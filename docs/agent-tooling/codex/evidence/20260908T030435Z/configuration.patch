@@ -1,0 +1,255 @@
+--- a/.codex/agents/x86qw-architect.toml
++++ b/.codex/agents/x86qw-architect.toml
+@@ -21,7 +21,7 @@
+ Sem remediação G0 ou G1 neste bootstrap. Preserve HOLD externo e baseline nulo.
+ Use memória somente para consulta necessária em workspace=x86, project=x86qw.
+ Não escreva páginas duráveis ou handoffs. Não use MCP para escapar do sandbox.
+-Saída: preencha todos os campos de templates/AGENT-RESULT.md, evidências sanitizadas,
++Saída: preencha todos os campos de docs/agent-tooling/codex/templates/AGENT-RESULT.md, evidências sanitizadas,
+ findings (caminho/símbolo, impacto, reprodução, severidade), testes e limitações.
+ Model/effort/permissões observados vêm de metadata nativa; ausência=NOT_OBSERVABLE.
+ Não use PID como identidade suficiente nem atribua sua autoria a outra sessão.
+@@ -35,6 +35,10 @@
+ [features]
+ apps = false
+ plugins = false
++browser_use = false
++computer_use = false
++in_app_browser = false
++in_app_local_automation = false
+ tool_suggest = false
+ skill_mcp_dependency_install = false
+ multi_agent_v2 = false
+--- a/.codex/agents/x86qw-contract-checker.toml
++++ b/.codex/agents/x86qw-contract-checker.toml
+@@ -21,7 +21,7 @@
+ Sem remediação G0 ou G1 neste bootstrap. Preserve HOLD externo e baseline nulo.
+ Use memória somente para consulta necessária em workspace=x86, project=x86qw.
+ Não escreva páginas duráveis ou handoffs. Não use MCP para escapar do sandbox.
+-Saída: preencha todos os campos de templates/AGENT-RESULT.md, evidências sanitizadas,
++Saída: preencha todos os campos de docs/agent-tooling/codex/templates/AGENT-RESULT.md, evidências sanitizadas,
+ findings (caminho/símbolo, impacto, reprodução, severidade), testes e limitações.
+ Model/effort/permissões observados vêm de metadata nativa; ausência=NOT_OBSERVABLE.
+ Não use PID como identidade suficiente nem atribua sua autoria a outra sessão.
+@@ -35,6 +35,10 @@
+ [features]
+ apps = false
+ plugins = false
++browser_use = false
++computer_use = false
++in_app_browser = false
++in_app_local_automation = false
+ tool_suggest = false
+ skill_mcp_dependency_install = false
+ multi_agent_v2 = false
+--- a/.codex/agents/x86qw-critical-maker.toml
++++ b/.codex/agents/x86qw-critical-maker.toml
+@@ -20,7 +20,7 @@
+ Sem remediação G0 ou G1 neste bootstrap. Preserve HOLD externo e baseline nulo.
+ Use memória somente para consulta necessária em workspace=x86, project=x86qw.
+ Não escreva páginas duráveis ou handoffs. Não use MCP para escapar do sandbox.
+-Saída: preencha todos os campos de templates/AGENT-RESULT.md, evidências sanitizadas,
++Saída: preencha todos os campos de docs/agent-tooling/codex/templates/AGENT-RESULT.md, evidências sanitizadas,
+ findings (caminho/símbolo, impacto, reprodução, severidade), testes e limitações.
+ Model/effort/permissões observados vêm de metadata nativa; ausência=NOT_OBSERVABLE.
+ Não use PID como identidade suficiente nem atribua sua autoria a outra sessão.
+@@ -39,6 +39,10 @@
+ [features]
+ apps = false
+ plugins = false
++browser_use = false
++computer_use = false
++in_app_browser = false
++in_app_local_automation = false
+ tool_suggest = false
+ skill_mcp_dependency_install = false
+ multi_agent_v2 = false
+--- a/.codex/agents/x86qw-explorer.toml
++++ b/.codex/agents/x86qw-explorer.toml
+@@ -21,7 +21,7 @@
+ Sem remediação G0 ou G1 neste bootstrap. Preserve HOLD externo e baseline nulo.
+ Use memória somente para consulta necessária em workspace=x86, project=x86qw.
+ Não escreva páginas duráveis ou handoffs. Não use MCP para escapar do sandbox.
+-Saída: preencha todos os campos de templates/AGENT-RESULT.md, evidências sanitizadas,
++Saída: preencha todos os campos de docs/agent-tooling/codex/templates/AGENT-RESULT.md, evidências sanitizadas,
+ findings (caminho/símbolo, impacto, reprodução, severidade), testes e limitações.
+ Model/effort/permissões observados vêm de metadata nativa; ausência=NOT_OBSERVABLE.
+ Não use PID como identidade suficiente nem atribua sua autoria a outra sessão.
+@@ -35,6 +35,10 @@
+ [features]
+ apps = false
+ plugins = false
++browser_use = false
++computer_use = false
++in_app_browser = false
++in_app_local_automation = false
+ tool_suggest = false
+ skill_mcp_dependency_install = false
+ multi_agent_v2 = false
+--- a/.codex/agents/x86qw-finalizer.toml
++++ b/.codex/agents/x86qw-finalizer.toml
+@@ -21,7 +21,7 @@
+ Sem remediação G0 ou G1 neste bootstrap. Preserve HOLD externo e baseline nulo.
+ Use memória somente para consulta necessária em workspace=x86, project=x86qw.
+ Não escreva páginas duráveis ou handoffs. Não use MCP para escapar do sandbox.
+-Saída: preencha todos os campos de templates/AGENT-RESULT.md, evidências sanitizadas,
++Saída: preencha todos os campos de docs/agent-tooling/codex/templates/AGENT-RESULT.md, evidências sanitizadas,
+ findings (caminho/símbolo, impacto, reprodução, severidade), testes e limitações.
+ Model/effort/permissões observados vêm de metadata nativa; ausência=NOT_OBSERVABLE.
+ Não use PID como identidade suficiente nem atribua sua autoria a outra sessão.
+@@ -35,6 +35,10 @@
+ [features]
+ apps = false
+ plugins = false
++browser_use = false
++computer_use = false
++in_app_browser = false
++in_app_local_automation = false
+ tool_suggest = false
+ skill_mcp_dependency_install = false
+ multi_agent_v2 = false
+--- a/.codex/agents/x86qw-inventory-auditor.toml
++++ b/.codex/agents/x86qw-inventory-auditor.toml
+@@ -21,7 +21,7 @@
+ Sem remediação G0 ou G1 neste bootstrap. Preserve HOLD externo e baseline nulo.
+ Use memória somente para consulta necessária em workspace=x86, project=x86qw.
+ Não escreva páginas duráveis ou handoffs. Não use MCP para escapar do sandbox.
+-Saída: preencha todos os campos de templates/AGENT-RESULT.md, evidências sanitizadas,
++Saída: preencha todos os campos de docs/agent-tooling/codex/templates/AGENT-RESULT.md, evidências sanitizadas,
+ findings (caminho/símbolo, impacto, reprodução, severidade), testes e limitações.
+ Model/effort/permissões observados vêm de metadata nativa; ausência=NOT_OBSERVABLE.
+ Não use PID como identidade suficiente nem atribua sua autoria a outra sessão.
+@@ -35,6 +35,10 @@
+ [features]
+ apps = false
+ plugins = false
++browser_use = false
++computer_use = false
++in_app_browser = false
++in_app_local_automation = false
+ tool_suggest = false
+ skill_mcp_dependency_install = false
+ multi_agent_v2 = false
+--- a/.codex/agents/x86qw-maker.toml
++++ b/.codex/agents/x86qw-maker.toml
+@@ -20,7 +20,7 @@
+ Sem remediação G0 ou G1 neste bootstrap. Preserve HOLD externo e baseline nulo.
+ Use memória somente para consulta necessária em workspace=x86, project=x86qw.
+ Não escreva páginas duráveis ou handoffs. Não use MCP para escapar do sandbox.
+-Saída: preencha todos os campos de templates/AGENT-RESULT.md, evidências sanitizadas,
++Saída: preencha todos os campos de docs/agent-tooling/codex/templates/AGENT-RESULT.md, evidências sanitizadas,
+ findings (caminho/símbolo, impacto, reprodução, severidade), testes e limitações.
+ Model/effort/permissões observados vêm de metadata nativa; ausência=NOT_OBSERVABLE.
+ Não use PID como identidade suficiente nem atribua sua autoria a outra sessão.
+@@ -39,6 +39,10 @@
+ [features]
+ apps = false
+ plugins = false
++browser_use = false
++computer_use = false
++in_app_browser = false
++in_app_local_automation = false
+ tool_suggest = false
+ skill_mcp_dependency_install = false
+ multi_agent_v2 = false
+--- a/.codex/agents/x86qw-release-checker.toml
++++ b/.codex/agents/x86qw-release-checker.toml
+@@ -21,7 +21,7 @@
+ Sem remediação G0 ou G1 neste bootstrap. Preserve HOLD externo e baseline nulo.
+ Use memória somente para consulta necessária em workspace=x86, project=x86qw.
+ Não escreva páginas duráveis ou handoffs. Não use MCP para escapar do sandbox.
+-Saída: preencha todos os campos de templates/AGENT-RESULT.md, evidências sanitizadas,
++Saída: preencha todos os campos de docs/agent-tooling/codex/templates/AGENT-RESULT.md, evidências sanitizadas,
+ findings (caminho/símbolo, impacto, reprodução, severidade), testes e limitações.
+ Model/effort/permissões observados vêm de metadata nativa; ausência=NOT_OBSERVABLE.
+ Não use PID como identidade suficiente nem atribua sua autoria a outra sessão.
+@@ -35,6 +35,10 @@
+ [features]
+ apps = false
+ plugins = false
++browser_use = false
++computer_use = false
++in_app_browser = false
++in_app_local_automation = false
+ tool_suggest = false
+ skill_mcp_dependency_install = false
+ multi_agent_v2 = false
+--- a/.codex/agents/x86qw-security-checker.toml
++++ b/.codex/agents/x86qw-security-checker.toml
+@@ -21,7 +21,7 @@
+ Sem remediação G0 ou G1 neste bootstrap. Preserve HOLD externo e baseline nulo.
+ Use memória somente para consulta necessária em workspace=x86, project=x86qw.
+ Não escreva páginas duráveis ou handoffs. Não use MCP para escapar do sandbox.
+-Saída: preencha todos os campos de templates/AGENT-RESULT.md, evidências sanitizadas,
++Saída: preencha todos os campos de docs/agent-tooling/codex/templates/AGENT-RESULT.md, evidências sanitizadas,
+ findings (caminho/símbolo, impacto, reprodução, severidade), testes e limitações.
+ Model/effort/permissões observados vêm de metadata nativa; ausência=NOT_OBSERVABLE.
+ Não use PID como identidade suficiente nem atribua sua autoria a outra sessão.
+@@ -35,6 +35,10 @@
+ [features]
+ apps = false
+ plugins = false
++browser_use = false
++computer_use = false
++in_app_browser = false
++in_app_local_automation = false
+ tool_suggest = false
+ skill_mcp_dependency_install = false
+ multi_agent_v2 = false
+--- a/.codex/agents/x86qw-test-designer.toml
++++ b/.codex/agents/x86qw-test-designer.toml
+@@ -21,7 +21,7 @@
+ Sem remediação G0 ou G1 neste bootstrap. Preserve HOLD externo e baseline nulo.
+ Use memória somente para consulta necessária em workspace=x86, project=x86qw.
+ Não escreva páginas duráveis ou handoffs. Não use MCP para escapar do sandbox.
+-Saída: preencha todos os campos de templates/AGENT-RESULT.md, evidências sanitizadas,
++Saída: preencha todos os campos de docs/agent-tooling/codex/templates/AGENT-RESULT.md, evidências sanitizadas,
+ findings (caminho/símbolo, impacto, reprodução, severidade), testes e limitações.
+ Model/effort/permissões observados vêm de metadata nativa; ausência=NOT_OBSERVABLE.
+ Não use PID como identidade suficiente nem atribua sua autoria a outra sessão.
+@@ -35,6 +35,10 @@
+ [features]
+ apps = false
+ plugins = false
++browser_use = false
++computer_use = false
++in_app_browser = false
++in_app_local_automation = false
+ tool_suggest = false
+ skill_mcp_dependency_install = false
+ multi_agent_v2 = false
+--- a/.codex/agents/x86qw-test-runner.toml
++++ b/.codex/agents/x86qw-test-runner.toml
+@@ -21,7 +21,7 @@
+ Sem remediação G0 ou G1 neste bootstrap. Preserve HOLD externo e baseline nulo.
+ Use memória somente para consulta necessária em workspace=x86, project=x86qw.
+ Não escreva páginas duráveis ou handoffs. Não use MCP para escapar do sandbox.
+-Saída: preencha todos os campos de templates/AGENT-RESULT.md, evidências sanitizadas,
++Saída: preencha todos os campos de docs/agent-tooling/codex/templates/AGENT-RESULT.md, evidências sanitizadas,
+ findings (caminho/símbolo, impacto, reprodução, severidade), testes e limitações.
+ Model/effort/permissões observados vêm de metadata nativa; ausência=NOT_OBSERVABLE.
+ Não use PID como identidade suficiente nem atribua sua autoria a outra sessão.
+@@ -35,6 +35,10 @@
+ [features]
+ apps = false
+ plugins = false
++browser_use = false
++computer_use = false
++in_app_browser = false
++in_app_local_automation = false
+ tool_suggest = false
+ skill_mcp_dependency_install = false
+ multi_agent_v2 = false
+--- a/.codex/config.toml
++++ b/.codex/config.toml
+@@ -18,6 +18,10 @@
+ [features]
+ apps = false
+ plugins = false
++browser_use = false
++computer_use = false
++in_app_browser = false
++in_app_local_automation = false
+ tool_suggest = false
+ skill_mcp_dependency_install = false
+ 

@@ -1,0 +1,47 @@
+# Codex CLI 0.153.4; source schema rust-v0.153.4. Qualification is separate.
+model = "gpt-6-astra"
+model_reasoning_effort = "xhigh"
+approval_policy = "on-request"
+approvals_reviewer = "user"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = false
+exclude_slash_tmp = true
+exclude_tmpdir_env_var = true
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 4
+interrupt_message = true
+
+[features]
+apps = false
+plugins = false
+browser_use = false
+computer_use = false
+in_app_browser = false
+in_app_local_automation = false
+tool_suggest = false
+skill_mcp_dependency_install = false
+
+[mcp_servers.node_repl]
+command = "/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node_repl"
+enabled = false
+
+[mcp_servers."computer-use"]
+command = "./Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient"
+enabled = false
+
+[mcp_servers."ai-memory"]
+url = "http://127.0.0.1:49374/mcp"
+enabled = true
+required = true
+enabled_tools = ["memory_query", "memory_read_page", "memory_status"]
+default_tools_approval_mode = "prompt"
+
+[mcp_servers.openaiDeveloperDocs]
+url = "https://developers.openai.com/mcp"
+enabled = true
+enabled_tools = ["search_openai_docs", "fetch_openai_doc"]
+default_tools_approval_mode = "prompt"

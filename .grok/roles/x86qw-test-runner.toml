@@ -1,0 +1,6 @@
+description = "Executa testes independentes no worktree indicado, sem corrigir a implementação."
+default_capability_mode = "execute"
+model = "grok-4.6"
+reasoning_effort = "high"
+prompt_file = ".grok/prompts/test-runner.md"
+default_isolation = "none"

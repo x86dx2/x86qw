@@ -1,0 +1,6 @@
+description = "Implementa uma única issue aprovada em worktree isolado e produz Evidence Pack."
+default_capability_mode = "all"
+model = "grok-4.6"
+reasoning_effort = "high"
+prompt_file = ".grok/prompts/maker.md"
+default_isolation = "worktree"

@@ -1,0 +1,17 @@
+{
+  "observed_at_utc": "2026-09-08T19:50:53.675581+00:00",
+  "source_candidates_unchanged": true,
+  "main_protected_files_checked": 56,
+  "changed_protected_files": [],
+  "git_refs_unchanged": true,
+  "bootstrap_head": "9fe34a355ad84b85606af83d249f36347b2162e5",
+  "bootstrap_branch": "chore/codex-astra-agents",
+  "tracked_diff_paths": [],
+  "staged_paths": [],
+  "main_status_unchanged": true,
+  "candidate_sha": "c2650d2a78147f4cc379d26e95d932c19437be21",
+  "candidate_tree": "c10cc5feafd49b76342d13a797e4092d1392a75d",
+  "git_worktrees_unchanged": true,
+  "no_personal_installation_inspected_or_modified": true,
+  "limitations": "No live release/issue/service-state audit was undertaken; G0 external HOLD retained per current user authorization."
+}

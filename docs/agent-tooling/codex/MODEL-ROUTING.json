@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "purpose": "normative target, not runtime evidence",
+  "permission_scheme": "sandbox_mode",
+  "max_children": 4,
+  "max_makers": 2,
+  "initial_makers": 1,
+  "orchestrator": {
+    "model": "gpt-6-astra",
+    "effort": "xhigh",
+    "sandbox": "workspace-write",
+    "approval_policy": "on-request",
+    "approvals_reviewer": "user"
+  },
+  "roles": {
+    "x86qw-explorer": {
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "sandbox": "read-only",
+      "discovery_active": true,
+      "leaf": true
+    },
+    "x86qw-architect": {
+      "model": "gpt-6-astra",
+      "effort": "xhigh",
+      "sandbox": "read-only",
+      "discovery_active": true,
+      "leaf": true
+    },
+    "x86qw-inventory-auditor": {
+      "model": "gpt-6-astra",
+      "effort": "xhigh",
+      "sandbox": "read-only",
+      "discovery_active": true,
+      "leaf": true
+    },
+    "x86qw-maker": {
+      "model": "gpt-6-astra",
+      "effort": "high",
+      "sandbox": "workspace-write",
+      "discovery_active": true,
+      "leaf": true
+    },
+    "x86qw-critical-maker": {
+      "model": "gpt-6-astra",
+      "effort": "xhigh",
+      "sandbox": "workspace-write",
+      "discovery_active": true,
+      "leaf": true
+    },
+    "x86qw-test-designer": {
+      "model": "gpt-6-astra",
+      "effort": "high",
+      "sandbox": "read-only",
+      "discovery_active": true,
+      "leaf": true
+    },
+    "x86qw-test-runner": {
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "sandbox": "read-only",
+      "discovery_active": true,
+      "leaf": true
+    },
+    "x86qw-contract-checker": {
+      "model": "gpt-6-astra",
+      "effort": "xhigh",
+      "sandbox": "read-only",
+      "discovery_active": true,
+      "leaf": true
+    },
+    "x86qw-security-checker": {
+      "model": "gpt-6-astra",
+      "effort": "xhigh",
+      "sandbox": "read-only",
+      "discovery_active": true,
+      "leaf": true
+    },
+    "x86qw-release-checker": {
+      "model": "gpt-6-astra",
+      "effort": "xhigh",
+      "sandbox": "read-only",
+      "discovery_active": true,
+      "leaf": true
+    },
+    "x86qw-finalizer": {
+      "model": "gpt-6-astra",
+      "effort": "xhigh",
+      "sandbox": "read-only",
+      "discovery_active": true,
+      "leaf": true
+    }
+  },
+  "optional": {
+    "x86qw-gate-auditor": {
+      "model": "gpt-6-astra",
+      "effort": "max",
+      "sandbox": "read-only",
+      "discovery_active": false,
+      "qualification": "MAX_ROLE_NOT_QUALIFIED"
+    }
+  }
+}

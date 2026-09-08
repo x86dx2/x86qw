@@ -1,0 +1,326 @@
+{
+  "client_version": "0.153.4",
+  "observed_at_utc": "2026-09-08T19:46:34Z",
+  "initialize": {
+    "userAgent": "x86qw-bootstrap-config-inspection/0.153.4 (Mac OS 26.6.2; arm64) Orca/1.4.197 (x86qw-bootstrap-config-inspection; 1)",
+    "codexHome": "$HOME/.codex",
+    "platformFamily": "unix",
+    "platformOs": "macos"
+  },
+  "config": {
+    "model": "gpt-6-astra",
+    "model_reasoning_effort": "xhigh",
+    "approval_policy": "on-request",
+    "approvals_reviewer": "user",
+    "sandbox_mode": "workspace-write",
+    "sandbox_workspace_write": {
+      "writable_roots": [],
+      "network_access": false,
+      "exclude_tmpdir_env_var": true,
+      "exclude_slash_tmp": true
+    },
+    "default_permissions": null,
+    "agents": {
+      "enabled": true,
+      "max_concurrent_threads_per_session": 4,
+      "max_depth": null,
+      "default_subagent_model": null,
+      "default_subagent_reasoning_effort": null,
+      "job_max_runtime_seconds": null,
+      "interrupt_message": true
+    },
+    "features": {
+      "network_proxy": null,
+      "apps": false,
+      "browser_use": false,
+      "computer_use": false,
+      "in_app_browser": false,
+      "in_app_local_automation": false,
+      "js_repl": false,
+      "memories": true,
+      "plugins": false,
+      "skill_mcp_dependency_install": false,
+      "tool_suggest": false,
+      "auth_elicitation": true,
+      "background_paginated_rollout_migration": false,
+      "mcp_2026_07_28": false,
+      "mentions_v2": true,
+      "remote_control": false,
+      "remote_plugin": true
+    },
+    "mcp_servers": {
+      "computer-use": {
+        "enabled": false,
+        "transport": "stdio"
+      },
+      "node_repl": {
+        "enabled": false,
+        "transport": "stdio"
+      },
+      "ai-memory": {
+        "enabled": true,
+        "required": true,
+        "enabled_tools": [
+          "memory_query",
+          "memory_read_page",
+          "memory_status"
+        ],
+        "default_tools_approval_mode": "prompt",
+        "transport": "http"
+      },
+      "openaiDeveloperDocs": {
+        "enabled": true,
+        "enabled_tools": [
+          "search_openai_docs",
+          "fetch_openai_doc"
+        ],
+        "default_tools_approval_mode": "prompt",
+        "transport": "http"
+      }
+    },
+    "plugins": {
+      "unified-computer-use@openai-bundled": {
+        "enabled": true
+      },
+      "pdf@openai-primary-runtime": {
+        "enabled": true
+      },
+      "github@openai-curated": {
+        "enabled": true
+      },
+      "template-creator@openai-primary-runtime": {
+        "enabled": true
+      },
+      "computer-use@openai-bundled": {
+        "enabled": true
+      },
+      "documents@openai-primary-runtime": {
+        "enabled": true
+      },
+      "chrome@openai-bundled": {
+        "enabled": true
+      },
+      "visualize@openai-bundled": {
+        "enabled": true
+      },
+      "outlook-email@openai-curated": {
+        "enabled": true
+      },
+      "spreadsheets@openai-primary-runtime": {
+        "enabled": true
+      },
+      "presentations@openai-primary-runtime": {
+        "enabled": true
+      },
+      "codex-app-tools@openai-bundled": {
+        "enabled": true
+      },
+      "sites@openai-bundled": {
+        "enabled": true
+      },
+      "browser@openai-bundled": {
+        "enabled": true
+      }
+    }
+  },
+  "layers": [
+    {
+      "name": {
+        "type": "project",
+        "dotCodexFolder": "$HOME/git-projects/x86qw-codex-agents/.codex"
+      },
+      "version": "sha256:999ab3b8c1514f84f37ef42c2a24c7c0f340e301db25b79b6f45f5693c3dffa6",
+      "selected_values": {
+        "model": "gpt-6-astra",
+        "model_reasoning_effort": "xhigh",
+        "approval_policy": "on-request",
+        "approvals_reviewer": "user",
+        "sandbox_mode": "workspace-write",
+        "sandbox_workspace_write": {
+          "network_access": false,
+          "exclude_slash_tmp": true,
+          "exclude_tmpdir_env_var": true
+        },
+        "agents": {
+          "enabled": true,
+          "max_concurrent_threads_per_session": 4,
+          "interrupt_message": true
+        },
+        "features": {
+          "apps": false,
+          "plugins": false,
+          "browser_use": false,
+          "computer_use": false,
+          "in_app_browser": false,
+          "in_app_local_automation": false,
+          "tool_suggest": false,
+          "skill_mcp_dependency_install": false
+        },
+        "mcp_servers": {
+          "node_repl": {
+            "enabled": false,
+            "transport": "stdio"
+          },
+          "computer-use": {
+            "enabled": false,
+            "transport": "stdio"
+          },
+          "ai-memory": {
+            "enabled": true,
+            "required": true,
+            "enabled_tools": [
+              "memory_query",
+              "memory_read_page",
+              "memory_status"
+            ],
+            "default_tools_approval_mode": "prompt",
+            "transport": "http"
+          },
+          "openaiDeveloperDocs": {
+            "enabled": true,
+            "enabled_tools": [
+              "search_openai_docs",
+              "fetch_openai_doc"
+            ],
+            "default_tools_approval_mode": "prompt",
+            "transport": "http"
+          }
+        },
+        "plugins": {}
+      }
+    },
+    {
+      "name": {
+        "type": "user",
+        "file": "$HOME/.codex/config.toml",
+        "profile": null
+      },
+      "version": "sha256:d0e544816a99c2c0e3809e6f75fc6601128d5b8e8a9f426c6ee6404687a3b347",
+      "selected_values": {
+        "model": "gpt-6-astra",
+        "model_reasoning_effort": "low",
+        "approval_policy": "on-request",
+        "approvals_reviewer": "auto_review",
+        "sandbox_mode": "workspace-write",
+        "agents": {
+          "enabled": true,
+          "max_concurrent_threads_per_session": 4
+        },
+        "features": {
+          "memories": true,
+          "js_repl": false
+        },
+        "mcp_servers": {
+          "node_repl": {
+            "transport": "stdio"
+          },
+          "computer-use": {
+            "enabled": false,
+            "transport": "stdio"
+          },
+          "openaiDeveloperDocs": {
+            "transport": "http"
+          },
+          "ai-memory": {
+            "default_tools_approval_mode": "approve",
+            "transport": "http"
+          }
+        },
+        "plugins": {
+          "github@openai-curated": {
+            "enabled": true
+          },
+          "computer-use@openai-bundled": {
+            "enabled": true
+          },
+          "pdf@openai-primary-runtime": {
+            "enabled": true
+          },
+          "outlook-email@openai-curated": {
+            "enabled": true
+          },
+          "documents@openai-primary-runtime": {
+            "enabled": true
+          },
+          "spreadsheets@openai-primary-runtime": {
+            "enabled": true
+          },
+          "presentations@openai-primary-runtime": {
+            "enabled": true
+          },
+          "template-creator@openai-primary-runtime": {
+            "enabled": true
+          },
+          "browser@openai-bundled": {
+            "enabled": true
+          },
+          "chrome@openai-bundled": {
+            "enabled": true
+          },
+          "visualize@openai-bundled": {
+            "enabled": true
+          },
+          "codex-app-tools@openai-bundled": {
+            "enabled": true
+          },
+          "sites@openai-bundled": {
+            "enabled": true
+          },
+          "unified-computer-use@openai-bundled": {
+            "enabled": true
+          }
+        }
+      }
+    },
+    {
+      "name": {
+        "type": "system",
+        "file": "/etc/codex/config.toml"
+      },
+      "version": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "selected_values": {
+        "mcp_servers": {},
+        "plugins": {}
+      }
+    }
+  ],
+  "origins": {
+    "model": {
+      "name": {
+        "type": "project",
+        "dotCodexFolder": "$HOME/git-projects/x86qw-codex-agents/.codex"
+      },
+      "version": "sha256:999ab3b8c1514f84f37ef42c2a24c7c0f340e301db25b79b6f45f5693c3dffa6"
+    },
+    "approvals_reviewer": {
+      "name": {
+        "type": "project",
+        "dotCodexFolder": "$HOME/git-projects/x86qw-codex-agents/.codex"
+      },
+      "version": "sha256:999ab3b8c1514f84f37ef42c2a24c7c0f340e301db25b79b6f45f5693c3dffa6"
+    },
+    "approval_policy": {
+      "name": {
+        "type": "project",
+        "dotCodexFolder": "$HOME/git-projects/x86qw-codex-agents/.codex"
+      },
+      "version": "sha256:999ab3b8c1514f84f37ef42c2a24c7c0f340e301db25b79b6f45f5693c3dffa6"
+    },
+    "model_reasoning_effort": {
+      "name": {
+        "type": "project",
+        "dotCodexFolder": "$HOME/git-projects/x86qw-codex-agents/.codex"
+      },
+      "version": "sha256:999ab3b8c1514f84f37ef42c2a24c7c0f340e301db25b79b6f45f5693c3dffa6"
+    },
+    "sandbox_mode": {
+      "name": {
+        "type": "project",
+        "dotCodexFolder": "$HOME/git-projects/x86qw-codex-agents/.codex"
+      },
+      "version": "sha256:999ab3b8c1514f84f37ef42c2a24c7c0f340e301db25b79b6f45f5693c3dffa6"
+    }
+  },
+  "requirements": null,
+  "appserver_exit_code": 0
+}

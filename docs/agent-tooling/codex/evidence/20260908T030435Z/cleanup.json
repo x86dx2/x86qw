@@ -1,0 +1,40 @@
+{
+  "created_by_bootstrap": true,
+  "generator_sha256": "525eef52ad141871b316efb84b56752477b9d3ee67a692c4ea15edf5b06d4ff0",
+  "scratch_files": [
+    ".codex-bootstrap-drill/generate.py",
+    ".codex-bootstrap-drill/proposal/.codex/README.md",
+    ".codex-bootstrap-drill/proposal/.codex/agents/x86qw-architect.toml",
+    ".codex-bootstrap-drill/proposal/.codex/agents/x86qw-contract-checker.toml",
+    ".codex-bootstrap-drill/proposal/.codex/agents/x86qw-critical-maker.toml",
+    ".codex-bootstrap-drill/proposal/.codex/agents/x86qw-explorer.toml",
+    ".codex-bootstrap-drill/proposal/.codex/agents/x86qw-finalizer.toml",
+    ".codex-bootstrap-drill/proposal/.codex/agents/x86qw-inventory-auditor.toml",
+    ".codex-bootstrap-drill/proposal/.codex/agents/x86qw-maker.toml",
+    ".codex-bootstrap-drill/proposal/.codex/agents/x86qw-release-checker.toml",
+    ".codex-bootstrap-drill/proposal/.codex/agents/x86qw-security-checker.toml",
+    ".codex-bootstrap-drill/proposal/.codex/agents/x86qw-test-designer.toml",
+    ".codex-bootstrap-drill/proposal/.codex/agents/x86qw-test-runner.toml",
+    ".codex-bootstrap-drill/proposal/.codex/config.toml",
+    ".codex-bootstrap-drill/proposal/.codex/instructions/external-reviewer.md",
+    ".codex-bootstrap-drill/proposal/.codex/instructions/orchestrator.md",
+    ".codex-bootstrap-drill/proposal/AGENTS.md"
+  ],
+  "all_results_preserved_in": "evidence/20260908T030435Z",
+  "runtime_fixtures_created": false,
+  "runtime_child_processes_started": 0,
+  "inspection_appservers": "all collected with exit code; no live process retained",
+  "cleanup_status": "PASS",
+  "removed_only_recorded_bootstrap_files": true,
+  "finished_at_utc": "2026-09-08T19:53:41.611598+00:00",
+  "git_locks_checked": [
+    "common-dir/index.lock",
+    "common-dir/packed-refs.lock",
+    "worktree-git-dir/index.lock"
+  ],
+  "git_locks_present": [],
+  "active_children": 0,
+  "native_children_evidence": "collaboration.list_agents returned /root only",
+  "inspection_process_evidence": "config-before/config-final app-server subprocesses collected; each finally waited for process exit",
+  "final_observed_at_utc": "2026-09-08T19:55:07.144518+00:00"
+}

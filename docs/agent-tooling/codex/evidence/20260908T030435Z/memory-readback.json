@@ -1,0 +1,12 @@
+{
+  "observed_at_utc": "2026-09-08T19:53:41.611598+00:00",
+  "workspace": "x86",
+  "project": "x86qw",
+  "path": "decisions/codex-astra-agent-configuration.md",
+  "page_id": "01a08294-82ef-7013-98d4-643073df69fc",
+  "memory_checkpoint": "5b9b5799908caf9ee595200879719e10a4d569b1",
+  "readback_body_equal_to_written_body": true,
+  "status": "PASS",
+  "does_not_prove_transcript_import": true,
+  "verification": "MCP memory_read_page with exact workspace/project/path; returned body compared byte-for-byte as text in orchestrator tool runtime"
+}

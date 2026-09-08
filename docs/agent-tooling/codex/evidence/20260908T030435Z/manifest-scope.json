@@ -1,0 +1,17 @@
+{
+  "bootstrap_base_sha": "9fe34a355ad84b85606af83d249f36347b2162e5",
+  "manifest_sha256": "d4c93e5f5051dcbff209ae98c5c553082096b3812fd1b8d770b1b58233647e4c",
+  "manifest": "normative-content.sha256",
+  "files": 27,
+  "included": "All .codex files, AGENTS.md, unchanged marker, normative policy/routing/qualification/templates/tests/optional files, schema-key source and pre-bootstrap AGENTS input.",
+  "excluded": [
+    "manifest itself",
+    "manifest-scope.json",
+    "BOOTSTRAP-REPORT.md",
+    "CAPABILITY-REPORT.json",
+    "all execution reports/evidence other than the two listed static inputs",
+    "scratch fixtures/generator",
+    "native client logs and caches"
+  ],
+  "content_identity": "9fe34a355ad84b85606af83d249f36347b2162e5+sha256:d4c93e5f5051dcbff209ae98c5c553082096b3812fd1b8d770b1b58233647e4c"
+}

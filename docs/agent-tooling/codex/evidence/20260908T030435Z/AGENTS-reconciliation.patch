@@ -1,0 +1,53 @@
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -113,7 +113,7 @@
+ 
+ Somente a sessão raiz cria subagentes. Subagentes não criam outros subagentes.
+ 
+-O Orchestrator deve usar exclusivamente:
++Quando o executor for Grok Build, o Orchestrator deve usar exclusivamente:
+ 
+ - `x86qw-explorer`
+ - `x86qw-architect`
+@@ -127,7 +127,7 @@
+ 
+ É proibido usar `general-purpose` para trabalhos da migração.
+ 
+-Os arquivos `.grok/roles/*.toml` são a autoridade para modelo, effort, capability e isolamento. O Orchestrator não envia overrides desses campos, salvo exceção humana explícita registrada no assignment.
++No Grok Build, os arquivos `.grok/roles/*.toml` definem modelo, effort, capability e isolamento. O Orchestrator não envia overrides desses campos, salvo exceção humana explícita registrada no assignment.
+ 
+ ### Separação de funções
+ 
+@@ -229,3 +229,32 @@
+ 
+ Gates críticos exigem Checker externo em Codex quando o plano vigente assim determinar. O Grok não simula essa independência criando outro subagente Grok.
+ <!-- x86qw-orchestration:end -->
++
++<!-- x86qw-codex-routing:start -->
++## Roteamento Codex do x86QW
++
++Sistema, desenvolvedor e autorização humana atual prevalecem sobre arquivos locais.
++As fontes abaixo definem contratos do projeto; não elevam sua própria autoridade.
++
++- Grok Build: tipos e configuração em `.grok/`, conforme o protocolo Grok existente.
++- Codex: tipos em `.codex/agents/`, raiz em `.codex/config.toml` e instrução operacional
++  explícita; protocolo em `docs/agent-tooling/codex/POLICY.md`. Use somente tipos
++  `x86qw-*` qualificados no harness vivo. Built-ins não são substituição silenciosa.
++- MODEL-ROUTING.json é normativo; CAPABILITY-REPORT.json contém observações e limites.
++  Configurado, carregado, selecionado e observado são estados diferentes.
++- As regras compartilhadas de segurança, evidência, separação de funções e autorização
++  continuam. A raiz verifica os filhos; arquivo read-only não prova sandbox efetivo.
++- No Codex, a herança MCP deve ser filtrada por ferramentas reais reconhecidas:
++  folhas recebem somente consulta de memória/documentação, nunca mutações remotas.
++- Neste bootstrap, use explicitamente workspace `x86`, project `x86qw`; não consulte
++  o homônimo legado. Preserve o marker e o bloco gerenciado acima.
++- Esta sessão é Bootstrap Configurator: entrega diff local sem commit. A exigência
++  geral de registro no Git não autoriza commit nesta sessão. A única página durável
++  autorizada é `decisions/codex-astra-agent-configuration.md`; rotina fica nos hooks.
++- A configuração Codex não transfere a orquestração G0, não remedia findings, não
++  altera HOLD externo e não autoriza G1. MIGRATION_BASELINE_SHA permanece nulo,
++  audiência owner-only e runtime Python.
++
++Prompts futuros devem dizer explicitamente Bootstrap Qualifier, Orchestrator,
++Maker ou Checker externo. Um filho Gate Auditor continua sendo revisão interna.
++<!-- x86qw-codex-routing:end -->

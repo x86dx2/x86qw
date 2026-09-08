@@ -1,0 +1,7 @@
+{
+  "observed_at_utc": "2026-09-08T19:46:35.018148+00:00",
+  "status": "PASS",
+  "second_generation_diff_bytes": 0,
+  "all_normative_hashes_unchanged": true,
+  "managed_block_duplicated": false
+}

@@ -1,0 +1,6 @@
+description = "Investiga código, contratos, documentação e histórico sem alterar arquivos."
+default_capability_mode = "read-only"
+model = "grok-4.6"
+reasoning_effort = "medium"
+prompt_file = ".grok/prompts/explorer.md"
+default_isolation = "none"

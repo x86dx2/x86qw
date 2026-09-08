@@ -1,0 +1,6 @@
+description = "Audita candidate, build-once, provenance, mirrors, TUF, workflows, audiência e claims de release."
+default_capability_mode = "read-only"
+model = "grok-4.6"
+reasoning_effort = "xhigh"
+prompt_file = ".grok/prompts/release-checker.md"
+default_isolation = "none"

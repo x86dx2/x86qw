@@ -1,0 +1,6 @@
+description = "Analisa arquitetura, fronteiras, dependências, ADRs e decomposição de gates."
+default_capability_mode = "read-only"
+model = "grok-4.6"
+reasoning_effort = "xhigh"
+prompt_file = ".grok/prompts/architect.md"
+default_isolation = "none"

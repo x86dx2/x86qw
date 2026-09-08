@@ -1,0 +1,34 @@
+# Marker local do x86QW. Sem credenciais.
+# Identidade pretendida: workspace x86 / project x86qw.
+# Captura de subagentes permanece habilitada: não definir drop_subagent_captures.
+
+workspace = "x86"
+project = "x86qw"
+
+[briefing]
+inject_on_session_start = "true"
+max_chars = 8000
+
+[capture]
+ignore_paths = [
+  ".env",
+  ".env.*",
+  "**/.env",
+  "**/.env.*",
+  "**/*.pem",
+  "**/*.key",
+  "**/*.p12",
+  "**/*.pfx",
+  "**/*private-key*",
+  "**/secrets/**",
+  "**/private-keys/**",
+  ".git/**",
+  "vendor/**",
+  "maintenance/vendor/**",
+  "maintenance/vendor/wheels/**",
+  "maintenance/build/**",
+  "release-work/**",
+  "quake-world/**",
+  "dist/installer/packages/**",
+  "site/node_modules/**"
+]

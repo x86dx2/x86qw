@@ -1,0 +1,11 @@
+test_all_emitted_keys_exist_in_pinned_schema (test_agent_configuration.AgentConfiguration.test_all_emitted_keys_exist_in_pinned_schema) ... ok
+test_managed_block_preserved_and_routing_unique (test_agent_configuration.AgentConfiguration.test_managed_block_preserved_and_routing_unique) ... ok
+test_observations_do_not_claim_unrun_qualification (test_agent_configuration.AgentConfiguration.test_observations_do_not_claim_unrun_qualification) ... ok
+test_required_configuration_exists (test_agent_configuration.AgentConfiguration.test_required_configuration_exists) ... ok
+test_routing_permissions_and_tool_surface (test_agent_configuration.AgentConfiguration.test_routing_permissions_and_tool_surface) ... ok
+test_untracked_files_are_clean_text (test_agent_configuration.AgentConfiguration.test_untracked_files_are_clean_text) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.010s
+
+OK

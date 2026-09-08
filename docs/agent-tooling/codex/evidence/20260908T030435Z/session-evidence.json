@@ -1,0 +1,44 @@
+{
+  "native_session_id": "01a07ef9-7f22-7742-8eb6-7d116c8e4647",
+  "parent_native_agent_id": null,
+  "cli_version": "0.153.4",
+  "source": "cli",
+  "turn_context_observation": {
+    "model": "gpt-6-astra",
+    "effort": "xhigh",
+    "approval_policy": "on-request",
+    "sandbox_policy": {
+      "type": "workspace-write",
+      "network_access": false,
+      "exclude_tmpdir_env_var": false,
+      "exclude_slash_tmp": false
+    }
+  },
+  "metadata_source": "session_meta and turn_context of this exact native session; no raw conversation copied",
+  "current_spawn_schema": {
+    "tool": "collaboration.spawn_agent",
+    "fields": [
+      "task_name",
+      "message",
+      "agent_type",
+      "fork_turns",
+      "model",
+      "reasoning_effort"
+    ],
+    "advertised_types": [
+      "executor",
+      "finalizer",
+      "planner",
+      "reviewer",
+      "default",
+      "explorer",
+      "worker"
+    ],
+    "cwd_parameter": false,
+    "isolation_parameter": false,
+    "custom_type_selected": false
+  },
+  "tools_list_result": "only /root running; zero children",
+  "inspection_processes": "app-server config-only subprocesses exited; no threads or model turns created by them",
+  "limits": "Current tool declaration is session-scoped, not a proof of future discovery after restart."
+}

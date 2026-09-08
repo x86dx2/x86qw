@@ -1,0 +1,72 @@
+{
+  "schema_tag": "rust-v0.153.4",
+  "schema_sha256": "692da7699367f6f4fbbd46c0021278c1311440bcebf0bcb9b836690c05e56196",
+  "validation": "TOML parser and all emitted keys; native semantic recognition separate",
+  "files": [
+    {
+      "path": ".codex/agents/x86qw-architect.toml",
+      "syntax": "PASS",
+      "schema_keys": "PASS"
+    },
+    {
+      "path": ".codex/agents/x86qw-contract-checker.toml",
+      "syntax": "PASS",
+      "schema_keys": "PASS"
+    },
+    {
+      "path": ".codex/agents/x86qw-critical-maker.toml",
+      "syntax": "PASS",
+      "schema_keys": "PASS"
+    },
+    {
+      "path": ".codex/agents/x86qw-explorer.toml",
+      "syntax": "PASS",
+      "schema_keys": "PASS"
+    },
+    {
+      "path": ".codex/agents/x86qw-finalizer.toml",
+      "syntax": "PASS",
+      "schema_keys": "PASS"
+    },
+    {
+      "path": ".codex/agents/x86qw-inventory-auditor.toml",
+      "syntax": "PASS",
+      "schema_keys": "PASS"
+    },
+    {
+      "path": ".codex/agents/x86qw-maker.toml",
+      "syntax": "PASS",
+      "schema_keys": "PASS"
+    },
+    {
+      "path": ".codex/agents/x86qw-release-checker.toml",
+      "syntax": "PASS",
+      "schema_keys": "PASS"
+    },
+    {
+      "path": ".codex/agents/x86qw-security-checker.toml",
+      "syntax": "PASS",
+      "schema_keys": "PASS"
+    },
+    {
+      "path": ".codex/agents/x86qw-test-designer.toml",
+      "syntax": "PASS",
+      "schema_keys": "PASS"
+    },
+    {
+      "path": ".codex/agents/x86qw-test-runner.toml",
+      "syntax": "PASS",
+      "schema_keys": "PASS"
+    },
+    {
+      "path": ".codex/config.toml",
+      "syntax": "PASS",
+      "schema_keys": "PASS"
+    },
+    {
+      "path": "docs/agent-tooling/codex/optional/x86qw-gate-auditor.toml.example",
+      "syntax": "PASS",
+      "schema_keys": "PASS"
+    }
+  ]
+}

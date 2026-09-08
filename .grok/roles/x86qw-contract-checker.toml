@@ -1,0 +1,6 @@
+description = "Audita contratos públicos, schemas, formatos persistidos, SemVer, CLI, JSON e paridade Python-Go."
+default_capability_mode = "read-only"
+model = "grok-4.6"
+reasoning_effort = "xhigh"
+prompt_file = ".grok/prompts/contract-checker.md"
+default_isolation = "none"

@@ -1,0 +1,6 @@
+description = "Consolida evidências independentes e decide se um assignment ou gate pode avançar."
+default_capability_mode = "read-only"
+model = "grok-4.6"
+reasoning_effort = "xhigh"
+prompt_file = ".grok/prompts/finalizer.md"
+default_isolation = "none"

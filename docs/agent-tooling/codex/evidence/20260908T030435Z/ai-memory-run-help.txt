@@ -1,0 +1,56 @@
+Launch an agent in an opt-in, cross-harness managed workstream. Native arguments are forwarded except exact wrapper flags such as `--yolo` and `--fresh`
+
+Usage: ai-memory run [OPTIONS] [HARNESS] [NATIVE_ARGS]...
+
+Arguments:
+  [HARNESS]
+          Agent harness to launch. When omitted, continue the newest managed or checkout-local session among the auto-detected harnesses
+
+          Possible values:
+          - claude:       Anthropic Claude Code (`claude`)
+          - codex:        OpenAI Codex CLI
+          - opencode:     OpenCode
+          - pi:           Pi coding agent
+          - crush:        Charmbracelet Crush
+          - omp:          Oh My Pi
+          - kimi:         Moonshot AI Kimi Code
+          - command-code: Command Code CLI
+          - kiro:         Amazon Kiro CLI (v2 engine)
+          - grok:         Grok Build CLI (xAI)
+          - antigravity:  Google Antigravity CLI (`agy`)
+
+  [NATIVE_ARGS]...
+          Native harness arguments, forwarded byte-for-byte and in order
+
+Options:
+      --data-dir <DATA_DIR>
+          Override the data directory.
+
+          Defaults to a platform path under `dirs::data_local_dir()`. The config loader also honours `AI_MEMORY_DATA_DIR`.
+
+      --workspace <WORKSPACE>
+          Workspace containing the managed workstream. Defaults to the nearest `.ai-memory.toml` marker's `workspace`, else `default`
+
+      --config <CONFIG>
+          Path to an explicit config file (defaults to `<data_dir>/config.toml`)
+
+      --project <PROJECT>
+          Project override. Defaults to the current repository project
+
+      --workstream <WORKSTREAM>
+          Select an existing named workstream instead of the current one
+
+      --new <NEW_WORKSTREAM>
+          Create and select a fresh named workstream
+
+      --executable <EXECUTABLE>
+          Override the native harness executable path
+
+      --yolo
+          Disable native permission prompts using the selected harness's equivalent dangerous-mode option
+
+      --fresh
+          Start a new native session in the selected workstream instead of resuming or adopting an existing harness session
+
+  -h, --help
+          Print help (see a summary with '-h')

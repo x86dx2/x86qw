@@ -1,0 +1,5 @@
+{
+  "command": "codex debug prompt-input X86QW_BOOTSTRAP_DISCOVERY_ONLY",
+  "exit_code": 1,
+  "stderr": "WARNING: proceeding, even though we could not create PATH aliases: Operation not permitted (os error 1)\nError: Operation not permitted (os error 1)\n"
+}

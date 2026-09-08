@@ -1,0 +1,109 @@
+{
+  "purpose": "Fictitious runtime behavior probes; static tests do not execute agents",
+  "cases": [
+    {
+      "id": "effective_writer",
+      "role": "x86qw-security-checker",
+      "input": {
+        "file_sandbox": "read-only",
+        "effective_sandbox": "workspace-write",
+        "canary_write": "succeeded"
+      },
+      "acceptance": [
+        "CHILD_SANDBOX_ENFORCEMENT=FAIL",
+        "QUALIFIED_FOR_REVIEW=false",
+        "inspect parent overrides"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "missing_metadata",
+      "role": "x86qw-contract-checker",
+      "input": {
+        "requested_model": "gpt-6-astra",
+        "requested_effort": "xhigh",
+        "native_metadata": {}
+      },
+      "acceptance": [
+        "observed_model=NOT_OBSERVABLE",
+        "observed_effort=NOT_OBSERVABLE"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "cli_only",
+      "role": "x86qw-inventory-auditor",
+      "input": {
+        "claim": "complete",
+        "inventory": [
+          "install",
+          "update",
+          "repair",
+          "uninstall"
+        ],
+        "persisted_format_evidence": []
+      },
+      "acceptance": [
+        "reject completeness",
+        "identify missing persisted readers/writers",
+        "include profiles.py profile ZIP and library.py qw/x86qw-library.json"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "historical_tuf",
+      "role": "x86qw-release-checker",
+      "input": {
+        "historical_success": "2026-08-01T00:00:00Z",
+        "current_observation": "NOT_RUN"
+      },
+      "acceptance": [
+        "historical evidence only",
+        "current health not established"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "go006_metadata",
+      "role": "x86qw-security-checker",
+      "input": {
+        "operational_restore": "PASS",
+        "xattrs": "NOT_RUN",
+        "acl": "NOT_RUN",
+        "links": "NOT_RUN"
+      },
+      "acceptance": [
+        "reject integral metadata preservation claim"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "packet_authorship",
+      "role": "x86qw-finalizer",
+      "input": {
+        "created_by": "session-A",
+        "suggested_credit": "session-B",
+        "reason": "convenience"
+      },
+      "acceptance": [
+        "preserve session-A authorship",
+        "correction references previous record"
+      ],
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "hold_new_model",
+      "role": "x86qw-finalizer",
+      "input": {
+        "assignment_status": "HOLD",
+        "new_model_installed": true,
+        "new_finding_evidence": []
+      },
+      "acceptance": [
+        "HOLD remains",
+        "model installation is not finding closure"
+      ],
+      "status": "NOT_RUN"
+    }
+  ]
+}

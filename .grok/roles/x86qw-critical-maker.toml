@@ -1,0 +1,6 @@
+description = "Implementa trabalho crítico de segurança, persistência, TUF, transações, bootstrap ou release em worktree isolado."
+default_capability_mode = "all"
+model = "grok-4.6"
+reasoning_effort = "xhigh"
+prompt_file = ".grok/prompts/critical-maker.md"
+default_isolation = "worktree"

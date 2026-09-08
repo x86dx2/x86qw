@@ -1,0 +1,25 @@
+{
+  "command": "codex debug prompt-input X86QW_BOOTSTRAP_DISCOVERY_ONLY",
+  "observed_at_utc": "2026-09-08T19:42:34.968599+00:00",
+  "exit_code": 0,
+  "stderr": "",
+  "top_type": "list",
+  "top_keys": [],
+  "role_names": [
+    "x86qw-architect",
+    "x86qw-codex-agents",
+    "x86qw-codex-bootstrap-",
+    "x86qw-codex-routing",
+    "x86qw-contract-checker",
+    "x86qw-critical-maker",
+    "x86qw-explorer",
+    "x86qw-finalizer",
+    "x86qw-maker",
+    "x86qw-orchestration",
+    "x86qw-release-checker",
+    "x86qw-security-checker",
+    "x86qw-test-runner"
+  ],
+  "spawn_mentions": 3,
+  "json_bytes": 44170
+}
