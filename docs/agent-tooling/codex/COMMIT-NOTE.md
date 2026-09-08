@@ -28,3 +28,14 @@ A regra MCP foi separada por harness e a designação fixa de toda sessão como
 Bootstrap Configurator foi substituída pelo papel do assignment atual.
 Os modelos, efforts e configurações dos dois harnesses permanecem inalterados.
 O manifesto inicial continua sendo a fotografia anterior a esta correção.
+
+## Preparação para sincronização da main
+
+O usuário autorizou integrar na main, sincronizar os remotos e remover worktrees
+auxiliares. As candidatas G0 em HOLD não fazem parte desta integração.
+Os patches do bootstrap foram encapsulados em arquivos `.patch.json`: o campo
+`patch` contém o diff UTF-8 integral, com SHA-256 dos bytes originais. A conversão
+foi verificada byte a byte e evita que espaços sintáticos dos patches sejam
+interpretados como whitespace de código pela CI. A checagem CI permanece intacta.
+Os nomes antigos nos registros históricos continuam identificando as fotografias
+originais; o conteúdo pode ser recuperado do JSON ou do commit `7aff41e`.

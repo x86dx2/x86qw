@@ -61,7 +61,7 @@ NEXT_ALLOWED_ACTION=Normal exit of this managed run, then a fresh Bootstrap Qual
 - [Catálogo instalado](evidence/20260908T030435Z/model-catalog.json), [schema utilizado](evidence/20260908T030435Z/recognized-schema-keys.json) e [fontes/versionamento](evidence/20260908T030435Z/SOURCES.md).
 - [Testes estáticos](evidence/20260908T030435Z/static-tests.txt) e [idempotência](evidence/20260908T030435Z/idempotence.json). Falha inicial por ausência de configuração foi observada antes da implementação.
 - [Preservação de fontes](evidence/20260908T030435Z/source-integrity.json): 56 arquivos protegidos do principal, refs, HEAD e worktrees sem mudanças. Nenhuma issue/release/serviço foi reclassificado como estado vivo.
-- [Diff normativo completo](evidence/20260908T030435Z/normative-review.patch) inclui arquivos novos sem git add; [diff de AGENTS](evidence/20260908T030435Z/AGENTS-reconciliation.patch) mostra a condição por harness. O marker preexistente permanece byte a byte.
+- [Diff normativo completo](evidence/20260908T030435Z/normative-review.patch.json) inclui arquivos novos sem git add; [diff de AGENTS](evidence/20260908T030435Z/AGENTS-reconciliation.patch.json) mostra a condição por harness. O marker preexistente permanece byte a byte.
 - [Escopo do manifesto](evidence/20260908T030435Z/manifest-scope.json): exclui a si mesmo e relatórios de execução; identifica base + bytes untracked, sem inventar review_sha.
 - [Identidade da sessão e schema vivo](evidence/20260908T030435Z/session-evidence.json): nenhum tipo x86qw foi selecionado. O debug de mensagens não exporta o schema completo de ferramentas; nomes no texto não provam discovery.
 - [Qualificação futura](QUALIFICATION.md): B1–B5 e sete fixtures de governança, todas com resultado real ainda NOT_RUN.
