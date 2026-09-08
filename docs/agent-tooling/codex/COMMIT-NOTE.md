@@ -18,3 +18,13 @@ Os seis testes estáticos passaram novamente antes do commit. A qualificação r
 continua pendente, o HOLD externo da G0 permanece e G1 não está autorizada.
 O baseline da migração continua nulo. Este commit não constitui aprovação do autor
 sobre a qualificação dos agentes ou sobre qualquer candidata da migração.
+
+## Correção posterior do roteamento de inicialização
+
+Após o commit inicial `9a7a916`, o usuário pediu que `AGENTS.md` refletisse
+explicitamente a tierização de cada cliente. A seleção por contexto nativo passou
+ao início das regras do projeto: Grok segue `.grok/`; Codex segue `.codex/`.
+A regra MCP foi separada por harness e a designação fixa de toda sessão como
+Bootstrap Configurator foi substituída pelo papel do assignment atual.
+Os modelos, efforts e configurações dos dois harnesses permanecem inalterados.
+O manifesto inicial continua sendo a fotografia anterior a esta correção.
