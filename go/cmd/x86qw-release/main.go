@@ -87,11 +87,20 @@ func main() {
 	if len(os.Args) >= 2 && os.Args[1] == "sign" {
 		os.Exit(runSign(os.Args[2:]))
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "catalog-cli" {
+		os.Exit(runCatalogCLI(os.Args[2:]))
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "site" {
+		os.Exit(runSite(os.Args[2:]))
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "monitor" {
+		os.Exit(runMonitor(os.Args[2:]))
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "renew-timestamp" {
 		os.Exit(runRenew(os.Args[2:]))
 	}
 	if len(os.Args) < 2 || os.Args[1] != "bootstrap" {
-		fmt.Fprintln(os.Stderr, "uso: x86qw-release bootstrap|sign|renew-timestamp ...")
+		fmt.Fprintln(os.Stderr, "uso: x86qw-release bootstrap|sign|renew-timestamp|monitor|site|catalog-cli ...")
 		os.Exit(2)
 	}
 	flags := flag.NewFlagSet("bootstrap", flag.ExitOnError)

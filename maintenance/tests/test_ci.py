@@ -409,13 +409,13 @@ class ContinuousIntegrationTests(unittest.TestCase):
             elif path.name == "codeql.yml":
                 self.assertIn("github/codeql-action/init@", source)
                 self.assertIn("github/codeql-action/analyze@", source)
-            elif path.name in {"go.yml", "go-release.yml"}:
+            elif path.name in {"go.yml", "go-release.yml", "tuf-monitor.yml", "tuf-timestamp-auto-renewal.yml"}:
                 self.assertIn("actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e", source)
             else:
                 self.assertIn("actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1", source)
         monitor = (workflow_dir / "tuf-monitor.yml").read_text(encoding="utf-8")
         self.assertIn('cron: "17 * * * *"', monitor)
-        self.assertIn("monitor_public_tuf.py", monitor)
+        self.assertIn("x86qw-release monitor", monitor)
         self.assertIn("--warning-hours 72", monitor)
         self.assertNotIn("--warning-hours 6", monitor)
 
