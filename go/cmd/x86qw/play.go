@@ -390,3 +390,7 @@ func indexOf(values []string, wanted string) int {
 	}
 	return -1
 }
+
+func init() {
+	register("play", 70, "play JOGO --map MAPA inicia uma partida local (KTX exige --mode)", noName(runPlay))
+}

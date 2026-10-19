@@ -1,0 +1,41 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"io"
+
+	"github.com/x86dx2/x86qw/go/internal/hub"
+	"github.com/x86dx2/x86qw/go/internal/output"
+)
+
+func runHub(args []string, stdout, stderr io.Writer) int {
+	target, asJSON, ok := targetFlags("hub", args, stderr)
+	if !ok {
+		return output.ExitUsage
+	}
+	servers, err := hub.Servers(context.Background(), target)
+	if err != nil {
+		if asJSON {
+			output.Failure("hub", output.ExitFailure, "operation", err.Error()).Write(stdout)
+		} else {
+			fmt.Fprintf(stderr, "✗ %v\n", err)
+		}
+		return output.ExitFailure
+	}
+	if asJSON {
+		data := map[string]any{"servers": servers, "target": target}
+		if err := output.Success("hub", data).Write(stdout); err != nil {
+			return output.ExitFailure
+		}
+		return output.ExitSuccess
+	}
+	for _, server := range servers {
+		fmt.Fprintf(stdout, "  %-28s %-6s %-10s %2d+%-2d %s\n", server.Address, server.Mode, server.Map, server.Players.Humans, server.Players.Bots, server.Title)
+	}
+	return output.ExitSuccess
+}
+
+func init() {
+	register("hub", 80, "hub                  lista servidores públicos para jogar ou observar", noName(runHub))
+}
