@@ -27,6 +27,9 @@ jobs:
           ref: main
           lfs: false
           fetch-depth: 1
+          # The record step pushes with RELEASE_GH_TOKEN; a persisted
+          # GITHUB_TOKEN header would override it and be denied.
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
