@@ -19,7 +19,8 @@ indisponíveis: transferir a orquestração da G0 do Grok Build para o Claude Co
 - Candidata: `go/g0/governance-candidate` em c2650d2a78147f4cc379d26e95d932c19437be21;
   packet 6ac3fd68980255546744b94c57d4b35effe4e36a. Nenhuma candidata foi alterada.
 - `MIGRATION_BASELINE_SHA=null`, `G1_AUTHORIZED=false`, audiência owner-only, runtime
-  Python, P0 aberto = 0. Nenhum finding é fechado por esta transferência.
+  Python, P0 aberto = 0 (incorreto; ver Correção). Nenhum finding é fechado por esta
+  transferência.
 
 ## Pontos abertos herdados pelo novo Orchestrator
 
@@ -34,3 +35,10 @@ indisponíveis: transferir a orquestração da G0 do Grok Build para o Claude Co
 5. Dois handoffs abertos no ai-memory (Codex e Grok); ler exige aceitá-los, o que os
    consome.
 6. Qualificação independente do harness Claude pendente (QUALIFICATION.md).
+
+## Correção (2026-10-19, sessão 2c751897)
+
+"P0 aberto = 0" estava errado quando foi escrito: a issue #294 (P0, owner-only) está
+aberta desde 2026-09-04T05:58:16Z e o `timestamp.json` público v44 expirou em
+2026-10-02T00:37:28Z. Fatos, classificação e decisões do Release Owner em
+[G0-P0-294-DECISIONS.md](G0-P0-294-DECISIONS.md). A transferência da orquestração não muda.
