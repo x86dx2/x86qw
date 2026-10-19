@@ -19,7 +19,7 @@ jobs:
   renew:
     name: Renew, deploy and record the timestamp
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     environment: release
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -95,4 +95,12 @@ jobs:
           url="$(gh pr create --base main --head "$branch" \
             --title "chore(trust): record published TUF timestamp v${version}" \
             --body "Automatic weekly renewal. The timestamp is already live; this keeps the checked-out projection equal to production.")"
-          gh pr merge "$url" --auto --squash --delete-branch
+          # Auto-merge stalls under the signed-commit rule; a squash merge
+          # through the API is signed by GitHub once the checks are green.
+          number="${url##*/}"
+          sleep 30
+          gh pr checks "$url" --required --watch --interval 30
+          gh api -X PUT "repos/${GITHUB_REPOSITORY}/pulls/${number}/merge" \
+            -f merge_method=squash \
+            -f commit_title="chore(trust): record published TUF timestamp v${version} (#${number})"
+          gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${branch}"
