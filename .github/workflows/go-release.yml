@@ -1,0 +1,77 @@
+name: Release native CLI
+
+# Builds the static x86qw binaries once and publishes them as the
+# x86qw-cli-<version> GitHub release; the pinned bootstraps are rendered
+# from these exact assets with `go run ./cmd/x86qw-release bootstrap`.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "SemVer da CLI nativa (ex.: 2.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: x86qw-cli-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish x86qw-cli-${{ inputs.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: go
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          lfs: false
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      - name: Validate the version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]
+      - run: go vet ./... && go test ./...
+      - name: Build the static binaries
+        env:
+          VERSION: ${{ inputs.version }}
+          CGO_ENABLED: "0"
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for target in darwin-arm64 darwin-amd64 linux-amd64 linux-arm64 windows-amd64; do
+            os=${target%-*}; arch=${target#*-}; ext=""
+            [ "$os" = windows ] && ext=".exe"
+            GOOS=$os GOARCH=$arch go build -trimpath \
+              -ldflags "-s -w -X github.com/x86dx2/x86qw/go/internal/buildinfo.Version=${VERSION}" \
+              -o "dist/x86qw-${VERSION}-${target}${ext}" ./cmd/x86qw
+          done
+          (cd dist && sha256sum x86qw-* > SHA256SUMS)
+          cat dist/SHA256SUMS
+      - name: Publish the release without overwriting
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          tag="x86qw-cli-${VERSION}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release $tag já existe; nada foi sobrescrito" >&2
+            exit 1
+          fi
+          gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "x86QW CLI ${VERSION}" \
+            --notes "CLI nativa x86QW ${VERSION}. Verifique os binários pelo SHA256SUMS."
