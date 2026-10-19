@@ -13,3 +13,5 @@
 __pycache__/
 maintenance/build/
 site/node_modules/
+# Worktrees criados pelo Claude Code para Makers (isolation: worktree).
+/.claude/worktrees/

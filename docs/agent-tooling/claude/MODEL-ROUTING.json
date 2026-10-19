@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "harness": "claude-code",
+  "purpose": "normative target, not runtime evidence",
+  "tiering_status": "CONFIRMED_BY_RELEASE_OWNER_2026-10-19",
+  "configured_with_client": "2.1.292",
+  "enforcement": "tools allowlist + PreToolUse guard .claude/hooks/x86qw_guard.py; child permissionMode is ignored when the parent runs in bypassPermissions, acceptEdits or auto",
+  "max_children": 4,
+  "max_makers": 2,
+  "initial_makers": 1,
+  "leaf_memory_tools": [
+    "mcp__ai-memory__memory_query",
+    "mcp__ai-memory__memory_read_page",
+    "mcp__ai-memory__memory_status"
+  ],
+  "top_level": {
+    "x86qw-orchestrator": {
+      "model": "claude-opus-5-5",
+      "effort": "xhigh",
+      "permission_mode": "default",
+      "guard": "orchestrator",
+      "spawnable": false
+    },
+    "x86qw-external-reviewer": {
+      "model": "claude-opus-5-5",
+      "effort": "xhigh",
+      "permission_mode": "default",
+      "guard": "readonly",
+      "spawnable": false
+    }
+  },
+  "roles": {
+    "x86qw-explorer": {
+      "model": "claude-sonnet-5-5",
+      "effort": "medium",
+      "access": "read-only",
+      "guard": "readonly",
+      "isolation": "none",
+      "leaf": true
+    },
+    "x86qw-architect": {
+      "model": "claude-opus-5-5",
+      "effort": "xhigh",
+      "access": "read-only",
+      "guard": "readonly",
+      "isolation": "none",
+      "leaf": true
+    },
+    "x86qw-inventory-auditor": {
+      "model": "claude-opus-5-5",
+      "effort": "xhigh",
+      "access": "read-only",
+      "guard": "readonly",
+      "isolation": "none",
+      "leaf": true
+    },
+    "x86qw-maker": {
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "access": "worktree-write",
+      "guard": "maker",
+      "isolation": "worktree",
+      "leaf": true
+    },
+    "x86qw-critical-maker": {
+      "model": "claude-opus-5-5",
+      "effort": "xhigh",
+      "access": "worktree-write",
+      "guard": "maker",
+      "isolation": "worktree",
+      "leaf": true
+    },
+    "x86qw-test-designer": {
+      "model": "claude-opus-5-5",
+      "effort": "high",
+      "access": "read-only",
+      "guard": "readonly",
+      "isolation": "none",
+      "leaf": true
+    },
+    "x86qw-test-runner": {
+      "model": "claude-sonnet-5-5",
+      "effort": "low",
+      "access": "execute",
+      "guard": "test",
+      "isolation": "maker-worktree",
+      "leaf": true
+    },
+    "x86qw-contract-checker": {
+      "model": "claude-opus-5-5",
+      "effort": "xhigh",
+      "access": "read-only",
+      "guard": "readonly",
+      "isolation": "maker-worktree",
+      "leaf": true
+    },
+    "x86qw-security-checker": {
+      "model": "claude-opus-5-5",
+      "effort": "xhigh",
+      "access": "read-only",
+      "guard": "readonly",
+      "isolation": "maker-worktree",
+      "leaf": true
+    },
+    "x86qw-release-checker": {
+      "model": "claude-opus-5-5",
+      "effort": "xhigh",
+      "access": "read-only",
+      "guard": "readonly",
+      "isolation": "none",
+      "leaf": true
+    },
+    "x86qw-finalizer": {
+      "model": "claude-opus-5-5",
+      "effort": "xhigh",
+      "access": "read-only",
+      "guard": "readonly",
+      "isolation": "none",
+      "leaf": true
+    }
+  }
+}

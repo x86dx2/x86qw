@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "harness": "claude-code",
+  "purpose": "dated observations, not a permanent guarantee",
+  "configuration_status": "CONFIGURED_NOT_QUALIFIED",
+  "runtime_qualification": "PARTIAL_AUTHOR_OBSERVATION",
+  "independence": "probes run by the session that authored the configuration; not an independent qualification",
+  "g1_authorized": false,
+  "migration_baseline_sha": null,
+  "g0_external_hold_remains": true,
+  "observations": [
+    {
+      "observed_at_utc": "2026-10-19",
+      "client_version": "2.1.292",
+      "main_head": "265af5a1e27bbf05c05dbd4f56a7db1ddd93ce9c",
+      "configuration_committed": false,
+      "agent_types_loaded_mid_session": false,
+      "agent_types_loaded_after_restart": 13,
+      "agents_md_loaded_natively": true,
+      "root_claude_md_present": false,
+      "ai_memory_mcp_tool_prefix": "mcp__ai-memory__",
+      "ai_memory_mcp_scope": "user",
+      "ai_memory_hooks": "~/.claude/settings.json (ai-memory install-hooks --apply)",
+      "hook_env_claude_project_dir": "main checkout (guard ran for an isolated Maker whose worktree had no .claude/)",
+      "bash_tool_env_claude_project_dir": "empty",
+      "grep_glob_tools_present": false,
+      "extra_harness_tools_in_leaves": [
+        "advisor",
+        "SubagentHandback"
+      ],
+      "worktree_base_without_setting": "origin/HEAD 9fe34a355ad84b85606af83d249f36347b2162e5",
+      "worktree_base_setting": "worktree.baseRef=head added after the probe; NOT_OBSERVED",
+      "harness_worktree_confinement": "harness refused a Write outside the worktree and a compound git command before the guard ran"
+    }
+  ],
+  "agent_results": [
+    {
+      "role": "x86qw-explorer",
+      "requested_model": "claude-sonnet-5-5",
+      "observed_model": "claude-sonnet-5-5",
+      "observed_effort": "NOT_OBSERVABLE",
+      "transcript_ref": "session 3393219e task a014177dd6da7422d (ephemeral, /private/tmp)",
+      "probes": {
+        "git_rev_parse": "PASS",
+        "touch_canary": "DENIED_BY_GUARD; canary absent",
+        "memory_status": "PASS",
+        "agent_edit_write_absent": "PASS"
+      },
+      "result_status": "AUTHOR_OBSERVATION_PASS"
+    },
+    {
+      "role": "x86qw-test-runner",
+      "requested_model": "claude-sonnet-5-5",
+      "observed_model": "claude-sonnet-5-5",
+      "observed_effort": "NOT_OBSERVABLE",
+      "transcript_ref": "session 3393219e task a1f90080ca5cfb2a0 (ephemeral, /private/tmp)",
+      "probes": {
+        "python_execution": "PASS",
+        "touch_canary": "DENIED_BY_GUARD; canary absent",
+        "status_before_after": "PASS (unchanged)"
+      },
+      "result_status": "AUTHOR_OBSERVATION_PASS"
+    },
+    {
+      "role": "x86qw-maker",
+      "requested_model": "claude-opus-5-5",
+      "observed_model": "claude-opus-5-5",
+      "observed_effort": "NOT_OBSERVABLE",
+      "transcript_ref": "session 3393219e task a964a69a0b8df61df (ephemeral, /private/tmp)",
+      "probes": {
+        "isolated_worktree": "PASS (.claude/worktrees/agent-*)",
+        "write_inside": "PASS",
+        "write_outside": "DENIED_BY_HARNESS",
+        "git_merge": "DENIED_BY_GUARD",
+        "touch_outside": "DENIED_BY_GUARD; canary absent",
+        "config_in_worktree": "FAIL (worktree at origin/HEAD, configuration uncommitted)"
+      },
+      "result_status": "BLOCKED",
+      "cleanup": "probe worktree and branch removed"
+    },
+    {
+      "role": "x86qw-architect",
+      "requested_model": "claude-opus-5-5",
+      "observed_model": "NOT_OBSERVABLE",
+      "observed_effort": "NOT_OBSERVABLE",
+      "transcript_ref": null,
+      "result_status": "NOT_RUN"
+    },
+    {
+      "role": "x86qw-inventory-auditor",
+      "requested_model": "claude-opus-5-5",
+      "observed_model": "NOT_OBSERVABLE",
+      "observed_effort": "NOT_OBSERVABLE",
+      "transcript_ref": null,
+      "result_status": "NOT_RUN"
+    },
+    {
+      "role": "x86qw-critical-maker",
+      "requested_model": "claude-opus-5-5",
+      "observed_model": "NOT_OBSERVABLE",
+      "observed_effort": "NOT_OBSERVABLE",
+      "transcript_ref": null,
+      "result_status": "NOT_RUN"
+    },
+    {
+      "role": "x86qw-test-designer",
+      "requested_model": "claude-opus-5-5",
+      "observed_model": "NOT_OBSERVABLE",
+      "observed_effort": "NOT_OBSERVABLE",
+      "transcript_ref": null,
+      "result_status": "NOT_RUN"
+    },
+    {
+      "role": "x86qw-contract-checker",
+      "requested_model": "claude-opus-5-5",
+      "observed_model": "NOT_OBSERVABLE",
+      "observed_effort": "NOT_OBSERVABLE",
+      "transcript_ref": null,
+      "result_status": "NOT_RUN"
+    },
+    {
+      "role": "x86qw-security-checker",
+      "requested_model": "claude-opus-5-5",
+      "observed_model": "NOT_OBSERVABLE",
+      "observed_effort": "NOT_OBSERVABLE",
+      "transcript_ref": null,
+      "result_status": "NOT_RUN"
+    },
+    {
+      "role": "x86qw-release-checker",
+      "requested_model": "claude-opus-5-5",
+      "observed_model": "NOT_OBSERVABLE",
+      "observed_effort": "NOT_OBSERVABLE",
+      "transcript_ref": null,
+      "result_status": "NOT_RUN"
+    },
+    {
+      "role": "x86qw-finalizer",
+      "requested_model": "claude-opus-5-5",
+      "observed_model": "NOT_OBSERVABLE",
+      "observed_effort": "NOT_OBSERVABLE",
+      "transcript_ref": null,
+      "result_status": "NOT_RUN"
+    },
+    {
+      "role": "x86qw-orchestrator",
+      "requested_model": "claude-opus-5-5",
+      "observed_model": "NOT_OBSERVABLE",
+      "observed_effort": "NOT_OBSERVABLE",
+      "transcript_ref": null,
+      "result_status": "NOT_RUN",
+      "note": "spawn guard only exercised by unit tests; needs a session started with claude --agent x86qw-orchestrator"
+    },
+    {
+      "role": "x86qw-external-reviewer",
+      "requested_model": "claude-opus-5-5",
+      "observed_model": "NOT_OBSERVABLE",
+      "observed_effort": "NOT_OBSERVABLE",
+      "transcript_ref": null,
+      "result_status": "NOT_RUN"
+    }
+  ]
+}
