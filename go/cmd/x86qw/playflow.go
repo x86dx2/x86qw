@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/menu"
@@ -22,23 +23,50 @@ var rulesetKeys = []string{"x86qw", "qcon", "smackdown", "thunderdome", "mtfl", 
 // errBack is play_local returning None: nothing launched, exit 0.
 var errBack = errors.New("voltar")
 
+// interruptTrap is the single process-wide SIGINT handler; the innermost
+// interactive phase (play inside the main menu) chooses the message.
+var interruptTrap struct {
+	sync.Mutex
+	messages []string
+	stderr   io.Writer
+	signals  chan os.Signal
+}
+
 // trapInterrupt mirrors KeyboardInterrupt during the line-based pickers:
 // the message, then exit 130. Raw-mode navigation reports Ctrl-C itself.
+// The returned function restores the enclosing phase.
 func trapInterrupt(stderr io.Writer, message string) func() {
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt)
-	done := make(chan struct{})
-	go func() {
-		select {
-		case <-signals:
-			fmt.Fprintln(stderr, "✗ "+message)
-			os.Exit(130)
-		case <-done:
-		}
-	}()
+	trap := &interruptTrap
+	trap.Lock()
+	defer trap.Unlock()
+	if trap.signals == nil {
+		trap.signals = make(chan os.Signal, 1)
+		go func() {
+			for range trap.signals {
+				trap.Lock()
+				if count := len(trap.messages); count > 0 {
+					fmt.Fprintln(trap.stderr, "✗ "+trap.messages[count-1])
+					os.Exit(130)
+				}
+				trap.Unlock()
+			}
+		}()
+	}
+	if len(trap.messages) == 0 {
+		signal.Notify(trap.signals, os.Interrupt)
+	}
+	trap.messages = append(trap.messages, message)
+	trap.stderr = stderr
+	var once sync.Once
 	return func() {
-		signal.Stop(signals)
-		close(done)
+		once.Do(func() {
+			trap.Lock()
+			defer trap.Unlock()
+			trap.messages = trap.messages[:len(trap.messages)-1]
+			if len(trap.messages) == 0 {
+				signal.Stop(trap.signals)
+			}
+		})
 	}
 }
 
