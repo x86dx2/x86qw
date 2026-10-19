@@ -1,0 +1,95 @@
+name: Renew public TUF timestamp
+
+# The online timestamp key re-signs timestamp.json weekly with a 30-day lease,
+# so the public chain always has more than three weeks of margin. Snapshot and
+# targets stay offline-signed; the monitor warns 14 days before they expire.
+on:
+  schedule:
+    - cron: "41 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: x86qw-tuf-timestamp-auto-renewal
+  cancel-in-progress: false
+
+jobs:
+  renew:
+    name: Renew, deploy and record the timestamp
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          lfs: false
+          fetch-depth: 1
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Install pinned trust dependencies from vendored wheels
+        run: python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Install the pinned site toolchain
+        working-directory: site
+        run: npm ci
+      - name: Materialize the online timestamp key
+        env:
+          TUF_TIMESTAMP_KEY_B64: ${{ secrets.TUF_TIMESTAMP_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$TUF_TIMESTAMP_KEY_B64"
+          printf '%s' "$TUF_TIMESTAMP_KEY_B64" | base64 --decode > "$RUNNER_TEMP/timestamp-key.pem"
+      - name: Renew timestamp.json and assemble a site that differs only there
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          set -euo pipefail
+          python maintenance/tools/renew_public_timestamp.py prepare \
+            --timestamp-key "$RUNNER_TEMP/timestamp-key.pem" \
+            --work-dir "$RUNNER_TEMP/renewal"
+          rm -f "$RUNNER_TEMP/timestamp-key.pem"
+      - name: Deploy the renewed site generation
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          site/node_modules/.bin/wrangler deploy \
+            --config "$RUNNER_TEMP/renewal/site/wrangler.jsonc" \
+            --assets "$RUNNER_TEMP/renewal/site/public" \
+            --strict
+      - name: Verify the public chain and the published timestamp
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          set -euo pipefail
+          python maintenance/tools/verify_public_tuf.py \
+            --root maintenance/trust/root.json \
+            --catalog site/public/api/v1/catalog.json
+          python maintenance/tools/renew_public_timestamp.py confirm
+      - name: Record the published timestamp on main
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_GH_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="$(python -c 'import json; print(json.load(open("site/public/api/v1/trust/metadata/timestamp.json"))["signed"]["version"])')"
+          branch="bot/tuf-timestamp-v${version}"
+          git config user.name "x86qw-bot"
+          git config user.email "x86qw-bot@users.noreply.github.com"
+          git switch -c "$branch"
+          git add site/public/api/v1/trust/metadata/timestamp.json
+          git commit -m "chore(trust): record published TUF timestamp v${version}"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$branch"
+          url="$(gh pr create --base main --head "$branch" \
+            --title "chore(trust): record published TUF timestamp v${version}" \
+            --body "Automatic weekly renewal. The timestamp is already live; this keeps the checked-out projection equal to production.")"
+          gh pr merge "$url" --auto --squash --delete-branch
