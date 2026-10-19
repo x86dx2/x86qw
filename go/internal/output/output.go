@@ -46,7 +46,7 @@ func Failure(command string, exitCode int, code, message string) Envelope {
 	return Envelope{
 		SchemaVersion: SchemaVersion,
 		Command:       command,
-		Data:          nil,
+		Data:          map[string]any{},
 		Errors:        []Error{{Code: code, Message: message}},
 		ExitCode:      exitCode,
 	}

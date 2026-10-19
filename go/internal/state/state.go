@@ -1,0 +1,201 @@
+// Package state reads and writes .x86qw/state.json exactly like
+// x86qw_runtime/state.py (formats 1 and 2).
+package state
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"regexp"
+	"sort"
+	"strings"
+)
+
+const (
+	// Path is the state file relative to the installation root.
+	Path          = ".x86qw/state.json"
+	CurrentFormat = 2
+	maxBytes      = 256 * 1024
+)
+
+var (
+	componentID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$`)
+	// Profiles accepted in persisted state.
+	Profiles = map[string]bool{"none": true, "custom": true, "essential": true, "recommended": true, "complete": true}
+	// legacyReplacements and legacyRemovals mirror manager.py.
+	legacyReplacements = map[string]string{"nquake-bootstrap": "x86qw-client-bootstrap", "nquake-ktx": "ktx"}
+	legacyRemovals     = map[string]bool{"nquake-sounds": true}
+)
+
+// Error describes an invalid state document.
+type Error struct {
+	Code  string
+	Field string
+	msg   string
+}
+
+func (e *Error) Error() string { return e.msg }
+
+func fail(code, field, format string, args ...any) error {
+	return &Error{Code: code, Field: field, msg: fmt.Sprintf(format, args...)}
+}
+
+// State is a validated state document. Unknown fields are preserved.
+type State struct {
+	Format               int
+	Profile              string
+	RequestedComponents  []string
+	RecordedComponents   []string
+	KnownComponents      []string
+	Capabilities         []string
+	ComponentFingerprint string
+	document             map[string]any
+}
+
+// Fingerprint is sha256 over sorted identifiers, each followed by "\n".
+func Fingerprint(components []string) string {
+	sorted := append([]string(nil), components...)
+	sort.Strings(sorted)
+	var payload strings.Builder
+	for _, id := range sorted {
+		payload.WriteString(id)
+		payload.WriteByte('\n')
+	}
+	digest := sha256.Sum256([]byte(payload.String()))
+	return hex.EncodeToString(digest[:])
+}
+
+// Read loads and validates the state file of an installation root.
+func Read(root string) (*State, error) {
+	file, err := os.Open(root + string(os.PathSeparator) + Path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fail("identity", "", "estado da instalação não é arquivo regular")
+	}
+	payload, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(payload) > maxBytes {
+		return nil, fail("identity", "", "estado da instalação excede %d bytes", maxBytes)
+	}
+	return Parse(payload)
+}
+
+// Parse validates a state document.
+func Parse(payload []byte) (*State, error) {
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.UseNumber()
+	var document map[string]any
+	if err := decoder.Decode(&document); err != nil {
+		return nil, fail("identity", "", "JSON de estado inválido: %v", err)
+	}
+	format, ok := integer(document["format"])
+	profile, profileOK := document["profile"].(string)
+	if !ok || (format != 1 && format != CurrentFormat) || document["project"] != "x86qw" || !profileOK || !Profiles[profile] {
+		return nil, fail("identity", "", "identidade do estado da instalação inválida")
+	}
+	state := &State{Format: format, Profile: profile, document: document}
+	var err error
+	if state.RequestedComponents, err = components(document, "requested_components"); err != nil {
+		return nil, err
+	}
+	if state.RecordedComponents, err = components(document, "recorded_components"); err != nil {
+		return nil, err
+	}
+	if state.KnownComponents, err = components(document, "known_components"); err != nil {
+		return nil, err
+	}
+	if profile != "custom" && len(state.RequestedComponents) > 0 {
+		return nil, fail("custom_requested", "", "somente o perfil custom pode registrar escolhas explícitas")
+	}
+	if format == CurrentFormat {
+		if state.Capabilities, err = components(document, "capabilities"); err != nil {
+			return nil, err
+		}
+		fingerprint, _ := document["component_fingerprint"].(string)
+		// No capability is currently defined (INSTALLATION_CAPABILITIES is empty).
+		if len(state.Capabilities) > 0 || fingerprint != Fingerprint(state.RecordedComponents) {
+			return nil, fail("capabilities", "", "capacidades ou fingerprint inválidos no estado da instalação")
+		}
+		state.ComponentFingerprint = fingerprint
+	}
+	return state, nil
+}
+
+func integer(value any) (int, bool) {
+	number, ok := value.(json.Number)
+	if !ok || strings.ContainsAny(number.String(), ".eE") {
+		return 0, false
+	}
+	parsed, err := number.Int64()
+	return int(parsed), err == nil
+}
+
+func components(document map[string]any, field string) ([]string, error) {
+	raw, ok := document[field].([]any)
+	if !ok {
+		return nil, fail("component_field", field, "campo %s inválido no estado da instalação", field)
+	}
+	seen := map[string]bool{}
+	values := make([]string, 0, len(raw))
+	for _, item := range raw {
+		id, ok := item.(string)
+		if !ok || !componentID.MatchString(id) || seen[id] {
+			return nil, fail("component_field", field, "campo %s inválido no estado da instalação", field)
+		}
+		seen[id] = true
+		values = append(values, id)
+	}
+	return values, nil
+}
+
+// Installed reports the current (post-legacy-migration) recorded components.
+func (s *State) Installed() []string {
+	var result []string
+	seen := map[string]bool{}
+	for _, id := range s.RecordedComponents {
+		if legacyRemovals[id] {
+			continue
+		}
+		if replacement, ok := legacyReplacements[id]; ok {
+			id = replacement
+		}
+		if !seen[id] {
+			seen[id] = true
+			result = append(result, id)
+		}
+	}
+	return result
+}
+
+// Marshal encodes the document the way the Python installer does:
+// json.dumps(indent=2, sort_keys=True, ensure_ascii=False) + "\n".
+func (s *State) Marshal() ([]byte, error) {
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(s.document); err != nil {
+		return nil, err
+	}
+	return buffer.Bytes(), nil
+}
+
+// IsInvalid reports whether err is a state validation error.
+func IsInvalid(err error) bool {
+	var target *Error
+	return errors.As(err, &target)
+}
