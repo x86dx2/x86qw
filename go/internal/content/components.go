@@ -37,7 +37,11 @@ func ProfileFingerprint(selected []string) string {
 func (p *Project) Components() (*Object, error) {
 	if !p.componentsDone {
 		p.componentsDone = true
-		p.components, p.componentsErr = LoadComponentCatalog(p.Path(ComponentsPath))
+		path := p.Path(ComponentsPath)
+		if p.componentsFile != "" {
+			path = p.componentsFile
+		}
+		p.components, p.componentsErr = LoadComponentCatalog(path)
 	}
 	return p.components, p.componentsErr
 }

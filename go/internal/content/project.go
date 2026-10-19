@@ -4,9 +4,12 @@
 package content
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
@@ -39,6 +42,16 @@ type Object = pyjson.Object
 type Project struct {
 	Root string
 
+	// HTTP carries every network request (tests inject a fake transport).
+	HTTP *http.Client
+	// Run executes git/gh (tests inject a recorder); nil uses os/exec.
+	Run func(dir string, stdin []byte, name string, args ...string) ([]byte, error)
+	// Getenv reads tokens; nil uses os.Getenv.
+	Getenv func(string) string
+	// componentsFile/releasesFile override the canonical inventories
+	// for staged workspaces.
+	componentsFile, releasesFile string
+
 	policy     map[string]*Object
 	policyKeys []string
 	policyErr  error
@@ -59,6 +72,41 @@ type Project struct {
 
 // NewProject returns a project rooted at root.
 func NewProject(root string) *Project { return &Project{Root: root} }
+
+// Staged returns a view of the project whose component catalog and release
+// inventory come from a workspace (manage.py's staged validation).
+func (p *Project) Staged(componentsFile, releasesFile string) *Project {
+	return &Project{
+		Root: p.Root, HTTP: p.HTTP, Run: p.Run, Getenv: p.Getenv,
+		componentsFile: componentsFile, releasesFile: releasesFile,
+	}
+}
+
+func (p *Project) env(name string) string {
+	if p.Getenv != nil {
+		return p.Getenv(name)
+	}
+	return os.Getenv(name)
+}
+
+// command runs an external tool in the checkout and returns stdout.
+func (p *Project) command(stdin []byte, name string, args ...string) ([]byte, error) {
+	if p.Run != nil {
+		return p.Run(p.Root, stdin, name, args...)
+	}
+	process := exec.Command(name, args...)
+	process.Dir = p.Root
+	if stdin != nil {
+		process.Stdin = bytes.NewReader(stdin)
+	}
+	var stderr bytes.Buffer
+	process.Stderr = &stderr
+	output, err := process.Output()
+	if err != nil {
+		return output, fmt.Errorf("Command '%s' returned non-zero exit status: %v %s", name, err, stderr.String())
+	}
+	return output, nil
+}
 
 // Path resolves a repository-relative POSIX path.
 func (p *Project) Path(relative string) string { return joinPosix(p.Root, relative) }

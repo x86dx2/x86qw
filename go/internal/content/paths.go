@@ -255,6 +255,16 @@ func rglobFiles(root string) ([]string, error) {
 	return files, err
 }
 
+func fileSize(path string) (int64, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0, err
+	}
+	return info.Size(), nil
+}
+
+func readFile(path string) ([]byte, error) { return os.ReadFile(path) }
+
 // joinPosix joins a POSIX relative path below base.
 func joinPosix(base, relative string) string {
 	return filepath.Join(base, filepath.FromSlash(relative))

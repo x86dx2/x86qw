@@ -42,7 +42,11 @@ func getOr(object *Object, key string, fallback any) any {
 func (p *Project) Releases() (*Object, error) {
 	if !p.releasesDone {
 		p.releasesDone = true
-		p.releases, p.releasesErr = p.loadReleases(p.Path(ReleasesPath))
+		path := p.Path(ReleasesPath)
+		if p.releasesFile != "" {
+			path = p.releasesFile
+		}
+		p.releases, p.releasesErr = p.loadReleases(path)
 	}
 	return p.releases, p.releasesErr
 }
