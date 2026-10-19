@@ -29,6 +29,15 @@ from x86qw_runtime.trust import load_trusted_catalog  # noqa: E402
 
 METADATA_NAME = re.compile(r"^(?:\d+\.)?(timestamp|snapshot|targets)\.json$")
 DEFAULT_WARNING_HOURS = 6
+# Snapshot and targets are re-signed offline with keys that never reach CI,
+# so they need far more notice than the online timestamp role.
+OFFLINE_ROLE_WARNING_HOURS = 14 * 24
+
+
+def role_warning_hours(role: str, warning_hours: int) -> int:
+    if role in {"snapshot", "targets"}:
+        return max(warning_hours, OFFLINE_ROLE_WARNING_HOURS)
+    return warning_hours
 UTC = timezone.utc
 
 
@@ -120,9 +129,10 @@ def monitor_public_tuf(
         version, expiry = _expires(_metadata_payload(fetcher.records, role), role)
         versions[role] = version
         expires[role] = expiry.isoformat().replace("+00:00", "Z")
-        if expiry <= now + timedelta(hours=warning_hours):
+        window = role_warning_hours(role, warning_hours)
+        if expiry <= now + timedelta(hours=window):
             raise PublicTufMonitorError(
-                f"lease TUF {role} expira em menos de {warning_hours} horas: {expires[role]}"
+                f"lease TUF {role} expira em menos de {window} horas: {expires[role]}"
             )
     target_payloads = [
         payload for url, payload in fetcher.records.items()
