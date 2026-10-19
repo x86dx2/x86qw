@@ -24,6 +24,11 @@ var archiveBinary = map[string]string{"macos": "ezQuake.app", "linux": "ezQuake-
 // InstallClient installs the newest ezQuake of one channel, like
 // manager.py ensure_archive + prepare_runtime + commit_runtime.
 func (t *Transaction) InstallClient(ctx context.Context, cat *catalog.Catalog, spec catalog.ClientSpec, channel string) (string, error) {
+	return t.InstallClientVersion(ctx, cat, spec, channel, "")
+}
+
+// InstallClientVersion installs one exact catalog release ("" = newest).
+func (t *Transaction) InstallClientVersion(ctx context.Context, cat *catalog.Catalog, spec catalog.ClientSpec, channel, selection string) (string, error) {
 	if channel != "stable" {
 		return "", fmt.Errorf("o canal %s do ezQuake ainda não foi portado; use a CLI Python", channel)
 	}
@@ -32,6 +37,17 @@ func (t *Transaction) InstallClient(ctx context.Context, cat *catalog.Catalog, s
 		return "", err
 	}
 	release := releases[0]
+	if selection != "" {
+		found := false
+		for _, candidate := range releases {
+			if candidate.Version == selection {
+				release, found = candidate, true
+			}
+		}
+		if !found {
+			return "", fmt.Errorf("A versão registrada do ezQuake %s não está disponível para reparo.", channel)
+		}
+	}
 	pin := download.Artifact{URLs: release.URLs, Size: release.Size, SHA256: release.SHA256}
 	cacheRoot, err := download.CacheDir()
 	if err != nil {

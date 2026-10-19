@@ -236,11 +236,14 @@ func retryAfter(value string) time.Duration {
 	return 0
 }
 
+// CacheEnv overrides the cache root (tests and isolated runs).
+const CacheEnv = "X86QW_CACHE_DIR"
+
 // CacheDir is the Python installer's download cache, shared with it;
-// X86QW_CACHE_DIR overrides it (tests, portable setups).
+// X86QW_CACHE_DIR overrides it.
 func CacheDir() (string, error) {
-	if dir := os.Getenv("X86QW_CACHE_DIR"); dir != "" {
-		return dir, nil
+	if dir := os.Getenv(CacheEnv); dir != "" {
+		return filepath.Abs(dir)
 	}
 	switch runtime.GOOS {
 	case "darwin":
