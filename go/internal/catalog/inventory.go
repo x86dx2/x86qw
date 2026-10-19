@@ -14,10 +14,30 @@ var ComponentsJSON []byte
 
 // Component is one installable component.
 type Component struct {
-	ID       string   `json:"id"`
-	Label    string   `json:"label"`
-	Kind     string   `json:"kind"`
-	Requires []string `json:"requires"`
+	ID             string          `json:"id"`
+	Label          string          `json:"label"`
+	Kind           string          `json:"kind"`
+	Requires       []string        `json:"requires"`
+	ProjectSources []ProjectSource `json:"project_sources"`
+}
+
+// ProjectSource maps a packaged file to its install path; entries with a
+// platform are per-platform executables.
+type ProjectSource struct {
+	Destination        string `json:"destination"`
+	InstallDestination string `json:"install_destination"`
+	Platform           string `json:"platform"`
+}
+
+// PlatformFiles returns the per-platform executables of a component.
+func (c Component) PlatformFiles() []ProjectSource {
+	var files []ProjectSource
+	for _, source := range c.ProjectSources {
+		if source.Platform != "" {
+			files = append(files, source)
+		}
+	}
+	return files
 }
 
 // Inventory holds profiles and the dependency graph.
