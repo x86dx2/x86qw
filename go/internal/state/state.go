@@ -202,6 +202,68 @@ func MarshalDocument(document map[string]any) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
+// Document returns a shallow copy of the persisted document.
+func (s *State) Document() map[string]any {
+	copied := make(map[string]any, len(s.document))
+	for key, value := range s.document {
+		copied[key] = value
+	}
+	return copied
+}
+
+// Migrate mirrors migrations.migrate_install_state: legacy component ids
+// replaced or dropped, format 2, fingerprint recomputed, one
+// installation_version marker (targetVersion when given).
+func (s *State) Migrate(targetVersion string) map[string]any {
+	document := s.Document()
+	replace := func(ids []string) []any {
+		result := []any{}
+		seen := map[string]bool{}
+		for _, id := range ids {
+			if legacyRemovals[id] {
+				continue
+			}
+			if replacement, ok := legacyReplacements[id]; ok {
+				id = replacement
+			}
+			if !seen[id] {
+				seen[id] = true
+				result = append(result, id)
+			}
+		}
+		return result
+	}
+	recorded := replace(s.RecordedComponents)
+	recordedIDs := make([]string, len(recorded))
+	for index, id := range recorded {
+		recordedIDs[index] = id.(string)
+	}
+	capabilities := []any{}
+	for _, capability := range s.Capabilities {
+		capabilities = append(capabilities, capability)
+	}
+	document["format"] = CurrentFormat
+	document["requested_components"] = replace(s.RequestedComponents)
+	document["recorded_components"] = recorded
+	document["known_components"] = replace(s.KnownComponents)
+	document["capabilities"] = capabilities
+	document["component_fingerprint"] = Fingerprint(recordedIDs)
+	marker := ""
+	for _, key := range []string{"installation_version", "installer_version", "version"} {
+		if value, ok := document[key].(string); ok {
+			marker = value
+		}
+	}
+	delete(document, "version")
+	delete(document, "installer_version")
+	if targetVersion != "" {
+		document["installation_version"] = targetVersion
+	} else if marker != "" {
+		document["installation_version"] = marker
+	}
+	return document
+}
+
 // IsInvalid reports whether err is a state validation error.
 func IsInvalid(err error) bool {
 	var target *Error

@@ -49,7 +49,9 @@ func Diagnose(target string, commands []string, trustTimestamps []string, now ti
 	}
 	status, summary := installation(target)
 	add("installation", status, summary)
-	if len(commands) == 0 {
+	if commands == nil {
+		add("catalog", "skip", "catálogo do bundle não lido")
+	} else if len(commands) == 0 {
 		add("catalog", "fail", "catálogo sem comandos públicos")
 	} else {
 		add("catalog", "ok", "catálogo de capacidades legível")
