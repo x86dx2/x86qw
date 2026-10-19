@@ -45,4 +45,3 @@ if [ -s $S/oracle-diff.txt ]; then echo "TREES DIFFER:"; head -20 $S/oracle-diff
 modes() { (cd $1 && find . -path ./.x86qw/staging -prune -o -path ./.x86qw/sessions -prune -o ! -name .DS_Store -print0 | xargs -0 stat -f '%Sp %N' | sort); }
 diff <(modes $S/oracle-py) <(modes $S/oracle-go) > $S/oracle-modes.txt && echo "MODES IDENTICAL" || { echo "MODES DIFFER:"; head -10 $S/oracle-modes.txt; }
 (cd $S/oracle-go && ./x86qw.sh verify --json < /dev/null 2>&1 | tail -1)
-
