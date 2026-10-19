@@ -13,6 +13,7 @@ import (
 
 	"github.com/x86dx2/x86qw/go/internal/buildinfo"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
+	"github.com/x86dx2/x86qw/go/internal/hub"
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/output"
 	"github.com/x86dx2/x86qw/go/internal/plan"
@@ -31,6 +32,7 @@ Comandos:
   install              instala ezQuake e um perfil de conteúdo em um diretório novo
   update --dry-run     planeja a atualização dos itens instalados
   upgrade --dry-run    planeja a atualização e as novidades do perfil
+  hub                  lista servidores públicos para jogar ou observar
   catalog              autentica o catálogo público via TUF
 `
 
@@ -56,6 +58,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runPlan(args[0], args[1:], stdout, stderr)
 	case "install":
 		return runInstall(args[1:], stdout, stderr)
+	case "hub":
+		return runHub(args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "x86qw: comando desconhecido: %s\n", args[0])
 		fmt.Fprintf(stderr, usage, buildinfo.Version)
@@ -409,5 +413,32 @@ func runInstall(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "! %s\n", warning)
 	}
 	fmt.Fprintf(stdout, "✓ Instalação completa: ezQuake + %d componentes · %d arquivos em %s\n", len(result.Installed), result.Files, absolute)
+	return output.ExitSuccess
+}
+
+func runHub(args []string, stdout, stderr io.Writer) int {
+	target, asJSON, ok := targetFlags("hub", args, stderr)
+	if !ok {
+		return output.ExitUsage
+	}
+	servers, err := hub.Servers(context.Background(), target)
+	if err != nil {
+		if asJSON {
+			output.Failure("hub", output.ExitFailure, "operation", err.Error()).Write(stdout)
+		} else {
+			fmt.Fprintf(stderr, "✗ %v\n", err)
+		}
+		return output.ExitFailure
+	}
+	if asJSON {
+		data := map[string]any{"servers": servers, "target": target}
+		if err := output.Success("hub", data).Write(stdout); err != nil {
+			return output.ExitFailure
+		}
+		return output.ExitSuccess
+	}
+	for _, server := range servers {
+		fmt.Fprintf(stdout, "  %-28s %-6s %-10s %2d+%-2d %s\n", server.Address, server.Mode, server.Map, server.Players.Humans, server.Players.Bots, server.Title)
+	}
 	return output.ExitSuccess
 }
