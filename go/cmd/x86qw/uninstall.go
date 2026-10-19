@@ -21,10 +21,10 @@ func runUninstall(args []string, stdout, stderr io.Writer) int {
 	}
 	var report *maint.Report
 	if purge {
-		fmt.Fprintln(stdout, "\n· Desinstalação completa")
+		fmt.Fprintln(stdout, "\nDesinstalação completa")
 		report, err = maint.Purge(target)
 	} else {
-		fmt.Fprintln(stdout, "\n· Desinstalação")
+		fmt.Fprintln(stdout, "\nDesinstalação")
 		report, err = maint.Uninstall(target)
 	}
 	if report != nil {

@@ -25,7 +25,7 @@ func runMigrate(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail(err)
 	}
-	fmt.Fprintln(stdout, "\n· Migração da instalação")
+	fmt.Fprintln(stdout, "\nMigração da instalação")
 	if len(ops) == 0 {
 		fmt.Fprintln(stdout, "✓ Nenhuma migração é necessária; os metadados já estão convergentes.")
 		return output.ExitSuccess

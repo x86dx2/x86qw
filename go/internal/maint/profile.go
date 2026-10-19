@@ -262,7 +262,7 @@ func RestoreProfile(archive, target string) ([]string, error) {
 	read := func(name string) ([]byte, error) {
 		file, ok := members[name]
 		if !ok {
-			return nil, fmt.Errorf("There is no item named %s in the archive", pyRepr(name))
+			return nil, fmt.Errorf("\"There is no item named %s in the archive\"", pyRepr(name)) // str(KeyError)
 		}
 		source, err := file.Open()
 		if err != nil {

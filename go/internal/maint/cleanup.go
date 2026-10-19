@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -148,8 +149,9 @@ func ownedCaches() ([]string, error) {
 		if err != nil || strings.TrimRight(string(marker), "\n") != candidate.value {
 			return nil, fmt.Errorf("O diretório de cache contém arquivos que não pertencem ao instalador e foi preservado: %s", candidate.path)
 		}
-		// Like private_fs.validate_private_file: owner-only regular file.
-		if info, err := os.Lstat(markerPath); err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
+		// Like private_fs.validate_private_file: owner-only regular file
+		// (Windows relies on ACLs, which the mode bits do not reflect).
+		if info, err := os.Lstat(markerPath); err != nil || !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0) {
 			return nil, fmt.Errorf("O marcador de propriedade do cache não pôde ser protegido: %s", markerPath)
 		}
 		owned = append(owned, candidate.path)

@@ -19,7 +19,7 @@ PYTHON="${PYTHON:-python3}"
 # Without --installed-cli Python needs a development root: use the one Go embeds.
 export X86_QW_TRUST_ROOT="$HERE/../../internal/trust/root.json"
 REAL_CACHE="${ORACLE_REAL_CACHE:-$(getconf DARWIN_USER_CACHE_DIR 2>/dev/null)x86qw}"
-PASS=0; FAIL=0
+PASS=0; FAIL=0; POST=""
 
 setup() { # side
   local side=$1 root="$W/$1"
@@ -69,6 +69,7 @@ compare() { # scenario expect_target(yes/no) output_filter
   cmp -s "$W/py/link.txt" "$W/go/link.txt" || problems+=("link")
   if [ -n "$filter" ]; then
     diff <(normalize "$W/py/out.txt" | eval "$filter") <(normalize "$W/go/out.txt" | eval "$filter") > "$W/out.diff" || problems+=("output")
+    diff <(normalize "$W/py/err.txt" | grep '^✗') <(normalize "$W/go/err.txt" | grep '^✗') >> "$W/out.diff" || problems+=("error")
     diff <(normalize "$W/py/out.txt" "$W/py/err.txt" | grep '^! ' | sort) <(normalize "$W/go/out.txt" "$W/go/err.txt" | grep '^! ' | sort) >> "$W/out.diff" || problems+=("warnings")
   fi
   if [ "$keep" = yes ] && [ -d "$W/go/target" ]; then
@@ -86,19 +87,25 @@ compare() { # scenario expect_target(yes/no) output_filter
 
 scenario() { # name age-fn keep filter command...
   local name=$1 age=$2 keep=$3 filter=$4; shift 4
-  for side in py go; do setup $side; [ -n "$age" ] && $age "$W/$side"; run_side $side "$@"; done
+  for side in py go; do setup $side; [ -n "$age" ] && $age "$W/$side"; run_side $side "$@"; [ -n "$POST" ] && $POST "$W/$side"; done
   compare "$name" "$keep" "$filter"
 }
 
 # --- aging helpers (argument: side root) ----------------------------------
 age_library() { mkdir -p "$1/target/qw"; printf '%s\n' '{"favorites": [{"address": "a.example:27500", "freshness": "2026-01-01T00:00:00Z", "origin": "user", "title": "A"}, {"address": "b.example:27500", "freshness": "2026-01-02T00:00:00Z", "origin": "hub", "title": "B"}], "format": 1, "kind": "library", "recents": [{"address": "c.example:28000", "freshness": "2026-01-03T00:00:00Z", "origin": "local", "title": "C"}]}' > "$1/target/qw/x86qw-library.json"; }
 age_profile() { printf '// mine\n' >> "$1/target/ezquake/configs/config.cfg"; printf 'set x 1\n' > "$1/target/qw/x86qw-extra.cfg"; }
-age_restore() { age_profile "$1"; mkdir -p "$1/stash"; (cd "$1/target" && zip -q -0 "$1/stash/backup.zip" ezquake/configs/config.cfg qw/x86qw-extra.cfg); }
+age_restore() { age_profile "$1"; mkdir -p "$1/stash"
+  (cd "$1" && HOME="$1/home" X86QW_CACHE_DIR="$1/cache/x86qw" "$PYTHON" "$HERE/pyrun.py" --online-only --installed-cli profile "$1/target" --backup "$1/stash/backup.zip" < /dev/null > /dev/null 2>&1)
+  printf 'changed\n' > "$1/target/ezquake/configs/config.cfg"; rm -f "$1/target/qw/x86qw-extra.cfg"; }
+# The library stamps entries with the current time; pin it after the run.
+pin_freshness() { sed -i '' -E 's/"freshness": "[^"]*"/"freshness": "@NOW@"/' "$1/target/qw/x86qw-library.json"; }
 age_changes() { printf 'x\n' > "$1/target/qw/new file[1].cfg"; printf 'tamper\n' >> "$1/target/qw/x86qw-ktx-help.cfg"; rm -f "$1/target/arena/x86qw-arena.cfg"; }
 age_cleanup() { mkdir -p "$1/target/ezquake/temp" "$1/target/ezquake/sb/cache" "$1/target/td2/demos" "$1/target/logs" "$1/target/fortress/progs";
   printf 'x' > "$1/target/ezquake/temp/a"; printf 'y' > "$1/target/ezquake/sb/cache/b"; : > "$1/target/td2/demos/empty.mvd";
   printf 'demo' > "$1/target/td2/demos/real.mvd"; printf 'tmp' > "$1/target/fortress/x.tmp"; printf 'log' > "$1/target/logs/l.txt";
   printf 'dl' > "$1/target/fortress/progs/downloaded.mdl"; printf 'h' > "$1/target/qw/qconsole.log"; }
+age_public_marker() { age_cleanup "$1"; chmod 644 "$1/cache/x86qw/.x86qw-cache"; }
+age_public_legacy() { age_cleanup "$1"; chmod 644 "$1/cache/x86-qw/.x86-qw-cache"; }
 age_repair() { rm -f "$1/target/qw/x86qw-ktx-help.cfg" "$1/target/td2/x86qw_td2.dat" "$1/target/qw/pak.lst"; chmod -x "$1/target/mvdsv"; }
 age_repair_state() { "$PYTHON" - "$1/target/.x86qw/state.json" <<'PY'
 import hashlib, json, sys
@@ -112,39 +119,45 @@ PY
 
 json_only='grep "^{" | sed -E "s/\"freshness\": \"[^\"]*\"/F/g"'
 # Go prints warnings on stderr (Python on stdout); compare() checks them apart.
-messages='grep -E "^[✓·] " | grep -vE "^· (Desinstalação|Limpeza|Reparo)"'
+# Python's banner and "Preparando" line are interface chrome Go does not print.
+full="awk '{line[NR] = \$0} /^Preparando interface do instalador/ {skip = NR} END {for (i = skip + 1; i <= NR; i++) print line[i]}' | awk 'NF {seen = 1} seen'"
+messages="$full | grep -v '^! '"
 lines_only='grep -E "^(  |[AMD]  |x86QW|favorites|recents|profile|cache|personal|Arquivos)" | grep -v "Perfil gravado"'
 
 PY_PREFIX=(--online-only --installed-cli)
 run_all() {
   for wanted in "$@"; do case $wanted in
-    library-add) scenario library-add "" yes "$lines_only | sed -E 's/  [0-9T:-]+Z$//'" library @TARGET@ --add Quake.Example.com:27500 ;;
-    library-remove) scenario library-remove age_library yes "$lines_only" library @TARGET@ --remove B.EXAMPLE:27500 ;;
-    profile) scenario profile age_profile yes "$lines_only" profile @TARGET@ ;;
-    profile-backup) scenario profile-backup age_profile yes "$lines_only" profile @TARGET@ --backup @ROOT@/backup.zip
+    library-add) POST=pin_freshness; scenario library-add "" yes "$full | sed -E 's/  [0-9T:-]+Z$//'" library @TARGET@ --add Quake.Example.com:27500; POST="" ;;
+    library-remove) scenario library-remove age_library yes "$full" library @TARGET@ --remove B.EXAMPLE:27500 ;;
+    profile) scenario profile age_profile yes "$full" profile @TARGET@ ;;
+    profile-backup) scenario profile-backup age_profile yes "$full" profile @TARGET@ --backup @ROOT@/backup.zip
       for side in py go; do (cd "$W/$side" && rm -rf x && mkdir x && cd x && unzip -q ../backup.zip && find . -type f | sort | xargs shasum -a 256) > "$W/$side/zip.txt"; done
       cmp -s "$W/py/zip.txt" "$W/go/zip.txt" && echo "PASS profile-backup-zip" || { FAIL=$((FAIL+1)); echo "FAIL profile-backup-zip"; } ;;
-    profile-restore) scenario profile-restore age_restore yes "$lines_only" profile @TARGET@ --restore @ROOT@/stash/backup.zip ;;
-    ui) scenario ui "" yes "" ui @TARGET@ --output @ROOT@/panel.html
+    profile-restore) scenario profile-restore age_restore yes "$full" profile @TARGET@ --restore @ROOT@/stash/backup.zip ;;
+    ui) scenario ui "" yes "$full" ui @TARGET@ --output @ROOT@/panel.html
       diff <(normalize "$W/py/panel.html") <(normalize "$W/go/panel.html") > /dev/null && echo "PASS ui-html" || { FAIL=$((FAIL+1)); echo "FAIL ui-html"; } ;;
-    changes) scenario changes age_changes no "grep -E '^[AMD]  '" changes @TARGET@ ;;
-    changes-sync) scenario changes-sync age_changes no "grep -E '^[AMD]  '" changes @TARGET@ --sync-gitignore ;;
+    changes) scenario changes age_changes no "$full" changes @TARGET@ ;;
+    changes-sync) scenario changes-sync age_changes no "$full" changes @TARGET@ --sync-gitignore ;;
     cleanup) scenario cleanup age_cleanup yes "$messages" cleanup @TARGET@ ;;
     cleanup-all) scenario cleanup-all age_cleanup yes "$messages" cleanup @TARGET@ --downloads --personal-data ;;
-    migrate-dry) scenario migrate-dry "" yes "grep -E 'commit|Nenhuma|Simulação'" migrate @TARGET@ --dry-run ;;
-    migrate) scenario migrate "" yes "grep -E 'commit|Nenhuma|concluída'" migrate @TARGET@ ;;
+    cleanup-public-marker) scenario cleanup-public-marker age_public_marker yes "$messages" cleanup @TARGET@ ;;
+    cleanup-public-legacy) scenario cleanup-public-legacy age_public_legacy yes "$messages" cleanup @TARGET@ ;;
+    purge-public-marker) scenario purge-public-marker age_public_marker yes "$messages" uninstall @TARGET@ --purge ;;
+    migrate-dry) scenario migrate-dry "" yes "$full" migrate @TARGET@ --dry-run ;;
+    migrate) scenario migrate "" yes "$full" migrate @TARGET@ ;;
     uninstall) scenario uninstall "" no "$messages" uninstall @TARGET@ ;;
     uninstall-modified) scenario uninstall-modified age_changes no "$messages" uninstall @TARGET@ ;;
     purge) scenario purge "" no "$messages" uninstall @TARGET@ --purge ;;
-    repair-dry) PY_PREFIX=(--online-only); scenario repair-dry age_repair no "$json_only" repair @TARGET@ --dry-run --json; PY_PREFIX=(--online-only --installed-cli) ;;
-    repair) PY_PREFIX=(--online-only); scenario repair age_repair yes "" repair @TARGET@; PY_PREFIX=(--online-only --installed-cli) ;;
-    repair-state) PY_PREFIX=(--online-only); scenario repair-state age_repair_state yes "" repair @TARGET@; PY_PREFIX=(--online-only --installed-cli) ;;
+    repair-dry) PY_PREFIX=(--online-only); scenario repair-dry age_repair no "$full" repair @TARGET@ --dry-run --json; PY_PREFIX=(--online-only --installed-cli) ;;
+    repair) PY_PREFIX=(--online-only); scenario repair age_repair yes "tail -1" repair @TARGET@; PY_PREFIX=(--online-only --installed-cli) ;;
+    repair-state) PY_PREFIX=(--online-only); scenario repair-state age_repair_state yes "tail -1" repair @TARGET@; PY_PREFIX=(--online-only --installed-cli) ;;
     *) echo "unknown scenario $wanted"; FAIL=$((FAIL+1)) ;;
   esac; done
 }
 
 if [ $# -eq 0 ]; then
   set -- library-add library-remove profile profile-backup profile-restore ui changes changes-sync cleanup cleanup-all \
+    cleanup-public-marker cleanup-public-legacy purge-public-marker \
     migrate-dry migrate uninstall uninstall-modified purge repair-dry repair repair-state
 fi
 run_all "$@"

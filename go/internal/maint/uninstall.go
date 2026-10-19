@@ -32,7 +32,9 @@ func (r *Report) info(format string, args ...any) {
 func (r *Report) success(format string, args ...any) {
 	r.Lines = append(r.Lines, "✓ "+fmt.Sprintf(format, args...))
 }
-func (r *Report) warn(format string, args ...any)    { r.Warnings = append(r.Warnings, fmt.Sprintf(format, args...)) }
+func (r *Report) warn(format string, args ...any) {
+	r.Warnings = append(r.Warnings, fmt.Sprintf(format, args...))
+}
 
 func cliPaths(target string) []string {
 	return []string{

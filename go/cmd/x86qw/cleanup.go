@@ -31,11 +31,11 @@ func runCleanup(args []string, stdout, stderr io.Writer) int {
 	}
 	defer held.Release()
 	downloads, personal := parsed.bools["--downloads"], parsed.bools["--personal-data"]
+	fmt.Fprintln(stdout, "\nLimpeza segura")
 	result, err := maint.Cleanup(target, downloads, personal)
 	if err != nil {
 		return fail(err)
 	}
-	fmt.Fprintln(stdout, "\n· Limpeza segura")
 	for _, root := range result.Caches {
 		fmt.Fprintf(stdout, "✓ Cache removido: %s\n", root)
 	}
