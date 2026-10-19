@@ -84,8 +84,14 @@ func render(p *pins, out string) error {
 }
 
 func main() {
+	if len(os.Args) >= 2 && os.Args[1] == "sign" {
+		os.Exit(runSign(os.Args[2:]))
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "renew-timestamp" {
+		os.Exit(runRenew(os.Args[2:]))
+	}
 	if len(os.Args) < 2 || os.Args[1] != "bootstrap" {
-		fmt.Fprintln(os.Stderr, "uso: x86qw-release bootstrap --version V --assets DIR --out DIR")
+		fmt.Fprintln(os.Stderr, "uso: x86qw-release bootstrap|sign|renew-timestamp ...")
 		os.Exit(2)
 	}
 	flags := flag.NewFlagSet("bootstrap", flag.ExitOnError)
