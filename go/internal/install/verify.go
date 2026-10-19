@@ -336,3 +336,56 @@ func fileSHA256(name string) (string, error) {
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
+
+// VerifyForPlay runs the checks `play` performs before launching: original
+// PAKs, the selected game's managed files and play-support for every game.
+func VerifyForPlay(root, component string, games []Game) error {
+	for _, pak := range []struct{ path, sha string }{{"id1/pak0.pak", pak0SHA256}, {"id1/pak1.pak", pak1SHA256}} {
+		if err := checkPak(filepath.Join(root, pak.path), pak.sha); err != nil {
+			return err
+		}
+	}
+	record, err := receipt.Load(filepath.Join(root, receipt.ComponentsDir, component))
+	if err != nil {
+		return err
+	}
+	if _, err := verifyRecord(root, record); err != nil {
+		return err
+	}
+	issues, _, err := PlaySupportIssues(root, games)
+	if err != nil {
+		return err
+	}
+	if len(issues) > 0 {
+		return fmt.Errorf("Suporte de execução incompleto (%s). Execute update, upgrade ou repair antes de jogar ou hospedar.", strings.Join(issues, "; "))
+	}
+	return nil
+}
+
+// ClientRuntime returns the single managed ezQuake (verified), like
+// choose_host_runtime when only one channel is installed.
+func ClientRuntime(root string) (string, error) {
+	var found []string
+	for _, spec := range catalog.ClientSpecs {
+		for _, channel := range []string{"stable", "nightly"} {
+			ok, err := verifyClient(root, spec, channel)
+			if err != nil {
+				return "", err
+			}
+			if ok {
+				runtime := filepath.Join(root, spec.Runtime(channel))
+				if spec.Platform == "macos" {
+					runtime = filepath.Join(runtime, "Contents", "MacOS", "ezQuake")
+				}
+				found = append(found, runtime)
+			}
+		}
+	}
+	switch len(found) {
+	case 0:
+		return "", fmt.Errorf("nenhum ezQuake gerenciado foi encontrado em %s", root)
+	case 1:
+		return found[0], nil
+	}
+	return "", errors.New("há mais de um ezQuake instalado; use a CLI Python para escolher o cliente")
+}

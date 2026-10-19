@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "game": "ktx",
+  "profile": "x86qw",
+  "theme": "x86qw",
+  "prefix": "/",
+  "color": "quake-high-bit",
+  "randomize": true,
+  "groups": [
+    {
+      "id": "classic-maps",
+      "label": "Mapas clássicos da distribuição",
+      "characters": [
+        {"name": "dm6"},
+        {"name": "dm4"},
+        {"name": "dm2"},
+        {"name": "dm3"},
+        {"name": "aerowalk"},
+        {"name": "e1m2"},
+        {"name": "schloss"},
+        {"name": "povdmm4"},
+        {"name": "death32c"},
+        {"name": "cmt3"}
+      ]
+    },
+    {
+      "id": "more-maps",
+      "label": "Mais mapas da distribuição",
+      "characters": [
+        {"name": "ztndm3"},
+        {"name": "bravado"},
+        {"name": "catalyst"},
+        {"name": "cmt1b"},
+        {"name": "cmt4"},
+        {"name": "e2m2"},
+        {"name": "dm1"},
+        {"name": "dm5"},
+        {"name": "e1m5"},
+        {"name": "e1m3"},
+        {"name": "slide1"},
+        {"name": "hoppa2"}
+      ]
+    },
+    {
+      "id": "ktx-modes",
+      "label": "Modos KTX",
+      "characters": [
+        {"name": "Duel"},
+        {"name": "Practice"},
+        {"name": "Midair"},
+        {"name": "Instagib"},
+        {"name": "Wipeout"},
+        {"name": "Race"},
+        {"name": "Hoony"},
+        {"name": "LGC"},
+        {"name": "FFA"},
+        {"name": "CTF"}
+      ]
+    }
+  ]
+}

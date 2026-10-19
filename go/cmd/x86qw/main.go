@@ -36,6 +36,7 @@ Comandos:
   install              instala ezQuake e um perfil de conteúdo em um diretório novo
   update --dry-run     planeja a atualização dos itens instalados
   upgrade --dry-run    planeja a atualização e as novidades do perfil
+  play JOGO --map MAPA inicia uma partida local (KTX exige --mode)
   hub                  lista servidores públicos para jogar ou observar
   doctor [--bundle]    diagnostica a instalação sem alterar arquivos
   catalog              autentica o catálogo público via TUF
@@ -67,6 +68,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runHub(args[1:], stdout, stderr)
 	case "doctor":
 		return runDoctor(args[1:], stdout, stderr)
+	case "play":
+		return runPlay(args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "x86qw: comando desconhecido: %s\n", args[0])
 		fmt.Fprintf(stderr, usage, buildinfo.Version)
@@ -451,7 +454,7 @@ func runHub(args []string, stdout, stderr io.Writer) int {
 }
 
 // publicCommands are the commands this binary implements.
-var publicCommands = []string{"version", "status", "verify", "update", "upgrade", "install", "hub", "doctor", "catalog"}
+var publicCommands = []string{"version", "status", "verify", "update", "upgrade", "install", "play", "hub", "doctor", "catalog"}
 
 func runDoctor(args []string, stdout, stderr io.Writer) int {
 	bundle := ""
