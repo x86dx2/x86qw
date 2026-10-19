@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 	"github.com/x86dx2/x86qw/go/internal/state"
 )
@@ -32,21 +33,6 @@ var qwPackagePriority = []string{
 	"ktx.pk3", "models.pk3", "scoreboard_flags.pk3", "nquake.pk3", "textures.pk3",
 	"qrp_maps_textures_1.pk3", "qrp_maps_textures_2.pk3", "qrp_maps_textures_3.pk3",
 	"qrp_maps_textures_4.pk3", "qrp_b-models.pk3",
-}
-
-// Client describes one ezQuake runtime layout (maintenance/inventory/runtimes.json).
-type Client struct {
-	Platform, Channel, Runtime, Receipt string
-}
-
-// Clients lists every managed ezQuake layout.
-var Clients = []Client{
-	{"macos", "stable", "ezQuake Stable.app", ".x86qw/clients/ezquake/macos/stable.receipt"},
-	{"macos", "nightly", "ezQuake Nightly.app", ".x86qw/clients/ezquake/macos/nightly.receipt"},
-	{"linux", "stable", "ezquake-stable-x86_64.AppImage", ".x86qw/clients/ezquake/linux/stable.receipt"},
-	{"linux", "nightly", "ezquake-nightly-x86_64.AppImage", ".x86qw/clients/ezquake/linux/nightly.receipt"},
-	{"windows", "stable", "ezquake-stable.exe", ".x86qw/clients/ezquake/windows/stable.receipt"},
-	{"windows", "nightly", "ezquake-nightly.exe", ".x86qw/clients/ezquake/windows/nightly.receipt"},
 }
 
 // Report summarizes a successful verification.
@@ -70,13 +56,15 @@ func Verify(root string) (*Report, error) {
 			return nil, err
 		}
 	}
-	for _, client := range Clients {
-		ok, err := verifyClient(root, client)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			report.Clients++
+	for _, spec := range catalog.ClientSpecs {
+		for _, channel := range []string{"stable", "nightly"} {
+			ok, err := verifyClient(root, spec, channel)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				report.Clients++
+			}
 		}
 	}
 	if report.Clients == 0 {
@@ -138,8 +126,8 @@ func checkPak(name, expected string) error {
 	return nil
 }
 
-func verifyClient(root string, client Client) (bool, error) {
-	receiptPath := filepath.Join(root, filepath.FromSlash(client.Receipt))
+func verifyClient(root string, spec catalog.ClientSpec, channel string) (bool, error) {
+	receiptPath := filepath.Join(root, filepath.FromSlash(spec.Receipt(channel)))
 	payload, err := os.ReadFile(receiptPath)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
@@ -147,16 +135,13 @@ func verifyClient(root string, client Client) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	rec, err := receipt.ParseReceipt(payload)
+	rec, err := receipt.ParseClient(payload, spec.Context(channel))
 	if err != nil {
-		return false, fmt.Errorf("recibo ezQuake inválido %s: %w", receiptPath, err)
+		return false, fmt.Errorf("%w: %s", err, receiptPath)
 	}
-	if rec.Get("platform") != client.Platform || rec.Get("channel") != client.Channel || rec.Get("install_name") != client.Runtime {
-		return false, fmt.Errorf("metadados de plataforma inválidos no recibo ezQuake: %s", receiptPath)
-	}
-	runtime := filepath.Join(root, client.Runtime)
+	runtime := filepath.Join(root, spec.Runtime(channel))
 	binaryPath := runtime
-	if client.Platform == "macos" {
+	if spec.Platform == "macos" {
 		binaryPath = filepath.Join(runtime, "Contents/MacOS/ezQuake")
 		version, err := bundleVersion(filepath.Join(runtime, "Contents/Info.plist"))
 		if err != nil {
