@@ -185,6 +185,9 @@ func readKTXSource(path string) (*ktxAssets, error) {
 		if err != nil {
 			return nil, errKTXSource
 		}
+		if header.Typeflag == tar.TypeXGlobalHeader {
+			continue // tarfile consumes pax global headers
+		}
 		name := tarName(header)
 		names = append(names, name)
 		member := &tarMember{header: header}
