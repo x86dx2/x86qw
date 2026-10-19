@@ -109,9 +109,10 @@ configuração de outro.
 No Grok, siga a tierização Grok existente (grok-4.6, com effort por papel).
 No Codex, siga a tierização Codex existente (GPT-6 Astra nos papéis complexos e
 GPT-5.6 Sol em Explorer/Test Runner, com effort por papel). No Claude Code, siga a
-tierização Claude (Claude Opus 5.5 nos papéis complexos e Claude Sonnet 5.5 em
-Explorer/Test Runner, com effort por papel), confirmada pelo Release Owner em
-2026-10-19. Não traduza chaves entre
+tierização Claude (Claude Opus 5.5 nos papéis complexos, Claude Sonnet 5.5 no Explorer
+e Claude Haiku 4.5 no Test Runner, com effort por papel exceto no Haiku, que não o
+suporta), confirmada pelo Release Owner em 2026-10-19; o Haiku no Test Runner passou
+a sonda do autor, registrada em CAPABILITY-REPORT.json (qualificação independente pendente). Não traduza chaves entre
 harnesses, não aplique a matriz do outro cliente e não substitua modelos/tipos por
 improviso. Mudança de tierização exige autorização explícita.
 

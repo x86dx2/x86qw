@@ -69,12 +69,14 @@ class AgentFiles(unittest.TestCase):
         for name, row in ROUTING["roles"].items():
             fields, hooks, body = read_agent(AGENTS_DIR / f"{name}.md")
             expected = {"name", "description", "model", "effort", "tools"}
+            if row["effort"] is None:
+                expected.discard("effort")
             if row["isolation"] == "worktree":
                 expected.add("isolation")
                 self.assertEqual(fields["isolation"], "worktree", name)
             self.assertEqual(set(fields), expected, name)
             self.assertEqual(fields["name"], name)
-            self.assertEqual((fields["model"], fields["effort"]), (row["model"], row["effort"]), name)
+            self.assertEqual((fields["model"], fields.get("effort")), (row["model"], row["effort"]), name)
             self.assertNotIn(": ", fields["description"], name)
             self.assertIn("assignment_id", fields["description"], name)
             tools = fields["tools"].split(", ")

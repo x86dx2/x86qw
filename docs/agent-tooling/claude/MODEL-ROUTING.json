@@ -2,7 +2,7 @@
   "schema_version": 1,
   "harness": "claude-code",
   "purpose": "normative target, not runtime evidence",
-  "tiering_status": "CONFIRMED_BY_RELEASE_OWNER_2026-10-19",
+  "tiering_status": "CONFIRMED_BY_RELEASE_OWNER_2026-10-19_TEST_RUNNER_HAIKU_AUTHOR_PROBE_PASS",
   "configured_with_client": "2.1.292",
   "enforcement": "tools allowlist + PreToolUse guard .claude/hooks/x86qw_guard.py; child permissionMode is ignored when the parent runs in bypassPermissions, acceptEdits or auto",
   "max_children": 4,
@@ -79,12 +79,13 @@
       "leaf": true
     },
     "x86qw-test-runner": {
-      "model": "claude-sonnet-5-5",
-      "effort": "low",
+      "model": "claude-haiku-4-5",
+      "effort": null,
       "access": "execute",
       "guard": "test",
       "isolation": "maker-worktree",
-      "leaf": true
+      "leaf": true,
+      "effort_note": "Haiku 4.5 não suporta effort: o campo fica ausente do frontmatter"
     },
     "x86qw-contract-checker": {
       "model": "claude-opus-5-5",

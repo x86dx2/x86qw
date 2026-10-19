@@ -11,7 +11,8 @@ Configurado != carregado != selecionado != observado; solicitado != observado.
 Frontmatter válido != tipo carregado; guard escrito != guard exercitado em runtime.
 MCP conectado != ferramentas autorizadas; especialização interna != auditoria externa.
 
-A tierização Claude (Opus 5.5 nos papéis complexos, Sonnet 5.5 em Explorer e Test Runner)
+A tierização Claude (Opus 5.5 nos papéis complexos, Sonnet 5.5 no Explorer, Haiku 4.5 no
+Test Runner, sem effort por falta de suporte do modelo)
 foi confirmada pelo Release Owner em 2026-10-19; trocar modelo ou effort
 exige autorização explícita, como nos outros harnesses.
 

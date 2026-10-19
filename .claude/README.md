@@ -37,7 +37,7 @@ continua Codex.
 | Maker | Claude Opus 5.5 | high | escrita no worktree | maker | worktree |
 | Critical Maker | Claude Opus 5.5 | xhigh | escrita no worktree | maker | worktree |
 | Test Designer | Claude Opus 5.5 | high | leitura | readonly | none |
-| Test Runner | Claude Sonnet 5.5 | low | execução | test | worktree do Maker |
+| Test Runner | Claude Haiku 4.5 | n/a (sem suporte) | execução | test | worktree do Maker |
 | Contract / Security Checker | Claude Opus 5.5 | xhigh | leitura | readonly | worktree do Maker |
 | Release Checker | Claude Opus 5.5 | xhigh | leitura | readonly | none |
 | Finalizer | Claude Opus 5.5 | xhigh | leitura | readonly | none |

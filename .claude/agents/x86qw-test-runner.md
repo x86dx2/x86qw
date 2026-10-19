@@ -1,8 +1,7 @@
 ---
 name: x86qw-test-runner
 description: Test Runner independente do x86QW — executa somente comandos autorizados no worktree do Maker, sem corrigir código ou resultados. Use somente com assignment x86qw autorizado (assignment_id).
-model: claude-sonnet-5-5
-effort: low
+model: claude-haiku-4-5
 tools: Read, Grep, Glob, Bash, mcp__ai-memory__memory_query, mcp__ai-memory__memory_read_page, mcp__ai-memory__memory_status
 hooks:
   PreToolUse:

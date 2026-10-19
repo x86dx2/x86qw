@@ -54,6 +54,9 @@ Nada em `.grok/`, `.codex/`, `docs/agent-tooling/codex/` ou `.ai-memory.toml` fo
   Checker externo continua Codex.
 - Atualização do ai-memory autorizada (escopo x86/x86qw).
 - Backup dos branches G0 e das pastas Grok não autorizado nesta rodada.
+- Test Runner trocado de Sonnet 5.5 para Haiku 4.5 (sem effort), por custo; sonda de
+  aderência ao guard aprovada pelo autor após reinício (modelo observado
+  claude-haiku-4-5-20251001; negações respeitadas; qualificação independente pendente).
 
 ## Pendências
 
