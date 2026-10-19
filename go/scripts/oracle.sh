@@ -8,6 +8,17 @@ S="${ORACLE_WORK:-$(mktemp -d)}"
 GO_BIN="${GO_BIN:-$S/x86qw}"
 SOURCE="${ORACLE_SOURCE:-$HOME/Games/x86qw}"
 scenario=$1; command=$2
+if [ "$scenario" = fresh ]; then
+  profile=$command
+  : "${PYTHON_BUNDLE:?set PYTHON_BUNDLE to an extracted installer bundle}"
+  rm -rf "$S/fresh-py" "$S/fresh-go" "$S/home"; mkdir -p "$S/home"
+  (cd "$S" && HOME="$S/home" python3 -I "$PYTHON_BUNDLE/x86qw.pyz" --online-only install --non-interactive \
+    --platform macos --channel stable --release latest --profile "$profile" "$S/fresh-py" < /dev/null > "$S/fresh-py.log" 2>&1)
+  echo "python exit=$?"
+  "$GO_BIN" install --profile "$profile" "$S/fresh-go" | tail -1
+  diff -rq -x staging -x sessions -x cli -x x86qw.sh -x .DS_Store "$S/fresh-py" "$S/fresh-go" && echo "TREES IDENTICAL"
+  exit
+fi
 age() {
   root=$1
   case $scenario in

@@ -28,6 +28,7 @@ Comandos:
   version              mostra a versão
   status               mostra instalação, estado e serviços registrados
   verify               verifica a integridade da instalação
+  install              instala ezQuake e um perfil de conteúdo em um diretório novo
   update --dry-run     planeja a atualização dos itens instalados
   upgrade --dry-run    planeja a atualização e as novidades do perfil
   catalog              autentica o catálogo público via TUF
@@ -53,6 +54,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runVerify(args[1:], stdout, stderr)
 	case "update", "upgrade":
 		return runPlan(args[0], args[1:], stdout, stderr)
+	case "install":
+		return runInstall(args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "x86qw: comando desconhecido: %s\n", args[0])
 		fmt.Fprintf(stderr, usage, buildinfo.Version)
@@ -346,5 +349,65 @@ func applyPlan(command string, input plan.Input, planned *plan.Plan, yes bool, s
 		fmt.Fprintf(stderr, "! %s\n", warning)
 	}
 	fmt.Fprintf(stdout, "✓ %d componentes atualizados e validados · %d arquivos\n", len(result.Installed), result.Files)
+	return output.ExitSuccess
+}
+
+func loadCatalog(catalogFile string) (*catalog.Catalog, error) {
+	var raw []byte
+	var err error
+	if catalogFile != "" {
+		raw, err = os.ReadFile(catalogFile)
+	} else {
+		var authenticated *trust.Catalog
+		authenticated, err = trust.LoadCatalog(trust.Options{CacheDir: defaultCacheDir()})
+		if authenticated != nil {
+			raw = authenticated.Raw
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return catalog.Parse(raw)
+}
+
+func runInstall(args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("install", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	platform := flags.String("platform", install.HostPlatform(), "macos, linux ou windows")
+	channel := flags.String("channel", "stable", "canal do ezQuake")
+	profile := flags.String("profile", "", "essential, recommended ou complete")
+	target := flags.String("target", "", "diretório da instalação")
+	catalogFile := flags.String("catalog-file", "", "catálogo local já autenticado (testes)")
+	if err := flags.Parse(args); err != nil {
+		return output.ExitUsage
+	}
+	if len(flags.Args()) == 1 && *target == "" {
+		*target = flags.Args()[0]
+	}
+	if *target == "" || *profile == "" || len(flags.Args()) > 1 {
+		fmt.Fprintln(stderr, "uso: x86qw install --profile essential|recommended|complete [--platform SO] [--channel stable] DESTINO")
+		return output.ExitUsage
+	}
+	parsed, err := loadCatalog(*catalogFile)
+	if err != nil {
+		fmt.Fprintf(stderr, "✗ %v\n", err)
+		return output.ExitFailure
+	}
+	inventory, err := catalog.LoadInventory()
+	if err != nil {
+		fmt.Fprintf(stderr, "✗ %v\n", err)
+		return output.ExitFailure
+	}
+	absolute, _ := filepath.Abs(*target)
+	result, err := install.Install(context.Background(), absolute, parsed, inventory,
+		install.InstallOptions{Platform: *platform, Channel: *channel, Profile: *profile})
+	if err != nil {
+		fmt.Fprintf(stderr, "✗ %v\n", err)
+		return output.ExitFailure
+	}
+	for _, warning := range result.Warnings {
+		fmt.Fprintf(stderr, "! %s\n", warning)
+	}
+	fmt.Fprintf(stdout, "✓ Instalação completa: ezQuake + %d componentes · %d arquivos em %s\n", len(result.Installed), result.Files, absolute)
 	return output.ExitSuccess
 }
