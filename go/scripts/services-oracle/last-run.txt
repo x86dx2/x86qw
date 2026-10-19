@@ -1,0 +1,80 @@
+OK :: host ktx --mode duel --map dm6
+OK :: host ktx --mode 2on2 --map dm2
+OK :: host ktx --mode 4on4 --map dm2
+OK :: host ktx --mode ffa --map dm6 --bots 4 --bot-skill random
+BOTH-REFUSE :: host ktx --mode ffa --map dm6 --fill-bots --maxclients 8
+OK :: host ktx --mode ffa --map dm6 --bots 3 --bot-skill 12
+BOTH-REFUSE :: host ktx --mode 2on2 --map dm2 --bots 3
+OK :: host ktx --mode tot --map dm6 --bots 2 --bot-weapon 7 --bot-health 150 --bot-break-on-death
+OK :: host ktx --mode tot --map dm6 --bots 2 --no-bot-break-on-death --bot-weapon random
+OK :: host ktx --mode clan-arena --map dm6
+OK :: host ktx --mode wipeout --map dm6
+OK :: host ktx --mode ctf --map e1m3 --ctf-hook smooth --ctf-runes off --ctf-based-spawn
+OK :: host ktx --mode ctf --map e1m3 --ctf-hook off --ctf-runes on
+OK :: host ktx --mode ctf --map e1m3
+OK :: host ktx --mode race --map dm6 --race-style simultaneous
+OK :: host ktx --mode race --map dm6 --race-style match --race-scoring formula1
+OK :: host ktx --mode midair --map dm6
+OK :: host ktx --mode dmm4 --map dm6
+OK :: host ktx --mode instagib --map dm6
+OK :: host ktx --mode lgc --map dm6
+OK :: host ktx --mode rocket-arena --map dm6
+OK :: host ktx --mode practice --map dm6
+OK :: host ktx --mode hoony --map dm6
+OK :: host --mode duel --map aerowalk
+OK :: host ktx --mode duel --map dm6 --bind 0.0.0.0 --port 27500 --hostname "Meu Servidor" --maxclients 8 --no-mvd
+OK :: host ktx --mode ffa --map dm6 --bots 2 --bind 0.0.0.0
+OK :: host ktx --mode duel --map dm6 --bind ::1 --port 27600
+OK :: host ktx --mode duel --map dm6 --password abc --spectator-password def --rcon-password ghi
+OK :: host ktx --mode duel --map dm6 --password-file "$PW" --rcon-password-file "$PW"
+OK :: host ktx --mode duel --map dm6 --spectator-password-file "$PW" --bind 0.0.0.0
+OK :: host ktx --mode duel --map dm6 --with-qtv
+OK :: host ktx --mode duel --map dm6 --with-qtv --qtv-port 28010 --qtv-password-file "$PW" --qtv-bind 0.0.0.0
+OK :: host ktx --mode duel --map dm6 --with-proxy --proxy-port 30010
+OK :: host ktx --mode duel --map dm6 --with-qtv --with-proxy --bind ::1 --qtv-bind ::1 --proxy-bind ::1
+OK :: host ktx --mode ffa --map dm6 --bots 2 --with-qtv --qtv-password q1 --password p1
+OK :: host final-arena --map 23ar-a
+OK :: host final-arena --map arenarg2 --with-qtv
+OK :: host pro-x --map proxmap1
+OK :: host team-fortress --map 2fort5r --maxclients 24
+OK :: host td2 --map dm6 --no-mvd
+OK :: host ktx --mode duel --map dm6 --background
+OK :: host ktx --mode ffa --map dm6 --bots 3 --bot-skill 7 --background --password-file "$PW" --with-qtv
+OK :: host final-arena --map 23ar-a --background --rcon-password zz --verbose
+BOTH-REFUSE :: host ktx --mode ctf --map e1m3 --bind 0.0.0.0 --with-qtv --save-preset ctf-lan
+OK :: host --preset ctf-lan
+BOTH-REFUSE :: host final-arena --map 23ar-a --hostname Arena --save-preset arena
+OK :: host --preset arena --rcon-password r1
+EXIT-DIFF py=130 go=1 | py:  | go: ✗ Informe --mode para hospedar KTX; o menu interativo ainda não foi portado. :: host ktx --map dm6
+EXIT-DIFF py=130 go=1 | py:  | go: ✗ Informe --map; o menu interativo ainda não foi portado. :: host ktx --mode duel
+BOTH-REFUSE :: host ktx --mode nosuch --map dm6
+BOTH-REFUSE :: host ktx --mode duel --map nosuchmap
+BOTH-REFUSE :: host ktx --mode duel --map dm6 --port 80
+BOTH-REFUSE :: host ktx --mode duel --map dm6 --bots 40
+BOTH-REFUSE :: host ktx --mode ffa --map dm6 --bots 4 --maxclients 3
+BOTH-REFUSE :: host ktx --mode duel --map dm6 --password a --prompt-password
+BOTH-REFUSE :: host ktx --mode duel --map dm6 --bind notanip
+BOTH-REFUSE :: host ktx --mode duel --map dm6 --hostname "bad\"name"
+BOTH-REFUSE :: host final-arena --map 23ar-a --mode duel
+BOTH-REFUSE :: host final-arena --map 23ar-a --bots 2
+BOTH-REFUSE :: host ktx --mode duel --map dm6 --bot-skill 3
+BOTH-REFUSE :: host --preset missing
+BOTH-REFUSE :: host ktx --preset arena
+BOTH-REFUSE :: host nosuchgame --map dm6
+BOTH-REFUSE :: host ktx --mode duel --map dm6 --port 28000 --with-qtv
+BOTH-REFUSE :: host ktx --mode duel --map dm6 --save-preset "bad name"
+BOTH-REFUSE :: host ktx --mode duel --map dm6 --save-preset withpw --password x
+OK :: proxy
+OK :: proxy --port 30005 --bind 0.0.0.0
+OK :: proxy --bind ::1
+OK :: proxy --background
+BOTH-REFUSE :: proxy --port 99
+OK :: qtv
+OK :: qtv --upstream 127.0.0.1:28501
+OK :: qtv --upstream 127.0.0.1:28501 --qtv-password-file "$PW"
+OK :: qtv --hostname "Relay X" --bind 0.0.0.0 --port 28005
+OK :: qtv --upstream "[::1]:27500" --password abc --bind ::1
+OK :: qtv --background --upstream 127.0.0.1:27500 --qtv-password abc
+BOTH-REFUSE :: qtv --upstream notanendpoint
+BOTH-REFUSE :: qtv --hostname "bad\"host"
+pass=77 fail=2

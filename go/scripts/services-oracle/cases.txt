@@ -1,0 +1,89 @@
+# host: KTX modes and dedicated cvars
+host ktx --mode duel --map dm6
+host ktx --mode 2on2 --map dm2
+host ktx --mode 4on4 --map dm2
+host ktx --mode ffa --map dm6 --bots 4 --bot-skill random
+host ktx --mode ffa --map dm6 --fill-bots --maxclients 8
+host ktx --mode ffa --map dm6 --bots 3 --bot-skill 12
+host ktx --mode 2on2 --map dm2 --bots 3
+host ktx --mode tot --map dm6 --bots 2 --bot-weapon 7 --bot-health 150 --bot-break-on-death
+host ktx --mode tot --map dm6 --bots 2 --no-bot-break-on-death --bot-weapon random
+host ktx --mode clan-arena --map dm6
+host ktx --mode wipeout --map dm6
+host ktx --mode ctf --map e1m3 --ctf-hook smooth --ctf-runes off --ctf-based-spawn
+host ktx --mode ctf --map e1m3 --ctf-hook off --ctf-runes on
+host ktx --mode ctf --map e1m3
+host ktx --mode race --map dm6 --race-style simultaneous
+host ktx --mode race --map dm6 --race-style match --race-scoring formula1
+host ktx --mode midair --map dm6
+host ktx --mode dmm4 --map dm6
+host ktx --mode instagib --map dm6
+host ktx --mode lgc --map dm6
+host ktx --mode rocket-arena --map dm6
+host ktx --mode practice --map dm6
+host ktx --mode hoony --map dm6
+host --mode duel --map aerowalk
+# host: network, hostname and recording
+host ktx --mode duel --map dm6 --bind 0.0.0.0 --port 27500 --hostname "Meu Servidor" --maxclients 8 --no-mvd
+host ktx --mode ffa --map dm6 --bots 2 --bind 0.0.0.0
+host ktx --mode duel --map dm6 --bind ::1 --port 27600
+# host: password triplets
+host ktx --mode duel --map dm6 --password abc --spectator-password def --rcon-password ghi
+host ktx --mode duel --map dm6 --password-file "$PW" --rcon-password-file "$PW"
+host ktx --mode duel --map dm6 --spectator-password-file "$PW" --bind 0.0.0.0
+# host: QTV and QWFWD
+host ktx --mode duel --map dm6 --with-qtv
+host ktx --mode duel --map dm6 --with-qtv --qtv-port 28010 --qtv-password-file "$PW" --qtv-bind 0.0.0.0
+host ktx --mode duel --map dm6 --with-proxy --proxy-port 30010
+host ktx --mode duel --map dm6 --with-qtv --with-proxy --bind ::1 --qtv-bind ::1 --proxy-bind ::1
+host ktx --mode ffa --map dm6 --bots 2 --with-qtv --qtv-password q1 --password p1
+# host: other games
+host final-arena --map 23ar-a
+host final-arena --map arenarg2 --with-qtv
+host pro-x --map proxmap1
+host team-fortress --map 2fort5r --maxclients 24
+host td2 --map dm6 --no-mvd
+# host: background controller hand-off
+host ktx --mode duel --map dm6 --background
+host ktx --mode ffa --map dm6 --bots 3 --bot-skill 7 --background --password-file "$PW" --with-qtv
+host final-arena --map 23ar-a --background --rcon-password zz --verbose
+# host: presets
+host ktx --mode ctf --map e1m3 --bind 0.0.0.0 --with-qtv --save-preset ctf-lan
+host --preset ctf-lan
+host final-arena --map 23ar-a --hostname Arena --save-preset arena
+host --preset arena --rcon-password r1
+# host: refusals
+host ktx --map dm6
+host ktx --mode duel
+host ktx --mode nosuch --map dm6
+host ktx --mode duel --map nosuchmap
+host ktx --mode duel --map dm6 --port 80
+host ktx --mode duel --map dm6 --bots 40
+host ktx --mode ffa --map dm6 --bots 4 --maxclients 3
+host ktx --mode duel --map dm6 --password a --prompt-password
+host ktx --mode duel --map dm6 --bind notanip
+host ktx --mode duel --map dm6 --hostname "bad\"name"
+host final-arena --map 23ar-a --mode duel
+host final-arena --map 23ar-a --bots 2
+host ktx --mode duel --map dm6 --bot-skill 3
+host --preset missing
+host ktx --preset arena
+host nosuchgame --map dm6
+host ktx --mode duel --map dm6 --port 28000 --with-qtv
+host ktx --mode duel --map dm6 --save-preset "bad name"
+host ktx --mode duel --map dm6 --save-preset withpw --password x
+# proxy
+proxy
+proxy --port 30005 --bind 0.0.0.0
+proxy --bind ::1
+proxy --background
+proxy --port 99
+# qtv
+qtv
+qtv --upstream 127.0.0.1:28501
+qtv --upstream 127.0.0.1:28501 --qtv-password-file "$PW"
+qtv --hostname "Relay X" --bind 0.0.0.0 --port 28005
+qtv --upstream "[::1]:27500" --password abc --bind ::1
+qtv --background --upstream 127.0.0.1:27500 --qtv-password abc
+qtv --upstream notanendpoint
+qtv --hostname "bad\"host"
