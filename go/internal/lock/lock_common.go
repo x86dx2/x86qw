@@ -1,5 +1,3 @@
-//go:build !windows
-
 // Package lock takes the per-installation operation lock
 // (.x86qw/sessions/active.lock) in the exact format 3 that
 // x86qw_runtime/session_control.py writes, reads and reclaims, so the Go and
@@ -15,12 +13,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -84,23 +79,20 @@ func Acquire(target, command string) (*Lock, error) {
 		CreatedAt:    time.Now().UTC().Format("2006-01-02T15:04:05.000000-07:00"),
 		Installation: target, PrivateFilesystem: 1,
 	}
-	directory, err := os.Open(sessions)
-	if err != nil {
-		return nil, err
-	}
-	defer directory.Close()
-	if err := syscall.Flock(int(directory.Fd()), syscall.LOCK_EX); err != nil {
-		return nil, err
-	}
-	defer syscall.Flock(int(directory.Fd()), syscall.LOCK_UN)
-	return acquireSerialized(sessions, owner)
+	var result *Lock
+	err := serialize(target, sessions, func() error {
+		var inner error
+		result, inner = acquireSerialized(sessions, owner)
+		return inner
+	})
+	return result, err
 }
 
 func acquireSerialized(sessions string, owner Owner) (*Lock, error) {
 	path := filepath.Join(sessions, "active.lock")
 	reclaimed := ""
 	for {
-		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o600)
+		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|noFollow, 0o600)
 		if errors.Is(err, os.ErrExist) {
 			existing, err := readOwner(path)
 			if err != nil {
@@ -160,7 +152,7 @@ func (l *Lock) Release() error {
 }
 
 func readOwner(path string) (*Owner, error) {
-	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	file, err := os.OpenFile(path, os.O_RDONLY|noFollow, 0)
 	if err != nil {
 		return nil, fmt.Errorf("lock de operação inválido foi preservado para inspeção: %s", path)
 	}
@@ -192,93 +184,6 @@ type ProcessIdentity struct {
 	PID        int
 	Token      string
 	Executable string
-}
-
-// Identity returns ("alive"|"dead"|"inconclusive") and the identity of pid,
-// computed exactly like processes.process_identity.
-func Identity(pid int) (ProcessIdentity, string) {
-	if pid <= 0 {
-		return ProcessIdentity{}, "dead"
-	}
-	switch runtime.GOOS {
-	case "darwin":
-		return darwinIdentity(pid)
-	case "linux":
-		return linuxIdentity(pid)
-	}
-	return ProcessIdentity{}, "inconclusive"
-}
-
-func darwinIdentity(pid int) (ProcessIdentity, string) {
-	run := func(field string) (string, int, error) {
-		command := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", field+"=")
-		command.Env = append(os.Environ(), "LC_ALL=C")
-		output, err := command.Output()
-		code := 0
-		var exit *exec.ExitError
-		if errors.As(err, &exit) {
-			code, err = exit.ExitCode(), nil
-		}
-		return strings.TrimSpace(string(output)), code, err
-	}
-	started, code, err := run("lstart")
-	if err != nil {
-		return ProcessIdentity{}, "inconclusive"
-	}
-	if code == 1 && started == "" {
-		return ProcessIdentity{}, "dead"
-	}
-	if code != 0 || started == "" {
-		return ProcessIdentity{}, "inconclusive"
-	}
-	comm, code, err := run("comm")
-	if err != nil || code != 0 || comm == "" {
-		return ProcessIdentity{}, "inconclusive"
-	}
-	return ProcessIdentity{PID: pid, Token: "macos:" + strings.Join(strings.Fields(started), " "), Executable: realpath(comm)}, "alive"
-}
-
-func linuxIdentity(pid int) (ProcessIdentity, string) {
-	stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
-	if errors.Is(err, os.ErrNotExist) {
-		return ProcessIdentity{}, "dead"
-	}
-	if err != nil {
-		return ProcessIdentity{}, "inconclusive"
-	}
-	text := string(stat)
-	closing := strings.LastIndex(text, ")")
-	if closing < 0 || closing+2 > len(text) {
-		return ProcessIdentity{}, "inconclusive"
-	}
-	fields := strings.Fields(text[closing+2:])
-	if len(fields) <= 19 {
-		return ProcessIdentity{}, "inconclusive"
-	}
-	if fields[0] == "Z" {
-		return ProcessIdentity{}, "dead"
-	}
-	boot := "boot-unknown"
-	if data, err := os.ReadFile("/proc/sys/kernel/random/boot_id"); err == nil {
-		boot = strings.TrimSpace(string(data))
-	}
-	exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
-	if err != nil {
-		return ProcessIdentity{}, "inconclusive"
-	}
-	return ProcessIdentity{PID: pid, Token: "linux:" + boot + ":" + fields[19], Executable: realpath(exe)}, "alive"
-}
-
-// Resolve returns the canonical installation path Python records.
-func Resolve(target string) string {
-	absolute, err := filepath.Abs(target)
-	if err != nil {
-		return target
-	}
-	if resolved, err := filepath.EvalSymlinks(absolute); err == nil {
-		return resolved
-	}
-	return absolute
 }
 
 func realpath(path string) string {
@@ -316,4 +221,16 @@ func Probe(pid int, token, executable string) string {
 		return "identity_mismatch"
 	}
 	return "alive"
+}
+
+// Resolve returns the canonical installation path Python records.
+func Resolve(target string) string {
+	absolute, err := filepath.Abs(target)
+	if err != nil {
+		return target
+	}
+	if resolved, err := filepath.EvalSymlinks(absolute); err == nil {
+		return resolved
+	}
+	return absolute
 }
