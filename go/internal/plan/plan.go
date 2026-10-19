@@ -9,9 +9,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
+	"github.com/x86dx2/x86qw/go/internal/semver"
 	"github.com/x86dx2/x86qw/go/internal/state"
 )
 
@@ -46,6 +48,10 @@ type Input struct {
 	Root      string
 	Catalog   *catalog.Catalog
 	Inventory *catalog.Inventory
+	// CLIVersion is the running native CLI; when set, a newer x86qw-cli
+	// package for GOOS/GOARCH adds a "CLI" row (Python's self-update row).
+	CLIVersion   string
+	GOOS, GOARCH string
 }
 
 type installation struct {
@@ -123,6 +129,11 @@ func Update(in Input) (*Plan, error) {
 		return nil, err
 	}
 	var rows []Row
+	if row, err := cliRow(in); err != nil {
+		return nil, err
+	} else if row != nil {
+		rows = append(rows, *row)
+	}
 	if current.stale {
 		rows = append(rows, Row{Kind: "Sistema", Item: "Estado da instalação", Installed: "ausente ou formato histórico", Available: "formato 2", Action: "Migrar"})
 	}
@@ -249,4 +260,21 @@ func finish(root string, rows []Row) *Plan {
 		plan.Status = "planned"
 	}
 	return plan
+}
+
+// cliRow plans the native CLI self-update.
+func cliRow(in Input) (*Row, error) {
+	// Development builds are never replaced by the self-update.
+	if in.CLIVersion == "" || !semver.Valid(in.CLIVersion) || strings.HasSuffix(in.CLIVersion, "-dev") {
+		return nil, nil
+	}
+	pkg, ok, err := in.Catalog.CLIPackage(in.GOOS, in.GOARCH)
+	if err != nil || !ok {
+		return nil, err
+	}
+	newer, err := semver.CompareStrings(pkg.Version, in.CLIVersion)
+	if err != nil || newer <= 0 {
+		return nil, err
+	}
+	return &Row{Kind: "CLI", Item: "x86QW", Installed: in.CLIVersion, Available: pkg.Version, Action: "Atualizar", Size: size(pkg)}, nil
 }

@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 
+	"github.com/x86dx2/x86qw/go/internal/buildinfo"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/output"
@@ -69,7 +71,8 @@ func runPlan(command string, args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail("operation", err)
 	}
-	input := plan.Input{Root: target, Catalog: parsed, Inventory: inventory}
+	input := plan.Input{Root: target, Catalog: parsed, Inventory: inventory,
+		CLIVersion: buildinfo.Version, GOOS: runtime.GOOS, GOARCH: runtime.GOARCH}
 	compute := plan.Update
 	if command == "upgrade" {
 		compute = plan.Upgrade
@@ -119,7 +122,12 @@ func applyPlan(command string, input plan.Input, planned *plan.Plan, yes bool, s
 	for _, warning := range result.Warnings {
 		fmt.Fprintf(stderr, "! %s\n", warning)
 	}
-	fmt.Fprintf(stdout, "✓ %d componentes atualizados e validados · %d arquivos\n", len(result.Installed), result.Files)
+	if len(result.Installed) > 0 {
+		fmt.Fprintf(stdout, "✓ %d componentes atualizados e validados · %d arquivos\n", len(result.Installed), result.Files)
+	}
+	if result.CLIVersion != "" {
+		fmt.Fprintf(stdout, "✓ CLI x86QW atualizada para %s\n", result.CLIVersion)
+	}
 	return output.ExitSuccess
 }
 

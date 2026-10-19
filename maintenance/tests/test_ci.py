@@ -392,7 +392,7 @@ class ContinuousIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(
             {
-                "codeql.yml", "go.yml", "native-m3.yml", "patch-mirror.yml", "public-acceptance.yml", "release.yml", "sign-native-evidence.yml",
+                "codeql.yml", "go-release.yml", "go.yml", "native-m3.yml", "patch-mirror.yml", "public-acceptance.yml", "release.yml", "sign-native-evidence.yml",
                 "rc-soak.yml", "site-projection-repair.yml", "tuf-metadata-handoff.yml", "tuf-monitor.yml", "tuf-operation-drill.yml", "tuf-snapshot-publish.yml", "tuf-snapshot-renewal.yml", "tuf-timestamp-publish.yml", "tuf-timestamp-auto-renewal.yml", "tuf-timestamp-renewal.yml", "validate.yml",
             },
             {path.name for path in workflow_files},
@@ -409,7 +409,7 @@ class ContinuousIntegrationTests(unittest.TestCase):
             elif path.name == "codeql.yml":
                 self.assertIn("github/codeql-action/init@", source)
                 self.assertIn("github/codeql-action/analyze@", source)
-            elif path.name == "go.yml":
+            elif path.name in {"go.yml", "go-release.yml"}:
                 self.assertIn("actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e", source)
             else:
                 self.assertIn("actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1", source)

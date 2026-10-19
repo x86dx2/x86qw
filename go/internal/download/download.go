@@ -236,8 +236,12 @@ func retryAfter(value string) time.Duration {
 	return 0
 }
 
-// CacheDir is the Python installer's download cache, shared with it.
+// CacheDir is the Python installer's download cache, shared with it;
+// X86QW_CACHE_DIR overrides it (tests, portable setups).
 func CacheDir() (string, error) {
+	if dir := os.Getenv("X86QW_CACHE_DIR"); dir != "" {
+		return dir, nil
+	}
 	switch runtime.GOOS {
 	case "darwin":
 		if dir := darwinUserCacheDir(); dir != "" {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/catalog"
+	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/download"
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/plan"
@@ -28,9 +29,10 @@ var (
 
 // Result reports an applied plan.
 type Result struct {
-	Installed []string
-	Files     int
-	Warnings  []string
+	Installed  []string
+	Files      int
+	Warnings   []string
+	CLIVersion string // set when the native CLI was replaced
 }
 
 // Apply runs a plan computed by plan.Update/plan.Upgrade. Only component
@@ -38,6 +40,7 @@ type Result struct {
 // CLI so this never writes something it cannot reproduce byte for byte.
 func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Plan) (*Result, error) {
 	var outdated, missing []string
+	var cliPackage *catalog.Package
 	labels := map[string]string{}
 	for _, component := range in.Inventory.Components {
 		labels[component.Label] = component.ID
@@ -49,12 +52,18 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 			outdated = append(outdated, id)
 		case row.Kind == "Componente" && row.Action == "Adicionar" && known:
 			missing = append(missing, id)
+		case row.Kind == "CLI" && row.Action == "Atualizar":
+			pkg, ok, err := in.Catalog.CLIPackage(in.GOOS, in.GOARCH)
+			if err != nil || !ok {
+				return nil, fmt.Errorf("pacote da CLI x86QW indisponível: %v", err)
+			}
+			cliPackage = &pkg
 		default:
 			return nil, fmt.Errorf("esta versão ainda não aplica %q (%s); use a CLI Python para esta etapa", row.Item, row.Action)
 		}
 	}
 	result := &Result{}
-	if len(outdated)+len(missing) == 0 {
+	if len(outdated)+len(missing) == 0 && cliPackage == nil {
 		return result, nil
 	}
 	if err := refuseConfigMigrations(in.Root, append(append([]string{}, outdated...), missing...)); err != nil {
@@ -111,6 +120,17 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 	}
 	if _, err := Verify(in.Root); err != nil {
 		return fail(fmt.Errorf("verificação após a atualização falhou: %w", err))
+	}
+	if cliPackage != nil {
+		// Last: the content is already committed and verified.
+		artifact, err := fetchPackage(ctx, tx, *cliPackage)
+		if err != nil {
+			return nil, fmt.Errorf("conteúdo atualizado, mas a CLI não pôde ser baixada: %w", err)
+		}
+		if _, err := cli.Install(in.Root, artifact, cliPackage.Version); err != nil {
+			return nil, fmt.Errorf("conteúdo atualizado, mas a CLI não pôde ser substituída: %w", err)
+		}
+		result.CLIVersion = cliPackage.Version
 	}
 	result.Warnings = tx.Warnings
 	return result, nil
