@@ -21,11 +21,17 @@ var legacyComponents = []string{"clan-arena", "nquake-bootstrap", "nquake-ktx", 
 
 // Report collects user-facing messages of a maintenance operation.
 type Report struct {
-	Info, Success, Warnings []string
+	// Lines keeps info ("· ") and success ("✓ ") messages in emission order.
+	Lines    []string
+	Warnings []string
 }
 
-func (r *Report) info(format string, args ...any)    { r.Info = append(r.Info, fmt.Sprintf(format, args...)) }
-func (r *Report) success(format string, args ...any) { r.Success = append(r.Success, fmt.Sprintf(format, args...)) }
+func (r *Report) info(format string, args ...any) {
+	r.Lines = append(r.Lines, "· "+fmt.Sprintf(format, args...))
+}
+func (r *Report) success(format string, args ...any) {
+	r.Lines = append(r.Lines, "✓ "+fmt.Sprintf(format, args...))
+}
 func (r *Report) warn(format string, args ...any)    { r.Warnings = append(r.Warnings, fmt.Sprintf(format, args...)) }
 
 func cliPaths(target string) []string {
@@ -319,14 +325,7 @@ func Purge(target string) (*Report, error) {
 	}
 	removeShellIntegration(target)
 	if held != nil {
-		if err := held.Release(); err != nil {
-			return nil, err
-		}
-		removeEmptyMetadata(target, true)
-		if lexists(target) {
-			return nil, errors.New("A topologia final da instalação não está vazia e foi preservada.")
-		}
-		report.success("Diretório da instalação removido: %s", target)
+		report.info("Conteúdo da instalação removido; o diretório do lock será finalizado ao encerrar a operação.")
 	}
 	for _, root := range caches {
 		if !lexists(root) {
@@ -338,5 +337,16 @@ func Purge(target string) (*Report, error) {
 		report.info("Nenhum cache do instalador foi encontrado em %s.", root)
 	}
 	report.success("Remoção total concluída; nenhum dado gerenciado pelo x86QW foi preservado.")
+	// Like the Python CLI, the directory is reported once the lock is gone.
+	if held != nil {
+		if err := held.Release(); err != nil {
+			return nil, err
+		}
+		removeEmptyMetadata(target, true)
+		if lexists(target) {
+			return nil, errors.New("A topologia final da instalação não está vazia e foi preservada.")
+		}
+		report.success("Diretório da instalação removido: %s", target)
+	}
 	return report, nil
 }

@@ -31,11 +31,8 @@ func runUninstall(args []string, stdout, stderr io.Writer) int {
 		for _, warning := range report.Warnings {
 			fmt.Fprintf(stderr, "! %s\n", warning)
 		}
-		for _, line := range report.Info {
-			fmt.Fprintf(stdout, "· %s\n", line)
-		}
-		for _, line := range report.Success {
-			fmt.Fprintf(stdout, "✓ %s\n", line)
+		for _, line := range report.Lines {
+			fmt.Fprintln(stdout, line)
 		}
 	}
 	if err != nil {

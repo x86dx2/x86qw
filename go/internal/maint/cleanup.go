@@ -143,9 +143,14 @@ func ownedCaches() ([]string, error) {
 		if !info.IsDir() {
 			return nil, fmt.Errorf("O caminho reservado ao cache não é um diretório: %s", candidate.path)
 		}
-		marker, err := os.ReadFile(filepath.Join(candidate.path, candidate.marker))
+		markerPath := filepath.Join(candidate.path, candidate.marker)
+		marker, err := os.ReadFile(markerPath)
 		if err != nil || strings.TrimRight(string(marker), "\n") != candidate.value {
 			return nil, fmt.Errorf("O diretório de cache contém arquivos que não pertencem ao instalador e foi preservado: %s", candidate.path)
+		}
+		// Like private_fs.validate_private_file: owner-only regular file.
+		if info, err := os.Lstat(markerPath); err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
+			return nil, fmt.Errorf("O marcador de propriedade do cache não pôde ser protegido: %s", markerPath)
 		}
 		owned = append(owned, candidate.path)
 	}
