@@ -10,6 +10,12 @@ class PublicTufMonitorTests(unittest.TestCase):
     def test_default_warning_window_fits_the_timestamp_lease_policy(self) -> None:
         self.assertEqual(6, monitor_public_tuf.DEFAULT_WARNING_HOURS)
 
+    def test_offline_roles_get_two_weeks_of_notice(self) -> None:
+        self.assertEqual(72, monitor_public_tuf.role_warning_hours("timestamp", 72))
+        self.assertEqual(336, monitor_public_tuf.role_warning_hours("snapshot", 72))
+        self.assertEqual(336, monitor_public_tuf.role_warning_hours("targets", 72))
+        self.assertEqual(400, monitor_public_tuf.role_warning_hours("targets", 400))
+
     def test_metadata_payload_selects_consistent_snapshot_role(self) -> None:
         records = {
             "https://example.invalid/metadata/timestamp.json": b"timestamp",
