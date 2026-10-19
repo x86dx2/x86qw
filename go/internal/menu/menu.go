@@ -123,24 +123,49 @@ func wrap(value string, width int) []string {
 	if width < 8 {
 		width = 8
 	}
-	words := strings.Fields(value)
-	if len(words) == 0 {
-		return []string{""}
-	}
-	var lines []string
-	current := ""
-	for _, word := range words {
-		switch {
-		case current == "":
-			current = word
-		case runeLen(current)+1+runeLen(word) <= width:
-			current += " " + word
-		default:
-			lines = append(lines, current)
-			current = word
+	// textwrap.wrap(break_long_words=False, break_on_hyphens=False):
+	// whitespace runs are kept inside a line and dropped at line edges,
+	// except the paragraph's leading whitespace.
+	value = strings.NewReplacer("\t", "        ", "\n", " ", "\v", " ", "\f", " ", "\r", " ").Replace(value)
+	var chunks []string
+	start := 0
+	for index, r := range value {
+		if index > start && (r == ' ') != (value[index-1] == ' ') {
+			chunks = append(chunks, value[start:index])
+			start = index
 		}
 	}
-	return append(lines, current)
+	if start < len(value) {
+		chunks = append(chunks, value[start:])
+	}
+	blank := func(chunk string) bool { return strings.TrimSpace(chunk) == "" }
+	var lines []string
+	for len(chunks) > 0 {
+		if blank(chunks[0]) && len(lines) > 0 {
+			chunks = chunks[1:]
+		}
+		var line []string
+		length := 0
+		for len(chunks) > 0 && length+runeLen(chunks[0]) <= width {
+			line = append(line, chunks[0])
+			length += runeLen(chunks[0])
+			chunks = chunks[1:]
+		}
+		if len(chunks) > 0 && runeLen(chunks[0]) > width && len(line) == 0 {
+			line = append(line, chunks[0])
+			chunks = chunks[1:]
+		}
+		if len(line) > 0 && blank(line[len(line)-1]) {
+			line = line[:len(line)-1]
+		}
+		if len(line) > 0 {
+			lines = append(lines, strings.Join(line, ""))
+		}
+	}
+	if len(lines) == 0 {
+		return []string{""}
+	}
+	return lines
 }
 
 func (u *UI) emitText(value, code string) {

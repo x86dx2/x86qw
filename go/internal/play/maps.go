@@ -228,37 +228,3 @@ func splitLines(text string) []string {
 	text = strings.ReplaceAll(text, "\u0085", "\n")
 	return strings.Split(text, "\n")
 }
-
-// ResolveMap mirrors choose_local_map for a requested map.
-func ResolveMap(root string, game Game, requested string, requirements []Requirement, assets map[string]bool, label string) (string, error) {
-	maps, err := LocalMapNames(root, game.Gamedir)
-	if err != nil {
-		return "", err
-	}
-	if len(requirements) > 0 {
-		var filtered []string
-		for _, name := range maps {
-			ok := true
-			for _, requirement := range requirements {
-				ok = ok && assets[strings.ToLower(strings.ReplaceAll(requirement.Asset, "{map}", strings.ToLower(name)))]
-			}
-			if ok {
-				filtered = append(filtered, name)
-			}
-		}
-		if len(filtered) == 0 {
-			keys := make([]string, len(requirements))
-			for index, requirement := range requirements {
-				keys[index] = requirement.Asset
-			}
-			return "", errorf("Nenhum mapa instalado possui o recurso exigido por %s: %s.", label, strings.Join(keys, ", "))
-		}
-		maps = filtered
-	}
-	for _, name := range maps {
-		if strings.EqualFold(name, requested) {
-			return name, nil
-		}
-	}
-	return "", errorf("O mapa %s não está disponível ou não é compatível com %s.", requested, label)
-}

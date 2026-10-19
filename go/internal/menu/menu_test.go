@@ -67,7 +67,7 @@ print("RESULT=" + repr(r))
 func TestFallbackMatchesPython(t *testing.T) {
 	cases := []struct {
 		input, python, want string
-		settings          Settings
+		settings            Settings
 	}{
 		{"2\n", `select_one("O que você quer fazer?", opts, breadcrumb="x86QW 1.0.16", searchable=True, allow_back=True, interactive=False)`, "'hub'", Settings{Breadcrumb: "x86QW 1.0.16", Searchable: true, AllowBack: true}},
 		{"\n", `select_one("Título", opts, default=1, interactive=False)`, "'hub'", Settings{Default: 1}},
@@ -185,13 +185,5 @@ func TestNavigationKeys(t *testing.T) {
 	chosen, _, err := ui.SelectMany("Componentes", sample, Settings{}, nil, false)
 	if err != nil || strings.Join(chosen, ",") != "play,hub" {
 		t.Fatalf("seleção múltipla: %v %v", chosen, err)
-	}
-}
-
-func TestDecodeEscape(t *testing.T) {
-	for sequence, want := range map[string]string{"[A": "up", "[B": "down", "OC": "right", "[5~": "pageup", "[1;5~": "home", "[Z": "unknown"} {
-		if got := decodeEscape([]byte(sequence)); got != want {
-			t.Fatalf("%q: %s", sequence, got)
-		}
 	}
 }

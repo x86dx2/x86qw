@@ -12,10 +12,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/catalog"
+	"github.com/x86dx2/x86qw/go/internal/macos"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 	"github.com/x86dx2/x86qw/go/internal/state"
 )
@@ -141,17 +143,24 @@ func checkPak(name, expected string) error {
 }
 
 func verifyClient(root string, spec catalog.ClientSpec, channel string) (bool, error) {
+	rec, err := loadVerifiedClient(root, spec, channel)
+	return rec != nil, err
+}
+
+// loadVerifiedClient returns the verified receipt of an installed client,
+// or nil when that channel is not installed.
+func loadVerifiedClient(root string, spec catalog.ClientSpec, channel string) (*receipt.Receipt, error) {
 	receiptPath := filepath.Join(root, filepath.FromSlash(spec.Receipt(channel)))
 	payload, err := os.ReadFile(receiptPath)
 	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
+		return nil, nil
 	}
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	rec, err := receipt.ParseClient(payload, spec.Context(channel))
 	if err != nil {
-		return false, fmt.Errorf("%w: %s", err, receiptPath)
+		return nil, fmt.Errorf("%w: %s", err, receiptPath)
 	}
 	runtime := filepath.Join(root, spec.Runtime(channel))
 	binaryPath := runtime
@@ -159,24 +168,24 @@ func verifyClient(root string, spec catalog.ClientSpec, channel string) (bool, e
 		binaryPath = filepath.Join(runtime, "Contents/MacOS/ezQuake")
 		version, err := bundleVersion(filepath.Join(runtime, "Contents/Info.plist"))
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 		if version != rec.Get("bundle_version") {
-			return false, fmt.Errorf("versão inesperada em %s: %s", runtime, version)
+			return nil, fmt.Errorf("versão inesperada em %s: %s", runtime, version)
 		}
 	}
 	info, err := os.Lstat(binaryPath)
 	if err != nil || !info.Mode().IsRegular() {
-		return false, fmt.Errorf("runtime ezQuake ausente: %s", runtime)
+		return nil, fmt.Errorf("runtime ezQuake ausente: %s", runtime)
 	}
 	digest, err := fileSHA256(binaryPath)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	if digest != rec.Get("binary_sha256") {
-		return false, fmt.Errorf("hash inesperado do executável ezQuake: %s", runtime)
+		return nil, fmt.Errorf("hash inesperado do executável ezQuake: %s", runtime)
 	}
-	return true, nil
+	return rec, nil
 }
 
 // bundleVersion reads CFBundleShortVersionString from an XML Info.plist and
@@ -337,21 +346,29 @@ func fileSHA256(name string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-// VerifyForPlay runs the checks `play` performs before launching: original
-// PAKs, the selected game's managed files and play-support for every game.
-func VerifyForPlay(root, component string, games []Game) error {
+// CheckPaks mirrors check_paks: the original id1 PAKs.
+func CheckPaks(root string) error {
 	for _, pak := range []struct{ path, sha string }{{"id1/pak0.pak", pak0SHA256}, {"id1/pak1.pak", pak1SHA256}} {
 		if err := checkPak(filepath.Join(root, pak.path), pak.sha); err != nil {
 			return err
 		}
 	}
+	return nil
+}
+
+// VerifyComponent mirrors verify_component: the managed files of one
+// component, returning their count and the receipt's selection.
+func VerifyComponent(root, component string) (int, string, error) {
 	record, err := receipt.Load(filepath.Join(root, receipt.ComponentsDir, component))
 	if err != nil {
-		return err
+		return 0, "", err
 	}
-	if _, err := verifyRecord(root, record); err != nil {
-		return err
-	}
+	count, err := verifyRecord(root, record)
+	return count, record.Receipt.Get("selection"), err
+}
+
+// VerifyPlaySupport mirrors verify_local_play_support.
+func VerifyPlaySupport(root string, games []Game) error {
 	issues, _, err := PlaySupportIssues(root, games)
 	if err != nil {
 		return err
@@ -362,30 +379,50 @@ func VerifyForPlay(root, component string, games []Game) error {
 	return nil
 }
 
-// ClientRuntime returns the single managed ezQuake (verified), like
-// choose_host_runtime when only one channel is installed.
-func ClientRuntime(root string) (string, error) {
-	var found []string
-	for _, spec := range catalog.ClientSpecs {
-		for _, channel := range []string{"stable", "nightly"} {
-			ok, err := verifyClient(root, spec, channel)
-			if err != nil {
-				return "", err
-			}
-			if ok {
-				runtime := filepath.Join(root, spec.Runtime(channel))
-				if spec.Platform == "macos" {
-					runtime = filepath.Join(runtime, "Contents", "MacOS", "ezQuake")
-				}
-				found = append(found, runtime)
-			}
+// Runtime is one launchable ezQuake of the host platform.
+type Runtime struct {
+	Label     string // ezQuake <channel> <selection>
+	Path      string // the executable (inside the bundle on macOS)
+	BinarySHA string
+}
+
+// HostRuntimes mirrors host_runtimes: the verified stable and nightly
+// clients of the host platform, refusing a macOS bundle that needs repair.
+func HostRuntimes(root string) ([]Runtime, error) {
+	var spec *catalog.ClientSpec
+	for index := range catalog.ClientSpecs {
+		if catalog.ClientSpecs[index].Platform == HostPlatform() {
+			spec = &catalog.ClientSpecs[index]
 		}
 	}
-	switch len(found) {
-	case 0:
-		return "", fmt.Errorf("nenhum ezQuake gerenciado foi encontrado em %s", root)
-	case 1:
-		return found[0], nil
+	if spec == nil {
+		return nil, fmt.Errorf("A abertura automática não é suportada neste sistema: %s.", runtime.GOOS)
 	}
-	return "", errors.New("há mais de um ezQuake instalado; use a CLI Python para escolher o cliente")
+	var found []Runtime
+	for _, channel := range []string{"stable", "nightly"} {
+		rec, err := loadVerifiedClient(root, *spec, channel)
+		if err != nil {
+			return nil, err
+		}
+		if rec == nil {
+			continue
+		}
+		bundle := filepath.Join(root, spec.Runtime(channel))
+		executable := bundle
+		if spec.Platform == "macos" {
+			action, err := macos.RuntimeAction(bundle, channel, rec.Get("artifact_sha256"), rec.Get("binary_sha256"))
+			if err != nil {
+				return nil, err
+			}
+			if action != "" {
+				return nil, fmt.Errorf("O runtime macOS requer reparo antes da execução: %s. Execute update.", bundle)
+			}
+			executable = filepath.Join(bundle, "Contents", "MacOS", "ezQuake")
+		}
+		found = append(found, Runtime{Label: "ezQuake " + channel + " " + rec.Get("selection"), Path: executable, BinarySHA: rec.Get("binary_sha256")})
+	}
+	if len(found) == 0 {
+		return nil, errors.New("Nenhum ezQuake gerenciado para este sistema está instalado. Execute install primeiro.")
+	}
+	return found, nil
 }
