@@ -190,13 +190,29 @@ func (p *Project) RemoteFingerprint(url string, size int64, digest string) (int6
 	return size, digest, true, nil
 }
 
-// Put uploads payload (GitLab generic packages).
+// Put uploads payload (GitLab generic packages). Like the curl upload it
+// replaces (--max-redirs 0), a redirect is never followed: the private
+// token header must not reach another origin.
 func (p *Project) Put(url string, headers map[string]string, payload []byte) error {
-	response, cancel, err := p.request(http.MethodPut, url, headers, bytes.NewReader(payload), 900*time.Second)
+	if _, err := validateHTTPSURL(url, "URL"); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 900*time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}
-	defer cancel()
+	for key, value := range headers {
+		request.Header.Set(key, value)
+	}
+	request.Header.Set("User-Agent", "x86qw-gitlab-mirror/1")
+	client := *p.client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	response, err := client.Do(request)
+	if err != nil {
+		return fmt.Errorf("GitLab upload failed: %v", err)
+	}
 	defer response.Body.Close()
 	io.Copy(io.Discard, response.Body)
 	if response.StatusCode < 200 || response.StatusCode > 299 {

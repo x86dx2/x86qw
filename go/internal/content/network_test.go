@@ -417,6 +417,32 @@ func TestPublishRejectsChangedMirror(t *testing.T) {
 	}
 }
 
+func TestGitLabUploadNeverFollowsRedirects(t *testing.T) {
+	project, filename := publishFixture(t, []byte("published"), false)
+	url := GitLabPackageURL("nquake-maps", "test", filename)
+	web := &fakeWeb{handler: func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut {
+			http.Redirect(w, r, "https://evil.example/collect", http.StatusTemporaryRedirect)
+			return
+		}
+		http.NotFound(w, r)
+	}}
+	project.HTTP = web.client()
+	project.Getenv = func(string) string { return "glpat-secret" }
+	err := project.uploadGitLab(project.Path(BuildsDir+"/components-test/"+filename), url)
+	if err == nil || !strings.Contains(err.Error(), "HTTP status 307") {
+		t.Fatalf("redirecionamento do upload aceito: %v", err)
+	}
+	for _, request := range web.requests {
+		if strings.Contains(request, "evil.example") {
+			t.Fatalf("token seguiu o redirecionamento: %v", web.requests)
+		}
+	}
+	if len(web.requests) != 1 {
+		t.Fatalf("requisições inesperadas: %v", web.requests)
+	}
+}
+
 func TestCommitSequence(t *testing.T) {
 	project := NewProject(t.TempDir())
 	runner := &recorder{reply: func(args []string) ([]byte, error) {
