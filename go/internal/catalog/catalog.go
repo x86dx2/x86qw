@@ -230,3 +230,30 @@ var ClientSpecs = []ClientSpec{
 	{"windows", "Windows x64", "x64", "ezQuake-windows-x64.zip", "_ezquake.exe",
 		"ezquake-stable.exe", "ezquake-nightly.exe", ".x86qw/clients/ezquake/windows/stable.receipt", ".x86qw/clients/ezquake/windows/nightly.receipt"},
 }
+
+// CLIPackage returns the native CLI build for an OS/arch (GOOS/GOARCH names),
+// or false when the catalog does not publish one.
+func (c *Catalog) CLIPackage(goos, goarch string) (Package, bool, error) {
+	platform := map[string]string{"darwin": "macos", "linux": "linux", "windows": "windows"}[goos]
+	architecture := map[string]string{"arm64": "arm64", "amd64": "x86_64"}[goarch]
+	if goos == "windows" && goarch == "amd64" {
+		architecture = "x64"
+	}
+	var matches []Package
+	for _, pkg := range c.Packages {
+		if pkg.Component == "x86qw" && pkg.Package == "x86qw-cli" && pkg.Channel == "stable" &&
+			pkg.Platform == platform && pkg.Architecture == architecture {
+			matches = append(matches, pkg)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return Package{}, false, nil
+	case 1:
+		if !semver.Valid(matches[0].Version) {
+			return Package{}, false, fmt.Errorf("versão inválida da CLI x86QW no catálogo")
+		}
+		return matches[0], true, matches[0].validateArtifact("x86qw-cli")
+	}
+	return Package{}, false, fmt.Errorf("o catálogo publica mais de uma CLI x86QW para %s/%s", platform, architecture)
+}
