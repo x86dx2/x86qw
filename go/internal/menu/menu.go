@@ -190,6 +190,9 @@ func (u *UI) readLine(prompt string) (string, error) {
 	return strings.TrimRight(line, "\r\n"), nil
 }
 
+// ReadLine mirrors input(prompt); io.EOF at the end of input.
+func (u *UI) ReadLine(prompt string) (string, error) { return u.readLine(prompt) }
+
 // Pause mirrors pause_menu_result: false on EOF.
 func (u *UI) Pause(message string) bool {
 	_, err := u.readLine(message)

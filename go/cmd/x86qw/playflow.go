@@ -474,14 +474,6 @@ func (f *playFlow) run(request *playRequest, configure, chooseRuleset bool) (*pl
 	}
 }
 
-// fileCount mirrors manager.file_count.
-func fileCount(count int) string {
-	if count == 1 {
-		return "1 arquivo"
-	}
-	return fmt.Sprintf("%d arquivos", count)
-}
-
 func installGame(games []install.Game, id string) install.Game {
 	for _, game := range games {
 		if game.ID == id {

@@ -19,9 +19,11 @@ const corePackage = "x86qw-core-id1"
 
 // InstallOptions selects what a fresh installation contains.
 type InstallOptions struct {
-	Platform string // macos, linux or windows
-	Channel  string // stable
-	Profile  string // essential, recommended or complete
+	Platform  string   // macos, linux or windows
+	Channel   string   // stable or nightly
+	Release   string   // client version; "" or "latest" is the newest
+	Profile   string   // essential, recommended, complete, custom or none (client only)
+	Requested []string // the components chosen for the custom profile
 }
 
 // HostPlatform maps GOOS to the installer's platform keys.
@@ -48,10 +50,18 @@ func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory
 	if spec == nil {
 		return nil, fmt.Errorf("plataforma desconhecida: %s", options.Platform)
 	}
-	if options.Profile != "essential" && options.Profile != "recommended" && options.Profile != "complete" {
+	requested := []string{}
+	switch options.Profile {
+	case "essential", "recommended", "complete", "none":
+	case "custom":
+		if len(options.Requested) == 0 {
+			return nil, errors.New("Nenhum componente x86QW foi selecionado.")
+		}
+		requested = options.Requested
+	default:
 		return nil, fmt.Errorf("perfil inválido: %s", options.Profile)
 	}
-	selected, err := inventory.Desired(options.Profile, nil)
+	selected, err := inventory.Desired(options.Profile, requested)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +99,7 @@ func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory
 	if err := tx.provisionPaks(ctx, cat); err != nil {
 		return fail(err)
 	}
-	if _, err := tx.InstallClient(ctx, cat, *spec, options.Channel); err != nil {
+	if _, err := tx.InstallClientRelease(ctx, cat, *spec, options.Channel, options.Release); err != nil {
 		return fail(err)
 	}
 	if resetMacPreferences {
@@ -102,7 +112,7 @@ func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory
 	if err != nil {
 		return fail(err)
 	}
-	payload, err := stateDocument(in, &state.State{Profile: options.Profile, RequestedComponents: []string{}})
+	payload, err := stateDocument(in, &state.State{Profile: options.Profile, RequestedComponents: requested})
 	if err != nil {
 		return fail(err)
 	}

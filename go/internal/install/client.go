@@ -257,11 +257,21 @@ func (t *Transaction) commitRuntime(spec catalog.ClientSpec, channel string, pre
 
 // InstallClient installs (or reinstalls) the newest release of a channel.
 func (t *Transaction) InstallClient(ctx context.Context, cat *catalog.Catalog, spec catalog.ClientSpec, channel string) (string, error) {
-	return t.InstallClientVersion(ctx, cat, spec, channel, "")
+	return t.InstallClientRelease(ctx, cat, spec, channel, "")
 }
 
-// InstallClientVersion installs one exact catalog release ("" = newest).
+// InstallClientRelease installs one release of a channel; "" or "latest"
+// is the newest (choose_release).
+func (t *Transaction) InstallClientRelease(ctx context.Context, cat *catalog.Catalog, spec catalog.ClientSpec, channel, version string) (string, error) {
+	return t.installClient(ctx, cat, spec, channel, version, fmt.Sprintf("A versão %s não está disponível no canal %s.", version, channel))
+}
+
+// InstallClientVersion reinstalls the receipt's exact release for repair.
 func (t *Transaction) InstallClientVersion(ctx context.Context, cat *catalog.Catalog, spec catalog.ClientSpec, channel, selection string) (string, error) {
+	return t.installClient(ctx, cat, spec, channel, selection, fmt.Sprintf("A versão registrada do ezQuake %s não está disponível para reparo.", channel))
+}
+
+func (t *Transaction) installClient(ctx context.Context, cat *catalog.Catalog, spec catalog.ClientSpec, channel, version, missing string) (string, error) {
 	if channel != "stable" && channel != "nightly" {
 		return "", fmt.Errorf("canal ezQuake inválido: %s", channel)
 	}
@@ -278,15 +288,15 @@ func (t *Transaction) InstallClientVersion(ctx context.Context, cat *catalog.Cat
 		return "", err
 	}
 	release := releases[0]
-	if selection != "" {
+	if version != "" && version != "latest" {
 		found := false
 		for _, candidate := range releases {
-			if candidate.Version == selection {
+			if candidate.Version == version {
 				release, found = candidate, true
 			}
 		}
 		if !found {
-			return "", fmt.Errorf("A versão registrada do ezQuake %s não está disponível para reparo.", channel)
+			return "", errors.New(missing)
 		}
 	}
 	prepared, err := t.prepareRelease(ctx, spec, channel, release)
