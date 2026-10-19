@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -9,10 +10,14 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/buildinfo"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
+	"github.com/x86dx2/x86qw/go/internal/doctor"
+	"github.com/x86dx2/x86qw/go/internal/download"
+	"github.com/x86dx2/x86qw/go/internal/hub"
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/output"
 	"github.com/x86dx2/x86qw/go/internal/plan"
@@ -31,6 +36,9 @@ Comandos:
   install              instala ezQuake e um perfil de conteúdo em um diretório novo
   update --dry-run     planeja a atualização dos itens instalados
   upgrade --dry-run    planeja a atualização e as novidades do perfil
+  play JOGO --map MAPA inicia uma partida local (KTX exige --mode)
+  hub                  lista servidores públicos para jogar ou observar
+  doctor [--bundle]    diagnostica a instalação sem alterar arquivos
   catalog              autentica o catálogo público via TUF
 `
 
@@ -56,6 +64,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runPlan(args[0], args[1:], stdout, stderr)
 	case "install":
 		return runInstall(args[1:], stdout, stderr)
+	case "hub":
+		return runHub(args[1:], stdout, stderr)
+	case "doctor":
+		return runDoctor(args[1:], stdout, stderr)
+	case "play":
+		return runPlay(args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "x86qw: comando desconhecido: %s\n", args[0])
 		fmt.Fprintf(stderr, usage, buildinfo.Version)
@@ -409,5 +423,84 @@ func runInstall(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "! %s\n", warning)
 	}
 	fmt.Fprintf(stdout, "✓ Instalação completa: ezQuake + %d componentes · %d arquivos em %s\n", len(result.Installed), result.Files, absolute)
+	return output.ExitSuccess
+}
+
+func runHub(args []string, stdout, stderr io.Writer) int {
+	target, asJSON, ok := targetFlags("hub", args, stderr)
+	if !ok {
+		return output.ExitUsage
+	}
+	servers, err := hub.Servers(context.Background(), target)
+	if err != nil {
+		if asJSON {
+			output.Failure("hub", output.ExitFailure, "operation", err.Error()).Write(stdout)
+		} else {
+			fmt.Fprintf(stderr, "✗ %v\n", err)
+		}
+		return output.ExitFailure
+	}
+	if asJSON {
+		data := map[string]any{"servers": servers, "target": target}
+		if err := output.Success("hub", data).Write(stdout); err != nil {
+			return output.ExitFailure
+		}
+		return output.ExitSuccess
+	}
+	for _, server := range servers {
+		fmt.Fprintf(stdout, "  %-28s %-6s %-10s %2d+%-2d %s\n", server.Address, server.Mode, server.Map, server.Players.Humans, server.Players.Bots, server.Title)
+	}
+	return output.ExitSuccess
+}
+
+// publicCommands are the commands this binary implements.
+var publicCommands = []string{"version", "status", "verify", "update", "upgrade", "install", "play", "hub", "doctor", "catalog"}
+
+func runDoctor(args []string, stdout, stderr io.Writer) int {
+	bundle := ""
+	var rest []string
+	for index := 0; index < len(args); index++ {
+		switch {
+		case args[index] == "--bundle":
+			bundle = "x86qw-doctor.zip"
+			if index+1 < len(args) && !strings.HasPrefix(args[index+1], "-") && strings.HasSuffix(args[index+1], ".zip") {
+				bundle = args[index+1]
+				index++
+			}
+		case strings.HasPrefix(args[index], "--bundle="):
+			bundle = strings.TrimPrefix(args[index], "--bundle=")
+		default:
+			rest = append(rest, args[index])
+		}
+	}
+	target, asJSON, ok := targetFlags("doctor", rest, stderr)
+	if !ok {
+		return output.ExitUsage
+	}
+	var timestamps []string
+	if dir := defaultCacheDir(); dir != "" {
+		timestamps = append(timestamps, filepath.Join(dir, "metadata", "timestamp.json"))
+	}
+	if dir, err := download.CacheDir(); err == nil {
+		timestamps = append(timestamps, filepath.Join(dir, "trust", "metadata", "timestamp.json"))
+	}
+	report := doctor.Diagnose(target, publicCommands, timestamps, time.Now().UTC())
+	if bundle != "" {
+		var envelope bytes.Buffer
+		output.Success("doctor", report).Write(&envelope)
+		written, err := doctor.WriteBundle(envelope.Bytes(), bundle, target)
+		if err != nil {
+			fmt.Fprintf(stderr, "✗ %v\n", err)
+			return output.ExitFailure
+		}
+		fmt.Fprintf(stderr, "Bundle de diagnóstico gravado em %s\n", written)
+	}
+	if asJSON {
+		if err := output.Success("doctor", report).Write(stdout); err != nil {
+			return output.ExitFailure
+		}
+		return output.ExitSuccess
+	}
+	fmt.Fprint(stdout, doctor.Render(report))
 	return output.ExitSuccess
 }

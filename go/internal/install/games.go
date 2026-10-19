@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -128,46 +127,81 @@ func gameProgram(program string) ([]byte, error) {
 	return nil, fmt.Errorf("formato de gamecode local não suportado: %s", program)
 }
 
-// pakMember reads one member of a Quake PAK.
+type pakEntry struct {
+	name           string
+	position, size int64
+}
+
+func pakDirectory(file *os.File, name string) ([]pakEntry, error) {
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	header := make([]byte, 12)
+	if _, err := file.ReadAt(header, 0); err != nil || string(header[:4]) != "PACK" {
+		return nil, fmt.Errorf("PAK inválido: %s", name)
+	}
+	offset := int64(binary.LittleEndian.Uint32(header[4:8]))
+	length := int64(binary.LittleEndian.Uint32(header[8:12]))
+	if length%64 != 0 || offset+length > info.Size() || length/64 > 4096 {
+		return nil, fmt.Errorf("PAK inválido: %s", name)
+	}
+	directory := make([]byte, length)
+	if _, err := file.ReadAt(directory, offset); err != nil {
+		return nil, err
+	}
+	var entries []pakEntry
+	for index := int64(0); index < length; index += 64 {
+		entry := directory[index : index+64]
+		entryName := string(entry[:56])
+		if cut := strings.IndexByte(entryName, 0); cut >= 0 {
+			entryName = entryName[:cut]
+		}
+		position := int64(binary.LittleEndian.Uint32(entry[56:60]))
+		size := int64(binary.LittleEndian.Uint32(entry[60:64]))
+		if position+size > info.Size() {
+			return nil, fmt.Errorf("membro PAK fora dos limites: %s", entryName)
+		}
+		entries = append(entries, pakEntry{entryName, position, size})
+	}
+	return entries, nil
+}
+
+// PakNames lists the member names of a Quake PAK.
+func PakNames(name string) ([]string, error) {
+	file, err := os.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	entries, err := pakDirectory(file, name)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, len(entries))
+	for index, entry := range entries {
+		names[index] = entry.name
+	}
+	return names, nil
+}
+
+// pakMember reads one member of a Quake PAK (case-insensitive exact name).
 func pakMember(name, member string) ([]byte, error) {
 	file, err := os.Open(name)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
-	info, err := file.Stat()
+	entries, err := pakDirectory(file, name)
 	if err != nil {
 		return nil, err
 	}
-	header := make([]byte, 12)
-	if _, err := io.ReadFull(file, header); err != nil || string(header[:4]) != "PACK" {
-		return nil, fmt.Errorf("PAK inválido: %s", name)
-	}
-	offset := int64(binary.LittleEndian.Uint32(header[4:8]))
-	length := int64(binary.LittleEndian.Uint32(header[8:12]))
-	if length%64 != 0 || offset+length > info.Size() || length/64 > 4096 {
-		return nil, fmt.Errorf("diretório PAK inválido: %s", name)
-	}
-	directory := make([]byte, length)
-	if _, err := file.ReadAt(directory, offset); err != nil {
-		return nil, err
-	}
-	for index := int64(0); index < length; index += 64 {
-		entry := directory[index : index+64]
-		entryName := strings.TrimRight(string(entry[:56]), "\x00")
-		if cut := strings.IndexByte(entryName, 0); cut >= 0 {
-			entryName = entryName[:cut]
-		}
-		if entryName != member {
+	for _, entry := range entries {
+		if !strings.EqualFold(entry.name, member) {
 			continue
 		}
-		position := int64(binary.LittleEndian.Uint32(entry[56:60]))
-		size := int64(binary.LittleEndian.Uint32(entry[60:64]))
-		if position+size > info.Size() {
-			return nil, fmt.Errorf("membro PAK fora dos limites: %s", member)
-		}
-		payload := make([]byte, size)
-		if _, err := file.ReadAt(payload, position); err != nil {
+		payload := make([]byte, entry.size)
+		if _, err := file.ReadAt(payload, entry.position); err != nil {
 			return nil, err
 		}
 		return payload, nil
