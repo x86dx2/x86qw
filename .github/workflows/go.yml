@@ -5,6 +5,7 @@ on:
     paths:
       - "go/**"
       - "maintenance/trust/root.json"
+      - "maintenance/inventory/components.json"
       - "site/public/api/v1/trust/**"
       - "site/public/api/v1/catalog.json"
       - ".github/workflows/go.yml"
@@ -13,6 +14,7 @@ on:
     paths:
       - "go/**"
       - "maintenance/trust/root.json"
+      - "maintenance/inventory/components.json"
       - "site/public/api/v1/trust/**"
       - "site/public/api/v1/catalog.json"
       - ".github/workflows/go.yml"
