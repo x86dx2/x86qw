@@ -53,6 +53,13 @@ var serviceCommands = map[string]bool{"host": true, "proxy": true, "qtv": true}
 func Acquire(target, command string) (*Lock, error) {
 	// Path.resolve(strict=False) in Python: follow symlinks when present.
 	target = Resolve(target)
+	// Like InstallationLock.acquire: a missing installation is created 0700.
+	if _, err := os.Lstat(target); errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(target, 0o700); err != nil {
+			return nil, err
+		}
+		os.Chmod(target, 0o700)
+	}
 	sessions := filepath.Join(target, ".x86qw", "sessions")
 	for _, dir := range []string{filepath.Join(target, ".x86qw"), sessions} {
 		if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {

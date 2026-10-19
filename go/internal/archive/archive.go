@@ -217,7 +217,7 @@ func (p *Plan) validate(limits Limits) error {
 			return fail("membro ZIP excede a razão de compressão: %q", canonical)
 		}
 		p.Members = append(p.Members, Member{
-			Name: canonical, Size: file.UncompressedSize64, Executable: unixMode&0o111 != 0, file: file,
+			Name: canonical, Size: file.UncompressedSize64, file: file,
 		})
 	}
 	return nil
@@ -295,7 +295,23 @@ func validateName(name string, isDir bool, limits Limits) (string, []string, str
 
 // Extract writes every member below a new directory created atomically at
 // destination (which must not exist), verifying CRC and size while streaming.
-func (p *Plan) Extract(destination string) error {
+// Files are 0644 except the listed executables (0755), like archive.py's
+// executable_members; ZIP mode bits are ignored.
+func (p *Plan) Extract(destination string, executables ...string) error {
+	wanted := map[string]bool{}
+	for _, name := range executables {
+		wanted[name] = true
+	}
+	found := 0
+	for index := range p.Members {
+		p.Members[index].Executable = wanted[p.Members[index].Name]
+		if p.Members[index].Executable {
+			found++
+		}
+	}
+	if found != len(wanted) {
+		return fail("membro executável ausente do ZIP")
+	}
 	if _, err := os.Lstat(destination); err == nil {
 		return fail("destino de extração já existe: %s", destination)
 	} else if !errors.Is(err, fs.ErrNotExist) {

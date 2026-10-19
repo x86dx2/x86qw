@@ -52,7 +52,7 @@ func TestExtractsValidArchive(t *testing.T) {
 	}
 	defer plan.Close()
 	destination := filepath.Join(t.TempDir(), "out")
-	if err := plan.Extract(destination); err != nil {
+	if err := plan.Extract(destination, "payload/bin/run"); err != nil {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(filepath.Join(destination, "payload/qw/ktx.cfg"))
