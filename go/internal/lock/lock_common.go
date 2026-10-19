@@ -151,6 +151,9 @@ func (l *Lock) Release() error {
 	return nil
 }
 
+// ReadOwner reads and validates an active.lock document.
+func ReadOwner(path string) (*Owner, error) { return readOwner(path) }
+
 func readOwner(path string) (*Owner, error) {
 	file, err := os.OpenFile(path, os.O_RDONLY|noFollow, 0)
 	if err != nil {

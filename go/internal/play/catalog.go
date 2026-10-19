@@ -38,6 +38,9 @@ type Game struct {
 	ModeCatalog                  string      `json:"mode_catalog"`
 	BotNamesPersonalConfig       string      `json:"bot_names_personal_config"`
 	Description                  string      `json:"description"`
+	PersonalConfig               string      `json:"personal_config"`
+	DedicatedArguments           []string    `json:"dedicated_arguments"`
+	DedicatedSettings            [][2]string `json:"dedicated_settings"`
 }
 
 // UsesModeCatalog reports whether the game is played through KTX modes.
