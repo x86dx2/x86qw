@@ -47,8 +47,8 @@ type Report struct {
 // every managed file hash and the qw/pak.lst load order.
 //
 // Not yet ported: structural PK3 scanning (hash only), macOS code-signature
-// checks, the derived play-support comparison and legacy nQuake/metadata
-// layouts (those installations are migrated by the Python CLI first).
+// checks and legacy nQuake/metadata layouts (those installations are
+// migrated by the Python CLI first).
 func Verify(root string) (*Report, error) {
 	report := &Report{}
 	for _, pak := range []struct{ path, sha string }{{"id1/pak0.pak", pak0SHA256}, {"id1/pak1.pak", pak1SHA256}} {
@@ -93,6 +93,9 @@ func Verify(root string) (*Report, error) {
 		return nil, err
 	}
 	for _, record := range records {
+		if record.ID == "play-support" {
+			continue // checked against the derived gamecode below, as in Python
+		}
 		count, err := verifyRecord(root, record)
 		if err != nil {
 			return nil, err
@@ -101,6 +104,17 @@ func Verify(root string) (*Report, error) {
 	}
 	if _, err := os.Lstat(filepath.Join(root, "id1/gpl_maps.pk3")); err == nil {
 		return nil, errors.New("gpl_maps.pk3 shareware não pode ser instalado com os PAKs registrados")
+	}
+	games, err := LoadGames()
+	if err != nil {
+		return nil, err
+	}
+	issues, _, err := PlaySupportIssues(root, AvailableGames(root, games))
+	if err != nil {
+		return nil, err
+	}
+	if len(issues) > 0 {
+		return nil, fmt.Errorf("suporte de execução incompleto (%s); execute update, upgrade ou repair antes de jogar ou hospedar", strings.Join(issues, "; "))
 	}
 	if err := verifyPackageOrder(root, byID["package-order"]); err != nil {
 		return nil, err

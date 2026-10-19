@@ -5,6 +5,7 @@ go 1.27.2
 require (
 	github.com/sigstore/sigstore v1.10.6
 	github.com/theupdateframework/go-tuf/v2 v2.4.2
+	golang.org/x/text v0.43.0
 )
 
 require (

@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -244,13 +245,14 @@ func runPlan(command string, args []string, stdout, stderr io.Writer) int {
 	flags.SetOutput(stderr)
 	asJSON := flags.Bool("json", false, "saída estruturada (exige --dry-run)")
 	dryRun := flags.Bool("dry-run", false, "mostra o plano sem alterar arquivos")
+	yes := flags.Bool("yes", false, "aplica o plano sem confirmação interativa")
 	targetFlag := flags.String("target", "", "diretório da instalação")
 	catalogFile := flags.String("catalog-file", "", "catálogo local já autenticado (testes)")
 	if err := flags.Parse(args); err != nil {
 		return output.ExitUsage
 	}
-	if !*dryRun {
-		fmt.Fprintf(stderr, "x86qw %s: somente --dry-run está disponível nesta versão\n", command)
+	if *asJSON && !*dryRun {
+		fmt.Fprintf(stderr, "x86qw %s: --json exige --dry-run\n", command)
 		return output.ExitUsage
 	}
 	rest := append([]string{}, flags.Args()...)
@@ -302,6 +304,9 @@ func runPlan(command string, args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail("operation", err)
 	}
+	if !*dryRun {
+		return applyPlan(command, input, result, *yes, stdout, stderr)
+	}
 	if *asJSON {
 		envelope := output.Success(command, result)
 		envelope.DryRun = true
@@ -317,5 +322,29 @@ func runPlan(command string, args []string, stdout, stderr io.Writer) int {
 	for _, row := range result.Operations {
 		fmt.Fprintf(stdout, "  %-10s %-40s %s → %s  (%s)\n", row.Kind, row.Item, row.Installed, row.Available, row.Action)
 	}
+	return output.ExitSuccess
+}
+
+func applyPlan(command string, input plan.Input, planned *plan.Plan, yes bool, stdout, stderr io.Writer) int {
+	if len(planned.Operations) == 0 {
+		fmt.Fprintln(stdout, "✓ Nenhuma atualização disponível; o conteúdo instalado já está atualizado.")
+		return output.ExitSuccess
+	}
+	for _, row := range planned.Operations {
+		fmt.Fprintf(stdout, "  %-10s %-40s %s → %s  (%s)\n", row.Kind, row.Item, row.Installed, row.Available, row.Action)
+	}
+	if !yes {
+		fmt.Fprintf(stderr, "Confirme com: x86qw %s --yes\n", command)
+		return output.ExitUsage
+	}
+	result, err := install.Apply(context.Background(), command, input, planned)
+	if err != nil {
+		fmt.Fprintf(stderr, "✗ %v\n", err)
+		return output.ExitFailure
+	}
+	for _, warning := range result.Warnings {
+		fmt.Fprintf(stderr, "! %s\n", warning)
+	}
+	fmt.Fprintf(stdout, "✓ %d componentes atualizados e validados · %d arquivos\n", len(result.Installed), result.Files)
 	return output.ExitSuccess
 }
