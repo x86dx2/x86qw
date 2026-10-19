@@ -68,7 +68,9 @@ func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory
 	// Like macos_game_directory_reset_required: only a target without any
 	// managed ezQuake gets its macOS directory preferences cleared. Adding a
 	// channel to (or reinstalling) an existing installation is allowed.
-	resetMacPreferences := runtime.GOOS == "darwin" && spec.Platform == "macos"
+	// X86QW_NO_MACOS_PREFERENCES keeps tests and oracles from touching the
+	// user's real ezQuake preferences.
+	resetMacPreferences := runtime.GOOS == "darwin" && spec.Platform == "macos" && os.Getenv("X86QW_NO_MACOS_PREFERENCES") == ""
 	for _, channel := range []string{"stable", "nightly"} {
 		for _, relative := range []string{spec.Runtime(channel), spec.Receipt(channel), legacyClientReceipt(*spec, channel)} {
 			if _, err := os.Lstat(filepath.Join(target, filepath.FromSlash(relative))); err == nil {
