@@ -184,11 +184,19 @@ func (s *State) Installed() []string {
 // Marshal encodes the document the way the Python installer does:
 // json.dumps(indent=2, sort_keys=True, ensure_ascii=False) + "\n".
 func (s *State) Marshal() ([]byte, error) {
+	return MarshalDocument(s.document)
+}
+
+// MarshalDocument validates and encodes a state document.
+func MarshalDocument(document map[string]any) ([]byte, error) {
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(s.document); err != nil {
+	if err := encoder.Encode(document); err != nil {
+		return nil, err
+	}
+	if _, err := Parse(buffer.Bytes()); err != nil {
 		return nil, err
 	}
 	return buffer.Bytes(), nil

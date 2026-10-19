@@ -377,3 +377,26 @@ func fileSHA256(name string) (string, error) {
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
+
+// ReadMember returns the bytes of one file member, verifying size and CRC.
+func (p *Plan) ReadMember(name string) ([]byte, error) {
+	for _, member := range p.Members {
+		if member.Name != name {
+			continue
+		}
+		source, err := member.file.Open()
+		if err != nil {
+			return nil, err
+		}
+		defer source.Close()
+		payload, err := io.ReadAll(io.LimitReader(source, int64(member.Size)+1))
+		if err != nil {
+			return nil, err
+		}
+		if uint64(len(payload)) != member.Size || crc32.ChecksumIEEE(payload) != member.file.CRC32 {
+			return nil, fail("membro ZIP diverge do tamanho ou CRC declarado: %q", name)
+		}
+		return payload, nil
+	}
+	return nil, fail("membro ausente do ZIP: %q", name)
+}

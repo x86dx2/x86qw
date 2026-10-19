@@ -81,3 +81,30 @@ func TestVerifyDetectsTamperedFile(t *testing.T) {
 func loadForTest(root string) (*receipt.Record, error) {
 	return receipt.Load(filepath.Join(root, ".x86qw/components/docs"))
 }
+
+func TestEmbeddedGamesMatchMaintenance(t *testing.T) {
+	want, err := os.ReadFile(filepath.Join("..", "..", "..", "maintenance", "inventory", "games.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(want) != string(GamesJSON) {
+		t.Fatal("go/internal/install/games.json diverge de maintenance/inventory/games.json")
+	}
+}
+
+// TestPlaySupportOfRealInstallation derives the same gamecode Python recorded.
+func TestPlaySupportOfRealInstallation(t *testing.T) {
+	root := realRoot(t)
+	games, err := LoadGames()
+	if err != nil {
+		t.Fatal(err)
+	}
+	available := AvailableGames(root, games)
+	issues, expected, err := PlaySupportIssues(root, available)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(issues) != 0 || len(expected) != 4 {
+		t.Fatalf("play-support: %v (%d arquivos)", issues, len(expected))
+	}
+}
