@@ -24,15 +24,13 @@ jobs:
         with:
           fetch-depth: 1
           lfs: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          python-version: "3.13"
-      - name: Install pinned trust dependencies from vendored wheels
-        run: python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
       - name: Check authenticated public lease
-        env:
-          PYTHONDONTWRITEBYTECODE: "1"
-        run: python maintenance/tools/monitor_public_tuf.py --root maintenance/trust/root.json --warning-hours 72
+        working-directory: go
+        run: go run ./cmd/x86qw-release monitor --warning-hours 72
       - name: Fail closed if the monitor itself went stale
         # A manual run is the explicit recovery path after a cadence incident:
         # the authenticated lease check above must pass, then this run becomes

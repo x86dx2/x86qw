@@ -30,11 +30,13 @@ jobs:
           # The record step pushes with RELEASE_GH_TOKEN; a persisted
           # GITHUB_TOKEN header would override it and be denied.
           persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          python-version: "3.13"
-      - name: Install pinned trust dependencies from vendored wheels
-        run: python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      - name: Build the release tooling
+        working-directory: go
+        run: go build -o "$RUNNER_TEMP/x86qw-release" ./cmd/x86qw-release
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "24"
@@ -43,7 +45,14 @@ jobs:
       - name: Install the pinned site toolchain
         working-directory: site
         run: npm ci
-      - name: Materialize the online timestamp key
+      - name: Refuse a checkout that diverges from production
+        run: |
+          set -euo pipefail
+          curl -fsS --proto '=https' -H 'Cache-Control: no-cache' \
+            "https://qw.x86.com.br/api/v1/trust/metadata/timestamp.json?renewal=${GITHUB_RUN_ID}" \
+            -o "$RUNNER_TEMP/live-timestamp.json"
+          cmp "$RUNNER_TEMP/live-timestamp.json" site/public/api/v1/trust/metadata/timestamp.json
+      - name: Renew timestamp.json with the online key
         env:
           TUF_TIMESTAMP_KEY_B64: ${{ secrets.TUF_TIMESTAMP_KEY_B64 }}
         run: |
@@ -51,40 +60,39 @@ jobs:
           umask 077
           test -n "$TUF_TIMESTAMP_KEY_B64"
           printf '%s' "$TUF_TIMESTAMP_KEY_B64" | base64 --decode > "$RUNNER_TEMP/timestamp-key.pem"
-      - name: Renew timestamp.json and assemble a site that differs only there
-        env:
-          PYTHONDONTWRITEBYTECODE: "1"
-        run: |
-          set -euo pipefail
-          python maintenance/tools/renew_public_timestamp.py prepare \
-            --timestamp-key "$RUNNER_TEMP/timestamp-key.pem" \
-            --work-dir "$RUNNER_TEMP/renewal"
+          "$RUNNER_TEMP/x86qw-release" renew-timestamp \
+            --current site/public/api/v1/trust/metadata/timestamp.json \
+            --key "$RUNNER_TEMP/timestamp-key.pem" \
+            --out "$RUNNER_TEMP/timestamp.json"
           rm -f "$RUNNER_TEMP/timestamp-key.pem"
-      - name: Deploy the renewed site generation
+          cp "$RUNNER_TEMP/timestamp.json" site/public/api/v1/trust/metadata/timestamp.json
+      - name: Assemble and deploy the site generation
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
+          "$RUNNER_TEMP/x86qw-release" site --source site/public --out "$RUNNER_TEMP/site/public" \
+            --commit "$GITHUB_SHA" --deploy-run "$GITHUB_RUN_ID"
+          cp site/wrangler.jsonc "$RUNNER_TEMP/site/wrangler.jsonc"
           site/node_modules/.bin/wrangler deploy \
-            --config "$RUNNER_TEMP/renewal/site/wrangler.jsonc" \
-            --assets "$RUNNER_TEMP/renewal/site/public" \
+            --config "$RUNNER_TEMP/site/wrangler.jsonc" \
+            --assets "$RUNNER_TEMP/site/public" \
             --strict
       - name: Verify the public chain and the published timestamp
-        env:
-          PYTHONDONTWRITEBYTECODE: "1"
         run: |
           set -euo pipefail
-          python maintenance/tools/verify_public_tuf.py \
-            --root maintenance/trust/root.json \
-            --catalog site/public/api/v1/catalog.json
-          python maintenance/tools/renew_public_timestamp.py confirm
+          "$RUNNER_TEMP/x86qw-release" monitor --warning-hours 72
+          curl -fsS --proto '=https' -H 'Cache-Control: no-cache' \
+            "https://qw.x86.com.br/api/v1/trust/metadata/timestamp.json?confirm=${GITHUB_RUN_ID}" \
+            -o "$RUNNER_TEMP/published.json"
+          cmp "$RUNNER_TEMP/published.json" site/public/api/v1/trust/metadata/timestamp.json
       - name: Record the published timestamp on main
         env:
           GH_TOKEN: ${{ secrets.RELEASE_GH_TOKEN }}
         run: |
           set -euo pipefail
-          version="$(python -c 'import json; print(json.load(open("site/public/api/v1/trust/metadata/timestamp.json"))["signed"]["version"])')"
+          version="$(jq -r .signed.version site/public/api/v1/trust/metadata/timestamp.json)"
           branch="bot/tuf-timestamp-v${version}"
           git config user.name "x86qw-bot"
           git config user.email "x86qw-bot@users.noreply.github.com"
