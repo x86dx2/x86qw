@@ -43,6 +43,12 @@ var (
 	overlay        = regexp.MustCompile(`^(.+)\+x86qw\.(\d+)$`)
 )
 
+// macOS runtime actions (manager.py macos_runtime_action).
+const (
+	ActionPrepareNightly  = "prepare-nightly"
+	ActionRestoreUpstream = "restore-upstream"
+)
+
 // Input bundles what a plan reads.
 type Input struct {
 	Root      string
@@ -52,6 +58,9 @@ type Input struct {
 	// package for GOOS/GOARCH adds a "CLI" row (Python's self-update row).
 	CLIVersion   string
 	GOOS, GOARCH string
+	// ClientAction verifies an installed client and returns its macOS
+	// action ("", ActionPrepareNightly or ActionRestoreUpstream). Nil skips both.
+	ClientAction func(spec catalog.ClientSpec, channel string, rec *receipt.Receipt) (string, error)
 }
 
 type installation struct {
@@ -156,14 +165,30 @@ func Update(in Input) (*Plan, error) {
 			if err != nil {
 				return nil, err
 			}
+			action := ""
+			if in.ClientAction != nil {
+				if action, err = in.ClientAction(spec, channel, rec); err != nil {
+					return nil, err
+				}
+			}
+			item := fmt.Sprintf("ezQuake %s %s", spec.Label, channel)
 			available, installed := releases[0].Version, rec.Get("selection")
-			if available == installed || !catalog.ReleaseIsNewer(available, installed, channel) {
+			// Same order as manager.py update_runtime.
+			if available == installed && action == "" {
 				continue
 			}
-			rows = append(rows, Row{
-				Kind: "Cliente", Item: fmt.Sprintf("ezQuake %s %s", spec.Label, channel),
-				Installed: installed, Available: available, Action: "Atualizar", Size: size(releases[0]),
-			})
+			if available == installed && action == ActionPrepareNightly {
+				rows = append(rows, Row{Kind: "Cliente", Item: item, Installed: "área segura", Available: "tela inteira", Action: "Reparar"})
+				continue
+			}
+			if available != installed && !catalog.ReleaseIsNewer(available, installed, channel) {
+				continue
+			}
+			row := Row{Kind: "Cliente", Item: item, Installed: installed, Available: available, Action: "Atualizar", Size: size(releases[0])}
+			if action == ActionRestoreUpstream {
+				row.Installed, row.Available, row.Action = "bundle re-assinado localmente", "bundle upstream integral", "Restaurar"
+			}
+			rows = append(rows, row)
 		}
 	}
 	if clients == 0 {

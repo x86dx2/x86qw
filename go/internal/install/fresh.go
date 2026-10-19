@@ -55,12 +55,17 @@ func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory
 	if err != nil {
 		return nil, err
 	}
+	// Like macos_game_directory_reset_required: only a target without any
+	// managed ezQuake gets its macOS directory preferences cleared. Adding a
+	// channel to (or reinstalling) an existing installation is allowed.
+	resetMacPreferences := runtime.GOOS == "darwin" && spec.Platform == "macos"
 	for _, channel := range []string{"stable", "nightly"} {
-		if _, err := os.Lstat(filepath.Join(target, spec.Runtime(channel))); err == nil {
-			return nil, fmt.Errorf("já existe um ezQuake em %s; use update", target)
+		for _, relative := range []string{spec.Runtime(channel), spec.Receipt(channel), legacyClientReceipt(*spec, channel)} {
+			if _, err := os.Lstat(filepath.Join(target, filepath.FromSlash(relative))); err == nil {
+				resetMacPreferences = false
+			}
 		}
 	}
-	resetMacPreferences := runtime.GOOS == "darwin" && spec.Platform == "macos"
 	held, err := lock.Acquire(target, "install")
 	if err != nil {
 		return nil, err
