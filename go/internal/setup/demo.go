@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -17,6 +18,9 @@ type Demo struct {
 	ExistingInstall bool
 	// Speed scales the simulated install (1 = about 14 s for any size).
 	Speed float64
+
+	mu      sync.Mutex
+	running bool // the demo server
 }
 
 var demoComponents = []Component{
@@ -44,16 +48,24 @@ var demoComponents = []Component{
 }
 
 var demoModes = []Mode{
-	{"duel", "Duel", "dm6", []string{"dm6", "dm2", "dm4", "aerowalk", "ztndm3"}, true},
-	{"2on2", "2on2", "dm6", []string{"dm6", "dm4", "aerowalk", "ztndm3"}, true},
-	{"4on4", "4on4", "dm3", []string{"dm3", "dm2", "e1m2", "schloss"}, true},
-	{"ffa", "Free For All", "dm6", []string{"dm6", "dm3", "dm4", "e1m1"}, true},
-	{"clan-arena", "Clan Arena", "dm6", []string{"dm6", "dm3", "aerowalk"}, true},
-	{"ctf", "Capture The Flag", "e2m2", []string{"e2m2", "e1m5", "e1m3", "e2m5"}, false},
-	{"midair", "Midair", "dm4", []string{"dm4", "dm6"}, true},
-	{"instagib", "Instagib", "dm4", []string{"dm4", "dm3", "dm6"}, true},
-	{"race", "Race", "dm6", []string{"dm6", "dm4"}, false},
-	{"practice", "Practice", "dm6", []string{"dm6", "dm2", "dm4", "dm3"}, true},
+	{ID: "duel", Label: "Duel", DefaultMap: "dm6", Maps: []string{"dm6", "dm2", "dm4", "aerowalk", "ztndm3"}, Bots: true, Players: "2", BotLimit: 1, Description: "1 contra 1, sem times"},
+	{ID: "2on2", Label: "2on2", DefaultMap: "dm6", Maps: []string{"dm6", "dm4", "aerowalk", "ztndm3"}, Bots: true, Players: "4", BotLimit: 3, Description: "duas duplas"},
+	{ID: "4on4", Label: "4on4", DefaultMap: "dm3", Maps: []string{"dm3", "dm2", "e1m2", "schloss"}, Bots: true, Players: "8", BotLimit: 7, Description: "dois times de quatro"},
+	{ID: "ffa", Label: "Free For All", DefaultMap: "dm6", Maps: []string{"dm6", "dm3", "dm4", "e1m1"}, Bots: true, Players: "2+", Description: "todos contra todos"},
+	{ID: "clan-arena", Label: "Clan Arena", DefaultMap: "dm6", Maps: []string{"dm6", "dm3", "aerowalk"}, Bots: true, Players: "2+", Description: "rodadas por times, sem itens"},
+	{ID: "ctf", Label: "Capture The Flag", DefaultMap: "e2m2", Maps: []string{"e2m2", "e1m5", "e1m3", "e2m5"}, Players: "4+", Kind: "ctf", Description: "capture a bandeira inimiga"},
+	{ID: "midair", Label: "Midair", DefaultMap: "dm4", Maps: []string{"dm4", "dm6"}, Bots: true, Players: "2+", Description: "só acertos no ar valem"},
+	{ID: "instagib", Label: "Instagib", DefaultMap: "dm4", Maps: []string{"dm4", "dm3", "dm6"}, Bots: true, Players: "2+", Description: "um tiro, uma morte"},
+	{ID: "race", Label: "Race", DefaultMap: "dm6", Maps: []string{"dm6", "dm4"}, Players: "1+", Kind: "race", Description: "percorra a rota no menor tempo"},
+	{ID: "tot", Label: "Train of Thought", DefaultMap: "dm6", Maps: []string{"dm6", "dm2"}, Bots: true, Players: "1+", Kind: "tot", Description: "treino contra frogbots"},
+	{ID: "practice", Label: "Practice", DefaultMap: "dm6", Maps: []string{"dm6", "dm2", "dm4", "dm3"}, Bots: true, Players: "1+", Description: "treino livre"},
+}
+
+var demoGroups = []ModeGroup{
+	{Key: "recommended", Label: "Recomendados", Modes: []string{"duel", "4on4", "ffa", "ctf"}},
+	{Key: "individual", Label: "Individuais", Modes: []string{"duel", "ffa", "midair", "instagib"}},
+	{Key: "teams", Label: "Times", Modes: []string{"2on2", "4on4", "clan-arena", "ctf"}},
+	{Key: "training", Label: "Treino", Modes: []string{"race", "tot", "practice"}},
 }
 
 // Catalog returns the real x86QW content.
@@ -290,3 +302,114 @@ func (d *Demo) Uninstall(ctx context.Context, target string, keepPersonal bool) 
 }
 
 var _ Backend = (*Demo)(nil)
+
+// MatchCatalog offers KTX and two mods, with the demo modes.
+func (d *Demo) MatchCatalog(context.Context, string) (*MatchCatalog, error) {
+	return &MatchCatalog{
+		Games: []Game{
+			{ID: "ktx", Label: "KTX x86QW", Version: "1.47+x86qw.20", Description: "deathmatch, times e treino", Modes: true},
+			{ID: "final-arena", Label: "Final Arena", Version: "1.20", Description: "duelos em fila"},
+			{ID: "pro-x", Label: "Pro-X", Version: "1.1", Description: "rodadas, times e votações"},
+		},
+		Modes: demoModes, Groups: demoGroups, Channels: []string{"stable"}, Ruleset: "x86qw",
+	}, nil
+}
+
+// Maps returns the mode's suggested maps, fewer with bots.
+func (d *Demo) Maps(_ context.Context, _ string, match Match) (*MapList, error) {
+	maps := []string{"dm6", "dm4", "dm2", "dm3", "aerowalk", "ztndm3", "e1m2", "schloss", "e2m2", "e1m5", "end", "skull"}
+	list := &MapList{Suggested: map[string]bool{}}
+	for _, mode := range demoModes {
+		if mode.ID == match.Mode {
+			for _, name := range mode.Maps {
+				list.Suggested[name] = true
+			}
+			list.Default = mode.DefaultMap
+		}
+	}
+	if match.Game != "" && match.Game != "ktx" {
+		list.Default, list.Suggested = "dm6", map[string]bool{"dm6": true}
+	}
+	for name := range list.Suggested {
+		list.Maps = append(list.Maps, name)
+	}
+	sort.Strings(list.Maps)
+	for _, name := range maps {
+		if !list.Suggested[name] && !(match.HasBots() && len(name) > 4) {
+			list.Maps = append(list.Maps, name)
+		}
+	}
+	list.Narrowed = match.HasBots()
+	return list, nil
+}
+
+// Play pretends to open ezQuake.
+func (d *Demo) Play(ctx context.Context, _ string, _ Match) error { return d.wait(ctx, 700) }
+
+// Open pretends to connect.
+func (d *Demo) Open(ctx context.Context, _, _ string) error { return d.wait(ctx, 500) }
+
+var demoServers = []PublicServer{
+	{Address: "qw.x86.com.br:27500", Title: "x86QW · Duel #1", Map: "dm6", Mode: "1on1", Humans: 2, QTV: "2@qw.x86.com.br:28000", Favorite: true},
+	{Address: "qw.x86.com.br:27501", Title: "x86QW · 4on4", Map: "dm3", Mode: "4on4", Humans: 6, Bots: 2},
+	{Address: "nl.quakeworld.nu:28501", Title: "QuakeWorld.nu · Duel", Map: "aerowalk", Mode: "1on1", Humans: 1},
+	{Address: "de.qwsv.net:27500", Title: "Berlin KTX 4on4", Map: "e1m2", Mode: "4on4", Humans: 8, QTV: "1@de.qwsv.net:28000"},
+	{Address: "fi.qw.zone:28502", Title: "Helsinki FFA", Map: "dm4", Mode: "ffa", Humans: 5},
+	{Address: "us-east.qw.gg:27500", Title: "NA East · Clan Arena", Map: "dm6", Mode: "ca", Humans: 4, Bots: 4},
+	{Address: "br.quake.world:27500", Title: "São Paulo · Duel", Map: "ztndm3", Mode: "1on1", Humans: 2, QTV: "3@br.quake.world:28000"},
+	{Address: "au.qwfwd.net:30000", Title: "Sydney Instagib", Map: "dm4", Mode: "ffa", Humans: 3},
+}
+
+// Servers lists a fixed sample of public servers.
+func (d *Demo) Servers(ctx context.Context, _ string) ([]PublicServer, error) {
+	if err := d.wait(ctx, 400); err != nil {
+		return nil, err
+	}
+	return append([]PublicServer(nil), demoServers...), nil
+}
+
+// Stack reports the demo server while it "runs".
+func (d *Demo) Stack(context.Context, string) (*Stack, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.running {
+		return nil, nil
+	}
+	return &Stack{Status: "running", Processes: []StackProcess{
+		{Label: "MVDSV", Address: "0.0.0.0", Port: 27500, PID: 4242, Alive: true, Mode: "Duel", Map: "dm6"},
+		{Label: "MVDSV #2 · 27501", Address: "0.0.0.0", Port: 27501, PID: 4243, Alive: true, Mode: "4on4", Map: "dm3"},
+		{Label: "QTV", Address: "0.0.0.0", Port: 28000, PID: 4244, Alive: true},
+		{Label: "QWFWD", Address: "0.0.0.0", Port: 30000, PID: 4245, Alive: true},
+	}}, nil
+}
+
+// StartServer pretends to start the instances.
+func (d *Demo) StartServer(ctx context.Context, _ string, _ Options) error {
+	if err := d.wait(ctx, 900); err != nil {
+		return err
+	}
+	d.mu.Lock()
+	d.running = true
+	d.mu.Unlock()
+	return nil
+}
+
+// StopServer pretends to stop them.
+func (d *Demo) StopServer(ctx context.Context, _ string) error {
+	if err := d.wait(ctx, 600); err != nil {
+		return err
+	}
+	d.mu.Lock()
+	d.running = false
+	d.mu.Unlock()
+	return nil
+}
+
+func (d *Demo) wait(ctx context.Context, milliseconds int) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(time.Duration(float64(milliseconds)/max(d.Speed, 0.1)) * time.Millisecond):
+		return nil
+	}
+}

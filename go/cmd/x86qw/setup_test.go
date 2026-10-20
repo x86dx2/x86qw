@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/x86dx2/x86qw/go/internal/play"
+	"github.com/x86dx2/x86qw/go/internal/setup"
 )
 
 func TestSetupRecipeAsksForYesAndRejectsBadFlags(t *testing.T) {
@@ -31,5 +32,28 @@ func TestPlayAcceptsTheTargetTheInstallerHandsOver(t *testing.T) {
 	request, err := parsePlay([]string{"--target", "/games/x86qw"}, games)
 	if err != nil || request.target != "/games/x86qw" {
 		t.Fatalf("%+v %v", request, err)
+	}
+}
+
+func TestMatchArgsParseAsPlayFlags(t *testing.T) {
+	games, err := play.LoadGames()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []setup.Match{
+		{Game: "ktx", Mode: "tot", Map: "dm6", Ruleset: "qcon", Channel: "stable", Bots: 3, BotSkill: "8", BotName: "x86qw", BotWeapon: "random", BotHealth: 150, BotBreak: "off"},
+		{Game: "ktx", Mode: "ffa", Map: "dm4", FillBots: true},
+		{Game: "ktx", Mode: "ctf", Map: "e2m2", CTFHook: "fast", CTFRunes: "off", CTFBased: true},
+		{Game: "ktx", Mode: "race", Map: "dm6", RaceStyle: "match", RaceScoring: "formula1", RacePacemaker: 3, RaceHide: true},
+		{Game: "pro-x", Map: "dm2"},
+	} {
+		args := m.Args("/games/x86qw")
+		request, err := parsePlay(args[1:], games)
+		if err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		if request.game != m.Game || request.mode != m.Mode || request.mapName != m.Map || request.options.Bots != m.Bots || request.options.FillBots != m.FillBots {
+			t.Fatalf("%v → %+v", args, request)
+		}
 	}
 }
