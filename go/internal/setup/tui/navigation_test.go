@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -155,11 +156,18 @@ func TestBodyKeepsItsPlace(t *testing.T) {
 	}
 }
 
-func TestPercentFitsItsColumn(t *testing.T) {
-	for _, value := range []int{0, 7, 26, 100} {
-		for _, row := range bigNumber(value, unicodeGlyphs) {
-			if w := len([]rune(row)); w > 26 {
-				t.Fatalf("%d%% tem %d colunas", value, w)
+func TestPercentStaysPut(t *testing.T) {
+	first := bigNumber(0, unicodeGlyphs)
+	for value := 0; value <= 100; value++ {
+		for index, row := range bigNumber(value, unicodeGlyphs) {
+			runes, want := []rune(row), []rune(first[index])
+			if len(runes) != len(want) || len(runes) > 30 {
+				t.Fatalf("%d%% tem %d colunas, 0%% tem %d", value, len(runes), len(want))
+			}
+			// The sign is the art after the three digit cells.
+			sign := len(runes) - artWidth(bigDigits['%']) - 1
+			if string(runes[sign:]) != string(want[sign:]) {
+				t.Fatalf("o %% andou em %d%%", value)
 			}
 		}
 	}
@@ -200,3 +208,15 @@ func TestDialogEnterKeepsEscCancels(t *testing.T) {
 }
 
 func must(lines []string, _ []hit, _ *[2]int) []string { return lines }
+
+func TestFinishedInstallCountsEveryFile(t *testing.T) {
+	demo := &setup.Demo{Speed: 50}
+	options := setup.Defaults(setup.Both, t.TempDir())
+	var last setup.Progress
+	for progress := range demo.Install(context.Background(), options, nil) {
+		last = progress
+	}
+	if !last.Finished || filesDone(last) != filesTotal(last) {
+		t.Fatalf("terminou com %d de %d arquivos", filesDone(last), filesTotal(last))
+	}
+}

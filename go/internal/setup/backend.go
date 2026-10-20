@@ -48,6 +48,7 @@ type Lane struct {
 	ID, Label   string
 	Size, Done  int64
 	Files, Kept int
+	FileCount   int // files in the component, so Files can reach it
 }
 
 // Progress is a snapshot of an installation.

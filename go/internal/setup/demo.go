@@ -173,6 +173,9 @@ func (d *Demo) Install(ctx context.Context, options Options, control <-chan bool
 		}
 	}
 	sort.SliceStable(lanes, func(i, j int) bool { return lanes[i].Size > lanes[j].Size })
+	for index := range lanes {
+		lanes[index].FileCount = max(1, len(demoFiles[lanes[index].ID]))
+	}
 	var total int64
 	for _, lane := range lanes {
 		total += lane.Size

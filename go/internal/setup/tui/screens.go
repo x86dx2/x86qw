@@ -632,7 +632,7 @@ func filesDone(pr setup.Progress) int {
 func filesTotal(pr setup.Progress) int {
 	n := 0
 	for _, lane := range pr.Lanes {
-		n += max(1, int(math.Ceil(float64(lane.Size)/8e6)))
+		n += lane.FileCount
 	}
 	return max(n, filesDone(pr))
 }
@@ -684,24 +684,39 @@ func bigNumber(value int, glyphs Glyphs) []string {
 	text := fmt.Sprintf("%d%%", value)
 	rows := make([]string, 4)
 	if !glyphs.Braille {
-		rows[1] = "  " + text
+		rows[1] = fmt.Sprintf("  %4s", text)
 		return rows
 	}
+	// Every digit sits centred in a cell as wide as the widest digit, and
+	// the number is right-aligned in three cells, so the sign never moves.
+	cell := 0
+	for r := '0'; r <= '9'; r++ {
+		cell = max(cell, artWidth(bigDigits[r]))
+	}
+	text = fmt.Sprintf("%3d%%", value)
 	for _, r := range text {
-		art := bigDigits[r]
-		width := 0
-		for _, line := range art {
-			width = max(width, len([]rune(line)))
+		art, width := bigDigits[r], cell
+		if r == '%' {
+			width = artWidth(art)
 		}
+		left := (width - artWidth(art)) / 2
 		for index := range rows {
 			line := ""
 			if index < len(art) {
 				line = art[index]
 			}
-			rows[index] += line + strings.Repeat(" ", width-len([]rune(line))+1)
+			rows[index] += strings.Repeat(" ", left) + line + strings.Repeat(" ", width-left-len([]rune(line))+1)
 		}
 	}
 	return rows
+}
+
+func artWidth(art []string) int {
+	width := 0
+	for _, line := range art {
+		width = max(width, len([]rune(line)))
+	}
+	return width
 }
 
 // doneRow is an action on the final screen.
