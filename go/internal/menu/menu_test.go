@@ -3,9 +3,9 @@ package menu
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -23,45 +23,26 @@ func fallbackUI(input string) (*UI, *bytes.Buffer) {
 	return &UI{In: bufio.NewReader(strings.NewReader(input)), Out: &out}, &out
 }
 
-// pythonSelect runs the real Python fallback with the same options and input.
+// pythonSelect returns what the retired Python fallback
+// (x86qw_runtime.ui.menu) printed and returned for the same options and
+// input, recorded in testdata/python-fallback.json.
 func pythonSelect(t *testing.T, input, call string) (string, string) {
 	t.Helper()
-	repo, _ := filepath.Abs(filepath.Join("..", "..", ".."))
-	python, err := exec.LookPath("python3")
+	payload, err := os.ReadFile(filepath.Join("testdata", "python-fallback.json"))
 	if err != nil {
-		t.Skip("sem python3")
+		t.Fatal(err)
 	}
-	script := `
-import sys
-from x86qw_runtime.ui.menu import MenuOption as O, select_one, select_many, confirm, MenuCancelled, MenuExit
-opts = (
-  O("play","Jogar","mods locais e modos KTX","Escolha jogo, modo, mapa e regras.",group="Partida"),
-  O("hub","Encontrar servidor","jogar, observar ou assistir QTV",group="Partida"),
-  O("off","Desativado","não disponível",enabled=False,disabled_reason="sem rede",group="Instalação"),
-  O("exit","Sair","encerrar o menu",aliases=("quit",),group="Instalação"),
-)
-try:
-    r = ` + call + `
-except MenuCancelled:
-    r = "CANCELLED"
-except MenuExit:
-    r = "EXIT"
-print("RESULT=" + repr(r))
-`
-	command := exec.Command(python, "-c", script)
-	command.Dir = repo
-	command.Env = append(os.Environ(), "PYTHONPATH="+repo, "COLUMNS=88", "LINES=24")
-	command.Stdin = strings.NewReader(input)
-	output, err := command.CombinedOutput()
-	if err != nil {
-		if strings.Contains(string(output), "ModuleNotFoundError") {
-			t.Skip("x86qw_runtime indisponível")
+	var golden []struct{ Input, Call, Output, Result string }
+	if err := json.Unmarshal(payload, &golden); err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range golden {
+		if entry.Input == input && entry.Call == call {
+			return entry.Output, entry.Result
 		}
-		t.Fatalf("python: %v\n%s", err, output)
 	}
-	text := string(output)
-	index := strings.LastIndex(text, "RESULT=")
-	return text[:index], strings.TrimSpace(text[index+len("RESULT="):])
+	t.Fatalf("sem golden para %q %s", input, call)
+	return "", ""
 }
 
 func TestFallbackMatchesPython(t *testing.T) {

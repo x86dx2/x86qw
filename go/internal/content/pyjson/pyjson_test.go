@@ -3,7 +3,6 @@ package pyjson
 import (
 	"bytes"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -44,24 +43,8 @@ func contentFiles(t *testing.T, root string) []string {
 	return files
 }
 
-// pythonDumps returns json.dumps(json.loads(b), ensure_ascii=False, indent=2[, sort_keys]) + "\n".
-func pythonDumps(t *testing.T, python, path string, sortKeys bool) []byte {
-	t.Helper()
-	flag := "False"
-	if sortKeys {
-		flag = "True"
-	}
-	script := "import json,sys;sys.stdout.buffer.write((json.dumps(json.loads(open(sys.argv[1],encoding='utf-8').read()),ensure_ascii=False,indent=2,sort_keys=" + flag + ")+'\\n').encode())"
-	output, err := exec.Command(python, "-I", "-c", script, path).Output()
-	if err != nil {
-		t.Fatalf("python %s: %v", path, err)
-	}
-	return output
-}
-
-func TestRoundTripMatchesPythonDumps(t *testing.T) {
+func TestRoundTripIsCanonical(t *testing.T) {
 	root := repoRoot(t)
-	python, _ := exec.LookPath("python3.13")
 	canonical := 0
 	for _, path := range contentFiles(t, root) {
 		raw, err := os.ReadFile(path)
@@ -79,11 +62,6 @@ func TestRoundTripMatchesPythonDumps(t *testing.T) {
 			}
 			if bytes.Equal(encoded, raw) {
 				canonical++
-			}
-			if python != "" {
-				if expected := pythonDumps(t, python, path, sortKeys); !bytes.Equal(encoded, expected) {
-					t.Errorf("%s (sort_keys=%v) diverge do json.dumps", path, sortKeys)
-				}
 			}
 		}
 	}

@@ -108,7 +108,7 @@ intencional e auditável, não um segundo padrão de organização.
 - o pacote interno registra origem, membros substituídos e hashes resultantes;
 - o catálogo mantém somente a versão atual, enquanto releases antigas continuam
   imutáveis nos mirrors de entrega;
-- `maintenance/manage.py check` detecta novidades; `update` prepara apenas as
+- `x86qw-content check` detecta novidades; `update` prepara apenas as
   atualizações seguras e `publish` permanece uma ação separada.
 
 O bootstrap preserva o snapshot nQuake original, troca seu padrão

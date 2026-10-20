@@ -8,59 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
-func pythonRuntime(t *testing.T) (string, string) {
-	t.Helper()
-	repo, _ := filepath.Abs(filepath.Join("..", "..", ".."))
-	for _, name := range []string{"python3.13", "python3"} {
-		if path, err := exec.LookPath(name); err == nil {
-			check := exec.Command(path, "-c", "import x86qw_runtime.session_control")
-			check.Dir = repo
-			if check.Run() == nil {
-				return path, repo
-			}
-		}
-	}
-	t.Skip("sem Python com x86qw_runtime")
-	return "", ""
-}
-
-// python runs session_control against target and returns its output.
-func python(t *testing.T, script, target string) string {
-	t.Helper()
-	interpreter, repo := pythonRuntime(t)
-	command := exec.Command(interpreter, "-c", script, target)
-	command.Dir = repo
-	command.Env = append(os.Environ(), "PYTHONPATH="+repo)
-	output, _ := command.CombinedOutput()
-	return string(output)
-}
-
-const pythonAcquire = `
-import sys
-from pathlib import Path
-from x86qw_runtime.session_control import InstallationLock, SessionControlError
-try:
-    lock = InstallationLock.acquire(Path(sys.argv[1]), "update")
-except SessionControlError as error:
-    print("REFUSED", error)
-else:
-    print("ACQUIRED", lock.session_id)
-    lock.release()
-`
-
-const pythonCrash = `
-import os, sys
-from pathlib import Path
-from x86qw_runtime.session_control import InstallationLock
-InstallationLock.acquire(Path(sys.argv[1]), "update")
-os._exit(0)
-`
-
-func TestLockFormatMatchesPython(t *testing.T) {
+func TestLockFormat(t *testing.T) {
 	target := t.TempDir()
 	lock, err := Acquire(target, "update")
 	if err != nil {
@@ -81,23 +32,25 @@ func TestLockFormatMatchesPython(t *testing.T) {
 	}
 }
 
-func TestPythonRespectsLiveGoLock(t *testing.T) {
+func TestSecondAcquireRespectsLiveLock(t *testing.T) {
 	target := t.TempDir()
 	lock, err := Acquire(target, "update")
 	if err != nil {
 		t.Fatal(err)
 	}
-	output := python(t, pythonAcquire, target)
+	if second, err := Acquire(target, "update"); err == nil {
+		second.Release()
+		t.Fatal("um lock vivo deveria ser recusado")
+	}
 	lock.Release()
-	if !strings.Contains(output, "REFUSED") || !strings.Contains(output, "ativa") {
-		t.Fatalf("Python deveria recusar um lock Go vivo: %s", output)
+	again, err := Acquire(target, "update")
+	if err != nil {
+		t.Fatalf("deveria adquirir após a liberação: %v", err)
 	}
-	if output := python(t, pythonAcquire, target); !strings.Contains(output, "ACQUIRED") {
-		t.Fatalf("Python deveria adquirir após a liberação: %s", output)
-	}
+	again.Release()
 }
 
-func TestPythonReclaimsCrashedGoLock(t *testing.T) {
+func TestReclaimsLockOfDeadController(t *testing.T) {
 	target := t.TempDir()
 	child := exec.Command("sleep", "30")
 	if err := child.Start(); err != nil {
@@ -110,31 +63,20 @@ func TestPythonReclaimsCrashedGoLock(t *testing.T) {
 	sessions := filepath.Join(target, ".x86qw", "sessions")
 	os.MkdirAll(sessions, 0o700)
 	os.Chmod(filepath.Join(target, ".x86qw"), 0o700)
-	absolute := Resolve(target)
 	owner := Owner{Format: 3, Project: "x86qw", SessionID: newSessionID(), OperationKind: "maintenance", Command: "update",
 		ControllerPID: identity.PID, ControllerStartToken: identity.Token, ControllerExecutable: identity.Executable,
-		CreatedAt: "2026-10-19T00:00:00.000000+00:00", Installation: absolute, PrivateFilesystem: 1}
+		CreatedAt: "2026-10-19T00:00:00.000000+00:00", Installation: Resolve(target), PrivateFilesystem: 1}
 	payload, _ := json.MarshalIndent(owner, "", "  ")
 	os.WriteFile(filepath.Join(sessions, "active.lock"), append(payload, '\n'), 0o600)
-	if output := python(t, pythonAcquire, target); !strings.Contains(output, "REFUSED") {
-		t.Fatalf("Python deveria ver o controlador vivo: %s", output)
+	if lock, err := Acquire(target, "update"); err == nil {
+		lock.Release()
+		t.Fatal("o controlador vivo deveria manter o lock")
 	}
 	child.Process.Kill()
 	child.Wait()
-	if output := python(t, pythonAcquire, target); !strings.Contains(output, "ACQUIRED") {
-		t.Fatalf("Python deveria recuperar o lock de um controlador morto: %s", output)
-	}
-}
-
-func TestGoReclaimsCrashedPythonLock(t *testing.T) {
-	target := t.TempDir()
-	python(t, pythonCrash, target)
-	if _, err := os.Stat(filepath.Join(target, ".x86qw", "sessions", "active.lock")); err != nil {
-		t.Fatalf("Python não deixou o lock: %v", err)
-	}
 	lock, err := Acquire(target, "update")
 	if err != nil {
-		t.Fatalf("Go deveria recuperar o lock de um Python morto: %v", err)
+		t.Fatalf("deveria recuperar o lock de um controlador morto: %v", err)
 	}
 	if err := lock.Release(); err != nil {
 		t.Fatal(err)

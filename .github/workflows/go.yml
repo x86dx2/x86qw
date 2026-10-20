@@ -2,26 +2,8 @@ name: Go
 
 on:
   pull_request:
-    paths:
-      - "go/**"
-      - "maintenance/trust/root.json"
-      - "maintenance/inventory/components.json"
-      - "maintenance/inventory/games.json"
-      - "dist/mods/ktx/1.47/x86qw/catalog/**"
-      - "site/public/api/v1/trust/**"
-      - "site/public/api/v1/catalog.json"
-      - ".github/workflows/go.yml"
   push:
     branches: [main]
-    paths:
-      - "go/**"
-      - "maintenance/trust/root.json"
-      - "maintenance/inventory/components.json"
-      - "maintenance/inventory/games.json"
-      - "dist/mods/ktx/1.47/x86qw/catalog/**"
-      - "site/public/api/v1/trust/**"
-      - "site/public/api/v1/catalog.json"
-      - ".github/workflows/go.yml"
   workflow_dispatch:
 
 permissions:

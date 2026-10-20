@@ -24,17 +24,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language:
-          - python
-          - javascript-typescript
+        include:
+          - language: go
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           lfs: false
           fetch-depth: 1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: matrix.language == 'go'
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
       - name: Initialize CodeQL
         uses: github/codeql-action/init@bb16b9baa2ec4010b29f5c606d57d01190139edd # v4.37.1
         with:
           languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      - name: Build the Go module
+        if: matrix.language == 'go'
+        run: go -C go build ./...
       - name: Analyze
         uses: github/codeql-action/analyze@bb16b9baa2ec4010b29f5c606d57d01190139edd # v4.37.1

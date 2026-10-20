@@ -96,26 +96,11 @@ func main() {
 	if len(os.Args) >= 2 && os.Args[1] == "monitor" {
 		os.Exit(runMonitor(os.Args[2:]))
 	}
-	if len(os.Args) >= 2 && os.Args[1] == "renew-timestamp-handoff" {
-		os.Exit(runRenewTimestampHandoff(os.Args[2:]))
-	}
-	if len(os.Args) >= 2 && os.Args[1] == "renew-snapshot-handoff" {
-		os.Exit(runRenewSnapshotHandoff(os.Args[2:]))
-	}
-	if len(os.Args) >= 2 && os.Args[1] == "verify-tuf-operation" {
-		os.Exit(runVerifyTUFOperation(os.Args[2:]))
-	}
-	if len(os.Args) >= 2 && os.Args[1] == "verify-candidate" {
-		os.Exit(runVerifyCandidate(os.Args[2:]))
-	}
-	if len(os.Args) >= 2 && os.Args[1] == "verify-handoff" {
-		os.Exit(runVerifyHandoff(os.Args[2:]))
-	}
 	if len(os.Args) >= 2 && os.Args[1] == "renew-timestamp" {
 		os.Exit(runRenew(os.Args[2:]))
 	}
 	if len(os.Args) < 2 || os.Args[1] != "bootstrap" {
-		fmt.Fprintln(os.Stderr, "uso: x86qw-release bootstrap|sign|renew-timestamp|renew-timestamp-handoff|renew-snapshot-handoff|verify-handoff|verify-candidate|verify-tuf-operation|monitor|site|catalog-cli ...")
+		fmt.Fprintln(os.Stderr, "uso: x86qw-release bootstrap|sign|renew-timestamp|monitor|site|catalog-cli ...")
 		os.Exit(2)
 	}
 	flags := flag.NewFlagSet("bootstrap", flag.ExitOnError)

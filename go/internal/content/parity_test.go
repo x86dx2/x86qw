@@ -2,6 +2,7 @@ package content
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,10 +12,11 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// Parity with maintenance/manage.py verify. These tests clone the checkout
-// with APFS/reflink copies, corrupt one fact per case and require both the
-// Python and the Go verifier to reject it. They need a hydrated dist/ and
-// python3.13, so they only run with X86QW_CONTENT_PARITY=1.
+// Verify corruptions. These tests clone the checkout with APFS/reflink
+// copies, corrupt one fact per case and require the verifier to reject it
+// with the message the retired manage.py verify printed for the same case
+// (testdata/verify-corruptions.json). They need a hydrated dist/ and take
+// minutes, so they only run with X86QW_CONTENT_CORRUPTIONS=1.
 
 func repoRoot(t *testing.T) string {
 	t.Helper()
@@ -38,18 +40,6 @@ func requireHydrated(t *testing.T, root string) {
 	}
 }
 
-func parityPython(t *testing.T) string {
-	t.Helper()
-	if os.Getenv("X86QW_CONTENT_PARITY") != "1" {
-		t.Skip("defina X86QW_CONTENT_PARITY=1 para comparar com manage.py")
-	}
-	python, err := exec.LookPath("python3.13")
-	if err != nil {
-		t.Skip("python3.13 indisponível")
-	}
-	return python
-}
-
 // cloneCheckout copies the checkout cheaply and detaches it from Git.
 func cloneCheckout(t *testing.T, root string) string {
 	t.Helper()
@@ -64,20 +54,6 @@ func cloneCheckout(t *testing.T, root string) string {
 	os.RemoveAll(filepath.Join(target, ".git"))
 	os.RemoveAll(filepath.Join(target, "go"))
 	return target
-}
-
-func runPythonVerify(t *testing.T, python, root string) (int, string) {
-	t.Helper()
-	command := exec.Command(python, "-I", "-B", filepath.Join(root, "maintenance/manage.py"), "verify", "--no-tests")
-	command.Dir = root
-	output, err := command.CombinedOutput()
-	if exit, ok := err.(*exec.ExitError); ok {
-		return exit.ExitCode(), string(output)
-	}
-	if err != nil {
-		t.Fatalf("python verify: %v", err)
-	}
-	return 0, string(output)
 }
 
 func runGoVerify(root string) (string, error) {
@@ -276,65 +252,37 @@ var mutations = []mutation{
 	}},
 }
 
-func TestVerifyParityWithManage(t *testing.T) {
-	python := parityPython(t)
+func TestVerifyRejectsCorruptions(t *testing.T) {
+	if os.Getenv("X86QW_CONTENT_CORRUPTIONS") != "1" {
+		t.Skip("defina X86QW_CONTENT_CORRUPTIONS=1 para corromper clones do checkout")
+	}
 	root := repoRoot(t)
 	requireHydrated(t, root)
-
-	baseline := cloneCheckout(t, root)
-	code, pythonOutput := runPythonVerify(t, python, baseline)
-	if code != 0 {
-		t.Fatalf("manage.py verify rejeita o checkout: %s", pythonOutput)
-	}
-	goOutput, err := runGoVerify(baseline)
+	payload, err := os.ReadFile(filepath.Join("testdata", "verify-corruptions.json"))
 	if err != nil {
-		t.Fatalf("verify Go rejeita o checkout: %v", err)
+		t.Fatal(err)
 	}
-	pythonSummary := strings.SplitN(pythonOutput, "\n", 2)[0]
-	goSummary := strings.SplitN(goOutput, "\n", 2)[0]
-	if pythonSummary != goSummary {
-		t.Fatalf("resumo diverge:\npython: %s\ngo:     %s", pythonSummary, goSummary)
+	var want map[string]string
+	if err := json.Unmarshal(payload, &want); err != nil {
+		t.Fatal(err)
 	}
-
+	if _, err := runGoVerify(cloneCheckout(t, root)); err != nil {
+		t.Fatalf("verify rejeita o checkout: %v", err)
+	}
 	for _, item := range mutations {
 		t.Run(item.name, func(t *testing.T) {
 			clone := cloneCheckout(t, root)
 			item.apply(t, clone)
-			code, pythonOutput := runPythonVerify(t, python, clone)
-			_, goErr := runGoVerify(clone)
-			pythonError := lastLine(pythonOutput)
-			t.Logf("python (exit %d): %s", code, pythonError)
-			t.Logf("go: %v", goErr)
-			if code == 0 {
-				t.Fatalf("mutação não rejeitada pelo manage.py; caso inválido")
+			_, err := runGoVerify(clone)
+			if err == nil {
+				t.Fatal("corrupção aceita")
 			}
-			if goErr == nil {
-				t.Fatalf("verify Go aceitou o que manage.py rejeita: %s", pythonError)
-			}
-			if normalizeMessage(pythonError) != normalizeMessage("[ERRO] "+goErr.Error()) {
-				t.Errorf("mensagem diverge:\npython: %s\ngo:     %s", pythonError, goErr)
+			got := strings.ReplaceAll("[ERRO] "+err.Error(), clone+"/", "<root>/")
+			if got != want[item.name] {
+				t.Errorf("mensagem diverge:\nwant: %s\ngot:  %s", want[item.name], got)
 			}
 		})
 	}
-}
-
-// lastLine returns the "[ERRO]" line (stderr interleaves with stdout).
-func lastLine(output string) string {
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, "[ERRO] ") {
-			return line
-		}
-	}
-	return lines[len(lines)-1]
-}
-
-// normalizeMessage folds the temporary-directory alias and the remedy each
-// tool names for regenerating product.json.
-func normalizeMessage(message string) string {
-	message = strings.ReplaceAll(message, "/private/var/", "/var/")
-	message = strings.ReplaceAll(message, "'python3 -m maintenance.tools.product_catalog --write'", "<product --write>")
-	return strings.ReplaceAll(message, "'x86qw-content product --write'", "<product --write>")
 }
 
 // TestVerifyAcceptsCheckout runs the Go verifier on the real checkout.

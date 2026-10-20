@@ -1,15 +1,9 @@
 # quake-world/ mantém um .gitignore local gerado pelos inventories instalados.
-# generate_trust_metadata.py na raiz cria metadata/ e targets/; a cerimónia
-# de produção usa .tuf-production/repository/.
-/metadata/
-/targets/
 .artifacts/
 .cache/
 .DS_Store
 .env
 .wrangler/
 .tuf-production/
-*.py[cod]
-__pycache__/
 maintenance/build/
 site/node_modules/

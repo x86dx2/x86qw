@@ -1,0 +1,23 @@
+{
+ "digest-mismatch": {
+  "error": "[ERRO] URL, tamanho ou SHA-256 diverge do manifesto imutavel atual: dist/mods/ktx/1.47/source/ktx-1.47.tar.gz"
+ },
+ "identical-managed-file": {
+  "plan": "[PLANO] Definicao valida: 1 arquivo(s).\n  dist/mods/ktx/1.47/source/ktx-1.47.tar.gz | https://github.com/<redigido>\n[OK] Simulacao concluida; nenhum byte remoto foi baixado e nenhum arquivo foi alterado.\n"
+ },
+ "outside-dist": {
+  "error": "[ERRO] o caminho precisa ficar em dist/: maintenance/x.bin"
+ },
+ "unknown-consumer": {
+  "error": "[ERRO] consumer nao declarado para ktx: install:nobody"
+ },
+ "unmanaged-remote": {
+  "error": "[ERRO] todo arquivo remoto persistente precisa declarar managed: true"
+ },
+ "wrong-kind": {
+  "error": "[ERRO] a definicao precisa ser x86qw/distribution-change formato 1"
+ },
+ "wrong-package": {
+  "error": "[ERRO] package do arquivo gerenciado deve ser ktx: mods/ktx/1.47/source/ktx-1.47.tar.gz"
+ }
+}
