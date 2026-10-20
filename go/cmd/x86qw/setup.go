@@ -37,9 +37,9 @@ func hasInstallation(target string) bool {
 	return false
 }
 
-// publishCLI installs this executable as the installation's CLI and links
-// ~/.local/bin/x86qw to its launcher.
-func publishCLI(target string, stdout, stderr io.Writer) error {
+// publishCLI installs this executable as the installation's CLI and, with
+// link, links ~/.local/bin/x86qw to its launcher (shortcuts on Windows).
+func publishCLI(target string, link bool, stdout, stderr io.Writer) error {
 	executable, err := os.Executable()
 	if err != nil {
 		return err
@@ -60,6 +60,9 @@ func publishCLI(target string, stdout, stderr io.Writer) error {
 	layer, err := cli.Install(target, executable, buildinfo.Version)
 	if err != nil {
 		return err
+	}
+	if !link {
+		return nil
 	}
 	home, _ := os.UserHomeDir()
 	command, err := cli.LinkUserCommand(target, home)
@@ -115,7 +118,8 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "x86qw setup: %v\n", err)
 			return output.ExitUsage
 		}
-		backend.Publish = func(target string) error { return publishCLI(target, stdout, stderr) }
+		backend.Publish = func(target string) error { return publishCLI(target, false, stdout, stderr) }
+		backend.Integrate = setup.Integrate
 		return runRecipe(backend, options, *yes, stdout, stderr)
 	case *profile == "" && stdinIsTerminal() && isTerminal(os.Stdout):
 		return runSetupInterface(backend, root, stdout, stderr)
@@ -126,7 +130,7 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
 			return output.ExitFailure
 		}
-		err = publishCLI(root, stdout, stderr)
+		err = publishCLI(root, true, stdout, stderr)
 		held.Release()
 		if err != nil {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
@@ -162,7 +166,7 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if err == nil {
-		err = publishCLI(root, stdout, stderr)
+		err = publishCLI(root, true, stdout, stderr)
 	}
 	if err != nil {
 		if errors.Is(err, os.ErrPermission) {
@@ -183,7 +187,12 @@ func runSetupInterface(backend *setup.Real, root string, stdout, stderr io.Write
 	if hasInstallation(root) {
 		held, err := lock.Acquire(root, "install")
 		if err == nil {
-			err = publishCLI(root, io.Discard, io.Discard)
+			// Linked as before unless the setup recorded otherwise.
+			link := true
+			if choices, _ := setup.LoadChoices(root); choices != nil {
+				link = choices.Integration.Path
+			}
+			err = publishCLI(root, link, io.Discard, io.Discard)
 			held.Release()
 		}
 		if err != nil {
@@ -191,7 +200,8 @@ func runSetupInterface(backend *setup.Real, root string, stdout, stderr io.Write
 		}
 	}
 	// The interface owns the screen: what publishing prints is dropped.
-	backend.Publish = func(target string) error { return publishCLI(target, io.Discard, io.Discard) }
+	backend.Publish = func(target string) error { return publishCLI(target, false, io.Discard, io.Discard) }
+	backend.Integrate = setup.Integrate
 	next, err := tui.Run(tui.Config{Backend: backend, Target: root, Lang: interfaceLanguage()})
 	if err != nil {
 		fmt.Fprintf(stderr, "✗ %v\n", err)

@@ -50,3 +50,17 @@ func TestShortcutsLifecycle(t *testing.T) {
 		}
 	}
 }
+
+func TestUserPathLifecycle(t *testing.T) {
+	root := t.TempDir()
+	if err := AddUserPath(root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { RemoveUserPath(root) })
+	if err := AddUserPath(root); err != nil {
+		t.Fatalf("adicionar de novo: %v", err)
+	}
+	if err := RemoveUserPath(root); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -123,7 +123,7 @@ func Defaults(intent Intent, target string) Options {
 			Instances: []Instance{{Mode: "duel", Map: "dm6"}, {Mode: "4on4", Map: "dm3", Bots: true}},
 			QTVPort:   28000, QWFWDPort: 30000,
 		},
-		Integration: Integration{Shortcuts: true, Path: true, QWLinks: true, Demos: true},
+		Integration: SupportedIntegration(),
 		Target:      target,
 	}
 }

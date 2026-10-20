@@ -90,7 +90,7 @@ var texts = map[string][2]string{
 	"i.qw": {"Links qw:// no navegador", "qw:// links in the browser"}, "i.demo": {"Abrir demos .mvd e .qwd", "Open .mvd and .qwd demos"},
 	"i.short.macos": {"atalho em Aplicativos", "shortcut in Applications"}, "i.short.linux": {"entrada no menu de aplicativos", "app menu entry"},
 	"i.short.windows": {"Menu Iniciar e Área de Trabalho", "Start menu and Desktop"},
-	"i.path.unix":     {"link em ~/.local/bin e PATH no shell", "link in ~/.local/bin and PATH in the shell"}, "i.path.windows": {"pasta no PATH do usuário", "folder on the user PATH"},
+	"i.path.unix":     {"link em ~/.local/bin", "link in ~/.local/bin"}, "i.path.windows": {"pasta no PATH do usuário", "folder on the user PATH"},
 	"i.qw.d":   {"clicar num servidor numa página conecta direto", "clicking a server on a page connects right away"},
 	"i.demo.d": {"duplo clique abre o replay no ezQuake", "double-click replays it in ezQuake"},
 
@@ -146,7 +146,7 @@ var texts = map[string][2]string{
 	"d.recipe":        {"c copia · enter mostra", "c copies · enter shows"},
 	"k.edit.hint":     {"enter editar", "enter edit"},
 	"pre.running":     {"conferindo…", "checking…"},
-	"d.itemsN":        {"itens", "items"}, "d.instancesN": {"instâncias", "instances"}, "d.integN": {"%d de 4 ativas", "%d of 4 on"},
+	"d.itemsN":        {"itens", "items"}, "d.instancesN": {"instâncias", "instances"}, "d.integN": {"%d de %d ativas", "%d of %d on"},
 	"k.ok": {"confirmar", "confirm"}, "k.run": {"executar", "run"},
 	"rs.x86qw": {"x86QW Ruleset", "x86QW Ruleset"}, "rs.x86qw.d": {"recomendado: diversão assistida e controles modernos", "recommended: assisted fun and modern controls"},
 	"rs.qcon": {"QuakeCon", "QuakeCon"}, "rs.qcon.d": {"competição moderna, regras do qcon", "modern competition, qcon rules"},

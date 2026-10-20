@@ -360,12 +360,22 @@ func (m *Model) modalRows() []formRow {
 		if platform() == "windows" {
 			path = m.t("i.path.windows")
 		}
-		return []formRow{
-			{id: "short", kind: rowToggle, label: m.t("i.short"), desc: short, on: in.Shortcuts, activate: func() { in.Shortcuts = !in.Shortcuts }},
-			{id: "path", kind: rowToggle, label: m.t("i.path"), desc: path, on: in.Path, activate: func() { in.Path = !in.Path }},
-			{id: "qw", kind: rowToggle, label: m.t("i.qw"), desc: m.t("i.qw.d"), on: in.QWLinks, activate: func() { in.QWLinks = !in.QWLinks }},
-			{id: "demo", kind: rowToggle, label: m.t("i.demo"), desc: m.t("i.demo.d"), on: in.Demos, activate: func() { in.Demos = !in.Demos }},
+		// Only what this system can do is offered.
+		can := setup.SupportedIntegration()
+		var rows []formRow
+		if can.Shortcuts {
+			rows = append(rows, formRow{id: "short", kind: rowToggle, label: m.t("i.short"), desc: short, on: in.Shortcuts, activate: func() { in.Shortcuts = !in.Shortcuts }})
 		}
+		if can.Path {
+			rows = append(rows, formRow{id: "path", kind: rowToggle, label: m.t("i.path"), desc: path, on: in.Path, activate: func() { in.Path = !in.Path }})
+		}
+		if can.QWLinks {
+			rows = append(rows, formRow{id: "qw", kind: rowToggle, label: m.t("i.qw"), desc: m.t("i.qw.d"), on: in.QWLinks, activate: func() { in.QWLinks = !in.QWLinks }})
+		}
+		if can.Demos {
+			rows = append(rows, formRow{id: "demo", kind: rowToggle, label: m.t("i.demo"), desc: m.t("i.demo.d"), on: in.Demos, activate: func() { in.Demos = !in.Demos }})
+		}
+		return rows
 	case "folder":
 		return []formRow{
 			{id: "folder", kind: rowText, label: m.t("sec.folder"), field: m.modal.field["folder"], desc: m.t("folder.d")},

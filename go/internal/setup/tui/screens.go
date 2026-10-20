@@ -194,13 +194,17 @@ func (m *Model) sectionRows() []reviewRow {
 		}
 		rows = append(rows, reviewRow{"server", m.t("sec.server"), fmt.Sprintf("%d %s · %s", len(ports), m.t("d.instancesN"), where)})
 	}
-	on := 0
-	for _, enabled := range []bool{o.Integration.Shortcuts, o.Integration.Path, o.Integration.QWLinks, o.Integration.Demos} {
-		if enabled {
-			on++
+	on, offered := 0, 0
+	can := setup.SupportedIntegration()
+	for _, item := range [][2]bool{{can.Shortcuts, o.Integration.Shortcuts}, {can.Path, o.Integration.Path}, {can.QWLinks, o.Integration.QWLinks}, {can.Demos, o.Integration.Demos}} {
+		if item[0] {
+			offered++
+			if item[1] {
+				on++
+			}
 		}
 	}
-	rows = append(rows, reviewRow{"integ", m.t("sec.integ"), fmt.Sprintf(m.t("d.integN"), on)})
+	rows = append(rows, reviewRow{"integ", m.t("sec.integ"), fmt.Sprintf(m.t("d.integN"), on, offered)})
 	return append(rows, reviewRow{"folder", m.t("sec.folder"), shortPath(o.Target)})
 }
 
@@ -346,10 +350,25 @@ func (m *Model) details(id string) [][2]string {
 			}
 			return m.glyphs.Fail + " " + m.t(key)
 		}
-		return [][2]string{
-			{"", padRight(mark(in.Shortcuts, "i.short"), 30) + mark(in.Path, "i.path")},
-			{"", padRight(mark(in.QWLinks, "i.qw"), 30) + mark(in.Demos, "i.demo")},
+		can := setup.SupportedIntegration()
+		var marks []string
+		for _, item := range []struct {
+			offered, on bool
+			key         string
+		}{{can.Shortcuts, in.Shortcuts, "i.short"}, {can.Path, in.Path, "i.path"}, {can.QWLinks, in.QWLinks, "i.qw"}, {can.Demos, in.Demos, "i.demo"}} {
+			if item.offered {
+				marks = append(marks, mark(item.on, item.key))
+			}
 		}
+		var rows [][2]string
+		for index := 0; index < len(marks); index += 2 {
+			line := marks[index]
+			if index+1 < len(marks) {
+				line = padRight(line, 30) + marks[index+1]
+			}
+			rows = append(rows, [2]string{"", line})
+		}
+		return rows
 	case "folder":
 		return [][2]string{{"", shortPath(o.Target)}}
 	}
