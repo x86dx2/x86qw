@@ -17,3 +17,12 @@ func Ensure(path string, info os.FileInfo) error {
 	}
 	return nil
 }
+
+// ProtectFile makes an existing file private (0600).
+func ProtectFile(path string) error { return os.Chmod(path, 0o600) }
+
+// IsPrivateFile reports whether only the owner can access the file.
+func IsPrivateFile(path string, info os.FileInfo) bool { return info.Mode().Perm()&0o077 == 0 }
+
+// Guidance tells the user how to make a rejected secret file private.
+func Guidance() string { return "use chmod 600" }
