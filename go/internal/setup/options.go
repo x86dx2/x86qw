@@ -3,11 +3,11 @@
 package setup
 
 import (
-	"slices"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
