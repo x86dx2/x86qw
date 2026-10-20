@@ -118,3 +118,15 @@ func TestRealInstall(t *testing.T) {
 		t.Fatalf("verificação: %+v %v", report, err)
 	}
 }
+
+func TestDeepFolderWarnsAServer(t *testing.T) {
+	r := &Real{}
+	options := Defaults(Host, filepath.Join(t.TempDir(), strings.Repeat("pasta-funda/", 9), "x86qw"))
+	if check := r.checkFolder(options); check.State != CheckWarning || !strings.Contains(check.Detail, "MVDSV") {
+		t.Fatalf("%+v", check)
+	}
+	options.Intent = Play
+	if check := r.checkFolder(options); check.State != CheckOK {
+		t.Fatalf("jogador não precisa do aviso: %+v", check)
+	}
+}

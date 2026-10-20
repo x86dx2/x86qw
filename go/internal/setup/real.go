@@ -51,7 +51,10 @@ type Real struct {
 
 var _ Backend = (*Real)(nil)
 
-const corePackage = "x86qw-core-id1"
+const (
+	corePackage   = "x86qw-core-id1"
+	mvdsvPathRoom = 88
+)
 
 // load authenticates the catalog once per run.
 func (r *Real) load() error {
@@ -309,6 +312,13 @@ func (r *Real) checkFolder(o Options) Check {
 	}
 	if check.State == CheckFailed {
 		return check
+	}
+	// MVDSV cuts paths at 128 bytes; its deepest files sit about 40 below
+	// the folder, so a deeper folder hides maps and progs from it.
+	if o.Intent.WantsServer() && len(o.Target) > mvdsvPathRoom && check.State == CheckOK {
+		check.State, check.Value = CheckWarning, fmt.Sprintf("%d caracteres", len(o.Target))
+		check.Detail = "O MVDSV não enxerga arquivos em caminhos tão longos e o servidor não sobe."
+		check.Fix = fmt.Sprintf("Escolha uma pasta com até %d caracteres em Pasta.", mvdsvPathRoom)
 	}
 	if parent := existingParent(o.Target); parent != "" {
 		probe, err := os.CreateTemp(parent, ".x86qw-setup-*")
