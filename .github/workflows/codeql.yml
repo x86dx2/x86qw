@@ -46,6 +46,7 @@ jobs:
           build-mode: ${{ matrix.build-mode }}
       - name: Build the Go module
         if: matrix.language == 'go'
-        run: go -C go build -a ./...
+        working-directory: go
+        run: go build -a ./...
       - name: Analyze
         uses: github/codeql-action/analyze@bb16b9baa2ec4010b29f5c606d57d01190139edd # v4.37.1

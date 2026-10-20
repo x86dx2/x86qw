@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/install"
+	"github.com/x86dx2/x86qw/go/internal/launchguard"
 	"github.com/x86dx2/x86qw/go/internal/menu"
 	"github.com/x86dx2/x86qw/go/internal/output"
 	"github.com/x86dx2/x86qw/go/internal/play"
@@ -87,7 +88,7 @@ func playMain(args []string, stdout, stderr io.Writer, propagateExit bool) (int,
 		selection += " · " + choice.mode.Label
 	}
 	con.info("Abrindo " + selection + " no mapa " + choice.mapName + "...")
-	code := launchPlay(target, choice.runtime.Path, launch, stdout, stderr)
+	code := launchPlay(target, choice.runtime.Path, choice.runtime.BinarySHA, launch, stdout, stderr)
 	if code == output.ExitSuccess {
 		con.success(choice.runtime.Label + " aberto com " + selection + ".")
 	}
@@ -132,7 +133,7 @@ func choosePlay(con console, target string, request *playRequest, games []play.G
 	return flow.run(request, configure, chooseRuleset)
 }
 
-func launchPlay(target, executable string, launch *play.Launch, stdout, stderr io.Writer) int {
+func launchPlay(target, executable, binarySHA string, launch *play.Launch, stdout, stderr io.Writer) int {
 	arguments := launch.Arguments
 	var config *play.RuntimeConfig
 	if len(launch.StartupCommands) > 0 {
@@ -151,7 +152,12 @@ func launchPlay(target, executable string, launch *play.Launch, stdout, stderr i
 		arguments = replaced
 	}
 	argv := append([]string{"-nohome", "-basedir", target}, arguments...)
-	process, err := play.Spawn(executable, argv, target)
+	release, err := launchguard.Hold(executable, binarySHA)
+	var process *os.Process
+	if err == nil {
+		process, err = play.Spawn(executable, argv, target)
+		release()
+	}
 	if err != nil {
 		if config != nil {
 			config.Release()
