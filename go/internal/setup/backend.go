@@ -79,6 +79,7 @@ type LogLine struct {
 type Existing struct {
 	Target, CLIVersion string
 	Components         int
+	Installed          []string // component IDs; the setup adds, never removes
 	Updates            []Update
 	Options            Options
 }
@@ -99,8 +100,6 @@ type Backend interface {
 	// Install installs options, or applies them to the installation
 	// already at the target; sending on control pauses (true) or resumes.
 	Install(ctx context.Context, options Options, control <-chan bool) <-chan Progress
-	// Update brings an installation's components to their newest versions.
-	Update(ctx context.Context, target string, control <-chan bool) <-chan Progress
 	// Repair verifies an installation and repairs what it can.
 	Repair(ctx context.Context, target string) (Report, error)
 	// Uninstall removes the installation; keepPersonal keeps configs,

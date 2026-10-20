@@ -38,6 +38,7 @@ type Config struct {
 // Model is the installer program.
 type Model struct {
 	cfg    Config
+	next   []string // the x86qw command to run once the interface closes
 	theme  Theme
 	glyphs Glyphs
 	lang   Lang
@@ -78,8 +79,12 @@ type Model struct {
 	dnsFor     string
 	dnsPending string
 
-	panelView    string
-	verify       float64
+	panelView string
+	// The panel's repair and uninstall: running, then what came back.
+	busy         bool
+	report       *setup.Report
+	panelErr     error
+	removed      bool
 	keepPersonal bool
 
 	toast      string
@@ -143,6 +148,14 @@ type checkMsg struct {
 	ok    bool
 	run   int
 }
+
+// panelMsg is how a repair or an uninstall from the panel ended.
+type panelMsg struct {
+	report  *setup.Report
+	removed bool
+	err     error
+}
+
 type progressMsg struct {
 	progress setup.Progress
 	ok       bool
@@ -184,7 +197,7 @@ func (m *Model) Init() tea.Cmd {
 // about 12 fps, spinners and progress at 30 fps.
 func (m *Model) tick() tea.Cmd {
 	interval := 83 * time.Millisecond
-	if (m.screen == scConfigure && m.preOn && !m.preDone) || m.screen == scInstall || (m.screen == scPanel && m.panelView == "repair" && m.verify < 100) {
+	if (m.screen == scConfigure && m.preOn && !m.preDone) || m.screen == scInstall || (m.screen == scPanel && m.busy) {
 		interval = 33 * time.Millisecond
 	}
 	return tea.Tick(interval, func(t time.Time) tea.Msg { return tickMsg(t) })
@@ -250,11 +263,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.recordCheck(msg.check)
 		return m, m.nextCheck()
+	case panelMsg:
+		m.busy, m.report, m.panelErr = false, msg.report, msg.err
+		if msg.removed && msg.err == nil {
+			m.removed = true
+		}
 	case progressMsg:
 		if !msg.ok {
 			break
 		}
+		if m.screen != scInstall {
+			break // a cancelled installation reporting how it ended
+		}
 		m.progress = msg.progress
+		if m.progress.Err != nil {
+			break
+		}
 		if m.progress.Finished {
 			return m, tea.Tick(900*time.Millisecond, func(time.Time) tea.Msg { return advanceMsg(scDone) })
 		}
@@ -264,9 +288,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen, m.focus = screen(msg), 0
 		}
 	case tickMsg:
-		if m.screen == scPanel && m.panelView == "repair" && m.verify > 0 && m.verify < 100 {
-			m.verify = min(100, m.verify+1.4)
-		}
 		return m, m.tick()
 	case tea.PasteMsg:
 		if field := m.activeField(); field != nil {
@@ -347,6 +368,15 @@ func (m *Model) startInstall() tea.Cmd {
 	return m.nextProgress()
 }
 
+// leaveInstall returns from the cockpit to where the installation was
+// confirmed.
+func (m *Model) leaveInstall() {
+	m.screen, m.focus, m.preOn, m.preDone, m.checks = scConfigure, 0, false, false, nil
+	if m.fromPanel && m.existing != nil {
+		m.screen = scPanel
+	}
+}
+
 // armedFor implements double-press confirmation for destructive keys.
 func (m *Model) armedFor(what string) bool {
 	if m.armed == what && time.Now().Before(m.armedUntil) {
@@ -364,7 +394,8 @@ func (m *Model) keyPress(msg tea.KeyPressMsg) tea.Cmd {
 		if m.screen == scInstall && !m.progress.Finished {
 			if m.armedFor("cancel") {
 				m.cancel()
-				m.screen, m.focus = scConfigure, 0
+				m.leaveInstall()
+				m.say(m.t("cancelled"))
 			}
 			return nil
 		}
@@ -448,6 +479,12 @@ func (m *Model) key(key string) tea.Cmd {
 			}
 		}
 	case scInstall:
+		if m.progress.Err != nil {
+			if key == "enter" || key == "esc" {
+				m.leaveInstall()
+			}
+			return nil
+		}
 		switch key {
 		case "p", "space", " ":
 			if !m.progress.Finished {
@@ -472,6 +509,9 @@ func (m *Model) key(key string) tea.Cmd {
 			return tea.Quit
 		}
 	case scPanel:
+		if m.busy {
+			return nil
+		}
 		return m.panelKey(key)
 	}
 	return nil
@@ -813,6 +853,9 @@ func (m *Model) footerHints() [][2]string {
 		}
 		return append(items, [2]string{"c", m.t("k.copy")}, [2]string{"esc", m.t("k.back")})
 	case scInstall:
+		if m.progress.Err != nil {
+			return [][2]string{{"enter", m.t("k.back")}}
+		}
 		pause := m.t("k.pause")
 		if m.progress.Paused {
 			pause = m.t("k.resume")
@@ -820,6 +863,13 @@ func (m *Model) footerHints() [][2]string {
 		return [][2]string{{"p", pause}, {"l", m.t("k.log")}, {"ctrl+c", m.t("k.cancel")}}
 	case scDone:
 		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"esc", m.t("k.quit")}}
+	case scPanel:
+		switch {
+		case m.removed:
+			return [][2]string{{"esc", m.t("k.quit")}}
+		case m.busy:
+			return [][2]string{{"ctrl+c", m.t("k.quit")}}
+		}
 	}
 	return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"esc", m.t("k.back")}, {"ctrl+c", m.t("k.quit")}}
 }
@@ -834,9 +884,14 @@ func DefaultTarget() string {
 }
 
 // Run starts the installer on the terminal.
-func Run(cfg Config) error {
-	_, err := tea.NewProgram(New(cfg)).Run()
-	return err
+// Run shows the installer until it quits. It returns the x86qw command
+// the user chose to run next, such as play, or nil.
+func Run(cfg Config) ([]string, error) {
+	final, err := tea.NewProgram(New(cfg)).Run()
+	if m, ok := final.(*Model); ok && err == nil {
+		return m.next, nil
+	}
+	return nil, err
 }
 
 // preflightOutcome is the worst state among the finished checks.

@@ -17,7 +17,7 @@ func main() {
 	theme := flag.String("theme", "", "dark, light ou vazio para seguir o terminal")
 	speed := flag.Float64("speed", 1, "velocidade da instalação simulada")
 	flag.Parse()
-	err := tui.Run(tui.Config{
+	_, err := tui.Run(tui.Config{
 		Backend: &setup.Demo{ExistingInstall: *existing, Speed: *speed},
 		Target:  tui.DefaultTarget(), Lang: tui.Lang(*lang), Demo: true, Theme: *theme,
 	})

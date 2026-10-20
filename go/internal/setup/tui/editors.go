@@ -295,10 +295,12 @@ func (m *Model) modalRows() []formRow {
 				{id: "invert", kind: rowToggle, label: m.t("invert"), on: o.Mouse.Invert, desc: map[bool]string{false: "m_pitch 0.022", true: "m_pitch -0.022"}[o.Mouse.Invert], activate: func() { o.Mouse.Invert = !o.Mouse.Invert }},
 			}
 		case 2:
-			return []formRow{
-				{id: "ruleset", kind: rowRadio, label: m.t("exp.ruleset"), desc: m.t("exp.ruleset.d"), on: o.Experience == "ruleset", activate: func() { o.Experience = "ruleset" }},
-				{id: "competitive", kind: rowRadio, label: m.t("exp.comp"), desc: m.t("exp.comp.d"), on: o.Experience == "competitive", activate: func() { o.Experience = "competitive" }},
+			var rows []formRow
+			for _, key := range setup.RulesetKeys {
+				key := key
+				rows = append(rows, formRow{id: "rs." + key, kind: rowRadio, label: m.t("rs." + key), desc: m.t("rs." + key + ".d"), on: o.Experience == key, activate: func() { o.Experience = key }})
 			}
+			return rows
 		default:
 			resolutions := [][2]int{{0, 0}, {1920, 1080}, {2560, 1440}, {3440, 1440}, {3840, 2160}, {1280, 720}}
 			current := 0
@@ -409,6 +411,11 @@ func (m *Model) compRows() []formRow {
 		}
 		if component.ID == "x86qw-client-bootstrap" {
 			rows = append(rows, formRow{id: component.ID, kind: rowInfo, label: component.Label, value: m.t("always") + "  " + size(component.Size), tone: "dim"})
+			continue
+		}
+		if m.existing != nil && contains(m.existing.Installed, component.ID) {
+			// The setup adds to an installation; removing is uninstalling.
+			rows = append(rows, formRow{id: component.ID, kind: rowInfo, label: component.Label, value: m.t("installed") + "  " + size(component.Size), tone: "dim"})
 			continue
 		}
 		rows = append(rows, formRow{id: component.ID, kind: rowToggle, label: component.Label, desc: size(component.Size), on: selected[component.ID], activate: func() {
@@ -543,8 +550,13 @@ func (m *Model) serverGeneralRows() []formRow {
 				instance.Mode, instance.Map = next.ID, next.DefaultMap
 			}},
 			formRow{id: fmt.Sprintf("map%d", index), kind: rowStepper, label: "      " + m.t("map"), value: instance.Map, step: func(d int) { instance.Map = cycleString(mode.Maps, instance.Map, d) }},
-			formRow{id: fmt.Sprintf("bots%d", index), kind: rowStepper, label: "      " + m.t("bots"), value: map[bool]string{true: m.t("bots.on"), false: m.t("bots.off")}[instance.Bots], step: func(int) { instance.Bots = !instance.Bots }},
 		)
+		if mode.Bots {
+			rows = append(rows, formRow{id: fmt.Sprintf("bots%d", index), kind: rowStepper, label: "      " + m.t("bots"), value: map[bool]string{true: m.t("bots.on"), false: m.t("bots.off")}[instance.Bots], step: func(int) { instance.Bots = !instance.Bots }})
+		} else {
+			instance.Bots = false
+			rows = append(rows, formRow{id: fmt.Sprintf("bots%d", index), kind: rowInfo, label: "   " + m.t("bots"), value: m.t("bots.none"), tone: "dim"})
+		}
 	}
 	if len(s.Instances) < 8 {
 		rows = append(rows, formRow{id: "add", kind: rowAction, label: m.t("srv.add"), activate: func() {

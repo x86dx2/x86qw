@@ -171,6 +171,9 @@ func (r *Real) Existing(ctx context.Context, target string) (*Existing, error) {
 	existing := &Existing{Target: target, CLIVersion: cliVersion(target)}
 	components, _ := receipt.LoadComponents(target)
 	existing.Components = len(components)
+	for _, record := range components {
+		existing.Installed = append(existing.Installed, record.ID)
+	}
 	choices, err := LoadChoices(target)
 	if err != nil {
 		return nil, err
@@ -562,28 +565,6 @@ func (r *Real) finish(target string, options Options) []string {
 		note("integração", r.Integrate(target, options.Integration))
 	}
 	return warnings
-}
-
-// Update applies every newer version the catalog has.
-func (r *Real) Update(ctx context.Context, target string, control <-chan bool) <-chan Progress {
-	if err := r.load(); err != nil {
-		return failed(err)
-	}
-	in := r.planInput(target)
-	planned, err := plan.Update(in)
-	if err != nil {
-		return failed(err)
-	}
-	return track(ctx, newTracker(nil, r.labels()), control, func(ctx context.Context) ([]string, error) {
-		if len(planned.Operations) == 0 {
-			return nil, nil
-		}
-		result, err := install.Apply(ctx, "update", in, planned)
-		if err != nil {
-			return nil, err
-		}
-		return result.Warnings, nil
-	})
 }
 
 // Repair verifies target and, when something is wrong, repairs it.

@@ -80,7 +80,8 @@ func (d *Demo) Existing(_ context.Context, target string) (*Existing, error) {
 	}
 	options := Defaults(Play, target)
 	options.Nick = "x86dx2"
-	return &Existing{Target: target, CLIVersion: "2.0.3", Components: 12, Options: options, Updates: []Update{
+	catalog, _ := d.Catalog(context.Background())
+	return &Existing{Target: target, CLIVersion: "2.0.3", Components: 12, Installed: catalog.Profiles["recommended"], Options: options, Updates: []Update{
 		{"x86qw-client-bootstrap", "Base do cliente x86QW", "e4cb23d40aa2+x86qw.4", "dfb2ac9299f7+x86qw.4", "nQuake"},
 		{"ktx", "KTX x86QW", "1.47+x86qw.19", "1.47+x86qw.20", ""},
 		{"x86qw-core-id1", "Dados do Quake", "0.1.0", "0.1.1", ""},
@@ -266,13 +267,6 @@ func snapshot(progress Progress) Progress {
 	progress.Lanes = append([]Lane(nil), progress.Lanes...)
 	progress.Log = append([]LogLine(nil), progress.Log...)
 	return progress
-}
-
-// Update simulates updating the components Existing reports.
-func (d *Demo) Update(ctx context.Context, target string, control <-chan bool) <-chan Progress {
-	options := Defaults(Play, target)
-	options.Content = "essential"
-	return d.Install(ctx, options, control)
 }
 
 // Repair pretends to verify every file.
