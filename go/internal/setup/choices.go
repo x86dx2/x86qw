@@ -206,13 +206,17 @@ func SaveServerPresets(target string, o Options) error {
 	return nil
 }
 
-// HostCommand is the command line that starts instance index in the
-// background, with the rcon password the setup stored.
-func HostCommand(target string, o Options, index int) []string {
-	args := []string{"host", "--target", target, "--preset", PresetName(index), "--background",
+// HostCommand is the command line that starts every instance of the
+// server in one background session, with the rcon password the setup
+// stored: the first from its preset, the others as --instance.
+func HostCommand(target string, o Options) []string {
+	args := []string{"host", "--target", target, "--preset", PresetName(0), "--background",
 		"--rcon-password-file", filepath.Join(target, filepath.FromSlash(RconFile))}
-	if o.Server.Instances[index].Bots {
+	if o.Server.Instances[0].Bots {
 		args = append(args, "--fill-bots")
+	}
+	for index, instance := range o.Server.Instances[1:] {
+		args = append(args, "--instance", services.Instance{Mode: instance.Mode, Map: instance.Map, Port: o.Server.BasePort + index + 1, Bots: instance.Bots}.String())
 	}
 	return args
 }

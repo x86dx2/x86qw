@@ -837,9 +837,7 @@ func (m *Model) donePage(p *page) {
 		}
 		p.add(spread(p.st(t.Text2).Render("  rcon"), p.st(t.Text).Render(m.opts.Server.Rcon)+p.st(t.Base).Render("       "), p.width, t.Base))
 		p.add(p.st(t.Gray).Render("  " + m.t("ports.open")))
-		if len(m.opts.Server.Instances) > 1 {
-			p.lead("  " + fmt.Sprintf(m.t("srv.one"), setup.PresetName(1)))
-		}
+		p.lead("  " + m.t("srv.together"))
 	}
 	if warnings := m.progress.Warnings; len(warnings) > 0 {
 		p.gap(1)
@@ -878,7 +876,7 @@ func (m *Model) activateDone(id string) tea.Cmd {
 	case id == "play":
 		m.next = []string{"play", "--target", target}
 	case id == "server":
-		m.next = setup.HostCommand(target, m.opts, 0)
+		m.next = setup.HostCommand(target, m.opts)
 	case id == "find":
 		m.next = []string{"hub", "--target", target}
 	}

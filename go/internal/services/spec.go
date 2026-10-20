@@ -44,6 +44,9 @@ type Spec struct {
 type Session struct {
 	Temporary    []*TemporaryConfig
 	Materialized []*Materialized
+	// published holds the PK3s already materialized, so several servers
+	// of one game share a single copy.
+	published map[string]bool
 }
 
 var dedicatedModeCvars = map[string][][2]string{
@@ -317,7 +320,11 @@ func HostSpec(target string, o *HostOptions, hosted *Hosted, session *Session, j
 			continue
 		}
 		marker := gameMarkerPath(target, candidate)
-		if strings.EqualFold(filepath.Ext(marker), ".pk3") {
+		if strings.EqualFold(filepath.Ext(marker), ".pk3") && !session.published[marker] {
+			if session.published == nil {
+				session.published = map[string]bool{}
+			}
+			session.published[marker] = true
 			gamedir := filepath.Join(target, game.Gamedir)
 			materialized, err := MaterializePK3(marker, gamedir, game.Label, journal)
 			if err != nil {

@@ -267,9 +267,7 @@ func runRecipe(backend *setup.Real, options setup.Options, yes bool, stdout, std
 	}
 	fmt.Fprintf(stdout, "✓ x86QW instalado em %s\n", options.Target)
 	if options.Intent.WantsServer() {
-		for index := range options.Server.Instances {
-			fmt.Fprintf(stdout, "  Servidor #%d: x86qw %s\n", index+1, strings.Join(setup.HostCommand(options.Target, options, index), " "))
-		}
+		fmt.Fprintf(stdout, "  Iniciar o servidor: x86qw %s\n", strings.Join(setup.HostCommand(options.Target, options), " "))
 		fmt.Fprintf(stdout, "  rcon: %s (guardado em %s)\n", options.Server.Rcon, filepath.Join(options.Target, filepath.FromSlash(setup.RconFile)))
 	}
 	if options.Intent.WantsClient() {
