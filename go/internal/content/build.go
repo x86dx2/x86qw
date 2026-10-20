@@ -430,7 +430,7 @@ func (p *Project) RegisterPackages(catalogPath string, manifest *Object, now tim
 		if ok {
 			key = pyjson.Repr(packageKey(item))
 		}
-		if ok && pyjson.Eq(item.Value("channel"), "content") && !pyjson.Eq(item.Value("component"), "installer") && !(pyjson.IsStr(packageKey(item)) && current[key]) {
+		if ok && pyjson.Eq(item.Value("channel"), "content") && !(pyjson.IsStr(packageKey(item)) && current[key]) {
 			continue
 		}
 		kept = append(kept, raw)
@@ -518,10 +518,6 @@ func (p *Project) NormalizeCatalogReleaseMetadata(catalog *Object) error {
 		component := pyjson.Repr(getOr(item, "component", ""))
 		version := pyjson.Repr(getOr(item, "version", ""))
 		switch component {
-		case "installer":
-			setDefault(item, "mirror_title", "x86QW Installer "+version)
-			setDefault(item, "mirror_notes", "Instalador público e atualizador da distribuição x86QW.")
-			item.Set("mirror_latest", item.Value("current") == true)
 		case "ezquake":
 			channel := pyjson.Repr(getOr(item, "channel", ""))
 			setDefault(item, "mirror_title", "x86QW Content · ezQuake "+channel+" "+version)

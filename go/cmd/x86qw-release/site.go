@@ -15,8 +15,7 @@ import (
 )
 
 // noStoreHeaders keeps mutable API documents out of the CDN cache.
-const noStoreHeaders = "\n/api/v1/product.json\n  Cache-Control: no-store, no-cache, must-revalidate\n  CDN-Cache-Control: no-store\n  Access-Control-Allow-Origin: *\n" +
-	"\n/api/v1/release-truth.json\n  Cache-Control: no-store, no-cache, must-revalidate\n  CDN-Cache-Control: no-store\n  Access-Control-Allow-Origin: *\n"
+const noStoreHeaders = "\n/api/v1/product.json\n  Cache-Control: no-store, no-cache, must-revalidate\n  CDN-Cache-Control: no-store\n  Access-Control-Allow-Origin: *\n"
 
 // runSite assembles the deployable site from site/public: every file except
 // the TUF history, only the current TUF generation (the timestamp's

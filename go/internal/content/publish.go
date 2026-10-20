@@ -119,6 +119,9 @@ func (p *Project) PublishGitHub(out io.Writer, catalog *Object, dryRun bool) err
 	groups := map[key][]mirrorArtifact{}
 	var order []key
 	for _, pkg := range objects(catalog.Value("packages")) {
+		if IsCLIPackage(pkg) {
+			continue
+		}
 		filename := pyjson.Repr(pkg.Value("filename"))
 		found := false
 		for _, url := range objectsOrStrings(pkg.Value("urls")) {
@@ -156,8 +159,7 @@ func (p *Project) PublishGitHub(out io.Writer, catalog *Object, dryRun bool) err
 			pkg := artifact.pkg
 			titles[pyjson.Repr(getOr(pkg, "mirror_title", getOr(pkg, "release_title", "x86QW Content · "+group.tag)))] = true
 			notes[pyjson.Repr(getOr(pkg, "mirror_notes", "Pacotes versionados da distribuição x86QW."))] = true
-			fallback := pkg.Value("component") == "installer" && pkg.Value("current") == true
-			latestValues[pyjson.Truthy(getOr(pkg, "mirror_latest", fallback))] = true
+			latestValues[pyjson.Truthy(getOr(pkg, "mirror_latest", false))] = true
 		}
 		if len(titles) != 1 || len(notes) != 1 || len(latestValues) != 1 {
 			return managerError("release %s possui metadados de espelho conflitantes", group.tag)
@@ -310,6 +312,9 @@ func (p *Project) PublishGitLab(out io.Writer, catalogPath string) error {
 	packages := objects(catalog.Value("packages"))
 	verified, changed := 0, false
 	for index, pkg := range packages {
+		if IsCLIPackage(pkg) {
+			continue
+		}
 		url := ArtifactURL(pkg)
 		size, digest := int64Of(pkg.Value("size")), pyjson.Repr(pkg.Value("sha256"))
 		filename := pyjson.Repr(pkg.Value("filename"))

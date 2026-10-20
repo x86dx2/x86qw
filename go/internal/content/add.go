@@ -385,8 +385,8 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 		if _, err := p.ValidatePackage(pkgValue, "definition.package", true); err != nil {
 			return nil, &ManagerError{err.Error()}
 		}
-		if pkg.Value("component") == "installer" {
-			return nil, managerError("pacotes do instalador so podem ser preparados pelo fluxo de release imutavel")
+		if IsCLIPackage(pkg) {
+			return nil, managerError("pacotes da CLI x86qw so podem ser preparados pelo fluxo de release da CLI")
 		}
 	}
 	stagedComponents, err := LoadJSONObject(p.Path(ComponentsPath))
@@ -647,9 +647,6 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 				}
 			}
 			continue
-		}
-		if strings.HasPrefix(relative, "installer/") {
-			return nil, managerError("novos pacotes do instalador exigem o fluxo de release imutavel")
 		}
 		authorities := 0
 		if artifactAuthority != nil {

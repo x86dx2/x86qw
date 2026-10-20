@@ -186,11 +186,6 @@ func (p *Project) ValidatePackage(value any, label string, requireReviewed bool)
 			return identity, fmt.Errorf("%s.upstream_version is invalid", label)
 		}
 	}
-	if component == "installer" {
-		if _, ok := pkg.Value("current").(bool); !ok {
-			return identity, fmt.Errorf("%s.current must be a boolean for installer packages", label)
-		}
-	}
 	if pkg.Has("distribution_path") {
 		distribution, ok := pkg.Value("distribution_path").(string)
 		if !ok {
@@ -251,22 +246,11 @@ func (p *Project) ValidateCatalog(value any) (int, error) {
 		}
 		identities[identity] = true
 	}
-	installers, current := 0, 0
-	for _, pkg := range packages {
-		if object, ok := pkg.(*Object); ok && pyjson.Eq(object.Value("component"), "installer") {
-			installers++
-			if object.Value("current") == true {
-				current++
-			}
-		}
-	}
-	if installers > 0 && current != 1 {
-		return 0, fmt.Errorf("catalog must identify exactly one current installer package")
-	}
 	return len(packages), nil
 }
 
-// PublishedPackageCount mirrors published_package_count.
+// PublishedPackageCount counts the content packages: the x86qw CLI
+// binaries are the product itself, not distributed content.
 func PublishedPackageCount(value any) (int, error) {
 	catalog, ok := value.(*Object)
 	if !ok {
@@ -278,9 +262,15 @@ func PublishedPackageCount(value any) (int, error) {
 	}
 	count := 0
 	for _, pkg := range packages {
-		if object, ok := pkg.(*Object); ok && !pyjson.Eq(object.Value("component"), "installer") {
+		if object, ok := pkg.(*Object); ok && !IsCLIPackage(object) {
 			count++
 		}
 	}
 	return count, nil
+}
+
+// IsCLIPackage reports whether pkg is an x86qw CLI binary, published by the
+// CLI release workflow rather than by the content mirrors.
+func IsCLIPackage(pkg *Object) bool {
+	return pyjson.Eq(pkg.Value("component"), "x86qw") && pyjson.Eq(pkg.Value("package"), "x86qw-cli")
 }

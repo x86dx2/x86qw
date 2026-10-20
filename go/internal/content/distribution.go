@@ -19,9 +19,8 @@ import (
 var GitLFSPointerPrefix = []byte("version https://git-lfs.github.com/spec/v1\n")
 
 var (
-	installerPackagePath = regexp.MustCompile(`^installer/packages/[0-9]+\.[0-9]+\.[0-9]+/x86qw-installer-[0-9]+\.[0-9]+\.[0-9]+\.zip$`)
-	ezquakeReleaseAsset  = regexp.MustCompile(`^ezQuake-(?:macOS-universal|linux-x86_64|windows-x64)\.zip$`)
-	nightlyPatterns      = []*regexp.Regexp{
+	ezquakeReleaseAsset = regexp.MustCompile(`^ezQuake-(?:macOS-universal|linux-x86_64|windows-x64)\.zip$`)
+	nightlyPatterns     = []*regexp.Regexp{
 		regexp.MustCompile(`^[0-9]{8}-[0-9]{6}_[0-9a-f]{7}_ezQuake-macOS-universal\.zip$`),
 		regexp.MustCompile(`^[0-9]{8}-[0-9]{6}_[0-9a-f]{7}_ezQuake-x86_64\.AppImage$`),
 		regexp.MustCompile(`^[0-9]{8}-[0-9]{6}_[0-9a-f]{7}_ezquake\.exe$`),
@@ -30,12 +29,6 @@ var (
 
 // allowedUnmanaged are dist files that need no manifest entry.
 var allowedUnmanaged = []string{
-	"installer/README.md", "installer/VERSION", "installer/docs/installer.md",
-	"installer/bin/install.ps1", "installer/bin/install.sh", "installer/bin/x86qw.sh",
-	"installer/bin/x86qw.cmd", "installer/assets/x86qw.svg", "installer/assets/x86qw.ico",
-	"installer/assets/x86qw.icns", "installer/assets/x86qw-16.png", "installer/assets/x86qw-32.png",
-	"installer/assets/x86qw-48.png", "installer/assets/x86qw-64.png", "installer/assets/x86qw-128.png",
-	"installer/assets/x86qw-256.png", "installer/assets/x86qw-512.png",
 	"game-data/id1/pak0.pak", "game-data/id1/pak1.pak",
 }
 
@@ -163,12 +156,6 @@ func (p *Project) ConsumedComponent(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if component == "installer" {
-		if installerPackagePath.MatchString(path) {
-			return component, nil
-		}
-		return "", nil
-	}
 	artifactComponent, err := ComponentForArtifactPath(releases, path)
 	if err != nil {
 		return "", err
@@ -272,33 +259,6 @@ func (p *Project) VerifyDistribution(root string, manifest *Object) (int, error)
 	if len(unexpected) > 0 {
 		sort.Strings(unexpected)
 		return 0, fmt.Errorf("distribution contains a file without an explicit consumer: %s", unexpected[0])
-	}
-	var installers, current []string
-	for _, relative := range files.Keys() {
-		metadata, ok := files.Value(relative).(*Object)
-		if ok && pyjson.Eq(metadata.Value("component"), "installer") {
-			installers = append(installers, relative)
-			if pyjson.Eq(metadata.Value("consumer"), "bootstrap:installer") {
-				current = append(current, relative)
-			}
-		}
-	}
-	if len(installers) > 0 && len(current) != 1 {
-		return 0, fmt.Errorf("distribution must register exactly one current installer package")
-	}
-	if len(installers) > 0 {
-		parts := purePosix(current[0]).parts
-		if len(parts) != 4 || parts[0] != "installer" || parts[1] != "packages" {
-			return 0, fmt.Errorf("current installer package has an invalid distribution path")
-		}
-		latest := filepath.Join(root, "installer", "packages", "latest")
-		link, err := os.Readlink(latest)
-		if !isSymlink(latest) || err != nil || link != parts[2] {
-			return 0, fmt.Errorf("installer latest pointer must target %s", parts[2])
-		}
-		if resolve(latest) != resolve(filepath.Join(root, "installer", "packages", parts[2])) {
-			return 0, fmt.Errorf("installer latest pointer escapes its package directory")
-		}
 	}
 	keys := files.Keys()
 	sort.Strings(keys)
