@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-FULL_ACTION = re.compile(r"uses:\s+[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}(?:\s+#.*)?$")
+FULL_ACTION = re.compile(r"uses:\s+[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@[0-9a-f]{40}(?:\s+#.*)?$")
 
 
 class ReleaseWorkflowTests(unittest.TestCase):
@@ -193,9 +193,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("environment: release", source)
         self.assertIn("actions: read", source)
         self.assertIn("TUF_TIMESTAMP_KEY_B64", source)
-        self.assertIn("tuf_timestamp_renewal.py", source)
+        self.assertIn("x86qw-release\" renew-timestamp-handoff", source)
         self.assertIn('default: "168"', source)
-        self.assertIn("verify_external_handoff.py", source)
+        self.assertIn("x86qw-release\" verify-handoff", source)
         self.assertIn("tuf-metadata-handoff.yml", source)
         self.assertIn("release_code_commit:", source)
         self.assertIn("ref: ${{ inputs.release_code_commit }}", source)
@@ -240,10 +240,10 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("actions: read", source)
         self.assertIn("TUF_SNAPSHOT_KEY_B64", source)
         self.assertIn("TUF_TIMESTAMP_KEY_B64", source)
-        self.assertIn("tuf_snapshot_renewal.py", source)
+        self.assertIn("x86qw-release\" renew-snapshot-handoff", source)
         self.assertIn('default: "90"', source)
         self.assertIn('default: "30"', source)
-        self.assertIn("verify_external_handoff.py", source)
+        self.assertIn("x86qw-release\" verify-handoff", source)
         self.assertIn("tuf-metadata-handoff.yml", source)
         self.assertIn("release_code_commit:", source)
         self.assertIn("ref: ${{ inputs.release_code_commit }}", source)
@@ -882,8 +882,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("workflow_dispatch:", source)
         self.assertIn("environment: release", source)
         self.assertIn("operation_report_b64", source)
-        self.assertIn("verify_tuf_operation_report.py", source)
-        self.assertIn("verify_external_handoff.py", source)
+        self.assertIn("x86qw-release\" verify-tuf-operation", source)
+        self.assertIn("x86qw-release\" verify-handoff", source)
+        self.assertIn("x86qw-release\" verify-candidate candidate", source)
         self.assertIn("overwrite: false", source)
         self.assertIn("retention-days: 90", source)
         self.assertIn("tuf-operation-${{ inputs.candidate_commit }}-${{ github.run_id }}-${{ github.run_attempt }}", source)

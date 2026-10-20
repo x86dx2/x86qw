@@ -291,8 +291,12 @@ class ContinuousIntegrationTests(unittest.TestCase):
         self.assertIn("enableCrossOsArchive: true", workflow)
         self.assertIn("cache-hit", workflow)
         self.assertIn("git lfs checkout", workflow)
-        self.assertIn("materialize_lfs.py", workflow)
+        self.assertIn("lfs-materialize", workflow)
         self.assertIn("git lfs fsck --pointers", workflow)
+        seed = workflow.split("  lfs-seed:\n", 1)[1].split("\n  portable:\n", 1)[0]
+        self.assertIn("actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306", seed)
+        self.assertIn("actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306", seed)
+        self.assertLess(seed.index("actions/cache/save@"), seed.index(" verify'"))
         self.assertEqual(0, workflow.count("git lfs pull"))
 
     def test_workflows_use_node24_actions_and_codeql(self):
@@ -409,7 +413,10 @@ class ContinuousIntegrationTests(unittest.TestCase):
             elif path.name == "codeql.yml":
                 self.assertIn("github/codeql-action/init@", source)
                 self.assertIn("github/codeql-action/analyze@", source)
-            elif path.name in {"go.yml", "go-release.yml", "tuf-monitor.yml", "tuf-timestamp-auto-renewal.yml"}:
+            elif path.name in {
+                "go.yml", "go-release.yml", "tuf-monitor.yml", "tuf-operation-drill.yml",
+                "tuf-snapshot-renewal.yml", "tuf-timestamp-auto-renewal.yml", "tuf-timestamp-renewal.yml",
+            }:
                 self.assertIn("actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e", source)
             else:
                 self.assertIn("actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1", source)
