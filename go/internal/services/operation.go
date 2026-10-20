@@ -161,10 +161,6 @@ func (op *Operation) readBackgroundRequest() error {
 func (op *Operation) Run() (code int) {
 	c := op.Console
 	common := op.common()
-	if common.Menu {
-		c.Error("O menu interativo de serviços ainda não foi portado para a CLI nativa; informe os parâmetros na linha de comando.")
-		return 2
-	}
 	target, err := filepath.Abs(common.Target)
 	if err == nil {
 		target = lock.Resolve(target)

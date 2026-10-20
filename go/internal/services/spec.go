@@ -119,7 +119,7 @@ func SelectHosted(target string, o *HostOptions) (*Hosted, error) {
 		return nil, errorf("Nenhum mod gerenciado está instalado. Execute o bootstrap e selecione um jogo.")
 	}
 	if o.Game == "" {
-		return nil, errorf("Informe o jogo a hospedar (ktx, final-arena, pro-x, team-fortress ou td2); o menu interativo ainda não foi portado.")
+		return nil, errorf("Informe o jogo a hospedar (ktx, final-arena, pro-x, team-fortress ou td2) ou use --menu.")
 	}
 	games, err := play.LoadGames()
 	if err != nil {
@@ -161,7 +161,7 @@ func SelectHosted(target string, o *HostOptions) (*Hosted, error) {
 	hosted := &Hosted{Game: game, Options: o.KtxOptions}
 	if game.UsesModeCatalog() {
 		if !o.ModeGiven {
-			return nil, errorf("Informe --mode para hospedar KTX; o menu interativo ainda não foi portado.")
+			return nil, errorf("Informe --mode para hospedar KTX ou use --menu.")
 		}
 		modes, err := play.LoadModes()
 		if err != nil {
@@ -183,7 +183,7 @@ func SelectHosted(target string, o *HostOptions) (*Hosted, error) {
 			return nil, errorf("Pacote KTX inválido: %s", pk3)
 		}
 		if o.Map == "" {
-			return nil, errorf("Informe --map; o menu interativo ainda não foi portado.")
+			return nil, errorf("Informe --map ou use --menu.")
 		}
 		hosted.Map, err = play.ResolveMap(target, game, o.Map, play.ActiveRequirements(mode, hosted.Options), hosted.Assets, "KTX · "+mode.Label)
 		if err != nil {
@@ -192,7 +192,7 @@ func SelectHosted(target string, o *HostOptions) (*Hosted, error) {
 		return hosted, nil
 	}
 	if o.Map == "" {
-		return nil, errorf("Informe --map; o menu interativo ainda não foi portado.")
+		return nil, errorf("Informe --map ou use --menu.")
 	}
 	hosted.Map, err = play.ResolveMap(target, game, o.Map, nil, nil, game.Label)
 	return hosted, err

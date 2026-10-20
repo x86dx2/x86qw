@@ -2,17 +2,11 @@ package main
 
 import (
 	"io"
-
-	"github.com/x86dx2/x86qw/go/internal/services"
 )
 
 func runProxy(args []string, stdout, stderr io.Writer) int {
-	options, err := services.ParseProxy(args)
-	if err != nil {
-		return serviceUsage("proxy", err, stderr)
-	}
-	op := &services.Operation{Action: "proxy", Proxy: options, Args: args}
-	return runService(op, &options.Common, stdout, stderr)
+	code, _ := serviceMain("proxy", args, stdout, stderr, false)
+	return code
 }
 
 func init() {
