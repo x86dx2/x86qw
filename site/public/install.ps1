@@ -6,10 +6,10 @@ $BootstrapArguments = @($args)
 # x86QW bootstrap: downloads the native x86QW CLI pinned by size and SHA-256
 # and runs `x86qw setup`. No Python required.
 $ErrorActionPreference = "Stop"
-$Version = "2.0.2"
+$Version = "2.0.3"
 $File = "x86qw-$Version-windows-amd64.exe"
-$Sha256 = "d1eac70d2351411858166694011fa55c3ae6175c15604f49681fbbda376db4d7"
-$Size = 13580288
+$Sha256 = "632111ff360d623860ee75390a8d7afba9d96b7788f462249265444dca2039e5"
+$Size = 13580800
 $Url = "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-$Version/$File"
 if ([Environment]::Is64BitOperatingSystem -ne $true) { throw "x86QW: Windows 64-bit e necessario." }
 $Work = Join-Path ([IO.Path]::GetTempPath()) ("x86qw-bootstrap-" + [Guid]::NewGuid().ToString("N"))
