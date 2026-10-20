@@ -2,26 +2,6 @@
   "cli": {
     "binaries": [
       {
-        "architecture": "arm64",
-        "filename": "x86qw-2.0.2-darwin-arm64",
-        "platform": "macos",
-        "sha256": "97bbfc815f10ee2506def4efe9f0ddacf7b939747ea494aefa5fee8b2326482e",
-        "size": 12481554,
-        "urls": [
-          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-darwin-arm64"
-        ]
-      },
-      {
-        "architecture": "x86_64",
-        "filename": "x86qw-2.0.2-darwin-amd64",
-        "platform": "macos",
-        "sha256": "2a4f73c21b463ce66fbfadb4ce4672dd6be2d9657fa7c3844f19ca976de915cf",
-        "size": 13376416,
-        "urls": [
-          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-darwin-amd64"
-        ]
-      },
-      {
         "architecture": "x86_64",
         "filename": "x86qw-2.0.2-linux-amd64",
         "platform": "linux",
@@ -39,6 +19,26 @@
         "size": 12189856,
         "urls": [
           "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-linux-arm64"
+        ]
+      },
+      {
+        "architecture": "arm64",
+        "filename": "x86qw-2.0.2-darwin-arm64",
+        "platform": "macos",
+        "sha256": "97bbfc815f10ee2506def4efe9f0ddacf7b939747ea494aefa5fee8b2326482e",
+        "size": 12481554,
+        "urls": [
+          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-darwin-arm64"
+        ]
+      },
+      {
+        "architecture": "x86_64",
+        "filename": "x86qw-2.0.2-darwin-amd64",
+        "platform": "macos",
+        "sha256": "2a4f73c21b463ce66fbfadb4ce4672dd6be2d9657fa7c3844f19ca976de915cf",
+        "size": 13376416,
+        "urls": [
+          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-darwin-amd64"
         ]
       },
       {
@@ -155,7 +155,7 @@
       "version": "2.22"
     }
   ],
-  "package_count": 29,
+  "package_count": 28,
   "project": "x86qw",
   "release_audience": "owner-only",
   "runtimes": [

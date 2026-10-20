@@ -1,7 +1,7 @@
 # Hospedagem dedicada, QTV e QWFWD
 
-O x86QW distribui MVDSV `1.11+x86qw.3`, QTV
-`0+025ca949aca0+x86qw.2` e QWFWD `1.30+x86qw.3` no perfil completo. Cada
+O x86QW distribui MVDSV `1.11+x86qw.4`, QTV
+`0+025ca949aca0+x86qw.3` e QWFWD `1.30+x86qw.4` no perfil completo. Cada
 runtime possui pacote, recibo e verificação próprios. Os comandos não baixam
 conteúdo: se faltar um componente, a CLI orienta executar novamente o
 instalador e selecionar o perfil completo ou o componente correspondente.

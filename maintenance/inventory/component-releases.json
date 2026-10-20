@@ -7,8 +7,8 @@
   },
   "components": {
     "x86qw-client-bootstrap": {
-      "version": "e4cb23d40aa2+x86qw.4",
-      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "version": "dfb2ac9299f7+x86qw.4",
+      "reference_revision": "dfb2ac9299f72cbe399bf637dc3f7adc24295edb",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
       "distribution_component": "x86qw",
@@ -16,19 +16,19 @@
       "text_replacements": [
         {
           "target": "non-gpl/qw/nquake_default.cfg",
-          "source_sha256": "6b00240868b22ec675d6876210e818eb6a044c51409ebac482820cc10f5c8e9c",
+          "source_sha256": "5cfd7b6f93175d08ac04fc6d8971d59bace4eeeb760f7adc36d719026cf284a1",
           "before": "gl_max_size                          \"32768\"",
           "after": "gl_max_size                          \"16384\""
         },
         {
           "target": "non-gpl/qw/nquake_default.cfg",
-          "source_sha256": "6b00240868b22ec675d6876210e818eb6a044c51409ebac482820cc10f5c8e9c",
+          "source_sha256": "5cfd7b6f93175d08ac04fc6d8971d59bace4eeeb760f7adc36d719026cf284a1",
           "before": "r_fx_geometry                        \"0\"",
           "after": "// x86QW: r_fx_geometry is not exposed by the supported ezQuake clients."
         },
         {
           "target": "non-gpl/qw/nquake_default.cfg",
-          "source_sha256": "6b00240868b22ec675d6876210e818eb6a044c51409ebac482820cc10f5c8e9c",
+          "source_sha256": "5cfd7b6f93175d08ac04fc6d8971d59bace4eeeb760f7adc36d719026cf284a1",
           "before": "cl_verify_qwprotocol                 \"2\"",
           "after": "// x86QW: keep the ezQuake cl_verify_qwprotocol default; it is registered after autoexec."
         }
@@ -422,7 +422,8 @@
       "notes": "QWFWD 1.30 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag. O bootstrap instala somente a variante selecionada em qwfwd/, junto de sua configuração operacional.",
       "compatibility": {
         "client_scope": [
-          "QuakeWorld UDP clients"
+          "ezquake-stable:3.6.9",
+          "ezquake-nightly:20260616-101233_a86996a"
         ],
         "verified": [
           "source-integrity",
@@ -459,8 +460,8 @@
       "notes": "QTV fixado no commit oficial 025ca949aca0 e compilado de forma reproduzível para Linux amd64, Windows x64 e macOS arm64. O bootstrap instala somente a variante selecionada em qtv/, junto dos recursos e da configuração operacional.",
       "compatibility": {
         "client_scope": [
-          "Modern web browsers",
-          "QuakeWorld QTV clients"
+          "ezquake-stable:3.6.9",
+          "ezquake-nightly:20260616-101233_a86996a"
         ],
         "verified": [
           "source-integrity",
