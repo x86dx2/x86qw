@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-09-02T00:36:26Z",
+  "captured_at": "2026-10-20T11:02:45Z",
   "files": {
     "clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage": {
       "component": "ezquake",
@@ -70,6 +70,102 @@
       "sha256": "1814d2c9df12a732a5b2efb8720e67bb94094b422794e5f2550821f17a377f4d",
       "size": 4135630,
       "url": "https://github.com/QW-Group/ezquake-source/releases/download/3.6.9/ezQuake-windows-x64.zip"
+    },
+    "distributions/nquake/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/config.cfg": {
+      "component": "nquake",
+      "consumer": "install:nquake-reference",
+      "package": "x86qw-client-bootstrap",
+      "sha256": "30925267d22c9744a268b9e5f5cc6e4a04f46c377ea89527c858fd5f7f7145d0",
+      "size": 1424,
+      "url": "https://raw.githubusercontent.com/nQuake/distfiles/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/config.cfg"
+    },
+    "distributions/nquake/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/blooddog.cfg": {
+      "component": "nquake",
+      "consumer": "install:nquake-reference",
+      "package": "x86qw-client-bootstrap",
+      "sha256": "1eecbfb3fc8e7f2b76f53cb745ee2c5f484357906661db3090249dfed2dcd8d4",
+      "size": 105497,
+      "url": "https://raw.githubusercontent.com/nQuake/distfiles/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/blooddog.cfg"
+    },
+    "distributions/nquake/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/bps.cfg": {
+      "component": "nquake",
+      "consumer": "install:nquake-reference",
+      "package": "x86qw-client-bootstrap",
+      "sha256": "a968704f4903f6d921a0845f10c1ac1f70b7af5e3514a12e7076889706325829",
+      "size": 127061,
+      "url": "https://raw.githubusercontent.com/nQuake/distfiles/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/bps.cfg"
+    },
+    "distributions/nquake/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/dirtbox.cfg": {
+      "component": "nquake",
+      "consumer": "install:nquake-reference",
+      "package": "x86qw-client-bootstrap",
+      "sha256": "61d9fa0253ef1c6e61d0571216f2d394315887c2060fc827d4144598ec1c42c7",
+      "size": 107371,
+      "url": "https://raw.githubusercontent.com/nQuake/distfiles/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/dirtbox.cfg"
+    },
+    "distributions/nquake/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/gt.cfg": {
+      "component": "nquake",
+      "consumer": "install:nquake-reference",
+      "package": "x86qw-client-bootstrap",
+      "sha256": "887ff4506b7637a1d7416e9335a2125cb0c10fe0f699891857e4dc357d932ffe",
+      "size": 176079,
+      "url": "https://raw.githubusercontent.com/nQuake/distfiles/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/gt.cfg"
+    },
+    "distributions/nquake/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/locktar.cfg": {
+      "component": "nquake",
+      "consumer": "install:nquake-reference",
+      "package": "x86qw-client-bootstrap",
+      "sha256": "6e2cbea9435cffe9190a5cc2ddaced8e11c982e0d935d00a96e934e986df8a89",
+      "size": 113337,
+      "url": "https://raw.githubusercontent.com/nQuake/distfiles/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/locktar.cfg"
+    },
+    "distributions/nquake/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/locust.cfg": {
+      "component": "nquake",
+      "consumer": "install:nquake-reference",
+      "package": "x86qw-client-bootstrap",
+      "sha256": "681a4dee0fdd2f70a7f507c427ec35a04fc06d370cdd72679472e13b82fffe57",
+      "size": 134631,
+      "url": "https://raw.githubusercontent.com/nQuake/distfiles/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/locust.cfg"
+    },
+    "distributions/nquake/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/milton.cfg": {
+      "component": "nquake",
+      "consumer": "install:nquake-reference",
+      "package": "x86qw-client-bootstrap",
+      "sha256": "4e993b614de0ca4be0eedcf542c2061198ceab832f09fb315eb8735de570b91b",
+      "size": 10819,
+      "url": "https://raw.githubusercontent.com/nQuake/distfiles/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/milton.cfg"
+    },
+    "distributions/nquake/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/rikoll.cfg": {
+      "component": "nquake",
+      "consumer": "install:nquake-reference",
+      "package": "x86qw-client-bootstrap",
+      "sha256": "992871ce813b0252092deaf36afa2e057cd7c3f4c0a2508dc55b9ea11b6de064",
+      "size": 131436,
+      "url": "https://raw.githubusercontent.com/nQuake/distfiles/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/gpl/ezquake/configs/samples/rikoll.cfg"
+    },
+    "distributions/nquake/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/non-gpl/qw/autoexec.cfg": {
+      "component": "nquake",
+      "consumer": "install:nquake-reference",
+      "package": "x86qw-client-bootstrap",
+      "sha256": "61ea93a02ef08b03d078c33f8d0e16c6aec4846aaa90c1e4d2b009d548684fe4",
+      "size": 20325,
+      "url": "https://raw.githubusercontent.com/nQuake/distfiles/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/non-gpl/qw/autoexec.cfg"
+    },
+    "distributions/nquake/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/non-gpl/qw/fragfile.dat": {
+      "component": "nquake",
+      "consumer": "install:nquake-reference",
+      "package": "x86qw-client-bootstrap",
+      "sha256": "199dbda082be8672cb76d41a8be8a8201e85c91d62265455abb32ceaf2b3155e",
+      "size": 38950,
+      "url": "https://raw.githubusercontent.com/nQuake/distfiles/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/non-gpl/qw/fragfile.dat"
+    },
+    "distributions/nquake/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/non-gpl/qw/nquake_default.cfg": {
+      "component": "nquake",
+      "consumer": "install:nquake-reference",
+      "package": "x86qw-client-bootstrap",
+      "sha256": "5cfd7b6f93175d08ac04fc6d8971d59bace4eeeb760f7adc36d719026cf284a1",
+      "size": 80791,
+      "url": "https://raw.githubusercontent.com/nQuake/distfiles/dfb2ac9299f72cbe399bf637dc3f7adc24295edb/non-gpl/qw/nquake_default.cfg"
     },
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/addon-clanarena/arena/arena.pk3": {
       "component": "nquake",
@@ -279,78 +375,6 @@
       "size": 135,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/Online%20Manual.url"
     },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/config.cfg": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "x86qw-client-bootstrap",
-      "sha256": "30925267d22c9744a268b9e5f5cc6e4a04f46c377ea89527c858fd5f7f7145d0",
-      "size": 1424,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/config.cfg"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/blooddog.cfg": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "x86qw-client-bootstrap",
-      "sha256": "1eecbfb3fc8e7f2b76f53cb745ee2c5f484357906661db3090249dfed2dcd8d4",
-      "size": 105497,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/blooddog.cfg"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/bps.cfg": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "x86qw-client-bootstrap",
-      "sha256": "a968704f4903f6d921a0845f10c1ac1f70b7af5e3514a12e7076889706325829",
-      "size": 127061,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/bps.cfg"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/dirtbox.cfg": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "x86qw-client-bootstrap",
-      "sha256": "61d9fa0253ef1c6e61d0571216f2d394315887c2060fc827d4144598ec1c42c7",
-      "size": 107371,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/dirtbox.cfg"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/gt.cfg": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "x86qw-client-bootstrap",
-      "sha256": "887ff4506b7637a1d7416e9335a2125cb0c10fe0f699891857e4dc357d932ffe",
-      "size": 176079,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/gt.cfg"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/locktar.cfg": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "x86qw-client-bootstrap",
-      "sha256": "6e2cbea9435cffe9190a5cc2ddaced8e11c982e0d935d00a96e934e986df8a89",
-      "size": 113337,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/locktar.cfg"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/locust.cfg": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "x86qw-client-bootstrap",
-      "sha256": "681a4dee0fdd2f70a7f507c427ec35a04fc06d370cdd72679472e13b82fffe57",
-      "size": 134631,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/locust.cfg"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/milton.cfg": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "x86qw-client-bootstrap",
-      "sha256": "4e993b614de0ca4be0eedcf542c2061198ceab832f09fb315eb8735de570b91b",
-      "size": 10819,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/milton.cfg"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/rikoll.cfg": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "x86qw-client-bootstrap",
-      "sha256": "992871ce813b0252092deaf36afa2e057cd7c3f4c0a2508dc55b9ea11b6de064",
-      "size": 131436,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/configs/samples/rikoll.cfg"
-    },
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/ezquake/ezquake.pk3": {
       "component": "nquake",
       "consumer": "install:nquake-reference",
@@ -374,14 +398,6 @@
       "sha256": "eee2262fb372767afcb38c22aec7e872bef18c79dad6b13ab748df490eade478",
       "size": 2363039,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/gpl/qw/ktx.pk3"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/autoexec.cfg": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "x86qw-client-bootstrap",
-      "sha256": "61ea93a02ef08b03d078c33f8d0e16c6aec4846aaa90c1e4d2b009d548684fe4",
-      "size": 20325,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/autoexec.cfg"
     },
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/crosshairs/1.tga": {
       "component": "nquake",
@@ -886,14 +902,6 @@
       "sha256": "89c4f5e0bbe90848e3bfd52708298371114e81a631791d84924505b2d2e388df",
       "size": 28945,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/env/violentdays_up.jpg"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/fragfile.dat": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "x86qw-client-bootstrap",
-      "sha256": "199dbda082be8672cb76d41a8be8a8201e85c91d62265455abb32ceaf2b3155e",
-      "size": 38950,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/fragfile.dat"
     },
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/maps/a2.bsp": {
       "component": "nquake",
@@ -2534,14 +2542,6 @@
       "sha256": "7295a0ee15370a47fdaf492ebf7479241b5b36554c32eb9be9330a234083e8b4",
       "size": 9467858,
       "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/nquake.pk3"
-    },
-    "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/nquake_default.cfg": {
-      "component": "nquake",
-      "consumer": "install:nquake-reference",
-      "package": "x86qw-client-bootstrap",
-      "sha256": "6b00240868b22ec675d6876210e818eb6a044c51409ebac482820cc10f5c8e9c",
-      "size": 80565,
-      "url": "https://raw.githubusercontent.com/nQuake/distfiles/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/nquake_default.cfg"
     },
     "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d/non-gpl/qw/readme.txt": {
       "component": "nquake",
@@ -4326,6 +4326,30 @@
       "sha256": "85b24b677bbe3c6848949a90b06c5470dee40dab6db5f16c69472ba9d3194e4d",
       "size": 626175,
       "url": "https://www.frag-net.com/dl/mods/quake/fortress/tf29qw.zip"
+    },
+    "servers/mvdsv/1.11/source/mvdsv-source-with-submodules-1.11.zip": {
+      "component": "mvdsv",
+      "consumer": "install:mvdsv",
+      "package": "mvdsv",
+      "sha256": "a1312d109587fdc62d6373b3ba321926730d08de82ad6a9f4360ca81b9398e31",
+      "size": 637189,
+      "url": "https://github.com/QW-Group/mvdsv/releases/download/1.11/mvdsv-source-with-submodules-1.11.zip"
+    },
+    "services/qtv/025ca949aca0/source/qtv-025ca949aca0.tar.gz": {
+      "component": "qtv",
+      "consumer": "install:qtv",
+      "package": "qtv",
+      "sha256": "6742784e05b3222c2d82e18ac0f380218f9e8e8819d7834f0e80af366484f12d",
+      "size": 855593,
+      "url": "https://github.com/QW-Group/qtv/archive/025ca949aca06cad6777de0075148ac06a15f4f0.tar.gz"
+    },
+    "services/qwfwd/1.30/source/qwfwd-1.30.tar.gz": {
+      "component": "qwfwd",
+      "consumer": "install:qwfwd",
+      "package": "qwfwd",
+      "sha256": "07f0f9cd2a9f9ff8d054774ba351c34cab6785626476bda27017889fae9cff2a",
+      "size": 55786,
+      "url": "https://github.com/QW-Group/qwfwd/archive/refs/tags/1.30.tar.gz"
     },
     "toolchains/fteqcc/3343+svn3400/source/fteqcc_3343+svn3400.orig.tar.gz": {
       "component": "toolchains",

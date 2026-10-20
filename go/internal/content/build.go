@@ -18,7 +18,7 @@ import (
 
 const (
 	gitlabProjectID  = "84813414"
-	coreVersion      = "0.1.0"
+	coreVersion      = "0.1.1"
 	corePackage      = "x86qw-core-id1"
 	coreReleaseTag   = "x86qw-content-core-" + coreVersion
 	maxCorePakBytes  = 128 * 1024 * 1024
@@ -485,8 +485,18 @@ func (p *Project) RegisterPackages(catalogPath string, manifest *Object, now tim
 			pyjson.Repr(getOr(item, "version", "")), pyjson.Repr(getOr(item, "platform", "")),
 		}
 	}
-	sort.SliceStable(packages, func(i, j int) bool {
-		a, b := key(packages[i]), key(packages[j])
+	// The CLI binaries stay last, in the order x86qw-release catalog-cli
+	// writes them, so both tools produce the same catalog bytes.
+	var content, cli []any
+	for _, raw := range packages {
+		if item, ok := raw.(*Object); ok && IsCLIPackage(item) {
+			cli = append(cli, raw)
+		} else {
+			content = append(content, raw)
+		}
+	}
+	sort.SliceStable(content, func(i, j int) bool {
+		a, b := key(content[i]), key(content[j])
 		for index := range a {
 			if a[index] != b[index] {
 				return a[index] < b[index]
@@ -494,6 +504,7 @@ func (p *Project) RegisterPackages(catalogPath string, manifest *Object, now tim
 		}
 		return false
 	})
+	packages = append(content, cli...)
 	catalog.Set("packages", orEmpty(packages))
 	catalog.Set("generated_at", now.UTC().Format("2006-01-02T15:04:05Z"))
 	if _, err := p.ValidateCatalog(catalog); err != nil {

@@ -135,11 +135,12 @@ func currentUpstreams(t *testing.T, root string, extraNightly string) *fakeWeb {
 	if err != nil {
 		t.Fatal(err)
 	}
-	revision := ReferenceRevisionOf(releases, "nquake-maps")
+	// The fake nQuake head is the revision the inventory last reviewed.
 	inventory, err := LoadNQuakeInventory(filepath.Join(root, NQuakeInventoryPath))
 	if err != nil {
 		t.Fatal(err)
 	}
+	revision := inventory.Revision
 	nquake := &fakeNQuake{revision: revision, files: map[string]NQuakeFile{}, local: map[string]string{}, data: map[string][]byte{}}
 	for path, file := range inventory.Files {
 		nquake.files[path] = file
@@ -729,8 +730,10 @@ func TestEachComponentKeepsItsOwnNQuakeRevision(t *testing.T) {
 	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true}); err != nil {
 		t.Fatalf("update geral com nQuake movido: %v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "[NQUAKE] x86qw-client-bootstrap: e4cb23d40aa2 -> 222222222222 (1 arquivo(s) do nQuake alterado(s); 3 customizacao(oes) x86QW reaplicada(s))") ||
-		!strings.Contains(out.String(), "snapshot nQuake: e4cb23d40aa2 (12 removidos) -> 222222222222 (12 novos)") ||
+	releases, _ := update.Releases()
+	pinned := ReferenceRevisionOf(releases, "x86qw-client-bootstrap")[:12]
+	if !strings.Contains(out.String(), "[NQUAKE] x86qw-client-bootstrap: "+pinned+" -> 222222222222 (1 arquivo(s) do nQuake alterado(s); 3 customizacao(oes) x86QW reaplicada(s))") ||
+		!strings.Contains(out.String(), "snapshot nQuake: "+pinned+" (12 removidos) -> 222222222222 (12 novos)") ||
 		!strings.Contains(out.String(), "[INFO] Inventario nQuake: ") {
 		t.Fatalf("update geral deveria mover so o bootstrap:\n%s", out.String())
 	}

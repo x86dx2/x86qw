@@ -7,8 +7,8 @@
   },
   "components": {
     "x86qw-client-bootstrap": {
-      "version": "e4cb23d40aa2+x86qw.4",
-      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
+      "version": "dfb2ac9299f7+x86qw.4",
+      "reference_revision": "dfb2ac9299f72cbe399bf637dc3f7adc24295edb",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
       "distribution_component": "x86qw",
@@ -16,19 +16,19 @@
       "text_replacements": [
         {
           "target": "non-gpl/qw/nquake_default.cfg",
-          "source_sha256": "6b00240868b22ec675d6876210e818eb6a044c51409ebac482820cc10f5c8e9c",
+          "source_sha256": "5cfd7b6f93175d08ac04fc6d8971d59bace4eeeb760f7adc36d719026cf284a1",
           "before": "gl_max_size                          \"32768\"",
           "after": "gl_max_size                          \"16384\""
         },
         {
           "target": "non-gpl/qw/nquake_default.cfg",
-          "source_sha256": "6b00240868b22ec675d6876210e818eb6a044c51409ebac482820cc10f5c8e9c",
+          "source_sha256": "5cfd7b6f93175d08ac04fc6d8971d59bace4eeeb760f7adc36d719026cf284a1",
           "before": "r_fx_geometry                        \"0\"",
           "after": "// x86QW: r_fx_geometry is not exposed by the supported ezQuake clients."
         },
         {
           "target": "non-gpl/qw/nquake_default.cfg",
-          "source_sha256": "6b00240868b22ec675d6876210e818eb6a044c51409ebac482820cc10f5c8e9c",
+          "source_sha256": "5cfd7b6f93175d08ac04fc6d8971d59bace4eeeb760f7adc36d719026cf284a1",
           "before": "cl_verify_qwprotocol                 \"2\"",
           "after": "// x86QW: keep the ezQuake cl_verify_qwprotocol default; it is registered after autoexec."
         }
@@ -41,12 +41,12 @@
       "freshness": "reference-payload-current"
     },
     "ktx": {
-      "version": "1.47+x86qw.19",
+      "version": "1.47+x86qw.20",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "upstream-composed",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
-      "distribution_tag": "ktx-1.47-x86qw.19",
+      "distribution_tag": "ktx-1.47-x86qw.20",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
       "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos oficiais do KTX 1.47. O QVM reprodutível x86QW acrescenta nomes Frogbot declarativos, habilidade aleatória, balanceamento automático, nomes únicos por função e um Coach de Quad opt-in para partidas casuais. O launcher expõe 24 modos, planos contextuais de teclas sem comandos crus e oferece somente mapas compatíveis com os recursos instalados. Arma, vida e interrupção por morte ficam restritas ao ToT; camisa, calça, skins e cores relacionais continuam sob controle do KTX e da configuração pessoal.",
@@ -172,14 +172,14 @@
       "freshness": "reference-payload-current"
     },
     "nquake-documentation": {
-      "version": "e4cb23d40aa2+x86qw.1",
+      "version": "e4cb23d40aa2+x86qw.2",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
       "notes": "Mantém as licenças upstream e instala documentação x86QW atual e multiplataforma no lugar dos readmes e atalhos históricos."
     },
     "qrp-hires": {
-      "version": "e4cb23d40aa2+x86qw.1",
+      "version": "e4cb23d40aa2+x86qw.2",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
@@ -187,7 +187,7 @@
       "notes": "Preserva os pacotes QRP e substitui o aviso UTF-16 legado por documentação x86QW em UTF-8; a prioridade é controlada por pak.lst."
     },
     "final-arena": {
-      "version": "1.20+nquake.e4cb23d40aa2+x86qw.4",
+      "version": "1.20+nquake.e4cb23d40aa2+x86qw.5",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-overlay",
       "freshness": "upstream-current",
@@ -234,7 +234,7 @@
       ]
     },
     "pro-x": {
-      "version": "1.1+x86qw.5",
+      "version": "1.1+x86qw.6",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
@@ -273,7 +273,7 @@
       ]
     },
     "team-fortress": {
-      "version": "2.9+nquake.e4cb23d40aa2+x86qw.6",
+      "version": "2.9+nquake.e4cb23d40aa2+x86qw.7",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-overlay",
       "freshness": "upstream-current",
@@ -329,7 +329,7 @@
       ]
     },
     "total-destruction-2": {
-      "version": "2.22+x86qw.5",
+      "version": "2.22+x86qw.6",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "td2",
@@ -374,11 +374,11 @@
       ]
     },
     "mvdsv": {
-      "version": "1.11+x86qw.3",
+      "version": "1.11+x86qw.4",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "mvdsv",
-      "distribution_tag": "mvdsv-1.11-x86qw.3",
+      "distribution_tag": "mvdsv-1.11-x86qw.4",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/mvdsv/blob/1.11/LICENSE.md",
       "notes": "MVDSV 1.11 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag com correção mínima para alargamento dos argumentos QVM de 32 para 64 bits. O bootstrap instala somente o executável da plataforma selecionada no diretório operacional do jogo.",
@@ -412,17 +412,18 @@
       ]
     },
     "qwfwd": {
-      "version": "1.30+x86qw.3",
+      "version": "1.30+x86qw.4",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "qwfwd",
-      "distribution_tag": "qwfwd-1.30-x86qw.3",
+      "distribution_tag": "qwfwd-1.30-x86qw.4",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/qwfwd/blob/1.30/LICENSE.md",
       "notes": "QWFWD 1.30 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag. O bootstrap instala somente a variante selecionada em qwfwd/, junto de sua configuração operacional.",
       "compatibility": {
         "client_scope": [
-          "QuakeWorld UDP clients"
+          "ezquake-stable:3.6.9",
+          "ezquake-nightly:20260616-101233_a86996a"
         ],
         "verified": [
           "source-integrity",
@@ -449,18 +450,18 @@
       ]
     },
     "qtv": {
-      "version": "0+025ca949aca0+x86qw.2",
+      "version": "0+025ca949aca0+x86qw.3",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "qtv",
-      "distribution_tag": "qtv-025ca949aca0-x86qw.2",
+      "distribution_tag": "qtv-025ca949aca0-x86qw.3",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/qtv/blob/025ca949aca06cad6777de0075148ac06a15f4f0/LICENSE",
       "notes": "QTV fixado no commit oficial 025ca949aca0 e compilado de forma reproduzível para Linux amd64, Windows x64 e macOS arm64. O bootstrap instala somente a variante selecionada em qtv/, junto dos recursos e da configuração operacional.",
       "compatibility": {
         "client_scope": [
-          "Modern web browsers",
-          "QuakeWorld QTV clients"
+          "ezquake-stable:3.6.9",
+          "ezquake-nightly:20260616-101233_a86996a"
         ],
         "verified": [
           "source-integrity",
