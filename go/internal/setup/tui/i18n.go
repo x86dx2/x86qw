@@ -160,7 +160,7 @@ var texts = map[string][2]string{
 	"inst.rolled":     {"Nada ficou pela metade: a pasta voltou ao que era antes. Enter volta para a configuração.", "Nothing was left half done: the folder is back to how it was. Enter returns to the setup."},
 	"cancelled":       {"Instalação cancelada; a pasta voltou ao que era.", "Installation cancelled; the folder is back to how it was."},
 	"would.find":      {"abriria a lista de servidores", "would open the server list"},
-	"srv.one":         {"Cada instância é um preset e roda uma por vez: x86qw host --preset %s inicia a segunda.", "Each instance is a preset and one runs at a time: x86qw host --preset %s starts the second."},
+	"srv.together":    {"Iniciar servidor sobe todas as instâncias juntas; x86qw status --stop encerra.", "Start server brings every instance up together; x86qw status --stop stops them."},
 	"done.notes":      {"observações", "notes"},
 	"keep.where":      {"configs, demos e capturas ficam na pasta", "configs, demos and screenshots stay in the folder"},
 	"verify.running":  {"conferindo cada arquivo da instalação", "checking every file of the installation"},

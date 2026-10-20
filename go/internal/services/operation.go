@@ -322,6 +322,13 @@ func (op *Operation) Run() (code int) {
 			return fail(err)
 		}
 		specs = []*Spec{host}
+		for index, instance := range o.Instances {
+			extra, err := op.instanceSpec(target, instance, index+2, session, journal)
+			if err != nil {
+				return fail(err)
+			}
+			specs = append(specs, extra)
+		}
 		if o.WithQTV {
 			spec, err := QtvSpec(target, o.QtvBind, o.QtvPort, hostname+" QTV",
 				Endpoint(LocalServiceAddress(o.Bind), o.Port), o.QtvPassword, session, journal)
@@ -342,6 +349,9 @@ func (op *Operation) Run() (code int) {
 			label += " · " + hosted.Mode.Label
 		}
 		c.Info(fmt.Sprintf("Servidor: connect %s:%d · %s em %s", o.Bind, o.Port, label, hosted.Map))
+		for index, instance := range o.Instances {
+			c.Info(fmt.Sprintf("Servidor #%d: connect %s:%d · %s em %s", index+2, o.Bind, instance.Port, instance.Mode, instance.Map))
+		}
 		if o.WithQTV {
 			c.Info(fmt.Sprintf("QTV HTTP: http://%s/", Endpoint(o.QtvBind, o.QtvPort)))
 		}
@@ -357,6 +367,26 @@ func (op *Operation) Run() (code int) {
 		return fail(err)
 	}
 	return result
+}
+
+// instanceSpec is one more KTX server of the session: the first server's
+// settings with its own mode, map, port and bots, without QTV or proxy.
+func (op *Operation) instanceSpec(target string, instance Instance, number int, session *Session, journal *Journal) (*Spec, error) {
+	o := *op.Host
+	o.Instances, o.WithQTV, o.WithProxy = nil, false, false
+	o.Mode, o.Map, o.Port, o.ModeGiven = instance.Mode, instance.Map, instance.Port, true
+	o.KtxOptions = play.DefaultOptions()
+	o.KtxOptions.FillBots = instance.Bots
+	hosted, err := SelectHosted(target, &o)
+	if err != nil {
+		return nil, errorf("Servidor #%d: %s", number, err.Error())
+	}
+	spec, err := HostSpec(target, &o, hosted, session, journal)
+	if err != nil {
+		return nil, err
+	}
+	spec.Label = fmt.Sprintf("MVDSV #%d · %d", number, instance.Port)
+	return spec, nil
 }
 
 func capitalize(message string) string {
@@ -462,6 +492,9 @@ func (op *Operation) backgroundArguments(hosted *Hosted, logRelative string) []s
 		}
 		if o.WithProxy {
 			arguments = append(arguments, "--with-proxy", "--proxy-bind", o.ProxyBind, "--proxy-port", fmt.Sprint(o.ProxyPort))
+		}
+		for _, instance := range o.Instances {
+			arguments = append(arguments, "--instance", instance.String())
 		}
 	case "proxy":
 		arguments = []string{"proxy", "--bind", op.Proxy.ProxyBind, "--port", fmt.Sprint(op.Proxy.ProxyPort)}

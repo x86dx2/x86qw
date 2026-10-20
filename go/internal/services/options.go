@@ -39,6 +39,37 @@ type HostOptions struct {
 	RconPasswordFile, QtvPasswordFile   string
 	KtxOptions                          play.Options
 	ModeGiven                           bool
+	// Instances are more KTX servers the session runs beside the first,
+	// each on its own port; QTV and QWFWD stay with the first.
+	Instances []Instance
+}
+
+// Instance is one more KTX server of a host session.
+type Instance struct {
+	Mode, Map string
+	Port      int
+	Bots      bool // fill the server with bots
+}
+
+// String is the --instance value: MODE:MAP:PORT, with :bots when it has them.
+func (i Instance) String() string {
+	value := fmt.Sprintf("%s:%s:%d", i.Mode, i.Map, i.Port)
+	if i.Bots {
+		value += ":bots"
+	}
+	return value
+}
+
+func parseInstance(value string) (Instance, error) {
+	parts := strings.Split(value, ":")
+	if len(parts) < 3 || len(parts) > 4 || parts[0] == "" || parts[1] == "" || (len(parts) == 4 && parts[3] != "bots") {
+		return Instance{}, usagef("use MODO:MAPA:PORTA ou MODO:MAPA:PORTA:bots, não %q", value)
+	}
+	instance := Instance{Mode: parts[0], Map: parts[1], Bots: len(parts) == 4}
+	if err := boundedInteger(1024, 65535, &instance.Port)(parts[2]); err != nil {
+		return Instance{}, err
+	}
+	return instance, nil
 }
 
 // ProxyOptions mirrors the `proxy` namespace.
@@ -275,6 +306,13 @@ func ParseHost(args []string, games []play.Game) (*HostOptions, error) {
 	p.valueFlag(bindFlag(&o.ProxyBind), "--proxy-bind")
 	p.valueFlag(boundedInteger(1024, 65535, &o.ProxyPort), "--proxy-port")
 	p.valueFlag(stringFlag(&o.Preset), "--preset")
+	p.valueFlag(func(value string) error {
+		instance, err := parseInstance(value)
+		if err == nil {
+			o.Instances = append(o.Instances, instance)
+		}
+		return err
+	}, "--instance")
 	p.valueFlag(stringFlag(&o.SavePreset), "--save-preset")
 	if err := p.parse(args); err != nil {
 		return nil, err

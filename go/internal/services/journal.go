@@ -167,7 +167,7 @@ func (j *Journal) RecordProcess(spec *Spec, pid int) error {
 		parameters[item[0]] = item[1]
 	}
 	j.Data["processes"] = append(j.list("processes"), map[string]any{
-		"label": spec.Label, "runtime": strings.ToLower(spec.Label), "pid": pid, "process_group": pid,
+		"label": spec.Label, "runtime": strings.ToLower(strings.Fields(spec.Label)[0]), "pid": pid, "process_group": pid,
 		"executable": identity.Executable, "creation_token": identity.Token,
 		"runtime_executable": spec.Arguments[0], "runtime_pid": pid, "state": "ready",
 		"started_at": isoNow(), "address": address, "port": port, "parameters": parameters,

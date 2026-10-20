@@ -90,3 +90,39 @@ func TestUserPathKeepsOtherEntriesUnexpanded(t *testing.T) {
 		t.Fatalf("PATH depois de remover: %q", value)
 	}
 }
+
+func TestWindowsHandlersComeAndGo(t *testing.T) {
+	const classes = `Software\Classes\`
+	for _, key := range []string{"qw", demoProgID, ".mvd", ".qwd"} {
+		if k, err := registry.OpenKey(registry.CURRENT_USER, classes+key, registry.QUERY_VALUE); err == nil {
+			k.Close()
+			t.Skipf("HKCU\\%s%s já existe nesta máquina", classes, key)
+		}
+	}
+	t.Cleanup(func() {
+		for _, key := range []string{"qw", demoProgID, ".mvd", ".qwd"} {
+			deleteTree(classes + key)
+		}
+	})
+	root := t.TempDir()
+	if err := SetHandlers(root, true, true); err != nil {
+		t.Fatal(err)
+	}
+	if owned, _ := ownedCommand(classes+"qw", root); !owned {
+		t.Fatal("qw:// deveria abrir com esta instalação")
+	}
+	k, _ := registry.OpenKey(registry.CURRENT_USER, classes+".mvd", registry.QUERY_VALUE)
+	if value, _, _ := k.GetStringValue(""); value != demoProgID {
+		t.Fatalf(".mvd: %q", value)
+	}
+	k.Close()
+	if err := SetHandlers(t.TempDir(), true, false); err == nil {
+		t.Fatal("outra instalação tomou qw://")
+	}
+	if err := SetHandlers(root, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := ownedCommand(classes+"qw", root); exists {
+		t.Fatal("qw:// deveria ter saído")
+	}
+}

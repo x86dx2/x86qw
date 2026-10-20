@@ -3,6 +3,7 @@ package setup
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -20,11 +21,14 @@ func TestHostCommandParses(t *testing.T) {
 	if err := SaveServerPresets(target, options); err != nil {
 		t.Fatal(err)
 	}
-	for index := range options.Server.Instances {
-		args := HostCommand(target, options, index)
-		if _, err := services.ParseHost(args[1:], games); err != nil {
-			t.Fatalf("x86qw %s: %v", strings.Join(args, " "), err)
-		}
+	args := HostCommand(target, options)
+	host, err := services.ParseHost(args[1:], games)
+	if err != nil {
+		t.Fatalf("x86qw %s: %v", strings.Join(args, " "), err)
+	}
+	want := []services.Instance{{Mode: "4on4", Map: "dm3", Port: 27501, Bots: true}}
+	if host.Port != 27500 || host.Mode != "duel" || !reflect.DeepEqual(host.Instances, want) {
+		t.Fatalf("x86qw %s: %+v", strings.Join(args, " "), host)
 	}
 }
 

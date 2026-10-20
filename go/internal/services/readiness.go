@@ -30,6 +30,9 @@ func RequestedPorts(action string, host *HostOptions, proxy *ProxyOptions, qtv *
 		return []PortRequest{{"QTV", qtv.Bind, qtv.Port, "tcp"}}
 	}
 	requests := []PortRequest{{"MVDSV", host.Bind, host.Port, "udp"}}
+	for index, instance := range host.Instances {
+		requests = append(requests, PortRequest{fmt.Sprintf("MVDSV #%d", index+2), host.Bind, instance.Port, "udp"})
+	}
 	if host.WithQTV {
 		requests = append(requests, PortRequest{"QTV", host.QtvBind, host.QtvPort, "tcp"})
 	}
