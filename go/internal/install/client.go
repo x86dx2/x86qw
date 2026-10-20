@@ -54,13 +54,19 @@ func (t *Transaction) prepareRelease(ctx context.Context, spec catalog.ClientSpe
 		name = "stable-" + release.Version + "-" + name
 	}
 	cached := filepath.Join(cacheRoot, "bin", name)
+	if err := t.observer().begin(ctx, "client", release.Size); err != nil {
+		return nil, err
+	}
 	if regular(cached) {
 		if !download.Cached(cached, pin) {
 			return nil, fmt.Errorf("O arquivo em cache falhou na verificação: %s. Execute cleanup e tente novamente.", cached)
 		}
+		if report := t.observer().bytes("client"); report != nil {
+			report(release.Size)
+		}
 	} else {
 		temporary := filepath.Join(t.Stage, release.Filename+".download")
-		if err := download.Fetch(ctx, pin, temporary, download.Options{Deadline: 30 * time.Minute}); err != nil {
+		if err := download.Fetch(ctx, pin, temporary, download.Options{Deadline: 30 * time.Minute, Progress: t.observer().bytes("client")}); err != nil {
 			return nil, fmt.Errorf("download do ezQuake falhou: %w", err)
 		}
 		if err := os.MkdirAll(filepath.Dir(cached), 0o755); err != nil {

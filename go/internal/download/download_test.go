@@ -112,3 +112,22 @@ func TestRejectsRedirectToPlainHTTP(t *testing.T) {
 		t.Fatal("redirect para HTTP aceito")
 	}
 }
+
+func TestReportsProgressUpToTheSize(t *testing.T) {
+	body := strings.Repeat("q", 300_000)
+	srv, options := server(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(body)) })
+	size, digest := pin(body)
+	var seen []int64
+	options.Progress = func(written int64) { seen = append(seen, written) }
+	if err := Fetch(context.Background(), Artifact{URLs: []string{srv.URL + "/a.zip"}, Size: size, SHA256: digest}, filepath.Join(t.TempDir(), "a.zip"), options); err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) < 2 || seen[0] != 0 || seen[len(seen)-1] != size {
+		t.Fatalf("progresso: %v", seen)
+	}
+	for index := 1; index < len(seen); index++ {
+		if seen[index] < seen[index-1] {
+			t.Fatalf("progresso voltou: %v", seen)
+		}
+	}
+}

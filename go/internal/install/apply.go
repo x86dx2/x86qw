@@ -22,6 +22,7 @@ type Transaction struct {
 	Stage    string
 	Warnings []string
 	undo     []func() error
+	observe  *Observer
 }
 
 // NewTransaction creates a private staging directory under .x86qw/staging.
@@ -91,6 +92,7 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 	if err != nil {
 		return 0, err
 	}
+	t.observer().files(id, len(files))
 	var entries []receipt.Entry
 	for _, relative := range files {
 		if err := validate(relative); err != nil {
@@ -107,6 +109,7 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 			}
 			if expected, owned := old[relative]; !owned || current != expected {
 				t.warn("Arquivo pessoal ou modificado preservado: %s", destination)
+				t.observer().file(id, relative, info.Size(), true)
 				continue
 			}
 		}
@@ -198,6 +201,7 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 		if err := copyFile(source, destination, mode); err != nil {
 			return fail(err)
 		}
+		t.observer().file(id, entry.Path, info.Size(), false)
 		if digest, _ := fileSHA256(destination); digest != entry.SHA256 {
 			return fail(fmt.Errorf("arquivo copiado diverge do plano: %s", destination))
 		}

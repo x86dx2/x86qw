@@ -33,6 +33,9 @@ type Options struct {
 	Deadline time.Duration // total budget across attempts and mirrors
 	Attempts int
 	Client   *http.Client
+	// Progress, when set, hears the bytes of the current attempt so far;
+	// a retry starts again from zero.
+	Progress func(written int64)
 }
 
 const maxArtifactBytes = 512 << 20
@@ -118,7 +121,7 @@ func Fetch(ctx context.Context, artifact Artifact, destination string, options O
 	httpClient := client(options)
 	var last error
 	for _, raw := range artifact.URLs {
-		err := fetchMirror(ctx, httpClient, raw, artifact, destination, options.Attempts)
+		err := fetchMirror(ctx, httpClient, raw, artifact, destination, options.Attempts, options.Progress)
 		if err == nil {
 			return nil
 		}
@@ -133,11 +136,11 @@ func Fetch(ctx context.Context, artifact Artifact, destination string, options O
 	return fmt.Errorf("todos os mirrors falharam: %w", last)
 }
 
-func fetchMirror(ctx context.Context, httpClient *http.Client, raw string, artifact Artifact, destination string, attempts int) error {
+func fetchMirror(ctx context.Context, httpClient *http.Client, raw string, artifact Artifact, destination string, attempts int, progress func(int64)) error {
 	var err error
 	for attempt := 1; attempt <= attempts; attempt++ {
 		var wait time.Duration
-		err, wait = fetchOnce(ctx, httpClient, raw, artifact, destination)
+		err, wait = fetchOnce(ctx, httpClient, raw, artifact, destination, progress)
 		var transient *transientError
 		var status *HTTPError
 		retryable := errors.As(err, &transient) || (errors.As(err, &status) && transientStatus(status.Status))
@@ -164,7 +167,7 @@ func fetchMirror(ctx context.Context, httpClient *http.Client, raw string, artif
 	return err
 }
 
-func fetchOnce(ctx context.Context, httpClient *http.Client, raw string, artifact Artifact, destination string) (error, time.Duration) {
+func fetchOnce(ctx context.Context, httpClient *http.Client, raw string, artifact Artifact, destination string, progress func(int64)) (error, time.Duration) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
 	if err != nil {
 		return err, 0
@@ -197,7 +200,12 @@ func fetchOnce(ctx context.Context, httpClient *http.Client, raw string, artifac
 	}
 	defer os.Remove(temporary.Name())
 	hash := sha256.New()
-	written, copyErr := io.Copy(io.MultiWriter(temporary, hash), io.LimitReader(response.Body, artifact.Size+1))
+	sink := io.MultiWriter(temporary, hash)
+	if progress != nil {
+		progress(0)
+		sink = io.MultiWriter(sink, &counter{report: progress})
+	}
+	written, copyErr := io.Copy(sink, io.LimitReader(response.Body, artifact.Size+1))
 	syncErr := temporary.Sync()
 	closeErr := temporary.Close()
 	switch {
@@ -302,4 +310,16 @@ func Cached(path string, artifact Artifact) bool {
 		return false
 	}
 	return hex.EncodeToString(hash.Sum(nil)) == artifact.SHA256
+}
+
+// counter reports the running total of what passes through it.
+type counter struct {
+	total  int64
+	report func(int64)
+}
+
+func (c *counter) Write(p []byte) (int, error) {
+	c.total += int64(len(p))
+	c.report(c.total)
+	return len(p), nil
 }
