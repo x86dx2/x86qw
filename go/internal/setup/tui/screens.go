@@ -262,7 +262,7 @@ func (m *Model) primary(p *page, row reviewRow, focused, enabled bool, right str
 	case focused:
 		bg = Blend(t.Base, t.Brand, 0.28)
 	case hovered:
-		bg = Blend(t.Base, t.Brand, 0.14)
+		bg = t.Hover
 	}
 	base := lipgloss.NewStyle().Background(bg)
 	glyph := m.glyphs.Chevron
@@ -421,20 +421,26 @@ func (m *Model) confirmPage(p *page) {
 	p.lead(m.t("rev.lead"))
 	p.gap(1)
 	rows := m.confirmRows()
+	p.heading(m.t("rule.choices"))
 	for index, row := range rows[:len(rows)-1] {
 		focused, hovered := index == m.focus, m.hover == "row:"+row.id
 		start := len(p.lines)
-		bg := p.rowBG(focused, hovered)
-		base := lipgloss.NewStyle().Background(bg)
-		label := base.Foreground(t.Text).Bold(true)
-		right := base.Foreground(t.Dim).Render(m.t("k.edit")+" "+m.glyphs.Chevron) + base.Render("  ")
-		if focused {
-			right = base.Foreground(t.Brand).Render(m.t("k.edit")+" "+m.glyphs.Chevron) + base.Render("  ")
+		// A thin rail groups each section; it lights up on the one in focus.
+		railColor, headColor := t.Faint(), t.Text2
+		hint := p.st(t.Dim).Render(m.glyphs.Chevron)
+		switch {
+		case focused:
+			railColor, headColor = t.Brand, t.Text
+			hint = p.st(t.Brand).Render(m.t("k.edit.hint"))
+		case hovered:
+			railColor = t.Gray
 		}
 		if row.id == "recipe" {
-			right = base.Foreground(t.Gray).Render(m.t("d.recipe")) + base.Render("  ")
+			hint = p.st(t.Gray).Render(m.t("d.recipe"))
 		}
-		p.band(spread(base.Render("  ")+label.Render(row.label), right, p.width, bg), bg, "row:"+row.id)
+		rail := p.st(t.Base).Render("  ") + p.st(railColor).Render(m.glyphs.Rail) + p.st(t.Base).Render(" ")
+		y := p.add(spread(rail+p.st(headColor).Bold(true).Render(row.label), hint+p.st(t.Base).Render("  "), p.width, t.Base))
+		p.hits = append(p.hits, hit{y: y, x0: 0, x1: p.width, id: "row:" + row.id})
 		pairs := m.details(row.id)
 		labelWidth := 0 // sections without labels use the whole width
 		for _, pair := range pairs {
@@ -443,14 +449,13 @@ func (m *Model) confirmPage(p *page) {
 			}
 		}
 		for _, pair := range pairs {
-			valueWidth := p.width - labelWidth - 6
-			lines := wrapSegments(pair[1], valueWidth)
-			for n, line := range lines {
+			valueWidth := p.width - labelWidth - 8
+			for n, line := range wrapSegments(pair[1], valueWidth) {
 				key := ""
 				if n == 0 {
 					key = strings.ToLower(pair[0])
 				}
-				y := p.add(p.st(t.Gray).Render("    "+padRight(key, labelWidth)) + p.st(t.Text2).Render(line))
+				y := p.add(rail + p.st(t.Base).Render("  ") + p.st(t.Gray).Render(padRight(key, labelWidth)) + p.st(t.Text2).Render(line))
 				p.hits = append(p.hits, hit{y: y, x0: 0, x1: p.width, id: "row:" + row.id})
 			}
 		}
@@ -464,18 +469,18 @@ func (m *Model) confirmPage(p *page) {
 	}
 
 	// The preflight sits right above the confirmation it decides.
-	p.rule(m.t("rule.pre"))
+	p.heading(m.t("rule.pre"))
 	for _, check := range m.checks {
 		glyph, style, value := m.spinner(), p.st(t.Brand), p.st(t.Dim).Render(m.t("net.detecting"))
 		switch check.State {
 		case setup.CheckOK:
-			glyph, style, value = m.glyphs.Ok, p.st(t.Success), p.st(t.Text2).Render(shortPath(check.Value))
+			glyph, style, value = m.glyphs.Ok, p.st(t.Success), p.st(t.Gray).Render(shortPath(check.Value))
 		case setup.CheckWarning:
 			glyph, style, value = m.glyphs.Warn, p.st(t.Warning), p.st(t.Warning).Render(check.Value)
 		case setup.CheckFailed:
 			glyph, style, value = m.glyphs.Fail, p.st(t.Error), p.st(t.Error).Render(check.Value)
 		}
-		left := p.st(t.Base).Render("  ") + style.Render(glyph) + p.st(t.Gray).Render("  "+check.Title)
+		left := p.st(t.Base).Render("  ") + style.Render(glyph) + p.st(t.Text2).Render("  "+check.Title)
 		p.add(spread(left, value+p.st(t.Base).Render("  "), p.width, t.Base))
 	}
 	for _, check := range m.checks {

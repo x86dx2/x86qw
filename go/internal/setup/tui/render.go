@@ -109,6 +109,13 @@ func (p *page) rule(label string) {
 	p.add(text + faint.Render(strings.Repeat("─", max(0, p.width-lipgloss.Width(text)))))
 }
 
+// heading opens a part of a screen: a bold label and a faint rule.
+func (p *page) heading(label string) {
+	text := p.st(p.theme.Bright).Bold(true).Render(label) + p.st(p.theme.Base).Render("  ")
+	p.add(text + p.st(p.theme.Faint()).Render(strings.Repeat("─", max(0, p.width-lipgloss.Width(text)))))
+	p.gap(1)
+}
+
 // bar draws a progress bar with eighth-block resolution.
 func bar(theme Theme, glyphs Glyphs, width int, fraction float64, fg color.Color) string {
 	fraction = max(0, min(1, fraction))

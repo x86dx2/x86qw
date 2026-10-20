@@ -151,6 +151,7 @@ var texts = map[string][2]string{
 	"d.axis.normal":   {"eixo normal", "normal axis"},
 	"d.axis.inverted": {"eixo invertido", "inverted axis"},
 	"d.recipe":        {"c copia · enter mostra", "c copies · enter shows"},
+	"k.edit.hint":     {"enter editar", "enter edit"},
 }
 
 // T returns the text for key in lang.
