@@ -9,7 +9,7 @@ type RuntimeConfig struct{ Name string }
 
 // Create refuses on Windows.
 func Create(target string, payload []byte) (*RuntimeConfig, error) {
-	return nil, errors.New("configuração KTX no Windows ainda não foi portada; use a CLI Python")
+	return nil, errors.New("configuração KTX ainda não é suportada no Windows")
 }
 
 // Transfer is a no-op.

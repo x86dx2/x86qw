@@ -163,7 +163,7 @@ func (op *Operation) Run() (code int) {
 	c := op.Console
 	common := op.common()
 	if runtime.GOOS == "windows" {
-		c.Error("Os serviços x86QW (host, proxy, qtv) ainda não foram portados para Windows na CLI nativa; use a CLI Python.")
+		c.Error("Os serviços x86QW (host, proxy, qtv) ainda não são suportados no Windows.")
 		return 1
 	}
 	if common.Menu {

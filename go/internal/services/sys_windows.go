@@ -10,7 +10,7 @@ import (
 // Windows services (Job Objects, named mutex lock) are not ported yet; every
 // entry point refuses before reaching these helpers.
 
-var errWindows = errorf("os serviços x86QW ainda não foram portados para Windows; use a CLI Python")
+var errWindows = errorf("os serviços x86QW ainda não são suportados no Windows")
 
 func identityOf(info os.FileInfo) [2]int64 { return [2]int64{} }
 

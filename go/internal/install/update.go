@@ -72,7 +72,7 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 			}
 			cliPackage = &pkg
 		default:
-			return nil, fmt.Errorf("esta versão ainda não aplica %q (%s); use a CLI Python para esta etapa", row.Item, row.Action)
+			return nil, fmt.Errorf("esta versão ainda não aplica %q (%s)", row.Item, row.Action)
 		}
 	}
 	result := &Result{}
@@ -318,7 +318,7 @@ func refuseConfigMigrations(root string, batch []string) error {
 			needs = true
 		}
 		if needs {
-			return fmt.Errorf("a configuração pessoal %s precisa de migração; use a CLI Python para esta atualização", config)
+			return fmt.Errorf("a configuração pessoal %s usa um formato antigo que esta versão não migra; reinstale o x86QW", config)
 		}
 	}
 	return nil

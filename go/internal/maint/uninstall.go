@@ -114,7 +114,7 @@ func Uninstall(target string) (*Report, error) {
 		return nil, err
 	}
 	if lexists(filepath.Join(target, filepath.FromSlash(nquakeReceipt))) || legacyLayout(target) {
-		return nil, errors.New("esta instalação usa metadados legados; desinstale com a CLI Python 1.0.16 ou reinstale antes")
+		return nil, errors.New("esta instalação usa metadados anteriores ao 1.0 que esta versão não desinstala; reinstale antes")
 	}
 	metadataNames := []string{nquakeInventory, nquakeReceipt, cliReceipt, legacyCLIReceipt, stateRelative}
 	for _, id := range componentRecordIDs(target) {

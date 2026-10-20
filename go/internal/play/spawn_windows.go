@@ -10,7 +10,7 @@ import (
 
 // Spawn is not ported to Windows yet.
 func Spawn(executable string, args []string, dir string) (*os.Process, error) {
-	return nil, errors.New("lançamento no Windows ainda não foi portado; use a CLI Python")
+	return nil, errors.New("o lançamento do jogo ainda não é suportado no Windows")
 }
 
 // ExitsWithin is unused on Windows.

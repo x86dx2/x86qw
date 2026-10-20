@@ -159,9 +159,6 @@ func Install(root, source, version string) (*Layer, error) {
 	if err := layer.write(filepath.Join(dir, "receipt"), Receipt(version), 0o644); err != nil {
 		return fail(err)
 	}
-	if err := layer.remove(filepath.Join(dir, "x86qw.pyz")); err != nil {
-		return fail(err)
-	}
 	if runtime.GOOS == "windows" {
 		if err := layer.write(filepath.Join(root, "x86qw.cmd"), []byte(CmdShim), 0o644); err != nil {
 			return fail(err)
