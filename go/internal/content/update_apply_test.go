@@ -22,7 +22,7 @@ func TestUpdateAppliesWorkspace(t *testing.T) {
 	clone := cloneCheckout(t, root)
 
 	// Published content entries the current tree no longer reproduces would
-	// make register_packages refuse; start from installer/client entries only.
+	// make register_packages refuse; start from the CLI and client entries only.
 	catalogPath := filepath.Join(clone, CatalogPath)
 	catalog, err := LoadJSONObject(catalogPath)
 	if err != nil {
@@ -30,7 +30,7 @@ func TestUpdateAppliesWorkspace(t *testing.T) {
 	}
 	var kept []any
 	for _, pkg := range objects(catalog.Value("packages")) {
-		if pkg.Value("channel") != "content" || pkg.Value("component") == "installer" {
+		if pkg.Value("channel") != "content" {
 			kept = append(kept, pkg)
 		}
 	}
@@ -75,7 +75,7 @@ func TestUpdateAppliesWorkspace(t *testing.T) {
 	}
 	content := 0
 	for _, pkg := range objects(updated.Value("packages")) {
-		if pkg.Value("channel") == "content" && pkg.Value("component") != "installer" {
+		if pkg.Value("channel") == "content" {
 			content++
 		}
 	}

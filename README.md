@@ -61,50 +61,29 @@ adicionado ao shell.
 No Windows, a instalação cria atalhos do x86QW no Menu Iniciar e na Área de
 Trabalho com o ícone oficial do projeto.
 
-O bootstrap não encerra a sessão atual do PowerShell. Se o instalador Python
-falhar, a mensagem e o código ficam visíveis na mesma janela por meio de
-`$LASTEXITCODE`.
+O bootstrap baixa a CLI nativa `x86qw` da release `x86qw-cli-2.0.0` no
+GitHub, confere tamanho e SHA-256 fixados no próprio script e executa
+`x86qw setup`, que consulta o catálogo TUF público e pergunta onde instalar.
+Nada além do sistema é necessário: macOS e Linux usam `curl`, e o Windows usa
+o PowerShell incluído. O bootstrap não encerra a sessão atual do PowerShell; se
+a instalação falhar, a mensagem e o código ficam visíveis em `$LASTEXITCODE`.
 
 O comando Windows recusa scripts acima de 256 KiB antes de executá-los, via
 buffer limitado do `HttpClient`, sem `irm | iex` ilimitado. No Unix, o corpo do
 bootstrap só corre na última linha `x86qw_install_main "$@"`; um download
-truncado falha na análise e não executa o instalador. O comando público é
-`curl -fsS https://qw.x86.com.br/install.sh | bash`.
+truncado falha na análise e não executa nada.
 
-O x86QW precisa de Python 3.10 ou mais recente. No bootstrap público `0.7.1`,
-o Windows testa, nessa ordem, `py -3`, `python3` e `python`; o atalho da
-Microsoft Store só é aceito quando realmente executa uma versão compatível. Se
-nenhuma instalação compatível for encontrada:
-
-```powershell
-winget install --id Python.Python.3.13 -e
-```
-
-Depois da instalação, abra um novo PowerShell e execute novamente o comando do
-x86QW.
-
-Na versão `0.7.1`, o mesmo teste por `sys.version_info` acontece antes do
-download em todos os sistemas. O launcher grava o executável Python que
-concluiu a instalação e repete a resolução segura se esse runtime desaparecer.
-Na validação atual, Ubuntu e macOS executam a suíte integral; Windows executa
-o contrato de preview sem alegação de suporte nativo, porque os casos que
-dependem de semântica POSIX/macOS ficam explicitamente fora desse gate.
-
-O bootstrap público valida o instalador corrente por SHA-256, consulta o
-catálogo TUF público e pergunta onde instalar. A árvore-fonte current é
-`1.0.16`; a `1.0.15`, a `1.0.14`, a `1.0.13`, a `1.0.12`, a `1.0.11`, a `1.0.10`, a `1.0.9`, a `1.0.8`, a `1.0.7`, a `1.0.6`, a `1.0.5`, a `1.0.4`, a `1.0.3`, a `1.0.2`, a `1.0.1`, a `0.7.13` e a release `1.0.0` owner-only permanecem históricas.
 A audiência continua `owner-only`. Isso não é autorização `external-public`
-nem promessa de suporte para usuários externos.
-O candidato `1.0.0-rc.1` permanece apenas como histórico. Consulte a
-[verdade de release projetada](docs/post-1.0/RELEASE-TRUTH-CURRENT.md) antes de
-interpretar versão, audiência ou plataforma. O sistema atual é detectado
+nem promessa de suporte para usuários externos. O sistema atual é detectado
 automaticamente. Para preparar outra plataforma a partir de macOS ou Linux:
 
 ```sh
 curl -fsS https://qw.x86.com.br/install.sh | bash -s -- --platform windows
 ```
 
-Os valores aceitos são `macos`, `linux` e `windows`. Quer revisar tudo antes? Consulte o [manual do instalador](dist/installer/docs/installer.md) ou baixe diretamente pela [release mais recente](https://github.com/x86dx2/x86qw/releases/latest).
+Os valores aceitos são `macos`, `linux` e `windows`. Os binários da CLI também
+estão na [release `x86qw-cli-2.0.0`](https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.0.0),
+com `SHA256SUMS`.
 
 Na árvore de desenvolvimento, artefatos promovidos à instalação também exigem
 tamanho e SHA-256 exatos, limite máximo e deadline total. Metadados dinâmicos
@@ -114,9 +93,9 @@ autoridade declarada de release, upstream, pacote ou referência nQuake antes do
 download persistente. URLs armazenadas em catálogo, manifesto e inventários
 passam pela mesma política HTTPS e não aceitam credenciais, fragmentos, queries,
 espaços ou controles. Sua autenticação versionada pertence a uma etapa
-posterior. A baseline-fonte current é a `1.0.16`; o RC público e a `0.7.13`
-permanecem históricos e imutáveis. Nenhum conteúdo desta árvore muda os
-bytes já publicados sem um novo candidato promovido por digest.
+posterior. A CLI current é a `2.0.0`, nativa em Go; os instaladores Python
+`0.x` e `1.0.x` permanecem históricos e imutáveis nos mirrors. Nenhum conteúdo
+desta árvore muda os bytes já publicados.
 
 ## O que vem no x86QW
 
@@ -256,25 +235,11 @@ pacotes nem altera PAKs, configurações pessoais, demos ou logs.
 
 Serviços usam loopback por padrão e só são expostos com `--bind` explícito. Senhas podem vir de prompt oculto ou arquivo privado; a CLI evita colocá-las no comando filho e na saída. Locks e journals impedem manutenção concorrente, coordenam o encerramento e permitem recuperação conservadora após crash. Veja o [guia de hosting](docs/HOSTING.md).
 
-O runtime publicado na `0.7.2` centraliza a inspeção de ZIP, PK3 e PYZ antes de
-qualquer write de extração ou payload visível, com snapshot privado limitado,
-modos canônicos e promoção atômica. A regressão local em Python 3.14 e Python
-3.10 reporta `Ran 695 tests` e `OK (skipped=15)` na manutenção, além de
-`Ran 5 tests` e `OK` no site; quatorze skips exigem o runner Windows e um é o
-smoke de rede opt-in. A
-[matriz da PR 3](https://github.com/x86dx2/x86qw/actions/runs/30856293818)
-passou em 7/7 jobs no Ubuntu, macOS e Windows com Python 3.10 e 3.13, incluindo
-os casos nativos Windows de identidade e reparse point. Isso não substitui os
-smokes nativos dos runtimes. O contrato publicado está no
-[ADR 0002](docs/adr/0002-fronteira-unica-de-arquivos.md).
-
-O código corretivo da PR 4 também faz objetos privados gerenciados nascerem no
-Windows com DACL protegida, limitada ao usuário atual e a `LOCAL SYSTEM`.
-Arquivos de senha externos são somente validados e nunca reescritos. A
-matriz nativa Windows com Python 3.10 e 3.13 validou esse contrato. Isso não
-equivale ao smoke de runtime sob uma conta padrão sem elevação, reservado à
-evidência de release. A mudança faz parte da release pública `0.7.2`.
-Consulte o
+A CLI inspeciona ZIP e PK3 antes de qualquer extração, com limites, modos
+canônicos e promoção atômica. No Windows, o estado privado da instalação nasce
+com DACL protegida, limitada ao usuário atual e a `LOCAL SYSTEM`; arquivos de
+senha externos só são aceitos com essa mesma restrição e nunca são reescritos.
+Consulte os [ADR 0002](docs/adr/0002-fronteira-unica-de-arquivos.md) e
 [ADR 0003](docs/adr/0003-dacl-privada-windows.md).
 
 ## Arquitetura
@@ -314,10 +279,10 @@ docs/           arquitetura, hosting, decisões e roadmaps
 
 ## Estado do projeto
 
-A fonte current é `1.0.16` owner-only: um usuário, válida no Apple M3.
-Os instaladores de macOS, Windows e Linux continuam no site e no catálogo;
-o **gate** obrigatório é macOS/M3. Windows e Linux ficam catalogados até a
-evidência nativa da fase correspondente. A `0.7.13` permanece histórica.
+A CLI current é `2.0.0` owner-only: um usuário, validada no Apple M3. Os
+binários de macOS, Windows e Linux estão no catálogo e na release
+`x86qw-cli-2.0.0`; Windows e Linux seguem em preview até a evidência nativa da
+fase correspondente.
 Soak, migração histórica e audiência `external-public` não bloqueiam
 desenvolvimento. Consulte o [status operacional](docs/PROJECT-STATUS.md).
 
@@ -329,10 +294,10 @@ desenvolvimento. Consulte o [status operacional](docs/PROJECT-STATUS.md).
 | MVDSV | arm64 · preview | amd64 · preview | x64 · preview |
 | QTV | arm64 · preview | amd64 · preview | x64 · preview |
 | QWFWD | arm64 · preview | amd64 · preview | x64 · preview |
-| CLI e instalador | Python 3.10+ | Python 3.10+ | Python 3.10+ |
+| CLI `x86qw` | arm64 + amd64 | amd64 + arm64 | x64 |
 
 > [!NOTE]
-> O contrato `portable-contract` obrigatório roda em macOS e Ubuntu com Python 3.10 e 3.13. Windows permanece preview manual (`workflow_dispatch`) e não bloqueia merge. Isso não equivale a smoke nativo fora do Apple M3.
+> A CI obrigatória roda os testes Go em Ubuntu e Windows, compila a CLI para as cinco plataformas e valida distribuição e site. Isso não equivale a smoke nativo fora do Apple M3.
 
 Na release `0.7.2`, o stable macOS preserva o bundle
 upstream sem alterar `Info.plist`, sandbox, entitlements ou assinatura. Isso

@@ -6,7 +6,6 @@
  "component-contract": "[ERRO] invalid component catalog contract",
  "component-kind": "[ERRO] invalid component kind: x86qw-client-bootstrap",
  "component-policy-consumers": "[ERRO] component has no explicit consumer: installer",
- "dist-installer-latest": "[ERRO] installer latest pointer must target 1.0.16",
  "dist-integrity": "[ERRO] distribution file failed integrity verification: clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage",
  "dist-lfs-pointer": "[ERRO] distribution file is an unhydrated Git LFS pointer: clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage; run `git lfs pull --include='clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage'`",
  "dist-missing-file": "[ERRO] distribution is missing a registered upstream file: clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage",

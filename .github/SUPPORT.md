@@ -20,7 +20,7 @@ No Windows, use `x86qw.cmd`. Se a verificação encontrar conteúdo gerenciado a
 - **Falha reproduzível ou regressão:** abra um [relatório de bug](https://github.com/x86dx2/x86qw/issues/new?template=bug-report.yml).
 - **Ideia ou novo recurso:** use a [proposta de melhoria](https://github.com/x86dx2/x86qw/issues/new?template=feature-request.yml).
 - **Vulnerabilidade:** não abra issue; siga a [política de segurança](SECURITY.md).
-- **Uso do instalador:** consulte o [manual completo](../dist/installer/docs/installer.md).
+- **Instalação e uso da CLI:** consulte a [seção de instalação](../README.md#instalação) e `x86qw <comando> --help`.
 - **Servidor, QTV ou QWFWD:** consulte o [guia de hosting](../docs/HOSTING.md).
 
 ## Informações úteis em um diagnóstico

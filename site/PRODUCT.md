@@ -36,7 +36,8 @@ de esconder limitações de plataforma ou validação.
 
 Versão, contagens, comandos, jogos, runtimes e plataformas vêm da projeção
 gerada `public/api/v1/product.json`. A fonte é o conjunto canônico em
-`maintenance/inventory/`, `dist/installer/VERSION` e o catálogo de pacotes.
+`maintenance/inventory/` e o catálogo de pacotes, inclusive os binários da CLI
+`x86qw`.
 Textos do site não podem manter números divergentes: os testes comparam a página
 com essa projeção e a validação integral rejeita um JSON desatualizado.
 

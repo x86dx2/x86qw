@@ -230,11 +230,6 @@ var mutations = []mutation{
 		path := filepath.Join(root, DistDir, filepath.FromSlash(firstManifestFile(t, root)))
 		replaceFile(t, path, append(append([]byte{}, GitLFSPointerPrefix...), "oid sha256:0\nsize 1\n"...))
 	}},
-	{"dist-installer-latest", func(t *testing.T, root string) {
-		latest := filepath.Join(root, DistDir, "installer/packages/latest")
-		os.Remove(latest)
-		os.Symlink("0.1.0", latest)
-	}},
 	{"manifest-layout", func(t *testing.T, root string) {
 		editJSON(t, filepath.Join(root, ManifestPath), true, func(d *Object) {
 			d.Set("layout", "legacy")

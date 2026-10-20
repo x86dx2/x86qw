@@ -563,30 +563,6 @@ func (p *Project) discoverLocalAssets() ([]Asset, error) {
 		}
 		assets = append(assets, Asset{owner, pyjson.Repr(source.Value("url")), path, int64Of(source.Value("size")), pyjson.Repr(entry.Value("id")), pyjson.Repr(source.Value("sha256")), ""})
 	}
-	catalogValue, err := ReadJSON(p.Path(CatalogPath))
-	if err != nil {
-		return nil, err
-	}
-	packages, ok := pyjson.Get(catalogValue, "packages").([]any)
-	if !ok {
-		return nil, fmt.Errorf("public catalog has no packages")
-	}
-	installers := 0
-	for _, pkg := range objects(packages) {
-		if pkg.Value("component") != "installer" {
-			continue
-		}
-		path, ok := pkg.Value("distribution_path").(string)
-		if !ok {
-			return nil, fmt.Errorf("installer package has no distribution path")
-		}
-		assets = append(assets, Asset{"installer", pyjson.Repr(pkg.Value("origin_url")), path, int64Of(pkg.Value("size")),
-			pyjson.Repr(getOr(pkg, "package", "installer")), pyjson.Repr(pkg.Value("sha256")), ""})
-		installers++
-	}
-	if installers == 0 {
-		return nil, fmt.Errorf("public catalog has no installer package")
-	}
 	return assets, nil
 }
 

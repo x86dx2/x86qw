@@ -63,24 +63,29 @@ func (p *Project) BuildProductCatalog() (*Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	var installers []*Object
+	var binaries []*Object
 	for _, item := range public.Value("packages").([]any) {
-		pkg := item.(*Object)
-		if pyjson.Eq(pkg.Value("package"), "x86qw-installer") && pkg.Value("current") == true {
-			installers = append(installers, pkg)
+		if pkg := item.(*Object); IsCLIPackage(pkg) {
+			binaries = append(binaries, pkg)
 		}
 	}
-	if len(installers) != 1 {
-		return nil, fmt.Errorf("public catalog must declare exactly one current installer")
+	if len(binaries) == 0 {
+		return nil, fmt.Errorf("public catalog must declare the x86qw CLI binaries")
 	}
-	current := installers[0]
-	versionBytes, err := os.ReadFile(p.Path("dist/installer/VERSION"))
-	if err != nil {
-		return nil, err
+	version, ok := binaries[0].Value("version").(string)
+	if !ok {
+		return nil, fmt.Errorf("x86qw CLI package has no version")
 	}
-	version := pyStrip(string(versionBytes))
-	if !pyjson.Eq(current.Value("version"), version) {
-		return nil, fmt.Errorf("installer VERSION differs from the public current package")
+	var cliBinaries []any
+	for _, pkg := range binaries {
+		if !pyjson.Eq(pkg.Value("version"), version) {
+			return nil, fmt.Errorf("public catalog mixes x86qw CLI versions")
+		}
+		binary, err := project(pkg, "platform", "architecture", "filename", "sha256", "size", "urls")
+		if err != nil {
+			return nil, err
+		}
+		cliBinaries = append(cliBinaries, binary)
 	}
 
 	var runtimes []any
@@ -127,10 +132,6 @@ func (p *Project) BuildProductCatalog() (*Object, error) {
 		}
 		games = append(games, entry)
 	}
-	installer, err := project(current, "filename", "distribution_path", "sha256", "size", "urls")
-	if err != nil {
-		return nil, err
-	}
 	commands, err := field(inventory.Capabilities, "commands")
 	if err != nil {
 		return nil, err
@@ -140,12 +141,11 @@ func (p *Project) BuildProductCatalog() (*Object, error) {
 		"project", "x86qw",
 		"release_audience", "owner-only",
 		"external_public", false,
-		"release_truth_url", "/api/v1/release-truth.json",
 		"version", version,
 		"package_count", pyjson.Number(fmt.Sprint(packageCount)),
 		"component_count", pyjson.Number(fmt.Sprint(len(components.Value("components").([]any)))),
 		"commands", commands,
-		"installer", installer,
+		"cli", object("version", version, "binaries", cliBinaries),
 		"runtimes", orEmpty(runtimes),
 		"games", orEmpty(games),
 	), nil
