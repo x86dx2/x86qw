@@ -169,6 +169,7 @@ var texts = map[string][2]string{
 	"remove.running": {"removendo a instalação", "removing the installation"},
 	"removed":        {"x86QW removido de %s", "x86QW removed from %s"},
 	"removed.d":      {"Esc fecha o instalador.", "Esc closes the installer."},
+	"m.uptodate":     {"tudo em dia", "all up to date"},
 }
 
 // T returns the text for key in lang.

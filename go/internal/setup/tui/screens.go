@@ -491,6 +491,9 @@ func (m *Model) dock(width int) *page {
 				glyph, style, value = m.glyphs.Fail, p.st(t.Error), p.st(t.Error).Render(check.Value)
 			}
 			left := p.st(t.Base).Render("  ") + style.Bold(true).Render(glyph) + p.st(t.Text2).Render("  "+check.Title)
+			if room := width - lipgloss.Width(left) - 6; lipgloss.Width(value) > room {
+				value = ansi.Truncate(value, room, m.glyphs.Ellipsis)
+			}
 			p.add(spread(left, value+p.st(t.Base).Render("  "), width, t.Base))
 		}
 		for _, check := range m.checks {
@@ -955,7 +958,11 @@ func (m *Model) panelPage(p *page) {
 		left := base.Render("  ") + base.Foreground(t.Dim).Render(m.glyphs.Chevron) + base.Render(" ") + label.Render(row.label) + count
 		right := base.Foreground(t.Gray).Render(row.summary) + base.Render("  ")
 		if row.id == "update" {
-			right = base.Foreground(t.Gray).Render(m.t("m.update.d")) + base.Render("  ")
+			note := m.t("m.update.d")
+			if len(e.Updates) == 0 {
+				note = m.t("m.uptodate")
+			}
+			right = base.Foreground(t.Gray).Render(note) + base.Render("  ")
 		}
 		p.band(spread(left, right, p.width, bg), bg, "row:"+row.id)
 	}
@@ -1022,6 +1029,10 @@ func (m *Model) panelResult(p *page) {
 }
 
 func (m *Model) activatePanel(id string) tea.Cmd {
+	if m.panelView == "" && id == "update" && len(m.existing.Updates) == 0 {
+		m.say(m.t("m.uptodate"))
+		return nil
+	}
 	if m.panelView == "" && (id == "update" || id == "repair" || id == "remove") {
 		m.panelView, m.focus, m.report, m.panelErr = id, 0, nil, nil
 		return nil
