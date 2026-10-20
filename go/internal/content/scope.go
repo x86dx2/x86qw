@@ -75,7 +75,7 @@ func NQuakeOwners(manifest *Object, ids map[string]bool) map[string]bool {
 	}
 	for _, relative := range files.Keys() {
 		metadata, ok := files.Value(relative).(*Object)
-		if _, snapshot := nquakeSnapshotParts(relative); ok && snapshot {
+		if _, snapshot := nquakePath(relative); ok && snapshot {
 			if owner := manifestOwner(metadata, ids); owner != "" {
 				owners[owner] = true
 			}

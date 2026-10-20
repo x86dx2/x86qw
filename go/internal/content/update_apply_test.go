@@ -161,14 +161,13 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 	var files []any
 	for _, relative := range manifest.Value("files").(*Object).Keys() {
 		metadata := manifest.Value("files").(*Object).Value(relative).(*Object)
-		parts, ok := nquakeSnapshotParts(relative)
+		upstream, ok := nquakePath(relative)
 		if !ok || metadata.Value("package") != moved {
 			continue
 		}
-		upstream := strings.Join(parts[3:], "/")
 		url := "https://raw.githubusercontent.com/nQuake/distfiles/" + revision + "/" + quotePath(upstream)
 		bodies[url] = filepath.Join(clone, DistDir, filepath.FromSlash(relative))
-		files = append(files, object("destination", "dist/distributions/nquake/"+revision+"/"+upstream, "url", url,
+		files = append(files, object("destination", "dist/"+relative, "url", url,
 			"size", metadata.Value("size"), "sha256", metadata.Value("sha256"), "managed", true,
 			"distribution_component", metadata.Value("component"), "consumer", metadata.Value("consumer"), "package", moved))
 	}
@@ -274,7 +273,7 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 			t.Fatalf("a CLI le %s na revisao %s", id, current.Revision())
 		}
 	}
-	if _, err := os.Stat(filepath.Join(clone, DistDir, "distributions/nquake", pinnedBefore["nquake-maps"], "non-gpl/qw/maps")); err != nil {
+	if _, err := os.Stat(filepath.Join(clone, DistDir, "distributions/nquake/non-gpl/qw/maps")); err != nil {
 		t.Errorf("arquivos dos outros componentes sairam da revisao anterior: %v", err)
 	}
 }

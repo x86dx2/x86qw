@@ -152,13 +152,12 @@ func currentUpstreams(t *testing.T, root string, extraNightly string) *fakeWeb {
 		url := pyjson.Repr(metadata.Value("url"))
 		sizes[url] = int64Of(metadata.Value("size"))
 		bodies[url] = relative
-		if parts, ok := nquakeSnapshotParts(relative); ok {
+		if upstream, ok := nquakePath(relative); ok {
 			local := filepath.Join(root, "dist", filepath.FromSlash(relative))
 			digest, err := GitBlobSHA1(local)
 			if err != nil {
 				t.Fatal(err)
 			}
-			upstream := strings.Join(parts[3:], "/")
 			nquake.files[upstream] = NQuakeFile{int64Of(metadata.Value("size")), pyjson.Repr(metadata.Value("sha256")), digest}
 			nquake.local[upstream] = local
 		}
@@ -711,13 +710,10 @@ func TestEachComponentKeepsItsOwnNQuakeRevision(t *testing.T) {
 	}
 	for _, item := range objects(pyjson.Get(report, "distribution")) {
 		path := pyjson.Repr(item.Value("path"))
-		if parts, ok := nquakeSnapshotParts(path); ok && parts[2] == movedRevision {
-			continue
-		}
-		if parts, ok := nquakeSnapshotParts(path); ok {
+		if _, ok := nquakePath(path); ok {
 			manifest, _ := LoadManifest(project.Path(ManifestPath))
 			if pyjson.Get(manifest, "files", path, "package") != "x86qw-client-bootstrap" {
-				t.Fatalf("arquivo nQuake de outro componente mudou: %s (%v)", path, parts)
+				t.Fatalf("arquivo nQuake de outro componente mudou: %s", path)
 			}
 		}
 	}
@@ -733,7 +729,7 @@ func TestEachComponentKeepsItsOwnNQuakeRevision(t *testing.T) {
 	releases, _ := update.Releases()
 	pinned := ReferenceRevisionOf(releases, "x86qw-client-bootstrap")[:12]
 	if !strings.Contains(out.String(), "[NQUAKE] x86qw-client-bootstrap: "+pinned+" -> 222222222222 (1 arquivo(s) do nQuake alterado(s); 3 customizacao(oes) x86QW reaplicada(s))") ||
-		!strings.Contains(out.String(), "snapshot nQuake: "+pinned+" (12 removidos) -> 222222222222 (12 novos)") ||
+		!strings.Contains(out.String(), "nQuake: 11 origem alterada, 1 tamanho alterado") ||
 		!strings.Contains(out.String(), "[INFO] Inventario nQuake: ") {
 		t.Fatalf("update geral deveria mover so o bootstrap:\n%s", out.String())
 	}
@@ -754,7 +750,7 @@ func TestEachComponentKeepsItsOwnNQuakeRevision(t *testing.T) {
 	out.Reset()
 	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true}); err != nil ||
 		!strings.Contains(out.String(), "[PULADO] x86qw-client-bootstrap: nQuake 222222222222: a substituicao x86QW em non-gpl/qw/nquake_default.cfg nao se aplica mais") ||
-		strings.Contains(out.String(), "snapshot nQuake") {
+		strings.Contains(out.String(), "  - nQuake:") {
 		t.Fatalf("update deveria pular so o bootstrap com substituicao quebrada: %v\n%s", err, out.String())
 	}
 	update = NewProject(root)

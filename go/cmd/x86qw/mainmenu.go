@@ -17,7 +17,7 @@ import (
 const (
 	unixBootstrap       = "curl -fsS https://qw.x86.com.br/install.sh | bash"
 	powershellBootstrap = `powershell -c "irm https://qw.x86.com.br/install.ps1 | iex"`
-	commandList = "Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, doctor, ui, profile, library, changes, migrate, repair, cleanup, uninstall e version."
+	commandList         = "Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, doctor, ui, profile, library, changes, migrate, repair, cleanup, uninstall e version."
 )
 
 var mainMenuOptions = []menu.Option{

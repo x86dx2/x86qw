@@ -116,12 +116,12 @@ func DistributionDelta(assets []Asset, manifest *Object) ([]DeltaItem, error) {
 		switch {
 		case !ok:
 			reason = "novo"
-		case !pyjson.Eq(current.Value("url"), asset.URL):
-			reason = "origem alterada"
 		case !pyjson.EqInt(current.Value("size"), asset.ExpectedSize):
 			reason = "tamanho alterado"
 		case asset.ExpectedSHA256 != "" && !pyjson.Eq(current.Value("sha256"), asset.ExpectedSHA256):
 			reason = "conteudo alterado"
+		case !pyjson.Eq(current.Value("url"), asset.URL):
+			reason = "origem alterada"
 		}
 		if reason != "" {
 			changes = append(changes, DeltaItem{path, "update-available", reason})
@@ -136,45 +136,46 @@ func DistributionDelta(assets []Asset, manifest *Object) ([]DeltaItem, error) {
 	return changes, nil
 }
 
-func nquakeSnapshotParts(path string) ([]string, bool) {
-	parts := purePosix(path).parts
-	return parts, len(parts) > 3 && parts[0] == "distributions" && parts[1] == "nquake" && hex40Strict.MatchString(parts[2])
+// The nQuake files the distribution consumes live in one tree,
+// dist/distributions/nquake/, laid out like the nQuake repository. Each
+// component pins its own revision, recorded in the URL of each of its
+// files.
+const nquakeDir = "distributions/nquake"
+
+// nquakePath is the nQuake repository path of a distribution path.
+func nquakePath(path string) (string, bool) {
+	rest, ok := strings.CutPrefix(path, nquakeDir+"/")
+	return rest, ok && rest != ""
 }
 
-// SummarizeDelta mirrors manage.summarize_delta.
-func SummarizeDelta(delta []DeltaItem) []string {
-	type counter struct {
-		order  []string
-		counts map[string]int
+var nquakeRawURL = regexp.MustCompile(`^https://raw\.githubusercontent\.com/nQuake/distfiles/([0-9a-f]{40})/`)
+
+// nquakeURLRevision is the nQuake revision a raw file URL points at.
+func nquakeURLRevision(url string) string {
+	if match := nquakeRawURL.FindStringSubmatch(url); match != nil {
+		return match[1]
 	}
-	newer, older := &counter{counts: map[string]int{}}, &counter{counts: map[string]int{}}
+	return ""
+}
+
+// SummarizeDelta mirrors manage.summarize_delta; the nQuake files are
+// counted by kind of change.
+func SummarizeDelta(delta []DeltaItem) []string {
 	var others []string
+	reasons := map[string]int{}
 	for _, item := range delta {
-		if parts, ok := nquakeSnapshotParts(item.Path); ok {
-			group := newer
-			if item.Status == "obsolete" {
-				group = older
-			}
-			if group.counts[parts[2]] == 0 {
-				group.order = append(group.order, parts[2])
-			}
-			group.counts[parts[2]]++
+		if _, ok := nquakePath(item.Path); ok {
+			reasons[item.Reason]++
 			continue
 		}
 		others = append(others, item.Path+" ("+item.Reason+")")
 	}
-	if len(newer.order) > 0 || len(older.order) > 0 {
-		render := func(group *counter, word string) string {
-			var parts []string
-			for _, revision := range group.order {
-				parts = append(parts, fmt.Sprintf("%s (%d %s)", revision[:12], group.counts[revision], word))
-			}
-			if len(parts) == 0 {
-				return "nenhum"
-			}
-			return strings.Join(parts, ", ")
+	if len(reasons) > 0 {
+		var parts []string
+		for _, reason := range sortedKeys(reasons) {
+			parts = append(parts, fmt.Sprintf("%d %s", reasons[reason], reason))
 		}
-		others = append([]string{"snapshot nQuake: " + render(older, "removidos") + " -> " + render(newer, "novos")}, others...)
+		others = append([]string{"nQuake: " + strings.Join(parts, ", ")}, others...)
 	}
 	return others
 }
@@ -183,8 +184,8 @@ func SummarizeDelta(delta []DeltaItem) []string {
 func ReferenceRevision(assets []Asset) (string, error) {
 	revisions := map[string]bool{}
 	for _, asset := range assets {
-		if parts := purePosix(asset.Path).parts; asset.Component == "nquake" && len(parts) > 3 {
-			revisions[parts[2]] = true
+		if asset.Component == "nquake" {
+			revisions[nquakeURLRevision(asset.URL)] = true
 		}
 	}
 	if len(revisions) != 1 {
@@ -232,9 +233,9 @@ func ReferenceChanges(assets []Asset, manifest *Object, root string) (map[string
 	current := map[string]record{}
 	for _, relative := range files.Keys() {
 		metadata, isObject := files.Value(relative).(*Object)
-		if parts, ok := nquakeSnapshotParts(relative); ok && isObject {
+		if upstream, ok := nquakePath(relative); ok && isObject {
 			owner, _ := metadata.Value("package").(string)
-			current[strings.Join(parts[3:], "/")] = record{relative, owner, metadata}
+			current[upstream] = record{relative, owner, metadata}
 		}
 	}
 	changed := map[string]bool{}
@@ -243,7 +244,7 @@ func ReferenceChanges(assets []Asset, manifest *Object, root string) (map[string
 		if asset.Component != "nquake" {
 			continue
 		}
-		upstream := strings.Join(purePosix(asset.Path).parts[3:], "/")
+		upstream, _ := nquakePath(asset.Path)
 		discovered[upstream] = true
 		item, ok := current[upstream]
 		if !ok || item.owner != asset.Subcomponent || asset.ExpectedGitSHA1 == "" {
@@ -291,7 +292,7 @@ func PreserveCurrentReferenceAssets(assets []Asset, manifest *Object, root strin
 	}
 	for _, relative := range files.Keys() {
 		metadata, isObject := files.Value(relative).(*Object)
-		if _, ok := nquakeSnapshotParts(relative); !ok || !isObject {
+		if _, ok := nquakePath(relative); !ok || !isObject {
 			continue
 		}
 		if owner, _ := metadata.Value("package").(string); !keep(owner) {

@@ -30,7 +30,7 @@ var (
 	ktxUsermode      = regexp.MustCompile(`/resources/example-configs/ktx/configs/usermodes/([^/]+)/default\.cfg$`)
 	ctfEntityPattern = regexp.MustCompile(`^id1/maps/ctf/[^/]+\.ent$`)
 	ktxEntryConfig   = regexp.MustCompile(`^qw/x86qw-ktx-mode-[a-z0-9-]+\.cfg$`)
-	nquakeMapPath    = regexp.MustCompile(`^distributions/nquake/[^/]+/non-gpl/qw/maps/[^/]+\.bsp$`)
+	nquakeMapPath    = regexp.MustCompile(`^distributions/nquake/non-gpl/qw/maps/[^/]+\.bsp$`)
 )
 
 var (

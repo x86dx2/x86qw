@@ -594,13 +594,13 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 				if !ok {
 					return nil, managerError("inventario de releases nao possui referencia nQuake")
 				}
-				upstreamPath := strings.Join(parts[3:], "/")
+				upstreamPath, _ := nquakePath(relative)
 				if referencePackage, err = ComponentForSource(stagedComponents, upstreamPath, "reference"); err != nil {
 					return nil, err
 				}
 				revision := ReferenceRevisionOf(stagedReleases, referencePackage)
-				if revision == "" || parts[2] != revision {
-					return nil, managerError("revisao do snapshot nQuake diverge da referencia fixada de %s: %s", ownerRepr(referencePackage), parts[2])
+				if revision == "" {
+					return nil, managerError("%s nao fixa uma revisao nQuake: %s", ownerRepr(referencePackage), relative)
 				}
 				repository, ok := reference.Value("repository").(string)
 				if !ok {
@@ -656,7 +656,9 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 		if expectedPackage != nil && !pyjson.Eq(provided, expectedPackage) {
 			return nil, managerError("package do arquivo gerenciado deve ser %s: %s", pyjson.Repr(expectedPackage), relative)
 		}
-		if existing != nil {
+		// A file of a component moving to another nQuake revision is the
+		// only managed path that may change in place.
+		if existing != nil && !(referencePackage != "" && hasTransition && transition.previous[referencePackage] != "") {
 			if err := requireIdentity(plan, existing, "manifesto imutavel atual", "url"); err != nil {
 				return nil, err
 			}
@@ -701,11 +703,12 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 		}
 	}
 	if hasTransition {
-		prefix := "dist/distributions/nquake/" + transition.revision + "/"
 		for _, identifier := range sortedKeys(transition.previous) {
 			found := false
 			for _, plan := range plans {
-				found = found || (strings.HasPrefix(plan.destination, prefix) && pyjson.Eq(plan.entry.Value("package"), identifier))
+				_, nquake := nquakePath(strings.TrimPrefix(plan.destination, "dist/"))
+				found = found || (nquake && pyjson.Eq(plan.entry.Value("package"), identifier) &&
+					nquakeURLRevision(pyjson.Repr(plan.entry.Value("url"))) == transition.revision)
 			}
 			if !found {
 				return nil, managerError("transicao da referencia nQuake precisa incorporar os arquivos de %s em %s", identifier, transition.revision[:12])
@@ -926,12 +929,12 @@ func (p *Project) Add(out io.Writer, definitionPath string, options AddOptions) 
 	}
 	manifestFiles := manifest.Value("files").(*Object)
 	if hasTransition {
-		// Only the moving components leave their previous revision; a
-		// revision directory nobody pins any more disappears with them.
+		// The moving components' files are replaced by the definition; the
+		// ones the new revision no longer has go away.
 		for _, relative := range manifestFiles.Keys() {
-			parts, snapshot := nquakeSnapshotParts(relative)
+			_, snapshot := nquakePath(relative)
 			owner, _ := pyjson.Get(manifestFiles, relative, "package").(string)
-			if !snapshot || transition.previous[owner] == "" || parts[2] != transition.previous[owner] {
+			if !snapshot || transition.previous[owner] == "" {
 				continue
 			}
 			path := joinPosix(filepath.Join(work, "dist"), relative)
@@ -943,11 +946,7 @@ func (p *Project) Add(out io.Writer, definitionPath string, options AddOptions) 
 			}
 			manifestFiles.Delete(relative)
 		}
-		for _, previous := range transition.previous {
-			snapshot := filepath.Join(work, "dist", "distributions", "nquake", previous)
-			removeEmptyDirectories(snapshot)
-			os.Remove(snapshot) // only when empty
-		}
+		removeEmptyDirectories(filepath.Join(work, "dist", filepath.FromSlash(nquakeDir)))
 	}
 	for index, raw := range files {
 		entry, ok := raw.(*Object)
