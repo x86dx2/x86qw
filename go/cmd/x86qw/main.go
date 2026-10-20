@@ -68,6 +68,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stdout, usageText())
 		return output.ExitSuccess
 	}
+	if args[0] == "--target" || args[0] == "-v" || args[0] == "--verbose" || args[0] == "--no-color" {
+		// x86qw --target DIR opens the app on that installation.
+		return runMenuCommand(args, stdout, stderr)
+	}
 	cmd, ok := commands[args[0]]
 	if !ok {
 		fmt.Fprintf(stderr, "x86qw: comando desconhecido: %s\n", args[0])
