@@ -297,6 +297,9 @@ var texts = map[string][2]string{
 	"host.solo.lead":    {"Sobe só o serviço, nas portas da aba Serviços.", "Starts just the service, on the ports of the Services tab."},
 	"host.solo.qtv":     {"Iniciar só o QTV", "Start QTV alone"},
 	"host.solo.proxy":   {"Iniciar só o QWFWD", "Start QWFWD alone"},
+	"tool.upgrade":      {"Incorporar novidades", "Bring in what is new"}, "tool.upgrade.d": {"mostra o que o seu perfil ganhou desde a instalação", "shows what your profile gained since installing"},
+	"tool.cleanup": {"Limpar cache", "Clear the cache"}, "tool.cleanup.d": {"remove o que pode ser baixado de novo", "removes what can be downloaded again"},
+	"tool.help": {"Ajuda e comandos", "Help and commands"}, "tool.help.d": {"tudo o que o x86qw faz pela linha de comando", "everything x86qw does from the command line"},
 }
 
 // T returns the text for key in lang.

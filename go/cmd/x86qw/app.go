@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/output"
@@ -26,8 +27,24 @@ const (
 // stdinIsTerminal is whether someone can answer (replaced by the tests).
 var stdinIsTerminal = func() bool { return isTerminalFile(os.Stdin) }
 
+// appOpen is set while the interface owns the terminal: a command it runs
+// in-process must never open a second one.
+var appOpen bool
+
 // interactive is whether the interface can take the terminal.
-func interactive() bool { return stdinIsTerminal() && isTerminal(os.Stdout) }
+func interactive() bool { return !appOpen && stdinIsTerminal() && isTerminal(os.Stdout) }
+
+// installedCopy reports whether this executable is root's own CLI, which
+// cannot be replaced while it runs on Windows.
+func installedCopy(root string) bool {
+	executable, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	running, _ := filepath.EvalSymlinks(executable)
+	installed, _ := filepath.EvalSymlinks(filepath.Join(root, ".x86qw", "cli", cli.BinaryName()))
+	return running != "" && running == installed
+}
 
 // realBackend is the interface's backend for this command line: actions
 // that are x86qw commands run through the dispatcher, their output kept
@@ -38,6 +55,9 @@ func realBackend(catalogFile, platform string) *setup.Real {
 		// The interface owns the screen: what publishing prints is dropped.
 		Publish:   func(target string) error { return publishCLI(target, false, io.Discard, io.Discard) },
 		Integrate: setup.Integrate,
+		// Services the app starts always run with --background, so none
+		// writes to the terminal the interface owns; ezQuake starts with
+		// its output discarded.
 		Run: func(args []string) error {
 			var buffer bytes.Buffer
 			if code := run(args, &buffer, &buffer); code != output.ExitSuccess {
@@ -81,8 +101,8 @@ func appTarget(target string) string {
 // runApp opens the interface on root, at start ("" is home), and opens it
 // again after each report it hands to the command line.
 func runApp(backend *setup.Real, root, start string, stdout, stderr io.Writer) int {
-	if hasInstallation(root) {
-		// Running the app publishes this CLI, as re-running the
+	if hasInstallation(root) && !installedCopy(root) {
+		// A newer CLI opening the app publishes itself, as re-running the
 		// bootstrap always did, linked unless the setup said otherwise.
 		// A running server holds the lock: then the CLI stays as it is.
 		if held, err := lock.Acquire(root, "install"); err == nil {
@@ -99,7 +119,9 @@ func runApp(backend *setup.Real, root, start string, stdout, stderr io.Writer) i
 	}
 	notice := ""
 	for {
+		appOpen = true
 		result, err := tui.Run(tui.Config{Backend: backend, Target: root, Lang: interfaceLanguage(), Start: start, Notice: notice})
+		appOpen = false
 		if err != nil {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
 			return output.ExitFailure

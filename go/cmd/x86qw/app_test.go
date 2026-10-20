@@ -26,6 +26,8 @@ func TestWithoutATerminalNothingAsks(t *testing.T) {
 		{[]string{"install", target}, 2, "informe --profile"},
 		{[]string{"setup", "--target", target}, 2, "uso: x86qw setup --profile"},
 		{[]string{"host", "--menu", "--target", target}, 2, "sem terminal"},
+		{[]string{"play", "--bots", "zero", "--mode", "duel"}, 2, "argumento --bots"},
+		{[]string{"play", "--target", target, "--mode", "duel"}, 1, ""},
 	} {
 		var stdout, stderr bytes.Buffer
 		code := run(c.args, &stdout, &stderr)

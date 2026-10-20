@@ -892,7 +892,7 @@ func (m *Model) soloRows() []formRow {
 
 // tools are the commands that print a report: the app leaves the
 // screen to run them, then comes back.
-var tools = []string{"doctor", "verify", "changes", "library", "profile", "ui"}
+var tools = []string{"doctor", "verify", "upgrade", "changes", "library", "profile", "cleanup", "ui", "help"}
 
 func (m *Model) toolRows() []formRow {
 	var rows []formRow
@@ -900,6 +900,9 @@ func (m *Model) toolRows() []formRow {
 		tool := tool
 		rows = append(rows, formRow{id: "tool." + tool, kind: rowAction, label: m.t("tool." + tool), desc: m.t("tool." + tool + ".d"), activate: func() {
 			m.next, m.back = []string{tool, "--target", m.target()}, true
+			if tool == "help" {
+				m.next = []string{"help"}
+			}
 			m.pending = tea.Quit
 		}})
 	}
