@@ -92,13 +92,15 @@ temporários Windows passam pela fronteira privada do
 Python 3.10 e 3.13.
 
 Uma revisão nova do snapshot nQuake só pode ser autorizada pelo próprio intake.
-A definição declara `reference` com `repository`, `previous_revision` e
-`revision`; o repositório precisa ser exatamente o já inventariado, a revisão
-anterior precisa coincidir com o estado corrente e ambas as revisões são hashes
-Git completos. A transição é aplicada apenas aos inventários em memória antes
-da validação, precisa incorporar arquivo sob o novo snapshot e só pode ser
-promovida quando a lista revisada reconstrói o snapshot consumido completo. Ela
-não faz o `update` baixar um candidato ainda não revisado.
+A definição declara `reference` com `repository`, `revision` e `components`
+(cada componente movido e a revisão que ele deixa); o repositório precisa ser
+exatamente o já inventariado, cada revisão anterior precisa coincidir com a
+fixada pelo componente e todas são hashes Git completos. A transição é aplicada
+apenas aos inventários em memória antes da validação, precisa incorporar os
+arquivos de cada componente movido sob a revisão nova e só pode ser promovida
+quando a lista revisada reconstrói os arquivos consumidos por eles. Os demais
+componentes mantêm suas revisões. Ela não faz o `update` baixar um candidato
+ainda não revisado.
 
 Consumidores migrados:
 

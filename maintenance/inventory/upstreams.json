@@ -40,17 +40,13 @@
       "id": "nquake",
       "name": "nQuake distfiles",
       "kind": "distribution",
-      "version": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "observed_upstream_revision": "721b2c9cb8f4881450ff70c2189faa8304ac9339",
-      "consumed_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-      "payload_status": "current-for-consumed-files",
+      "version": "por componente (reference_revision em component-releases.json)",
       "release_url": "https://github.com/nQuake/distfiles",
       "update": {"strategy": "git-ref", "repository": "https://github.com/nQuake/distfiles.git", "ref": "refs/heads/master"},
       "source": {
         "status": "complete",
-        "url": "https://github.com/nQuake/distfiles/tree/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
-        "distribution_path": "distributions/nquake/e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+        "url": "https://github.com/nQuake/distfiles",
+        "distribution_path": "distributions/nquake"
       },
       "build": {"status": "not-applicable"}
     },

@@ -30,13 +30,15 @@ type Payload struct {
 
 // SourceContext mirrors ComponentSourceContext.
 type SourceContext struct {
-	Distribution  string
-	Catalog       *Object
-	Releases      *Object
-	Components    map[string]*Object
-	ComponentIDs  []string
-	Commit        string
-	Snapshot      string
+	Distribution string
+	Catalog      *Object
+	Releases     *Object
+	Components   map[string]*Object
+	ComponentIDs []string
+	// Snapshots maps each nQuake revision to its source tree; Located maps
+	// each consumed upstream path to the revision holding it.
+	Snapshots     map[string]string
+	Located       map[string]string
 	Partition     map[string][]string
 	ManifestFiles *Object
 }
@@ -48,40 +50,72 @@ func sha256Hex(payload []byte) string {
 
 func meta(pairs ...any) *Object { return object(pairs...) }
 
-// LoadSourceContext mirrors load_source_context.
+// LoadSourceContext mirrors load_source_context. Every consumed upstream path
+// lives in exactly one nQuake source tree: the revision its owner pins.
 func LoadSourceContext(distribution string, catalog, releases *Object) (*SourceContext, error) {
 	distribution = resolve(distribution)
-	commit, snapshot, err := DiscoverSnapshot(distribution)
+	snapshots, err := DiscoverSnapshots(distribution)
 	if err != nil {
 		return nil, err
 	}
+	located := map[string]string{}
 	var paths []string
-	err = filepath.WalkDir(snapshot, func(path string, entry os.DirEntry, err error) error {
-		if err != nil || path == snapshot {
-			return err
-		}
-		if !isFile(path) {
+	for _, revision := range sortedKeys(snapshots) {
+		snapshot := snapshots[revision]
+		err = filepath.WalkDir(snapshot, func(path string, entry os.DirEntry, err error) error {
+			if err != nil || path == snapshot {
+				return err
+			}
+			if !isFile(path) {
+				return nil
+			}
+			if isSymlink(path) {
+				return fmt.Errorf("canonical component source must not be a symlink: %s", path)
+			}
+			relative, _ := filepath.Rel(snapshot, path)
+			relative = filepath.ToSlash(relative)
+			if other, seen := located[relative]; seen {
+				return fmt.Errorf("nQuake source is present in two revisions (%s, %s): %s", other[:12], revision[:12], relative)
+			}
+			located[relative] = revision
+			paths = append(paths, relative)
 			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
-		if isSymlink(path) {
-			return fmt.Errorf("canonical component source must not be a symlink: %s", path)
-		}
-		relative, _ := filepath.Rel(snapshot, path)
-		paths = append(paths, filepath.ToSlash(relative))
-		return nil
-	})
-	if err != nil {
-		return nil, err
 	}
 	sort.Strings(paths)
 	partition, err := ValidateTreePartition(catalog, paths, "reference")
 	if err != nil {
 		return nil, err
 	}
+	pinned := ReferenceRevisions(releases)
+	used := map[string]bool{}
+	for _, identifier := range sortedKeys(partition) {
+		if len(partition[identifier]) == 0 {
+			continue
+		}
+		revision := pinned[identifier]
+		if revision == "" {
+			return nil, fmt.Errorf("component consumes nQuake files but pins no reference revision: %s", identifier)
+		}
+		for _, path := range partition[identifier] {
+			if located[path] != revision {
+				return nil, fmt.Errorf("nQuake source of %s is not under its pinned revision %s: %s", identifier, revision[:12], path)
+			}
+		}
+		used[revision] = true
+	}
+	for revision := range snapshots {
+		if !used[revision] {
+			return nil, fmt.Errorf("nQuake source tree is not pinned by any component: %s", revision)
+		}
+	}
 	context := &SourceContext{
 		Distribution: distribution, Catalog: catalog, Releases: releases,
 		Components: ComponentsByID(catalog), ComponentIDs: ComponentIDs(catalog),
-		Commit: commit, Snapshot: snapshot, Partition: partition,
+		Snapshots: snapshots, Located: located, Partition: partition,
 	}
 	manifestPath := filepath.Join(distribution, "manifest.json")
 	if isFile(manifestPath) && !isSymlink(manifestPath) {
@@ -108,8 +142,20 @@ func readRegular(path, label string) ([]byte, error) {
 
 func (c *SourceContext) projectRoot() string { return filepath.Dir(c.Distribution) }
 
+// RevisionOf is the nQuake revision identifier consumes ("" for none).
+func (c *SourceContext) RevisionOf(identifier string) string {
+	return ReferenceRevisionOf(c.Releases, identifier)
+}
+
+// Revisions are the nQuake revisions present in the distribution, sorted.
+func (c *SourceContext) Revisions() []string { return sortedKeys(c.Snapshots) }
+
 func (c *SourceContext) verifiedReferencePayload(upstreamPath string) ([]byte, error) {
-	path := joinPosix(c.Snapshot, upstreamPath)
+	revision, ok := c.Located[upstreamPath]
+	if !ok {
+		return nil, fmt.Errorf("canonical nQuake source is missing: %s", upstreamPath)
+	}
+	path := joinPosix(c.Snapshots[revision], upstreamPath)
 	payload, err := readRegular(path, "canonical nQuake source")
 	if err != nil {
 		return nil, err
@@ -785,7 +831,7 @@ func (c *SourceContext) loadArchiveLayerPolicy(identifier string, release, layer
 		{"format", pyjson.Number("1")}, {"project", "x86qw"}, {"component", identifier},
 		{"target_archive", pyjson.Repr(layer.Value("target_archive"))},
 		{"reference_source", pyjson.Repr(layer.Value("reference_source"))},
-		{"reference_revision", c.Commit},
+		{"reference_revision", c.RevisionOf(identifier)},
 		{"upstream_release", pyjson.Repr(upstream.Value("release"))},
 		{"upstream_revision", pyjson.Repr(upstream.Value("source_revision"))},
 	}
@@ -933,7 +979,7 @@ func (c *SourceContext) applyArchiveLayers(identifier string, component, release
 			return nil, err
 		}
 		layerMetadata := []*Object{
-			meta("layer", "nquake", "source", referenceSource, "revision", c.Commit, "sha256", sha256Hex(referencePayload)),
+			meta("layer", "nquake", "source", referenceSource, "revision", c.RevisionOf(identifier), "sha256", sha256Hex(referencePayload)),
 			meta("layer", "upstream", "source", upstream.Source,
 				"revision", pyjson.Repr(pyjson.Get(release, "upstream", "source_revision")),
 				"members", strconv.Itoa(len(upstreamFiles))),
@@ -1138,7 +1184,7 @@ func (c *SourceContext) ResolveComponentPayloads(identifier string) (*Object, st
 			return nil, "", nil, err
 		}
 	} else {
-		sourceRevision = c.Commit
+		sourceRevision = c.RevisionOf(identifier)
 		for _, upstreamPath := range c.Partition[identifier] {
 			destination, mode, err := DestinationForSource(component, upstreamPath, "reference")
 			if err != nil {

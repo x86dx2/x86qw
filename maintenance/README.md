@@ -87,11 +87,19 @@ x86qw-content update mvdsv
 - componente fora da seleção ou pulado mantém exatamente os arquivos que o
   manifesto registra, sem mudar nem sumir.
 
-A referência nQuake ainda é uma revisão única no caminho
-`dist/distributions/nquake/<revisão>/`: os 16 componentes que consomem
-arquivos dela (os 13 do snapshot, os overlays Final Arena e Team Fortress e o
-`ktx.pk3` do KTX) só mudam de revisão juntos. Pedir apenas parte deles quando
-a referência mudou é recusado com a lista dos que faltam.
+Os 17 componentes que consomem arquivos do nQuake (os 13 do snapshot, os
+overlays Final Arena e Team Fortress, o `ktx.pk3` do KTX e os arquivos do
+Pro-X) fixam cada um sua própria revisão em `reference_revision`
+(`component-releases.json`), e seus arquivos ficam em
+`dist/distributions/nquake/<revisão>/`. Várias revisões coexistem; cada
+arquivo consumido existe em exatamente uma delas, a do seu dono, e uma
+revisão que nenhum componente fixa mais é removida.
+
+Quando o nQuake anda, `check` compara os arquivos que cada componente consome
+e marca para atualização somente os componentes cujos arquivos mudaram; os
+demais continuam na revisão que já fixam. `update` nunca promove uma revisão
+nova: o componente afetado aparece como `[PULADO]` (ou `[REVISAR]`, quando
+também tem upstream próprio) e é incorporado com `add`.
 
 O snapshot nQuake já registrado pode ser reparado mecanicamente porque caminho,
 URL, tamanho e SHA-256 estão fixados no manifesto. Uma revisão nQuake nova, um
@@ -163,26 +171,30 @@ caminho remoto que já existe no manifesto é imutável: URL, tamanho, SHA-256,
 owner, consumer e package não podem mudar no lugar. Novos bundles do instalador
 entram apenas pelo fluxo de release imutável, nunca por `add`.
 
-Uma revisão nova do snapshot nQuake usa uma transição explícita e resistente a
-plano obsoleto na mesma definição:
+Levar componentes a uma revisão nova do nQuake usa uma transição explícita e
+resistente a plano obsoleto na mesma definição, que nomeia cada componente
+movido e a revisão que ele deixa:
 
 ```json
 {
   "reference": {
     "repository": "https://github.com/nQuake/distfiles",
-    "previous_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "components": {
+      "x86qw-client-bootstrap": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
   }
 }
 ```
 
-`previous_revision` precisa ser exatamente a revisão inventariada no momento da
-aplicação, o repositório não pode mudar e cada URL do novo snapshot é derivada
-da origem GitHub canônica, da nova revisão e do caminho declarado. A lista
-`files` precisa formar o novo snapshot consumido completo; caso contrário, a
-validação e a reconstrução dos pacotes falham dentro do workspace. O snapshot
-anterior só é removido nesse workspace transacional, depois da validação do
-plano, e o `dist/` vivo permanece intacto até a promoção final.
+A revisão anterior de cada componente precisa ser exatamente a inventariada no
+momento da aplicação, o repositório não pode mudar e cada URL é derivada da
+origem GitHub canônica, da nova revisão e do caminho declarado. A lista
+`files` precisa trazer todos os arquivos consumidos pelos componentes movidos
+na revisão nova (com `package` igual ao componente); a versão de cada um
+passa a carregar a revisão nova. Os arquivos que eles deixam só são removidos
+no workspace transacional, depois da validação do plano, e os demais
+componentes não mudam de revisão nem de bytes.
 
 Fontes locais precisam estar declaradas exatamente em `project_sources`,
 `project_inputs`, `project_overrides` ou `project_archive_overrides` do BOM

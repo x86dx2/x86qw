@@ -74,13 +74,12 @@ func ValidateReleases(value any, componentIDs, namespaces map[string]bool) error
 		return fmt.Errorf("invalid component release inventory identity")
 	}
 	reference, ok := releases.Value("reference").(*Object)
-	if !ok || !hex40Pattern.MatchString(pyjson.Repr(getOr(reference, "revision", ""))) {
-		return fmt.Errorf("invalid nQuake reference revision")
+	if !ok || !sameKeys(reference.Keys(), "repository") {
+		return fmt.Errorf("invalid nQuake reference: it declares only the repository; each component pins its own revision")
 	}
 	if err := persistentURL(reference.Value("repository"), "nQuake reference repository"); err != nil {
 		return err
 	}
-	referenceRevision := pyjson.Repr(reference.Value("revision"))
 	components, ok := releases.Value("components").(*Object)
 	if !ok || !sameSet(components.Keys(), componentIDs) {
 		return fmt.Errorf("release inventory must cover every component exactly once")
@@ -99,6 +98,13 @@ func ValidateReleases(value any, componentIDs, namespaces map[string]bool) error
 			return fmt.Errorf("invalid release strategy or freshness: %s", identifier)
 		}
 		strategy := release.Value("strategy").(string)
+		referenceRevision, pinned := release.Value("reference_revision").(string)
+		if release.Has("reference_revision") && !(pinned && hex40Strict.MatchString(referenceRevision)) {
+			return fmt.Errorf("invalid nQuake reference revision: %s", identifier)
+		}
+		if (IsReferenceStrategy(strategy) || strategy == "upstream-overlay") && !pinned {
+			return fmt.Errorf("reference component has no nQuake revision: %s", identifier)
+		}
 		if !inSet(getOr(release, "distribution_component", "nquake"), namespaces) {
 			return fmt.Errorf("invalid distribution component: %s", identifier)
 		}
@@ -471,4 +477,24 @@ func ComponentForArtifactPath(releases *Object, path string) (string, error) {
 		return "", nil
 	}
 	return matches[0], nil
+}
+
+// ReferenceRevisionOf is the nQuake revision a component consumes, or "" for
+// a component that consumes nothing from the nQuake reference.
+func ReferenceRevisionOf(releases *Object, identifier string) string {
+	revision, _ := pyjson.Get(releases, "components", identifier, "reference_revision").(string)
+	return revision
+}
+
+// ReferenceRevisions maps every nQuake consumer to the revision it pins.
+func ReferenceRevisions(releases *Object) map[string]string {
+	revisions := map[string]string{}
+	if components, ok := releases.Value("components").(*Object); ok {
+		for _, identifier := range components.Keys() {
+			if revision := ReferenceRevisionOf(releases, identifier); revision != "" {
+				revisions[identifier] = revision
+			}
+		}
+	}
+	return revisions
 }

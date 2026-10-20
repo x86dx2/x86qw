@@ -209,11 +209,11 @@ var mutations = []mutation{
 		})
 	}},
 	{"tree-partition-unassigned", func(t *testing.T, root string) {
-		revision, snapshot, err := DiscoverSnapshot(filepath.Join(root, DistDir))
-		if err != nil || revision == "" {
+		snapshots, err := DiscoverSnapshots(filepath.Join(root, DistDir))
+		if err != nil || len(snapshots) == 0 {
 			t.Fatal(err)
 		}
-		replaceFile(t, filepath.Join(snapshot, "zz-unassigned.txt"), []byte("x"))
+		replaceFile(t, filepath.Join(snapshots[sortedKeys(snapshots)[0]], "zz-unassigned.txt"), []byte("x"))
 	}},
 	{"dist-integrity", func(t *testing.T, root string) {
 		path := filepath.Join(root, DistDir, filepath.FromSlash(firstManifestFile(t, root)))

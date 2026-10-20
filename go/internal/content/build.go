@@ -156,12 +156,15 @@ func (p *Project) BuildPackages(distribution, output string, options BuildOption
 	if options.ProjectRef != "" && !projectRefPattern.MatchString(options.ProjectRef) {
 		return nil, fmt.Errorf("project-ref deve ser um SHA-1 hexadecimal minúsculo completo")
 	}
-	commit := context.Commit
-	referenceRelease := "nquake-" + commit
-	buildID := "components-" + commit
+	// One build carries every nQuake revision the components pin; each
+	// package records and is released under its own.
+	revisions := strings.Join(context.Revisions(), "+")
+	buildID := "components-" + revisions
 	releaseRoot := filepath.Join(output, buildID)
 	var packages, ownershipEntries []any
 	for _, identifier := range context.ComponentIDs {
+		commit := context.RevisionOf(identifier)
+		referenceRelease := "nquake-" + commit
 		release, sourceRevision, payloads, err := context.ResolveComponentPayloads(identifier)
 		if err != nil {
 			return nil, err
@@ -278,7 +281,7 @@ func (p *Project) BuildPackages(distribution, output string, options BuildOption
 		packages = append(packages, record)
 	}
 	manifest := object(
-		"format", pyjson.Number("1"), "project", "x86qw", "release", buildID, "source_commit", commit,
+		"format", pyjson.Number("1"), "project", "x86qw", "release", buildID, "source_commit", revisions,
 		"release_inventory", filepath.Base(ReleasesPath), "packages", orEmpty(packages),
 	)
 	manifestBytes, err := pyjson.EncodeFile(manifest, true)
