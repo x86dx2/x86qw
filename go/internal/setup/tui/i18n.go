@@ -38,10 +38,13 @@ var texts = map[string][2]string{
 	"nick.team":  {"nas mensagens do time", "in team messages"},
 
 	// preflight
-	"pre.title": {"Pré-voo", "Preflight"},
-	"pre.lead":  {"Conferindo a máquina antes de baixar qualquer coisa.", "Checking the machine before anything is downloaded."},
-	"pre.ok":    {"Tudo certo.", "All clear."},
-	"pre.warn":  {"Pronto, com uma observação.", "Ready, with one note."},
+	"pre.title":    {"Pré-voo", "Preflight"},
+	"pre.lead":     {"Conferindo a máquina com as suas escolhas antes de baixar qualquer coisa.", "Checking the machine against your choices before anything is downloaded."},
+	"pre.ok":       {"Tudo certo.", "All clear."},
+	"pre.warn":     {"Pronto, com uma observação. Instale mesmo assim ou volte para ajustar.", "Ready, with one note. Install anyway or go back to adjust."},
+	"pre.fail":     {"Algo impede a instalação. Volte para ajustar.", "Something blocks the install. Go back to adjust."},
+	"pre.starting": {"começando a instalação…", "starting the install…"},
+	"pre.anyway":   {"instalar mesmo assim", "install anyway"}, "k.adjust": {"ajustar", "adjust"},
 
 	// review
 	"rev.title":    {"Pronto para instalar", "Ready to install"},

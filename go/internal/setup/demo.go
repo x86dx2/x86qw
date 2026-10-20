@@ -109,7 +109,13 @@ func (d *Demo) Preflight(ctx context.Context, options Options) <-chan Check {
 	}
 	if options.Intent.WantsServer() {
 		ports := options.Server.Ports()
-		checks = append(checks, Check{ID: "ports", Title: "Portas do servidor", Detail: fmt.Sprintf("UDP %d–%d livres.", ports[0], ports[len(ports)-1]), Value: "livres", State: CheckOK})
+		check := Check{ID: "ports", Title: "Portas do servidor", Detail: fmt.Sprintf("UDP %d–%d livres.", ports[0], ports[len(ports)-1]), Value: "livres", State: CheckOK}
+		if options.Server.BasePort == 27500 {
+			// The demo shows the warning path: something already holds 27500.
+			check = Check{ID: "ports", Title: "Portas do servidor", Detail: "UDP 27500 está em uso por outro processo.", Value: "27500 ocupada",
+				Fix: "Mude a porta inicial para 27510 em Servidor, ou instale mesmo assim.", State: CheckWarning}
+		}
+		checks = append(checks, check)
 	}
 	go func() {
 		defer close(out)

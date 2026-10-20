@@ -58,6 +58,7 @@ type Model struct {
 
 	checks  []setup.Check
 	preDone bool
+	preRun  int // counts preflight runs, so a stale auto-start is ignored
 	preCh   <-chan setup.Check
 
 	focus     int  // focused row on the current screen
@@ -142,6 +143,7 @@ type dnsMsg setup.DNSCheck
 type dnsDebounceMsg string
 type tickMsg time.Time
 type advanceMsg screen
+type preflightPassedMsg int // the preflight run that passed
 
 // Init loads the catalog, looks for an installation, detects the network
 // and asks the terminal for its background.
@@ -229,6 +231,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case checkMsg:
 		if !msg.ok {
 			m.preDone = true
+			if m.preflightOutcome() == setup.CheckOK {
+				run := m.preRun
+				return m, tea.Tick(900*time.Millisecond, func(time.Time) tea.Msg { return preflightPassedMsg(run) })
+			}
 			break
 		}
 		m.recordCheck(msg.check)
@@ -242,6 +248,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Tick(900*time.Millisecond, func(time.Time) tea.Msg { return advanceMsg(scDone) })
 		}
 		return m, m.nextProgress()
+	case preflightPassedMsg:
+		if m.screen == scPreflight && int(msg) == m.preRun {
+			return m, m.startInstall()
+		}
 	case advanceMsg:
 		if m.screen == scInstall {
 			m.screen, m.focus = screen(msg), 0
@@ -315,6 +325,7 @@ func (m *Model) resolve(hostname string) tea.Cmd {
 // startPreflight runs the checks for the current options.
 func (m *Model) startPreflight() tea.Cmd {
 	m.screen, m.checks, m.preDone = scPreflight, nil, false
+	m.preRun++
 	m.preCh = m.cfg.Backend.Preflight(context.Background(), m.opts)
 	return m.nextCheck()
 }
@@ -404,12 +415,13 @@ func (m *Model) key(key string) tea.Cmd {
 		}
 	case scPreflight:
 		switch key {
-		case "enter", "right", "space":
-			if m.preDone {
-				m.screen, m.focus = scReview, len(m.reviewRows())-1
+		case "enter", "space":
+			if m.preDone && m.preflightOutcome() != setup.CheckFailed {
+				return m.startInstall()
 			}
 		case "esc", "left", "backspace":
-			m.screen, m.focus = scIntent, 0
+			m.preRun++ // drop a pending auto-start
+			m.screen, m.focus = scReview, len(m.reviewRows())-1
 		}
 	case scReview:
 		rows := m.reviewRows()
@@ -421,14 +433,14 @@ func (m *Model) key(key string) tea.Cmd {
 		case "enter", "right", "space", " ":
 			return m.activateReview(rows[m.focus].id)
 		case "i":
-			return m.startInstall()
+			return m.activateReview("install")
 		case "c":
 			return m.copyRecipe()
 		case "esc", "left", "backspace":
 			if m.fromPanel {
 				m.screen, m.focus = scPanel, 1
 			} else {
-				m.screen = scPreflight
+				m.screen, m.focus = scIntent, 0
 			}
 		}
 	case scInstall:
@@ -472,7 +484,8 @@ func (m *Model) leaveIntent() tea.Cmd {
 		return nil
 	}
 	m.opts.Nick = strings.TrimSpace(m.nick.String())
-	return m.startPreflight()
+	m.screen, m.focus = scReview, len(m.reviewRows())-1
+	return nil
 }
 
 func (m *Model) copyRecipe() tea.Cmd {
@@ -717,7 +730,15 @@ func (m *Model) footerHints() [][2]string {
 	case scIntent:
 		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"ctrl+c", m.t("k.quit")}}
 	case scPreflight:
-		return [][2]string{{"enter", m.t("k.next")}, {"esc", m.t("k.back")}, {"ctrl+c", m.t("k.quit")}}
+		switch {
+		case !m.preDone:
+			return [][2]string{{"esc", m.t("k.adjust")}, {"ctrl+c", m.t("k.quit")}}
+		case m.preflightOutcome() == setup.CheckWarning:
+			return [][2]string{{"enter", m.t("pre.anyway")}, {"esc", m.t("k.adjust")}}
+		case m.preflightOutcome() == setup.CheckFailed:
+			return [][2]string{{"esc", m.t("k.adjust")}, {"ctrl+c", m.t("k.quit")}}
+		}
+		return [][2]string{{"esc", m.t("k.adjust")}}
 	case scReview:
 		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.edit")}, {"i", m.t("k.install")}, {"c", m.t("k.copy")}, {"esc", m.t("k.back")}}
 	case scInstall:
@@ -745,4 +766,15 @@ func DefaultTarget() string {
 func Run(cfg Config) error {
 	_, err := tea.NewProgram(New(cfg)).Run()
 	return err
+}
+
+// preflightOutcome is the worst state among the finished checks.
+func (m *Model) preflightOutcome() setup.CheckState {
+	worst := setup.CheckOK
+	for _, check := range m.checks {
+		if check.State == setup.CheckFailed || (check.State == setup.CheckWarning && worst != setup.CheckFailed) {
+			worst = check.State
+		}
+	}
+	return worst
 }

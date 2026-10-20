@@ -86,8 +86,8 @@ func (m *Model) logo(p *page) {
 // route draws the five steps as diamonds with the current step named.
 func (m *Model) route(p *page) {
 	t := m.theme
-	steps := []string{"route.intent", "route.pre", "route.review", "route.install", "route.done"}
-	current := map[screen]int{scIntent: 0, scPreflight: 1, scReview: 2, scInstall: 3, scDone: 4}[m.screen]
+	steps := []string{"route.intent", "route.review", "route.pre", "route.install", "route.done"}
+	current := map[screen]int{scIntent: 0, scReview: 1, scPreflight: 2, scInstall: 3, scDone: 4}[m.screen]
 	var b strings.Builder
 	for index := range steps {
 		if index > 0 {
@@ -171,7 +171,6 @@ func (m *Model) preflightPage(p *page) {
 	p.title(m.t("pre.title"))
 	p.lead(m.t("pre.lead"))
 	p.gap(1)
-	warned := false
 	for _, check := range m.checks {
 		var mark lipgloss.Style
 		glyph := m.spinner()
@@ -180,7 +179,7 @@ func (m *Model) preflightPage(p *page) {
 		case setup.CheckOK:
 			glyph, mark, value = m.glyphs.Ok, p.st(t.Success), p.st(t.Text2).Render(check.Value)
 		case setup.CheckWarning:
-			glyph, mark, value, warned = m.glyphs.Warn, p.st(t.Warning), p.st(t.Warning).Render(check.Value), true
+			glyph, mark, value = m.glyphs.Warn, p.st(t.Warning), p.st(t.Warning).Render(check.Value)
 		case setup.CheckFailed:
 			glyph, mark, value = m.glyphs.Fail, p.st(t.Error), p.st(t.Error).Render(check.Value)
 		default:
@@ -197,11 +196,14 @@ func (m *Model) preflightPage(p *page) {
 	}
 	if m.preDone {
 		p.gap(1)
-		status, color := m.t("pre.ok"), t.Success
-		if warned {
-			status, color = m.t("pre.warn"), t.Warning
+		switch m.preflightOutcome() {
+		case setup.CheckFailed:
+			p.add(p.st(t.Error).Bold(true).Render("  " + m.t("pre.fail")))
+		case setup.CheckWarning:
+			p.add(p.st(t.Warning).Bold(true).Render("  " + m.t("pre.warn")))
+		default:
+			p.add(p.st(t.Success).Bold(true).Render("  "+m.t("pre.ok")) + p.st(t.Gray).Render("   "+m.t("pre.starting")))
 		}
-		p.add(p.st(color).Bold(true).Render("  "+status) + p.st(t.Gray).Render("   enter "+m.t("k.next")))
 	}
 }
 
@@ -315,7 +317,7 @@ func (m *Model) activateReview(id string) tea.Cmd {
 			m.say(err.Error())
 			return nil
 		}
-		return m.startInstall()
+		return m.startPreflight()
 	default:
 		m.openModal(id)
 	}
@@ -687,7 +689,7 @@ func (m *Model) activatePanel(id string) tea.Cmd {
 	case "change":
 		m.screen, m.focus, m.fromPanel = scReview, 0, true
 	case "apply":
-		return m.startInstall()
+		return m.startPreflight()
 	case "verify":
 		if m.verify == 0 || m.verify >= 100 {
 			m.verify = 0.5

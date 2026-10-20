@@ -36,22 +36,20 @@ func TestKeyboardNavigation(t *testing.T) {
 		t.Fatalf("↓ deveria escolher Hospedar: %s", m.opts.Intent)
 	}
 	drive(m, key("up"), key("enter"))
-	want(scPreflight, "enter na intenção")
-	for !m.preDone {
-		drive(m, run(m.nextCheck())...)
-	}
+	want(scReview, "enter na intenção vai para a revisão")
 	drive(m, key("esc"))
-	want(scIntent, "esc no pré-voo")
+	want(scIntent, "esc na revisão volta à intenção")
 	drive(m, key("enter"))
-	for !m.preDone {
-		drive(m, run(m.nextCheck())...)
+	want(scReview, "intenção → revisão")
+	m.Update(key("i")) // without running what it starts
+	want(scPreflight, "instalar roda o pré-voo")
+	m.Update(key("esc"))
+	want(scReview, "esc no pré-voo volta à revisão")
+	drive(m, key("i"))
+	if m.screen != scInstall && m.screen != scDone {
+		t.Fatalf("pré-voo sem avisos deveria começar a instalação sozinho: %d", m.screen)
 	}
-	drive(m, key("enter"))
-	want(scReview, "enter no pré-voo")
-	drive(m, key("left"))
-	want(scPreflight, "← na revisão volta ao pré-voo")
-	drive(m, key("enter"))
-	want(scReview, "pré-voo concluído segue para a revisão")
+	m.screen, m.focus, m.modal = scReview, 0, nil
 
 	// Dialog: open setup, change tabs with ← →, toggle with space.
 	m.focus = 1
@@ -103,5 +101,21 @@ func TestPanelNavigation(t *testing.T) {
 	drive(m, key("esc"))
 	if m.panelView != "" {
 		t.Fatal("esc deveria voltar ao menu do painel")
+	}
+}
+
+func TestPreflightWarningWaits(t *testing.T) {
+	m := started(t, false)
+	drive(m, typeText("x86dx2")...)
+	drive(m, key("down"), key("down"), key("enter"), key("i"))
+	for !m.preDone {
+		drive(m, run(m.nextCheck())...)
+	}
+	if m.screen != scPreflight || m.preflightOutcome() != setup.CheckWarning {
+		t.Fatalf("aviso deveria esperar a decisão: tela %d", m.screen)
+	}
+	drive(m, key("enter"))
+	if m.screen != scInstall && m.screen != scDone {
+		t.Fatalf("enter deveria instalar mesmo assim: %d", m.screen)
 	}
 }
