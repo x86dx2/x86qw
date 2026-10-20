@@ -1,5 +1,7 @@
 & {
-param([object[]]$BootstrapArguments)
+# Every argument is forwarded to `x86qw setup`; a typed param block would
+# bind only the first one.
+$BootstrapArguments = @($args)
 # Windows PowerShell 5.1 reads BOM-less scripts as ANSI: keep this file ASCII.
 # x86QW bootstrap: downloads the native x86QW CLI pinned by size and SHA-256
 # and runs `x86qw setup`. No Python required.
