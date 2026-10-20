@@ -2,26 +2,6 @@
   "cli": {
     "binaries": [
       {
-        "architecture": "x86_64",
-        "filename": "x86qw-2.0.2-linux-amd64",
-        "platform": "linux",
-        "sha256": "d4bdf56885c3200f3fa011742df405c77fdd8e2cbbc963ffa513be6b9c0a9a01",
-        "size": 13090976,
-        "urls": [
-          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-linux-amd64"
-        ]
-      },
-      {
-        "architecture": "arm64",
-        "filename": "x86qw-2.0.2-linux-arm64",
-        "platform": "linux",
-        "sha256": "31d3c136d526b95a885c4784ca34e8a78b8882911f99162f07ba49f1effac7b2",
-        "size": 12189856,
-        "urls": [
-          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-linux-arm64"
-        ]
-      },
-      {
         "architecture": "arm64",
         "filename": "x86qw-2.0.2-darwin-arm64",
         "platform": "macos",
@@ -39,6 +19,26 @@
         "size": 13376416,
         "urls": [
           "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-darwin-amd64"
+        ]
+      },
+      {
+        "architecture": "x86_64",
+        "filename": "x86qw-2.0.2-linux-amd64",
+        "platform": "linux",
+        "sha256": "d4bdf56885c3200f3fa011742df405c77fdd8e2cbbc963ffa513be6b9c0a9a01",
+        "size": 13090976,
+        "urls": [
+          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-linux-amd64"
+        ]
+      },
+      {
+        "architecture": "arm64",
+        "filename": "x86qw-2.0.2-linux-arm64",
+        "platform": "linux",
+        "sha256": "31d3c136d526b95a885c4784ca34e8a78b8882911f99162f07ba49f1effac7b2",
+        "size": 12189856,
+        "urls": [
+          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-linux-arm64"
         ]
       },
       {

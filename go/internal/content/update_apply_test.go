@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -45,6 +46,16 @@ func TestUpdateAppliesWorkspace(t *testing.T) {
 
 	project := NewProject(clone)
 	unmirrored := unmirroredReleaseArtifacts(t, project)
+	if len(unmirrored) == 0 {
+		// Everything is mirrored: forget one release artifact so the update
+		// has to fetch, verify and register it again (the fake upstream
+		// serves it from the clone).
+		const relative = "servers/mvdsv/1.11/source/mvdsv-source-with-submodules-1.11.zip"
+		editJSON(t, project.Path(ManifestPath), true, func(document *Object) {
+			document.Value("files").(*Object).Delete(relative)
+		})
+		unmirrored = []string{relative}
+	}
 	project.HTTP = currentUpstreams(t, clone, "").client()
 	git := &recorder{}
 	project.Run = git.run
@@ -117,6 +128,7 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	previous := ReferenceRevisionOf(releases, moved)
+	pinnedBefore := ReferenceRevisions(releases)
 	manifest, err := LoadManifest(project.Path(ManifestPath))
 	if err != nil {
 		t.Fatal(err)
@@ -197,7 +209,13 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dist depois do add: %v", err)
 	}
-	if revisions := sources.Revisions(); len(revisions) != 2 || !contains(revisions, revision) || !contains(revisions, previous) {
+	// The dist holds exactly the revisions some component pins; the one
+	// only the moved component used is gone.
+	expected := map[string]bool{}
+	for _, pinned := range ReferenceRevisions(updatedReleases) {
+		expected[pinned] = true
+	}
+	if revisions := sources.Revisions(); !slices.Equal(revisions, sortedKeys(expected)) || !expected[revision] {
 		t.Fatalf("revisoes nQuake no dist: %v", revisions)
 	}
 	updatedManifest, _ := LoadManifest(fresh.Path(ManifestPath))
@@ -205,7 +223,7 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 		t.Fatalf("dist depois do add nao verifica: %v", err)
 	}
 	for identifier, pinned := range ReferenceRevisions(updatedReleases) {
-		want := previous
+		want := pinnedBefore[identifier]
 		if identifier == moved {
 			want = revision
 		}
@@ -256,7 +274,7 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 			t.Fatalf("a CLI le %s na revisao %s", id, current.Revision())
 		}
 	}
-	if _, err := os.Stat(filepath.Join(clone, DistDir, "distributions/nquake", previous, "non-gpl/qw/maps")); err != nil {
+	if _, err := os.Stat(filepath.Join(clone, DistDir, "distributions/nquake", pinnedBefore["nquake-maps"], "non-gpl/qw/maps")); err != nil {
 		t.Errorf("arquivos dos outros componentes sairam da revisao anterior: %v", err)
 	}
 }
@@ -299,7 +317,7 @@ func TestUpdateFollowsNQuakeOneComponentAtATime(t *testing.T) {
 		before[pyjson.Repr(pkg.Value("filename"))] = pyjson.Repr(pkg.Value("sha256"))
 	}
 	releases, _ := project.Releases()
-	previous := ReferenceRevisionOf(releases, moved)
+	pinnedBefore := ReferenceRevisions(releases)
 
 	web := movedReference(currentUpstreams(t, clone, ""), appendComment)
 	web.nquake.files["sv-maps/qw/maps/novo.bsp"] = NQuakeFile{3, sha256Hex([]byte("bsp")), gitBlob([]byte("bsp"))}
@@ -316,7 +334,7 @@ func TestUpdateFollowsNQuakeOneComponentAtATime(t *testing.T) {
 		t.Fatal(err)
 	}
 	for identifier, pinned := range ReferenceRevisions(updated) {
-		want := previous
+		want := pinnedBefore[identifier]
 		if identifier == moved {
 			want = movedRevision
 		}

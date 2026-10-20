@@ -737,47 +737,29 @@
     },
     {
       "component": "x86qw",
-      "package": "x86qw-cli",
-      "version": "2.0.2",
-      "channel": "stable",
-      "platform": "linux",
-      "architecture": "x86_64",
-      "filename": "x86qw-2.0.2-linux-amd64",
-      "size": 13090976,
-      "sha256": "d4bdf56885c3200f3fa011742df405c77fdd8e2cbbc963ffa513be6b9c0a9a01",
-      "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-linux-amd64"
-      ],
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-linux-amd64",
-      "license": "MIT",
-      "license_url": "https://github.com/x86dx2/x86qw/blob/main/LICENSE",
+      "package": "x86qw-client-bootstrap",
+      "version": "dfb2ac9299f7+x86qw.4",
+      "channel": "content",
+      "platform": "any",
+      "architecture": "any",
+      "filename": "x86qw-client-bootstrap-dfb2ac9299f7+x86qw.4.zip",
+      "size": 28919,
+      "sha256": "78d59dc65daf0ca3538733f1e3fbf8d44833da25cb72306a06dafd993429e1fd",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-dfb2ac9299f72cbe399bf637dc3f7adc24295edb/x86qw-client-bootstrap-dfb2ac9299f7+x86qw.4.zip",
+      "license": "upstream-distfiles-terms",
+      "license_url": "https://github.com/nQuake/distfiles/tree/dfb2ac9299f72cbe399bf637dc3f7adc24295edb",
       "source_urls": [
-        "https://github.com/x86dx2/x86qw"
+        "https://github.com/nQuake/distfiles/tree/dfb2ac9299f72cbe399bf637dc3f7adc24295edb"
       ],
       "redistribution_reviewed": true,
-      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.0.2"
-    },
-    {
-      "component": "x86qw",
-      "package": "x86qw-cli",
-      "version": "2.0.2",
-      "channel": "stable",
-      "platform": "linux",
-      "architecture": "arm64",
-      "filename": "x86qw-2.0.2-linux-arm64",
-      "size": 12189856,
-      "sha256": "31d3c136d526b95a885c4784ca34e8a78b8882911f99162f07ba49f1effac7b2",
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-linux-arm64"
+        "https://github.com/x86dx2/x86qw/releases/download/nquake-dfb2ac9299f72cbe399bf637dc3f7adc24295edb/x86qw-client-bootstrap-dfb2ac9299f7+x86qw.4.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-client-bootstrap/dfb2ac9299f7+x86qw.4/x86qw-client-bootstrap-dfb2ac9299f7+x86qw.4.zip"
       ],
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-linux-arm64",
-      "license": "MIT",
-      "license_url": "https://github.com/x86dx2/x86qw/blob/main/LICENSE",
-      "source_urls": [
-        "https://github.com/x86dx2/x86qw"
-      ],
-      "redistribution_reviewed": true,
-      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.0.2"
+      "mirror_title": "x86QW Content · Base e inicialização do cliente x86QW dfb2ac9299f7+x86qw.4",
+      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
+      "mirror_latest": false,
+      "source_commit": "dfb2ac9299f72cbe399bf637dc3f7adc24295edb"
     },
     {
       "component": "x86qw",
@@ -828,6 +810,50 @@
       "package": "x86qw-cli",
       "version": "2.0.2",
       "channel": "stable",
+      "platform": "linux",
+      "architecture": "x86_64",
+      "filename": "x86qw-2.0.2-linux-amd64",
+      "size": 13090976,
+      "sha256": "d4bdf56885c3200f3fa011742df405c77fdd8e2cbbc963ffa513be6b9c0a9a01",
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-linux-amd64"
+      ],
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-linux-amd64",
+      "license": "MIT",
+      "license_url": "https://github.com/x86dx2/x86qw/blob/main/LICENSE",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.0.2"
+    },
+    {
+      "component": "x86qw",
+      "package": "x86qw-cli",
+      "version": "2.0.2",
+      "channel": "stable",
+      "platform": "linux",
+      "architecture": "arm64",
+      "filename": "x86qw-2.0.2-linux-arm64",
+      "size": 12189856,
+      "sha256": "31d3c136d526b95a885c4784ca34e8a78b8882911f99162f07ba49f1effac7b2",
+      "urls": [
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-linux-arm64"
+      ],
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.2/x86qw-2.0.2-linux-arm64",
+      "license": "MIT",
+      "license_url": "https://github.com/x86dx2/x86qw/blob/main/LICENSE",
+      "source_urls": [
+        "https://github.com/x86dx2/x86qw"
+      ],
+      "redistribution_reviewed": true,
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.0.2"
+    },
+    {
+      "component": "x86qw",
+      "package": "x86qw-cli",
+      "version": "2.0.2",
+      "channel": "stable",
       "platform": "windows",
       "architecture": "x64",
       "filename": "x86qw-2.0.2-windows-amd64.exe",
@@ -844,32 +870,6 @@
       ],
       "redistribution_reviewed": true,
       "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.0.2"
-    },
-    {
-      "component": "x86qw",
-      "package": "x86qw-client-bootstrap",
-      "version": "dfb2ac9299f7+x86qw.4",
-      "channel": "content",
-      "platform": "any",
-      "architecture": "any",
-      "filename": "x86qw-client-bootstrap-dfb2ac9299f7+x86qw.4.zip",
-      "size": 28919,
-      "sha256": "78d59dc65daf0ca3538733f1e3fbf8d44833da25cb72306a06dafd993429e1fd",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/nquake-dfb2ac9299f72cbe399bf637dc3f7adc24295edb/x86qw-client-bootstrap-dfb2ac9299f7+x86qw.4.zip",
-      "license": "upstream-distfiles-terms",
-      "license_url": "https://github.com/nQuake/distfiles/tree/dfb2ac9299f72cbe399bf637dc3f7adc24295edb",
-      "source_urls": [
-        "https://github.com/nQuake/distfiles/tree/dfb2ac9299f72cbe399bf637dc3f7adc24295edb"
-      ],
-      "redistribution_reviewed": true,
-      "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/nquake-dfb2ac9299f72cbe399bf637dc3f7adc24295edb/x86qw-client-bootstrap-dfb2ac9299f7+x86qw.4.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-client-bootstrap/dfb2ac9299f7+x86qw.4/x86qw-client-bootstrap-dfb2ac9299f7+x86qw.4.zip"
-      ],
-      "mirror_title": "x86QW Content · Base e inicialização do cliente x86QW dfb2ac9299f7+x86qw.4",
-      "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
-      "mirror_latest": false,
-      "source_commit": "dfb2ac9299f72cbe399bf637dc3f7adc24295edb"
     }
   ]
 }
