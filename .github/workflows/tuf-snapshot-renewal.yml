@@ -78,11 +78,12 @@ jobs:
           [[ "$RELEASE_CODE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           test "$GITHUB_SHA" = "$RELEASE_CODE_COMMIT"
           test "$(git rev-parse HEAD)" = "$RELEASE_CODE_COMMIT"
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          python-version: "3.13"
-      - name: Install pinned trust dependencies from vendored wheels
-        run: python -m pip install --no-index --find-links maintenance/vendor/wheels --require-hashes -r maintenance/requirements-trust.txt
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      - name: Build the release tool
+        run: go -C go build -o "$RUNNER_TEMP/x86qw-release" ./cmd/x86qw-release
       - name: Validate protected renewal coordinates
         env:
           SOURCE_WORKFLOW_COMMIT: ${{ inputs.source_workflow_commit }}
@@ -123,7 +124,7 @@ jobs:
           SOURCE_ARTIFACT_ID: ${{ inputs.source_artifact_id }}
           SOURCE_ARTIFACT_NAME: ${{ inputs.source_artifact_name }}
         run: |
-          python3 maintenance/tools/verify_external_handoff.py \
+          "$RUNNER_TEMP/x86qw-release" verify-handoff \
             --run-id "$SOURCE_RUN_ID" \
             --commit "$SOURCE_WORKFLOW_COMMIT" \
             --artifact "$SOURCE_ARTIFACT_NAME" \
@@ -169,7 +170,7 @@ jobs:
         run: |
           set -euo pipefail
           catalog="$(cat "$RUNNER_TEMP/catalog-path")"
-          python3 maintenance/tools/tuf_snapshot_renewal.py \
+          "$RUNNER_TEMP/x86qw-release" renew-snapshot-handoff \
             --repository source-tuf \
             --root maintenance/trust/root.json \
             --catalog "$catalog" \
