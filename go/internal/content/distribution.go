@@ -88,27 +88,33 @@ func validateManifestSizes(value any) error {
 	return nil
 }
 
-// DiscoverSnapshot mirrors component_sources.discover_snapshot.
-func DiscoverSnapshot(distribution string) (string, string, error) {
+// DiscoverSnapshots maps every commit-addressed nQuake source tree in the
+// distribution to its directory. Several revisions coexist: each component
+// keeps its files under the revision it pins.
+func DiscoverSnapshots(distribution string) (map[string]string, error) {
 	root := filepath.Join(distribution, "distributions", "nquake")
 	if !isDir(root) || isSymlink(root) {
-		return "", "", fmt.Errorf("canonical nQuake source tree is missing: %s", root)
+		return nil, fmt.Errorf("canonical nQuake source tree is missing: %s", root)
 	}
 	entries, err := os.ReadDir(root)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
-	var snapshots []string
+	snapshots := map[string]string{}
 	for _, entry := range entries {
 		path := filepath.Join(root, entry.Name())
-		if isDir(path) && !isSymlink(path) {
-			snapshots = append(snapshots, path)
+		if !isDir(path) || isSymlink(path) {
+			continue
 		}
+		if !hex40Strict.MatchString(entry.Name()) {
+			return nil, fmt.Errorf("nQuake source tree is not commit-addressed: %s", path)
+		}
+		snapshots[entry.Name()] = path
 	}
-	if len(snapshots) != 1 || len(filepath.Base(snapshots[0])) != 40 {
-		return "", "", fmt.Errorf("distribution must contain exactly one commit-addressed nQuake source tree")
+	if len(snapshots) == 0 {
+		return nil, fmt.Errorf("distribution has no commit-addressed nQuake source tree")
 	}
-	return filepath.Base(snapshots[0]), snapshots[0], nil
+	return snapshots, nil
 }
 
 // IsGitLFSPointer mirrors is_git_lfs_pointer.

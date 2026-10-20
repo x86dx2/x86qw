@@ -40,16 +40,13 @@ func IsReferenceStrategy(strategy string) bool {
 
 // CheckUpdates mirrors check_component_updates.check_updates.
 func (p *Project) CheckUpdates(releases *Object, online bool) ([]UpdateResult, error) {
+	// Whether a moved nQuake revision changes a component depends on the
+	// files it consumes, which Check and Update compare per component; here
+	// the reference only has to answer.
 	reference := releases.Value("reference").(*Object)
-	referenceRevision := pyjson.Repr(reference.Value("revision"))
-	current, referenceErr := referenceRevision, error(nil)
+	var referenceErr error
 	if online {
-		revision, err := p.GitHubRefRevision(pyjson.Repr(reference.Value("repository")), "refs/heads/master")
-		if err == nil {
-			current = revision
-		} else {
-			referenceErr = err
-		}
+		_, referenceErr = p.GitHubRefRevision(pyjson.Repr(reference.Value("repository")), "refs/heads/master")
 	}
 	var results []UpdateResult
 	components := releases.Value("components").(*Object)
@@ -62,15 +59,9 @@ func (p *Project) CheckUpdates(releases *Object, online bool) ([]UpdateResult, e
 			results = append(results, UpdateResult{identifier, expected, expected, "unavailable", strategy, referenceErr.Error()})
 			continue
 		}
-		if strategy == "reference-snapshot" && current != referenceRevision {
-			actual, status = current[:12], "update-available"
-		}
 		upstream, hasUpstream := release.Value("upstream").(*Object)
 		if strategy == "reference-overlay" && hasUpstream {
 			actual = pyjson.Repr(upstream.Value("release"))
-			if current != referenceRevision {
-				status = "update-available"
-			}
 		}
 		if repository, ok := pyjson.Get(release, "upstream", "repository").(string); online && hasUpstream && ok {
 			latest, err := p.GitHubLatestRelease(repository)
@@ -225,69 +216,85 @@ func GitBlobSHA1(path string) (string, error) {
 	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
-// ReferenceContentChanged mirrors manage.reference_content_changed.
-func ReferenceContentChanged(assets []Asset, manifest *Object, root string) (bool, error) {
+// ReferenceChanges lists the components whose consumed nQuake files differ
+// between the discovered upstream revision and the files they pin: a file
+// added, removed or changed. A component missing from the result keeps its
+// revision even when the upstream moved.
+func ReferenceChanges(assets []Asset, manifest *Object, root string) (map[string]bool, error) {
 	files, ok := manifest.Value("files").(*Object)
 	if !ok {
-		return false, fmt.Errorf("manifesto sem arquivos")
+		return nil, fmt.Errorf("manifesto sem arquivos")
 	}
 	type record struct {
-		relative string
-		metadata *Object
+		relative, owner string
+		metadata        *Object
 	}
 	current := map[string]record{}
 	for _, relative := range files.Keys() {
 		metadata, isObject := files.Value(relative).(*Object)
 		if parts, ok := nquakeSnapshotParts(relative); ok && isObject {
-			current[strings.Join(parts[3:], "/")] = record{relative, metadata}
+			owner, _ := metadata.Value("package").(string)
+			current[strings.Join(parts[3:], "/")] = record{relative, owner, metadata}
 		}
 	}
-	var discovered []Asset
+	changed := map[string]bool{}
+	discovered := map[string]bool{}
 	for _, asset := range assets {
-		if asset.Component == "nquake" {
-			discovered = append(discovered, asset)
+		if asset.Component != "nquake" {
+			continue
 		}
-	}
-	if len(discovered) != len(current) {
-		return true, nil
-	}
-	for _, asset := range discovered {
 		upstream := strings.Join(purePosix(asset.Path).parts[3:], "/")
+		discovered[upstream] = true
 		item, ok := current[upstream]
-		if !ok || asset.ExpectedGitSHA1 == "" {
-			return true, nil
+		if !ok || item.owner != asset.Subcomponent || asset.ExpectedGitSHA1 == "" {
+			changed[asset.Subcomponent] = true
+			if ok {
+				changed[item.owner] = true
+			}
+			continue
 		}
 		path := joinPosix(root, item.relative)
 		info, err := os.Stat(path)
 		if !isFile(path) || isSymlink(path) || err != nil || info.Size() != asset.ExpectedSize || !pyjson.EqInt(item.metadata.Value("size"), asset.ExpectedSize) {
-			return true, nil
+			changed[item.owner] = true
+			continue
 		}
 		digest, err := GitBlobSHA1(path)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 		if digest != asset.ExpectedGitSHA1 {
-			return true, nil
+			changed[item.owner] = true
 		}
 	}
-	return false, nil
+	for upstream, item := range current {
+		if !discovered[upstream] {
+			changed[item.owner] = true
+		}
+	}
+	delete(changed, "")
+	return changed, nil
 }
 
-// PreserveCurrentReferenceAssets mirrors manage.preserve_current_reference_assets.
-func PreserveCurrentReferenceAssets(assets []Asset, manifest *Object, root string) ([]Asset, error) {
+// PreserveCurrentReferenceAssets replaces the discovered nQuake files of
+// every component keep selects with the files it pins today.
+func PreserveCurrentReferenceAssets(assets []Asset, manifest *Object, root string, keep func(owner string) bool) ([]Asset, error) {
 	files, ok := manifest.Value("files").(*Object)
 	if !ok {
 		return nil, fmt.Errorf("manifesto sem arquivos")
 	}
 	var preserved []Asset
 	for _, asset := range assets {
-		if asset.Component != "nquake" {
+		if asset.Component != "nquake" || !keep(asset.Subcomponent) {
 			preserved = append(preserved, asset)
 		}
 	}
 	for _, relative := range files.Keys() {
 		metadata, isObject := files.Value(relative).(*Object)
 		if _, ok := nquakeSnapshotParts(relative); !ok || !isObject {
+			continue
+		}
+		if owner, _ := metadata.Value("package").(string); !keep(owner) {
 			continue
 		}
 		path := joinPosix(root, relative)
@@ -355,20 +362,32 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool, selected []st
 			if err != nil {
 				return 0, err
 			}
-			pinned := pyjson.Repr(pyjson.Get(releases, "reference", "revision"))
-			changed, err := ReferenceContentChanged(assets, manifest, p.Path(DistDir))
+			changed, err := ReferenceChanges(assets, manifest, p.Path(DistDir))
 			if err != nil {
 				return 0, err
 			}
-			referenceNote = object("pinned", pinned, "upstream", head, "consumed_content_changed", changed)
-			if head != pinned && !changed {
-				if assets, err = PreserveCurrentReferenceAssets(assets, manifest, p.Path(DistDir)); err != nil {
-					return 0, err
-				}
-				for index := range results {
-					if IsReferenceStrategy(results[index].Strategy) && results[index].Error == "" {
-						results[index].Status, results[index].LatestSource = "current", results[index].Installed
-					}
+			pinned := pyjson.NewObject()
+			revisions := ReferenceRevisions(releases)
+			for _, owner := range sortedKeys(revisions) {
+				pinned.Set(owner, revisions[owner])
+			}
+			changedList := []any{}
+			for _, owner := range sortedKeys(changed) {
+				changedList = append(changedList, owner)
+			}
+			referenceNote = object("pinned", pinned, "upstream", head, "changed_components", changedList)
+			moving := func(owner string) bool { return changed[owner] && inScope(owner) }
+			if assets, err = PreserveCurrentReferenceAssets(assets, manifest, p.Path(DistDir), func(owner string) bool { return !moving(owner) }); err != nil {
+				return 0, err
+			}
+			for index := range results {
+				item := &results[index]
+				switch {
+				case item.Error != "" || !nquakeOwners[item.Component]:
+				case changed[item.Component] && (IsReferenceStrategy(item.Strategy) || item.Status == "current"):
+					item.Status, item.LatestSource = "update-available", "nQuake "+head[:12]
+				case !changed[item.Component] && IsReferenceStrategy(item.Strategy):
+					item.Status, item.LatestSource = "current", item.Installed
 				}
 			}
 		}
@@ -428,23 +447,8 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool, selected []st
 			"review_required", reviewList, "unavailable_sources", sources), false)
 		fmt.Fprintln(out, string(payload))
 	} else {
-		var referenceUpdates []UpdateResult
-		for _, item := range outdated {
-			if IsReferenceStrategy(item.Strategy) {
-				referenceUpdates = append(referenceUpdates, item)
-			}
-		}
-		isReferenceUpdate := func(item UpdateResult) bool {
-			for _, other := range referenceUpdates {
-				if other == item {
-					return true
-				}
-			}
-			return false
-		}
 		for _, item := range shown {
 			switch {
-			case isReferenceUpdate(item):
 			case item.Error != "":
 				fmt.Fprintf(out, "[INDISPONIVEL] %s: %s\n", item.Component, item.Error)
 			case item.Status == "current":
@@ -456,13 +460,9 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool, selected []st
 		if ezquakeDown {
 			fmt.Fprintf(out, "[INDISPONIVEL] ezquake: %s\n", unavailable["ezquake"])
 		}
-		if len(referenceUpdates) > 0 {
-			first := referenceUpdates[0]
-			fmt.Fprintf(out, "[ATUALIZAR] referencia nQuake: %s -> %s (%d componentes)\n",
-				prefix(first.Installed, 12), prefix(first.LatestSource, 12), len(referenceUpdates))
-		} else if referenceNote != nil && referenceNote.Value("upstream") != referenceNote.Value("pinned") {
-			fmt.Fprintf(out, "[OK] referencia nQuake: upstream %s alterou apenas arquivos fora do x86QW; preservado %s\n",
-				prefix(pyjson.Repr(referenceNote.Value("upstream")), 12), prefix(pyjson.Repr(referenceNote.Value("pinned")), 12))
+		if referenceNote != nil && len(referenceNote.Value("changed_components").([]any)) == 0 {
+			head := pyjson.Repr(referenceNote.Value("upstream"))
+			fmt.Fprintf(out, "[OK] nQuake %s nao alterou nenhum arquivo consumido; cada componente mantem sua revisao.\n", head[:12])
 		}
 		for _, summary := range SummarizeDelta(delta) {
 			fmt.Fprintf(out, "[ATUALIZAR] %s\n", summary)

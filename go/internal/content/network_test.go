@@ -74,7 +74,7 @@ func currentUpstreams(t *testing.T, root string, extraNightly string) *fakeWeb {
 	if err != nil {
 		t.Fatal(err)
 	}
-	revision := pyjson.Repr(pyjson.Get(releases, "reference", "revision"))
+	revision := ReferenceRevisionOf(releases, "nquake-maps")
 	const tree = "1111111111111111111111111111111111111111"
 	var entries []any
 	sizes := map[string]int64{}
@@ -237,7 +237,7 @@ func TestCheckAndUpdateAgainstFakeUpstreams(t *testing.T) {
 	}
 	expected := "[OK] O dist e os inventarios ja representam os upstreams atuais."
 	if len(unmirrored) > 0 {
-		expected = fmt.Sprintf("[INFO] %d alteracao(oes) de arquivo; nQuake", len(unmirrored))
+		expected = fmt.Sprintf("[INFO] %d alteracao(oes) de arquivo.", len(unmirrored))
 	}
 	if !strings.Contains(out.String(), expected) {
 		t.Fatalf("update --dry-run inesperado:\n%s", out.String())
@@ -583,8 +583,10 @@ func TestEachComponentIsCheckedOnItsOwn(t *testing.T) {
 	}
 }
 
-// movedReference serves a new nQuake revision in which one consumed file
-// changed.
+// movedReference serves a new nQuake revision in which only changedFile, a
+// file of x86qw-client-bootstrap, changed.
+const changedFile = "non-gpl/qw/nquake_default.cfg"
+
 func movedReference(web *fakeWeb) *fakeWeb {
 	const revision, tree = "2222222222222222222222222222222222222222", "3333333333333333333333333333333333333333"
 	upstream := web.handler
@@ -601,8 +603,11 @@ func movedReference(web *fakeWeb) *fakeWeb {
 			recorded := httptest.NewRecorder()
 			upstream(recorded, original)
 			listing, _ := pyjson.Decode(recorded.Body.Bytes(), pyjson.RejectDuplicates)
-			entries := objects(pyjson.Get(listing, "tree"))
-			entries[0].Set("sha", "4444444444444444444444444444444444444444")
+			for _, entry := range objects(pyjson.Get(listing, "tree")) {
+				if entry.Value("path") == changedFile {
+					entry.Set("sha", "4444444444444444444444444444444444444444")
+				}
+			}
 			listing.(*Object).Set("sha", tree)
 			writeJSONResponse(w, listing)
 		default:
@@ -612,34 +617,69 @@ func movedReference(web *fakeWeb) *fakeWeb {
 	return web
 }
 
-func TestTheSharedNQuakeReferenceMovesTogether(t *testing.T) {
+func TestEachComponentKeepsItsOwnNQuakeRevision(t *testing.T) {
 	root := repoRoot(t)
 	requireHydrated(t, root)
-	var out bytes.Buffer
+	var out, info bytes.Buffer
 
-	// Components outside the reference update without it.
-	update := NewProject(root)
-	update.HTTP = movedReference(currentUpstreams(t, root, "")).client()
-	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true, Components: []string{"mvdsv", "qwfwd", "qtv", "total-destruction-2", "ezquake"}}); err != nil {
-		t.Fatalf("update fora da referencia nao deveria depender do nQuake: %v\n%s", err, out.String())
+	// Only the component whose consumed file changed is reported.
+	project := NewProject(root)
+	project.HTTP = movedReference(currentUpstreams(t, root, "")).client()
+	code, err := project.Check(&out, &info, false, true, nil)
+	if err != nil || code != 2 {
+		t.Fatalf("check com nQuake movido: %d %v\n%s", code, err, out.String())
 	}
-	// Only the selected components' own pending files may show up.
-	for _, line := range strings.Split(out.String(), "\n") {
-		if strings.HasPrefix(line, "  - ") && !strings.HasPrefix(line, "  - servers/mvdsv/") && !strings.HasPrefix(line, "  - services/") {
-			t.Fatalf("update fora da referencia tocou outro componente: %s\n%s", line, out.String())
+	report, err := pyjson.Decode(out.Bytes(), pyjson.RejectDuplicates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed, _ := pyjson.StrList(pyjson.Get(report, "reference", "changed_components"))
+	if len(changed) != 1 || changed[0] != "x86qw-client-bootstrap" {
+		t.Fatalf("componentes alterados pelo nQuake: %v", changed)
+	}
+	statuses := map[string]string{}
+	for _, item := range objects(pyjson.Get(report, "components")) {
+		statuses[pyjson.Repr(item.Value("component"))] = pyjson.Repr(item.Value("status"))
+	}
+	if statuses["x86qw-client-bootstrap"] != "update-available" || statuses["nquake-maps"] != "current" || statuses["team-fortress"] != "current" {
+		t.Fatalf("status por componente: %v", statuses)
+	}
+	for _, item := range objects(pyjson.Get(report, "distribution")) {
+		path := pyjson.Repr(item.Value("path"))
+		if parts, ok := nquakeSnapshotParts(path); ok && parts[2] == "2222222222222222222222222222222222222222" {
+			continue
+		}
+		if parts, ok := nquakeSnapshotParts(path); ok {
+			manifest, _ := LoadManifest(project.Path(ManifestPath))
+			if pyjson.Get(manifest, "files", path, "package") != "x86qw-client-bootstrap" {
+				t.Fatalf("arquivo nQuake de outro componente mudou: %s (%v)", path, parts)
+			}
 		}
 	}
-	if strings.Contains(out.String(), "[ATUALIZAR]") || !strings.Contains(out.String(), "nQuake e4cb23d40aa2 -> e4cb23d40aa2") && !strings.Contains(out.String(), "[OK] O dist") {
-		t.Fatalf("update fora da referencia moveu a referencia:\n%s", out.String())
-	}
 
-	// Part of the reference cannot move alone.
+	// update never promotes it: the component is skipped, the others and
+	// their files stay as they are.
+	update := NewProject(root)
+	update.HTTP = movedReference(currentUpstreams(t, root, "")).client()
+	out.Reset()
+	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true}); err != nil {
+		t.Fatalf("update geral com nQuake movido: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "[PULADO] x86qw-client-bootstrap: nQuake 222222222222 alterou") || strings.Contains(out.String(), "distributions/nquake") {
+		t.Fatalf("update geral deveria pular so o bootstrap:\n%s", out.String())
+	}
 	update = NewProject(root)
 	update.HTTP = movedReference(currentUpstreams(t, root, "")).client()
 	out.Reset()
-	err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true, Components: []string{"nquake-maps"}})
-	if err == nil || !strings.Contains(err.Error(), "e compartilhada; inclua tambem: ") {
-		t.Fatalf("update parcial da referencia deveria ser recusado: %v\n%s", err, out.String())
+	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true, Components: []string{"nquake-maps", "ktx"}}); err != nil {
+		t.Fatalf("componentes sem mudanca no nQuake deveriam atualizar sozinhos: %v\n%s", err, out.String())
+	}
+	update = NewProject(root)
+	update.HTTP = movedReference(currentUpstreams(t, root, "")).client()
+	out.Reset()
+	err = update.Update(&out, UpdateOptions{Workers: 4, DryRun: true, Components: []string{"x86qw-client-bootstrap"}})
+	if err == nil || !strings.Contains(err.Error(), "incorpore com 'add'") {
+		t.Fatalf("update do bootstrap deveria exigir add: %v\n%s", err, out.String())
 	}
 }
 

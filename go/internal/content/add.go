@@ -203,45 +203,64 @@ func validateDefinitionFile(raw any, base string) (*filePlan, error) {
 	return plan, nil
 }
 
-// applyReferenceTransition mirrors manage.apply_reference_transition.
-func applyReferenceTransition(releases *Object, proposed any) ([2]string, bool, error) {
+// referenceTransition moves some components to another nQuake revision;
+// previous maps each of them to the revision it leaves.
+type referenceTransition struct {
+	revision string
+	previous map[string]string
+}
+
+// applyReferenceTransition moves exactly the components the definition
+// names to its nQuake revision; every other component keeps its own.
+func applyReferenceTransition(releases *Object, proposed any) (referenceTransition, bool, error) {
 	if proposed == nil {
-		return [2]string{}, false, nil
+		return referenceTransition{}, false, nil
 	}
 	transition, ok := proposed.(*Object)
-	if !ok || !sameKeys(transition.Keys(), "repository", "previous_revision", "revision") {
-		return [2]string{}, false, managerError("reference precisa declarar somente repository, previous_revision e revision")
+	if !ok || !sameKeys(transition.Keys(), "repository", "revision", "components") {
+		return referenceTransition{}, false, managerError("reference precisa declarar somente repository, revision e components")
 	}
 	current, ok := releases.Value("reference").(*Object)
 	if !ok {
-		return [2]string{}, false, managerError("inventario de releases nao possui referencia nQuake")
+		return referenceTransition{}, false, managerError("inventario de releases nao possui referencia nQuake")
 	}
 	repository, repositoryOK := transition.Value("repository").(string)
-	previous, previousOK := transition.Value("previous_revision").(string)
 	revision, revisionOK := transition.Value("revision").(string)
-	if !repositoryOK || !previousOK || !hex40Strict.MatchString(previous) || !revisionOK || !hex40Strict.MatchString(revision) {
-		return [2]string{}, false, managerError("transicao da referencia nQuake possui campos invalidos")
+	moving, movingOK := transition.Value("components").(*Object)
+	if !repositoryOK || !revisionOK || !hex40Strict.MatchString(revision) || !movingOK || len(moving.Keys()) == 0 {
+		return referenceTransition{}, false, managerError("transicao da referencia nQuake possui campos invalidos")
 	}
 	parsed, err := validateHTTPSURL(repository, "repository da referencia nQuake")
 	if err != nil {
-		return [2]string{}, false, managerError("repository da referencia nQuake invalido")
+		return referenceTransition{}, false, managerError("repository da referencia nQuake invalido")
 	}
 	if parsed.Query != "" {
-		return [2]string{}, false, managerError("repository da referencia nQuake nao pode conter query")
+		return referenceTransition{}, false, managerError("repository da referencia nQuake nao pode conter query")
 	}
 	if !pyjson.Eq(repository, current.Value("repository")) {
-		return [2]string{}, false, managerError("transicao da referencia nQuake nao pode trocar o repository")
+		return referenceTransition{}, false, managerError("transicao da referencia nQuake nao pode trocar o repository")
 	}
-	if !pyjson.Eq(previous, current.Value("revision")) {
-		return [2]string{}, false, managerError("previous_revision da referencia nQuake diverge do inventario atual")
+	result := referenceTransition{revision, map[string]string{}}
+	for _, identifier := range moving.Keys() {
+		previous, ok := moving.Value(identifier).(string)
+		if !ok || !hex40Strict.MatchString(previous) {
+			return referenceTransition{}, false, managerError("revisao anterior invalida para %s", identifier)
+		}
+		pinned := ReferenceRevisionOf(releases, identifier)
+		if pinned == "" {
+			return referenceTransition{}, false, managerError("%s nao consome a referencia nQuake", identifier)
+		}
+		if previous != pinned {
+			return referenceTransition{}, false, managerError("revisao anterior de %s diverge do inventario atual (%s)", identifier, pinned[:12])
+		}
+		if revision == previous {
+			return referenceTransition{}, false, managerError("transicao da referencia nQuake precisa alterar a revisao de %s", identifier)
+		}
+		MoveReferenceRelease(pyjson.Get(releases, "components", identifier).(*Object), revision)
+		result.previous[identifier] = previous
 	}
-	if revision == previous {
-		return [2]string{}, false, managerError("transicao da referencia nQuake precisa alterar a revisao")
-	}
-	if _, err := UpdateReferenceReleases(releases, revision); err != nil {
-		return [2]string{}, false, err
-	}
-	return [2]string{previous, revision}, true, nil
+	releases.Set("checked_at", utcNow())
+	return result, true, nil
 }
 
 // referenceAssetURL mirrors manage.reference_asset_url.
@@ -575,11 +594,14 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 				if !ok {
 					return nil, managerError("inventario de releases nao possui referencia nQuake")
 				}
-				revision, ok := reference.Value("revision").(string)
-				if !ok || !hex40Strict.MatchString(revision) || parts[2] != revision {
-					return nil, managerError("revisao do snapshot nQuake diverge da referencia fixada: %s", parts[2])
-				}
 				upstreamPath := strings.Join(parts[3:], "/")
+				if referencePackage, err = ComponentForSource(stagedComponents, upstreamPath, "reference"); err != nil {
+					return nil, err
+				}
+				revision := ReferenceRevisionOf(stagedReleases, referencePackage)
+				if revision == "" || parts[2] != revision {
+					return nil, managerError("revisao do snapshot nQuake diverge da referencia fixada de %s: %s", ownerRepr(referencePackage), parts[2])
+				}
 				repository, ok := reference.Value("repository").(string)
 				if !ok {
 					return nil, managerError("inventario de releases nao possui repository nQuake")
@@ -590,9 +612,6 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 				}
 				if !pyjson.Eq(entry.Value("url"), expected) {
 					return nil, managerError("URL do snapshot nQuake diverge da referencia fixada: %s", relative)
-				}
-				if referencePackage, err = ComponentForSource(stagedComponents, upstreamPath, "reference"); err != nil {
-					return nil, err
 				}
 			}
 		}
@@ -682,13 +701,15 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 		}
 	}
 	if hasTransition {
-		prefix := "dist/distributions/nquake/" + transition[1] + "/"
-		found := false
-		for _, plan := range plans {
-			found = found || strings.HasPrefix(plan.destination, prefix)
-		}
-		if !found {
-			return nil, managerError("transicao da referencia nQuake precisa incorporar o novo snapshot")
+		prefix := "dist/distributions/nquake/" + transition.revision + "/"
+		for _, identifier := range sortedKeys(transition.previous) {
+			found := false
+			for _, plan := range plans {
+				found = found || (strings.HasPrefix(plan.destination, prefix) && pyjson.Eq(plan.entry.Value("package"), identifier))
+			}
+			if !found {
+				return nil, managerError("transicao da referencia nQuake precisa incorporar os arquivos de %s em %s", identifier, transition.revision[:12])
+			}
 		}
 	}
 	if pkg != nil {
@@ -905,15 +926,27 @@ func (p *Project) Add(out io.Writer, definitionPath string, options AddOptions) 
 	}
 	manifestFiles := manifest.Value("files").(*Object)
 	if hasTransition {
-		previousSnapshot := filepath.Join(work, "dist", "distributions", "nquake", transition[0])
-		if !isDir(previousSnapshot) || isSymlink(previousSnapshot) {
-			return managerError("snapshot nQuake anterior ausente ou inseguro no workspace")
-		}
-		os.RemoveAll(previousSnapshot)
+		// Only the moving components leave their previous revision; a
+		// revision directory nobody pins any more disappears with them.
 		for _, relative := range manifestFiles.Keys() {
-			if strings.HasPrefix(relative, "distributions/nquake/"+transition[0]+"/") {
-				manifestFiles.Delete(relative)
+			parts, snapshot := nquakeSnapshotParts(relative)
+			owner, _ := pyjson.Get(manifestFiles, relative, "package").(string)
+			if !snapshot || transition.previous[owner] == "" || parts[2] != transition.previous[owner] {
+				continue
 			}
+			path := joinPosix(filepath.Join(work, "dist"), relative)
+			if isSymlink(path) {
+				return managerError("arquivo nQuake anterior inseguro no workspace: %s", relative)
+			}
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			manifestFiles.Delete(relative)
+		}
+		for _, previous := range transition.previous {
+			snapshot := filepath.Join(work, "dist", "distributions", "nquake", previous)
+			removeEmptyDirectories(snapshot)
+			os.Remove(snapshot) // only when empty
 		}
 	}
 	for index, raw := range files {

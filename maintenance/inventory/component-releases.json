@@ -3,12 +3,12 @@
   "project": "x86qw",
   "checked_at": "2026-07-29",
   "reference": {
-    "repository": "https://github.com/nQuake/distfiles",
-    "revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d"
+    "repository": "https://github.com/nQuake/distfiles"
   },
   "components": {
     "x86qw-client-bootstrap": {
       "version": "e4cb23d40aa2+x86qw.4",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
       "distribution_component": "x86qw",
@@ -36,11 +36,13 @@
     },
     "nquake-visual-core": {
       "version": "e4cb23d40aa2",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current"
     },
     "ktx": {
       "version": "1.47+x86qw.19",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "upstream-composed",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
@@ -117,57 +119,68 @@
     },
     "nquake-player-skins": {
       "version": "e4cb23d40aa2",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current"
     },
     "nquake-crosshairs": {
       "version": "e4cb23d40aa2",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current"
     },
     "nquake-skyboxes": {
       "version": "e4cb23d40aa2",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current"
     },
     "nquake-models": {
       "version": "e4cb23d40aa2",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current"
     },
     "nquake-scoreboard-flags": {
       "version": "e4cb23d40aa2",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current"
     },
     "nquake-external-textures": {
       "version": "e4cb23d40aa2",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current"
     },
     "nquake-base-textures": {
       "version": "e4cb23d40aa2",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current"
     },
     "nquake-maps": {
       "version": "e4cb23d40aa2",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current"
     },
     "nquake-matchinfo": {
       "version": "e4cb23d40aa2",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current"
     },
     "nquake-documentation": {
       "version": "e4cb23d40aa2+x86qw.1",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
       "notes": "Mantém as licenças upstream e instala documentação x86QW atual e multiplataforma no lugar dos readmes e atalhos históricos."
     },
     "qrp-hires": {
       "version": "e4cb23d40aa2+x86qw.1",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
       "embedded_version": "maps-1.00+items-0.73",
@@ -175,6 +188,7 @@
     },
     "final-arena": {
       "version": "1.20+nquake.e4cb23d40aa2+x86qw.4",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-overlay",
       "freshness": "upstream-current",
       "distribution_component": "final-arena",
@@ -221,6 +235,7 @@
     },
     "pro-x": {
       "version": "1.1+x86qw.5",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "pro-x",
@@ -259,6 +274,7 @@
     },
     "team-fortress": {
       "version": "2.9+nquake.e4cb23d40aa2+x86qw.6",
+      "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-overlay",
       "freshness": "upstream-current",
       "distribution_component": "team-fortress",

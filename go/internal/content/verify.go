@@ -48,7 +48,8 @@ func (p *Project) Verify(out io.Writer, options VerifyOptions) error {
 	if err := p.CheckProduct(); err != nil {
 		return err
 	}
-	if _, err := p.Releases(); err != nil {
+	releases, err := p.Releases()
+	if err != nil {
 		return err
 	}
 	registry, err := p.Upstreams()
@@ -69,16 +70,13 @@ func (p *Project) Verify(out io.Writer, options VerifyOptions) error {
 		}
 	}
 	distribution := p.Path(DistDir)
-	revision, snapshot, err := DiscoverSnapshot(distribution)
+	sources, err := LoadSourceContext(distribution, components, releases)
 	if err != nil {
 		return err
 	}
-	paths, err := rglobFiles(snapshot)
-	if err != nil {
-		return err
-	}
-	if _, err := ValidateTreePartition(components, paths, "reference"); err != nil {
-		return err
+	var revisions []string
+	for _, revision := range sources.Revisions() {
+		revisions = append(revisions, revision[:12])
 	}
 	manifest, err := LoadManifest(p.Path(ManifestPath))
 	if err != nil {
@@ -96,7 +94,7 @@ func (p *Project) Verify(out io.Writer, options VerifyOptions) error {
 		"arquivos upstream: %d; fontes: %d; nQuake: %s; TUF: %s.\n",
 		packageCount, len(objects(components.Value("components"))),
 		len(inventory.Runtimes.Value("runtimes").([]any)), len(inventory.Games.Value("games").([]any)),
-		len(recipes), upstreamCount, sourceCount, revision[:12], trustStatus)
+		len(recipes), upstreamCount, sourceCount, strings.Join(revisions, ", "), trustStatus)
 	var misplaced []string
 	for _, path := range misplacedRootPaths {
 		if exists(p.Path(path)) {

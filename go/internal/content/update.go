@@ -131,11 +131,11 @@ func (p *Project) UpdateInventoryLines(results []UpdateResult, assets []Asset, r
 			referenceResults = append(referenceResults, item)
 		}
 	}
-	reference, ok := releases.Value("reference").(*Object)
-	if !ok {
-		return nil, managerError("inventario sem referencia nQuake")
+	revisions := map[string]bool{}
+	for _, item := range referenceResults {
+		revisions[prefix(ReferenceRevisionOf(releases, item.Component), 12)] = true
 	}
-	lines = append(lines, fmt.Sprintf("[OK] Conteudo baseado no nQuake: %s (%d componentes)", prefix(pyjson.Repr(reference.Value("revision")), 12), len(referenceResults)))
+	lines = append(lines, fmt.Sprintf("[OK] Conteudo baseado no nQuake: %s (%d componentes)", strings.Join(sortedKeys(revisions), ", "), len(referenceResults)))
 	for _, item := range referenceResults {
 		release, ok := releaseComponents.Value(item.Component).(*Object)
 		if !ok {
@@ -181,41 +181,26 @@ func (p *Project) UpdateInventoryLines(results []UpdateResult, assets []Asset, r
 	return lines, nil
 }
 
-// UpdateReferenceReleases mirrors update_reference_releases.
-func UpdateReferenceReleases(releases *Object, revision string) (bool, error) {
-	reference, referenceOK := releases.Value("reference").(*Object)
-	components, componentsOK := releases.Value("components").(*Object)
-	if !referenceOK || !componentsOK {
-		return false, managerError("inventario de releases de componentes invalido")
-	}
-	old := pyjson.Repr(getOr(reference, "revision", ""))
-	if old == revision {
-		return false, nil
-	}
+// MoveReferenceRelease pins release to another nQuake revision and carries
+// the revision into its version and distribution tag.
+func MoveReferenceRelease(release *Object, revision string) {
+	old := pyjson.Repr(getOr(release, "reference_revision", ""))
 	short, oldShort := prefix(revision, 12), prefix(old, 12)
-	reference.Set("revision", revision)
-	for _, identifier := range components.Keys() {
-		release, ok := components.Value(identifier).(*Object)
-		if !ok {
-			continue
+	release.Set("reference_revision", revision)
+	version := pyjson.Repr(getOr(release, "version", ""))
+	switch release.Value("strategy") {
+	case "reference-snapshot":
+		suffix := ""
+		if strings.HasPrefix(version, oldShort) {
+			suffix = version[len(oldShort):]
 		}
-		version := pyjson.Repr(getOr(release, "version", ""))
-		switch release.Value("strategy") {
-		case "reference-snapshot":
-			suffix := ""
-			if strings.HasPrefix(version, oldShort) {
-				suffix = version[len(oldShort):]
-			}
-			release.Set("version", short+suffix)
-		case "upstream-overlay", "reference-overlay":
-			release.Set("version", strings.ReplaceAll(version, "nquake."+oldShort, "nquake."+short))
-			if tag, ok := release.Value("distribution_tag").(string); ok {
-				release.Set("distribution_tag", strings.ReplaceAll(tag, "nquake."+oldShort, "nquake."+short))
-			}
+		release.Set("version", short+suffix)
+	case "upstream-overlay", "reference-overlay":
+		release.Set("version", strings.ReplaceAll(version, "nquake."+oldShort, "nquake."+short))
+		if tag, ok := release.Value("distribution_tag").(string); ok {
+			release.Set("distribution_tag", strings.ReplaceAll(tag, "nquake."+oldShort, "nquake."+short))
 		}
 	}
-	releases.Set("checked_at", utcNow())
-	return true, nil
 }
 
 // copyTree mirrors manage.copy_tree: hard links when possible.
@@ -542,15 +527,7 @@ func (p *Project) validateStaged(work string) (*Project, error) {
 		}
 	}
 	candidate := filepath.Join(work, "dist")
-	_, snapshot, err := DiscoverSnapshot(candidate)
-	if err != nil {
-		return nil, err
-	}
-	paths, err := rglobFiles(snapshot)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := ValidateTreePartition(components, paths, "reference"); err != nil {
+	if _, err := LoadSourceContext(candidate, components, releases); err != nil {
 		return nil, err
 	}
 	for _, component := range objects(components.Value("components")) {
@@ -656,47 +633,40 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 			}
 		}
 	}
+	// A moved nQuake revision is never promoted here: a component whose
+	// consumed files changed needs a reviewed definition ('add'), and every
+	// component keeps the nQuake files it pins.
+	var notices []string
+	if unavailable["nquake"] == "" {
+		head, err := ReferenceRevision(assets)
+		if err != nil {
+			return err
+		}
+		changed, err := ReferenceChanges(assets, manifest, p.Path(DistDir))
+		if err != nil {
+			return err
+		}
+		strategies := map[string]string{}
+		for _, item := range results {
+			strategies[item.Component] = item.Strategy
+		}
+		for _, owner := range sortedKeys(changed) {
+			reason := fmt.Sprintf("nQuake %s alterou arquivos consumidos; incorpore com 'add' e uma definicao revisada", head[:12])
+			if !IsReferenceStrategy(strategies[owner]) {
+				notices = append(notices, fmt.Sprintf("[REVISAR] %s: %s", owner, reason))
+			} else if err := skip(owner, reason); err != nil {
+				return err
+			}
+		}
+		if assets, err = PreserveCurrentReferenceAssets(assets, manifest, p.Path(DistDir), func(string) bool { return true }); err != nil {
+			return err
+		}
+	}
 	inScope := func(id string) bool {
 		if _, out := skipped[id]; out {
 			return false
 		}
 		return len(explicit) == 0 || explicit[id]
-	}
-	oldReference := pyjson.Repr(pyjson.Get(releases, "reference", "revision"))
-	newReference := oldReference
-	if unavailable["nquake"] == "" {
-		discovered, err := ReferenceRevision(assets)
-		if err != nil {
-			return err
-		}
-		changed, err := ReferenceContentChanged(assets, manifest, p.Path(DistDir))
-		if err != nil {
-			return err
-		}
-		var selectedOwners, otherOwners []string
-		for owner := range nquakeOwners {
-			if inScope(owner) {
-				selectedOwners = append(selectedOwners, owner)
-			} else {
-				otherOwners = append(otherOwners, owner)
-			}
-		}
-		switch {
-		case discovered == oldReference:
-		case !changed:
-			fmt.Fprintf(out, "[INFO] nQuake %s nao alterou nenhum arquivo consumido; mantendo a referencia imutavel %s.\n", discovered[:12], prefix(oldReference, 12))
-		case len(selectedOwners) == 0:
-		case len(otherOwners) > 0:
-			sort.Strings(otherOwners)
-			return managerError("a referencia nQuake %s e compartilhada; inclua tambem: %s", discovered[:12], strings.Join(otherOwners, ", "))
-		default:
-			newReference = discovered
-		}
-	}
-	if newReference == oldReference && unavailable["nquake"] == "" {
-		if assets, err = PreserveCurrentReferenceAssets(assets, manifest, p.Path(DistDir)); err != nil {
-			return err
-		}
 	}
 	if assets, err = KeepCurrent(assets, manifest, ids, func(owner string) bool { return !inScope(owner) }); err != nil {
 		return err
@@ -719,6 +689,9 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 	for _, id := range sortedKeys(setOfKeys(Unavailable(skipped))) {
 		fmt.Fprintf(out, "[PULADO] %s: %s\n", id, skipped[id])
 	}
+	for _, notice := range notices {
+		fmt.Fprintln(out, notice)
+	}
 	if assets, err = PinAssetsFromManifest(assets, manifest); err != nil {
 		return err
 	}
@@ -727,11 +700,11 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 	if err != nil {
 		return err
 	}
-	if len(delta) == 0 && newReference == oldReference && len(review) == 0 {
+	if len(delta) == 0 && len(review) == 0 {
 		fmt.Fprintln(out, "[OK] O dist e os inventarios ja representam os upstreams atuais.")
 		return nil
 	}
-	fmt.Fprintf(out, "[INFO] %d alteracao(oes) de arquivo; nQuake %s -> %s.\n", len(delta), prefix(oldReference, 12), prefix(newReference, 12))
+	fmt.Fprintf(out, "[INFO] %d alteracao(oes) de arquivo.\n", len(delta))
 	if options.DryRun {
 		for _, summary := range SummarizeDelta(delta) {
 			fmt.Fprintf(out, "  - %s\n", summary)
@@ -766,9 +739,6 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 	if err != nil {
 		return err
 	}
-	if _, err := UpdateReferenceReleases(stagedReleases, newReference); err != nil {
-		return err
-	}
 	stagedCatalog, err := LoadJSONObject(filepath.Join(work, "catalog.json"))
 	if err != nil {
 		return err
@@ -794,7 +764,7 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 	if err := p.applyWorkspace(work, true); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "[OK] Working tree atualizado: ezQuake %s/%s, nQuake %s.\n", stable, nightly, prefix(newReference, 12))
+	fmt.Fprintf(out, "[OK] Working tree atualizado: ezQuake %s/%s.\n", stable, nightly)
 	switch {
 	case options.Commit:
 		return p.Commit(out, options.Message, options.Push)
