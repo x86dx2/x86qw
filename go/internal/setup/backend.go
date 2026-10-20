@@ -124,6 +124,8 @@ type Backend interface {
 	Stack(ctx context.Context, target string) (*Stack, error)
 	// StartServer records the server choices and starts every instance.
 	StartServer(ctx context.Context, target string, options Options) error
+	// StartService starts QTV ("qtv") or QWFWD ("proxy") on its own.
+	StartService(ctx context.Context, target, kind string, options Options) error
 	// StopServer stops the running session.
 	StopServer(ctx context.Context, target string) error
 }

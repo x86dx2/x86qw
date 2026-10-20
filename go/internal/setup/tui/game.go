@@ -808,6 +808,7 @@ func (m *Model) hostRows() []reviewRow {
 			out = append(out, row)
 		}
 	}
+	out = append(out, reviewRow{"h.solo", m.t("host.solo"), m.t("host.solo.d")})
 	return append(out, reviewRow{"h.start", label, fmt.Sprintf("%d %s", len(m.opts.Server.Instances), m.t("d.instancesN"))})
 }
 
@@ -849,6 +850,8 @@ func (m *Model) activateHost(id string) tea.Cmd {
 	switch id {
 	case "server":
 		m.openModal("server")
+	case "h.solo":
+		m.openModal("solo")
 	case "h.add":
 		// The server programs come with the components of a host.
 		m.opts.Intent = setup.Both
@@ -868,6 +871,23 @@ func (m *Model) activateHost(id string) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// soloRows start QTV or QWFWD without a game server.
+func (m *Model) soloRows() []formRow {
+	backend, target, options := m.cfg.Backend, m.target(), m.opts
+	start := func(kind string) func() {
+		return func() {
+			m.pending = tea.Batch(m.closeModal(true), m.act("start", func(ctx context.Context) error {
+				return backend.StartService(ctx, target, kind, options)
+			}))
+		}
+	}
+	return []formRow{
+		{kind: rowInfo, label: "", value: m.t("host.solo.lead"), tone: "dim"},
+		{id: "solo.qtv", kind: rowAction, label: m.t("host.solo.qtv"), desc: m.t("qtv.d"), activate: start("qtv")},
+		{id: "solo.proxy", kind: rowAction, label: m.t("host.solo.proxy"), desc: m.t("qwfwd.d"), activate: start("proxy")},
+	}
 }
 
 // tools are the commands that print a report: the app leaves the

@@ -24,6 +24,8 @@ func (m *Model) openModal(kind string) {
 	add("srv.name", m.opts.Server.Name, 40)
 	add("hostname", m.opts.Server.Hostname, 253)
 	add("rcon", m.opts.Server.Rcon, 32)
+	add("password", m.opts.Server.Password, 32)
+	add("spectator", m.opts.Server.Spectators, 32)
 	add("folder", m.opts.Target, 400)
 	m.modal.field["hostname"].Accept = func(r rune) bool {
 		return r == '.' || r == '-' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
@@ -92,6 +94,7 @@ func (m *Model) fieldChanged() tea.Cmd {
 	f := m.modal.field
 	m.opts.Server.Name = f["srv.name"].String()
 	m.opts.Server.Rcon = f["rcon"].String()
+	m.opts.Server.Password, m.opts.Server.Spectators = f["password"].String(), f["spectator"].String()
 	m.opts.Target = f["folder"].String()
 	host := strings.ToLower(f["hostname"].String())
 	if host != m.opts.Server.Hostname {
@@ -108,7 +111,7 @@ func (m *Model) modalTabs() []string {
 	case "config":
 		return []string{m.t("tab.keys"), m.t("tab.mouse"), m.t("tab.exp"), m.t("tab.video")}
 	case "server":
-		return []string{m.t("tab.general"), m.t("tab.network"), m.t("tab.services")}
+		return []string{m.t("tab.general"), m.t("tab.access"), m.t("tab.network"), m.t("tab.services")}
 	}
 	return nil
 }
@@ -131,6 +134,8 @@ func (m *Model) modalTitle() string {
 		return m.t("servers")
 	case "tools":
 		return m.t("h.tools")
+	case "solo":
+		return m.t("host.solo")
 	case "m.game", "m.mode", "m.opts", "m.map", "m.rules":
 		return m.t(m.modal.kind)
 	}
@@ -343,6 +348,8 @@ func (m *Model) modalRows() []formRow {
 	switch m.modal.kind {
 	case "tools":
 		return m.toolRows()
+	case "solo":
+		return m.soloRows()
 	case "comps":
 		return m.compRows()
 	case "config":
@@ -398,6 +405,8 @@ func (m *Model) modalRows() []formRow {
 		case 0:
 			return m.serverGeneralRows()
 		case 1:
+			return m.accessRows()
+		case 2:
 			return m.networkRows()
 		default:
 			s := &o.Server
@@ -950,4 +959,24 @@ func remove(list []string, s string) []string {
 func homeDir() string {
 	home, _ := os.UserHomeDir()
 	return home
+}
+
+// accessRows decide who reaches the server and how many play.
+func (m *Model) accessRows() []formRow {
+	s := &m.opts.Server
+	slots := s.Slots
+	if slots == 0 {
+		slots = 16
+	}
+	return []formRow{
+		{kind: rowHeading, label: m.t("access.who")},
+		{id: "public", kind: rowRadio, label: m.t("access.public"), desc: m.t("access.public.d"), on: !s.Local, activate: func() { s.Local = false }},
+		{id: "local", kind: rowRadio, label: m.t("access.local"), desc: m.t("access.local.d"), on: s.Local, activate: func() { s.Local = true }},
+		{kind: rowHeading, label: m.t("access.match")},
+		{id: "slots", kind: rowStepper, label: m.t("access.slots"), value: fmt.Sprint(slots), step: func(d int) { s.Slots = cycleInt(setup.SlotChoices, slots, d) }},
+		{id: "record", kind: rowToggle, label: m.t("access.record"), desc: m.t("access.record.d"), on: !s.NoRecord, activate: func() { s.NoRecord = !s.NoRecord }},
+		{kind: rowHeading, label: m.t("access.passwords")},
+		{id: "password", kind: rowText, label: m.t("access.password"), field: m.modal.field["password"], desc: m.t("access.open")},
+		{id: "spectator", kind: rowText, label: m.t("access.spectator"), field: m.modal.field["spectator"], desc: m.t("access.open")},
+	}
 }

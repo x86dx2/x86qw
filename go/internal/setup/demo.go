@@ -20,7 +20,8 @@ type Demo struct {
 	Speed float64
 
 	mu      sync.Mutex
-	running bool // the demo server
+	running bool   // the demo server
+	solo    string // a service the demo runs alone
 }
 
 var demoComponents = []Component{
@@ -372,6 +373,12 @@ func (d *Demo) Servers(ctx context.Context, _ string) ([]PublicServer, error) {
 func (d *Demo) Stack(context.Context, string) (*Stack, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	switch d.solo {
+	case "qtv":
+		return &Stack{Status: "running", Processes: []StackProcess{{Label: "QTV", Address: "0.0.0.0", Port: 28000, PID: 4250, Alive: true}}}, nil
+	case "proxy":
+		return &Stack{Status: "running", Processes: []StackProcess{{Label: "QWFWD", Address: "0.0.0.0", Port: 30000, PID: 4251, Alive: true}}}, nil
+	}
 	if !d.running {
 		return nil, nil
 	}
@@ -400,7 +407,18 @@ func (d *Demo) StopServer(ctx context.Context, _ string) error {
 		return err
 	}
 	d.mu.Lock()
-	d.running = false
+	d.running, d.solo = false, ""
+	d.mu.Unlock()
+	return nil
+}
+
+// StartService pretends to start QTV or QWFWD alone.
+func (d *Demo) StartService(ctx context.Context, _, kind string, _ Options) error {
+	if err := d.wait(ctx, 600); err != nil {
+		return err
+	}
+	d.mu.Lock()
+	d.solo = kind
 	d.mu.Unlock()
 	return nil
 }

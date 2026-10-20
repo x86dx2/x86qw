@@ -279,6 +279,16 @@ func (m *Model) details(id string) [][2]string {
 	if strings.HasPrefix(id, "m.") {
 		return m.matchDetails(id)
 	}
+	if id == "h.solo" {
+		qtv, qwfwd := m.opts.Server.QTVPort, m.opts.Server.QWFWDPort
+		if qtv == 0 {
+			qtv = 28000
+		}
+		if qwfwd == 0 {
+			qwfwd = 30000
+		}
+		return [][2]string{{"QTV", fmt.Sprintf("TCP %d · %s", qtv, m.t("qtv.d"))}, {"QWFWD", fmt.Sprintf("UDP %d · %s", qwfwd, m.t("qwfwd.d"))}}
+	}
 	o := m.opts
 	switch id {
 	case "comps":
@@ -350,7 +360,31 @@ func (m *Model) details(id string) [][2]string {
 		if len(services) == 0 {
 			services = []string{m.t("off")}
 		}
-		return append(rows, [2]string{m.t("tab.services"), strings.Join(services, " · ")}, [2]string{"rcon", sv.Rcon})
+		access := m.t("access.public")
+		if sv.Local {
+			access = m.t("access.local")
+		}
+		slots := sv.Slots
+		if slots == 0 {
+			slots = 16
+		}
+		access += fmt.Sprintf(" · %d %s", slots, m.t("access.slots.n"))
+		if !sv.NoRecord {
+			access += " · " + m.t("access.recording")
+		}
+		var locked []string
+		if sv.Password != "" {
+			locked = append(locked, m.t("access.password"))
+		}
+		if sv.Spectators != "" {
+			locked = append(locked, m.t("access.spectator"))
+		}
+		passwords := m.t("access.none")
+		if len(locked) > 0 {
+			passwords = strings.Join(locked, " · ")
+		}
+		return append(rows, [2]string{m.t("tab.access"), access}, [2]string{m.t("access.passwords"), passwords},
+			[2]string{m.t("tab.services"), strings.Join(services, " · ")}, [2]string{"rcon", sv.Rcon})
 	case "integ":
 		in := o.Integration
 		mark := func(on bool, key string) string {

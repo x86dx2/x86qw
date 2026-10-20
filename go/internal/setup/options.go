@@ -80,7 +80,18 @@ type Server struct {
 	Rcon      string
 	QTVPort   int // 0 disables QTV
 	QWFWDPort int // 0 disables QWFWD
+	// Local keeps the server on this machine; otherwise it listens on
+	// every interface, for players on the network and the internet.
+	Local bool
+	Slots int // players per instance
+	// NoRecord turns off the automatic MVD demos.
+	NoRecord bool
+	// Password lets players in, Spectators lets spectators in; empty is open.
+	Password, Spectators string
 }
+
+// SlotChoices are the player limits offered.
+var SlotChoices = []int{8, 12, 16, 20, 24, 32}
 
 // Ports lists the UDP game ports, one per instance.
 func (s Server) Ports() []int {
@@ -121,7 +132,7 @@ func Defaults(intent Intent, target string) Options {
 		Server: Server{
 			Name: "x86QW KTX", BasePort: 27500, Rcon: Password(14),
 			Instances: []Instance{{Mode: "duel", Map: "dm6"}, {Mode: "4on4", Map: "dm3", Bots: true}},
-			QTVPort:   28000, QWFWDPort: 30000,
+			QTVPort:   28000, QWFWDPort: 30000, Slots: 16,
 		},
 		Integration: SupportedIntegration(),
 		Target:      target,
@@ -175,6 +186,14 @@ func (o Options) Validate() error {
 		}
 		if len(s.Instances) == 0 || len(s.Instances) > 8 {
 			return fmt.Errorf("o servidor precisa de 1 a 8 instâncias")
+		}
+		if s.Slots != 0 && (s.Slots < 2 || s.Slots > 32) {
+			return fmt.Errorf("vagas: de 2 a 32, não %d", s.Slots)
+		}
+		for _, secret := range []string{s.Password, s.Spectators, s.Rcon} {
+			if strings.ContainsAny(secret, "\"\\\n\r;") {
+				return fmt.Errorf("senhas não aceitam aspas, barras invertidas, ponto e vírgula nem quebras de linha")
+			}
 		}
 		used := map[string]string{}
 		claim := func(proto string, port int, what string) error {
@@ -248,6 +267,15 @@ func (o Options) Recipe() []string {
 		}
 		args = append(args, "--servers", strings.Join(instances, ","), "--base-port", strconv.Itoa(o.Server.BasePort),
 			"--qtv", portFlag(o.Server.QTVPort), "--qwfwd", portFlag(o.Server.QWFWDPort))
+		if o.Server.Local {
+			args = append(args, "--local")
+		}
+		if o.Server.Slots != 0 && o.Server.Slots != 16 {
+			args = append(args, "--slots", strconv.Itoa(o.Server.Slots))
+		}
+		if o.Server.NoRecord {
+			args = append(args, "--no-record")
+		}
 	}
 	var integrate []string
 	for _, item := range []struct {

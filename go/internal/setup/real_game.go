@@ -238,3 +238,11 @@ func (r *Real) StartServer(ctx context.Context, target string, options Options) 
 func (r *Real) StopServer(ctx context.Context, target string) error {
 	return services.RequestStop(target, 20*time.Second)
 }
+
+// StartService records the choices and starts QTV or QWFWD alone.
+func (r *Real) StartService(ctx context.Context, target, kind string, options Options) error {
+	if err := SaveChoices(target, options); err != nil {
+		return err
+	}
+	return r.run(ServiceCommand(target, options, kind))
+}

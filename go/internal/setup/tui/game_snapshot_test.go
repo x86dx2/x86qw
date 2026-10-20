@@ -52,6 +52,11 @@ func TestGameSnapshots(t *testing.T) {
 	m.focus = homeRow(m, "host")
 	drive(m, key("enter"))
 	save(m, "g-09-host")
+	drive(m, key("enter"), key("tab"))
+	save(m, "g-09b-host-access")
+	drive(m, key("esc"))
+	m.focus = 1
+	save(m, "g-09c-host-solo")
 	m.focus = len(m.hostRows()) - 1
 	drive(m, key("enter"))
 	drive(m, run(m.loadStack())...)
