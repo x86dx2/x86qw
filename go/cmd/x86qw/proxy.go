@@ -5,8 +5,7 @@ import (
 )
 
 func runProxy(args []string, stdout, stderr io.Writer) int {
-	code, _ := serviceMain("proxy", args, stdout, stderr, false)
-	return code
+	return serviceMain("proxy", args, stdout, stderr)
 }
 
 func init() {

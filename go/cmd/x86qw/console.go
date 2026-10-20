@@ -6,8 +6,6 @@ import (
 	"os"
 
 	"golang.org/x/term"
-
-	"github.com/x86dx2/x86qw/go/internal/menu"
 )
 
 // console mirrors the Console reporter of x86qw_runtime/ui/console.py for
@@ -77,14 +75,3 @@ func (c console) failed(err error) int {
 }
 
 func isTerminalFile(file *os.File) bool { return term.IsTerminal(int(file.Fd())) }
-
-// sessionUI is the one menu.UI of this process: every picker, including the
-// ones reached from the main menu, must share its buffered stdin.
-var sessionUI *menu.UI
-
-func interactiveUI(noColor bool) *menu.UI {
-	if sessionUI == nil {
-		sessionUI = menu.Stdio(noColor)
-	}
-	return sessionUI
-}
