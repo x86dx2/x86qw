@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/privfs"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 )
 
@@ -26,7 +27,7 @@ type Transaction struct {
 // NewTransaction creates a private staging directory under .x86qw/staging.
 func NewTransaction(root, prefix string) (*Transaction, error) {
 	staging := filepath.Join(root, ".x86qw", "staging")
-	if err := os.MkdirAll(staging, 0o700); err != nil {
+	if err := privfs.MkdirAll(staging); err != nil {
 		return nil, err
 	}
 	stage, err := os.MkdirTemp(staging, prefix)
@@ -246,7 +247,7 @@ func (t *Transaction) replaceFiles(dir string, files map[string][]byte) (func() 
 	previous := map[string][]byte{}
 	createdDir := false
 	if _, err := os.Lstat(dir); errors.Is(err, os.ErrNotExist) {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
+		if err := privfs.MkdirAll(dir); err != nil {
 			return nil, err
 		}
 		createdDir = true

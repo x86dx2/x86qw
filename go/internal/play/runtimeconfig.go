@@ -12,6 +12,7 @@ import (
 	"regexp"
 
 	"github.com/x86dx2/x86qw/go/internal/lock"
+	"github.com/x86dx2/x86qw/go/internal/privfs"
 )
 
 // Ephemeral KTX launch configuration, journaled like
@@ -146,7 +147,7 @@ func Create(target string, payload []byte) (*RuntimeConfig, error) {
 	}
 	dir := filepath.Join(target, filepath.FromSlash(journalDir))
 	for _, path := range []string{filepath.Join(target, ".x86qw", "gameplay"), dir} {
-		if err := os.Mkdir(path, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+		if err := privfs.Mkdir(path); err != nil && !errors.Is(err, os.ErrExist) {
 			return nil, errors.New("Não foi possível criar o journal privado do gameplay.")
 		}
 	}

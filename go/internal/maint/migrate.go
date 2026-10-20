@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/x86dx2/x86qw/go/internal/lock"
+	"github.com/x86dx2/x86qw/go/internal/privfs"
 	"github.com/x86dx2/x86qw/go/internal/state"
 )
 
@@ -62,7 +63,7 @@ func Migrate(target string) ([]MigrationOp, error) {
 	}
 	journal := filepath.Join(target, metadataDirectory, "migrations", "1.0")
 	for _, dir := range []string{filepath.Dir(journal), journal} {
-		if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+		if err := privfs.Mkdir(dir); err != nil && !errors.Is(err, os.ErrExist) {
 			return nil, err
 		}
 	}

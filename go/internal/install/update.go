@@ -15,6 +15,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/download"
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/plan"
+	"github.com/x86dx2/x86qw/go/internal/privfs"
 	"github.com/x86dx2/x86qw/go/internal/state"
 )
 
@@ -278,7 +279,7 @@ func prepareCache(root string) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if err := os.MkdirAll(root, 0o700); err != nil {
+	if err := privfs.MkdirAll(root); err != nil {
 		return err
 	}
 	return atomicWrite(filepath.Join(root, cacheMarker), []byte("x86qw-cache-v1\n"), 0o600)

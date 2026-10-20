@@ -17,6 +17,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/x86dx2/x86qw/go/internal/privfs"
 )
 
 // Owner is the lock document; fields are declared in sorted key order.
@@ -50,19 +52,21 @@ func Acquire(target, command string) (*Lock, error) {
 	target = Resolve(target)
 	// Like InstallationLock.acquire: a missing installation is created 0700.
 	if _, err := os.Lstat(target); errors.Is(err, os.ErrNotExist) {
-		if err := os.MkdirAll(target, 0o700); err != nil {
+		if err := privfs.MkdirAll(target); err != nil {
 			return nil, err
 		}
-		os.Chmod(target, 0o700)
 	}
 	sessions := filepath.Join(target, ".x86qw", "sessions")
 	for _, dir := range []string{filepath.Join(target, ".x86qw"), sessions} {
-		if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+		if err := privfs.Mkdir(dir); err != nil && !errors.Is(err, os.ErrExist) {
 			return nil, err
 		}
 		info, err := os.Lstat(dir)
 		if err != nil || !info.IsDir() {
 			return nil, fmt.Errorf("diretório de controle inseguro: %s", dir)
+		}
+		if err := privfs.Ensure(dir, info); err != nil {
+			return nil, fmt.Errorf("diretório de controle não pôde ser protegido: %s: %w", dir, err)
 		}
 	}
 	self, status := Identity(os.Getpid())
