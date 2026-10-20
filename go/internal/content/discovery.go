@@ -504,6 +504,11 @@ func (p *Project) discoverNQuake() ([]Asset, error) {
 	if err != nil {
 		return nil, err
 	}
+	upstream, err := p.fetchNQuakeUpstream(commit, tree)
+	if err != nil {
+		return nil, err
+	}
+	p.nquake = upstream
 	var assets []Asset
 	found := map[string]bool{}
 	for _, item := range tree {
@@ -528,7 +533,8 @@ func (p *Project) discoverNQuake() ([]Asset, error) {
 		}
 		assets = append(assets, Asset{
 			Component: "nquake", URL: "https://raw.githubusercontent.com/" + nquakeRepository + "/" + commit + "/" + quotePath(item.Path),
-			Path: "distributions/nquake/" + commit + "/" + item.Path, ExpectedSize: item.Size, Subcomponent: owner, ExpectedGitSHA1: item.SHA1,
+			Path: "distributions/nquake/" + commit + "/" + item.Path, ExpectedSize: item.Size, Subcomponent: owner,
+			ExpectedSHA256: upstream.Files[item.Path].SHA256, ExpectedGitSHA1: item.SHA1,
 		})
 	}
 	for _, root := range used {
