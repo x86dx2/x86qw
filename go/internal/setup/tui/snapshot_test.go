@@ -85,7 +85,7 @@ func TestSnapshots(t *testing.T) {
 		drive(m, key("down"), key("down"))
 		save(m, theme+"-03-intent-both")
 		drive(m, key("enter"))
-		save(m, theme+"-05-review")
+		save(m, theme+"-05-setup")
 		m.focus = 1
 		drive(m, key("enter"))
 		save(m, theme+"-06-config-keys")
@@ -103,10 +103,7 @@ func TestSnapshots(t *testing.T) {
 		save(m, theme+"-10-components")
 		drive(m, key("esc"))
 		drive(m, key("i"))
-		for !m.preDone {
-			drive(m, run(m.nextCheck())...)
-		}
-		save(m, theme+"-04-preflight")
+		save(m, theme+"-06-preflight-review")
 		demo.Speed = 0.2
 		m.update(func() tea.Cmd { return m.startInstall() })
 		for i := 0; i < 4000 && (m.progress.Total == 0 || m.progress.Done < m.progress.Total*45/100); i++ {

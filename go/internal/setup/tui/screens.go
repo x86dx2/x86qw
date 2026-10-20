@@ -41,10 +41,10 @@ func (m *Model) body(width int) *page {
 	switch m.screen {
 	case scIntent:
 		m.intentPage(p)
-	case scPreflight:
-		m.preflightPage(p)
-	case scReview:
-		m.reviewPage(p)
+	case scConfigure:
+		m.configurePage(p)
+	case scConfirm:
+		m.confirmPage(p)
 	case scInstall:
 		m.installPage(p)
 	case scDone:
@@ -86,8 +86,8 @@ func (m *Model) logo(p *page) {
 // route draws the five steps as diamonds with the current step named.
 func (m *Model) route(p *page) {
 	t := m.theme
-	steps := []string{"route.intent", "route.review", "route.pre", "route.install", "route.done"}
-	current := map[screen]int{scIntent: 0, scReview: 1, scPreflight: 2, scInstall: 3, scDone: 4}[m.screen]
+	steps := []string{"route.intent", "route.config", "route.review", "route.install", "route.done"}
+	current := map[screen]int{scIntent: 0, scConfigure: 1, scConfirm: 2, scInstall: 3, scDone: 4}[m.screen]
 	var b strings.Builder
 	for index := range steps {
 		if index > 0 {
@@ -165,52 +165,12 @@ func (m *Model) intentPage(p *page) {
 	}
 }
 
-func (m *Model) preflightPage(p *page) {
-	t := m.theme
-	m.route(p)
-	p.title(m.t("pre.title"))
-	p.lead(m.t("pre.lead"))
-	p.gap(1)
-	for _, check := range m.checks {
-		var mark lipgloss.Style
-		glyph := m.spinner()
-		value := p.st(t.Dim).Render(m.t("net.detecting"))
-		switch check.State {
-		case setup.CheckOK:
-			glyph, mark, value = m.glyphs.Ok, p.st(t.Success), p.st(t.Text2).Render(check.Value)
-		case setup.CheckWarning:
-			glyph, mark, value = m.glyphs.Warn, p.st(t.Warning), p.st(t.Warning).Render(check.Value)
-		case setup.CheckFailed:
-			glyph, mark, value = m.glyphs.Fail, p.st(t.Error), p.st(t.Error).Render(check.Value)
-		default:
-			mark = p.st(t.Brand)
-		}
-		left := p.st(t.Base).Render("  ") + mark.Render(glyph) + p.st(t.Base).Render("  ") + p.st(t.Text).Render(check.Title)
-		p.add(spread(left, value+p.st(t.Base).Render("  "), p.width, t.Base))
-		if check.State != setup.CheckRunning && check.Detail != "" {
-			p.add(p.st(t.Gray).Render("     " + check.Detail))
-		}
-		if check.Fix != "" {
-			p.add(p.st(t.Warning).Render("     " + m.glyphs.Chevron + " " + check.Fix))
-		}
-	}
-	if m.preDone {
-		p.gap(1)
-		switch m.preflightOutcome() {
-		case setup.CheckFailed:
-			p.add(p.st(t.Error).Bold(true).Render("  " + m.t("pre.fail")))
-		case setup.CheckWarning:
-			p.add(p.st(t.Warning).Bold(true).Render("  " + m.t("pre.warn")))
-		default:
-			p.add(p.st(t.Success).Bold(true).Render("  "+m.t("pre.ok")) + p.st(t.Gray).Render("   "+m.t("pre.starting")))
-		}
-	}
-}
-
-// reviewRow is a section of the review.
+// reviewRow is one summarised section of the choices.
 type reviewRow struct{ id, label, summary string }
 
-func (m *Model) reviewRows() []reviewRow {
+// sectionRows summarise each group of choices; both the setup and the
+// review screens list them, and each opens its editor.
+func (m *Model) sectionRows() []reviewRow {
 	o := m.opts
 	var rows []reviewRow
 	selected := setup.Selected(m.catalog, o)
@@ -244,9 +204,31 @@ func (m *Model) reviewRows() []reviewRow {
 		}
 	}
 	rows = append(rows, reviewRow{"integ", m.t("sec.integ"), strings.Join(integ, " · ")})
-	rows = append(rows, reviewRow{"folder", m.t("sec.folder"), shortPath(o.Target)})
-	rows = append(rows, reviewRow{"recipe", m.t("sec.recipe"), "x86qw setup --intent " + string(o.Intent) + " …"})
-	return append(rows, reviewRow{"install", m.t("rev.go"), ""})
+	return append(rows, reviewRow{"folder", m.t("sec.folder"), shortPath(o.Target)})
+}
+
+// configRows are the setup screen: the sections, then Install.
+func (m *Model) configRows() []reviewRow {
+	return append(m.sectionRows(), reviewRow{"install", m.t("conf.go"), ""})
+}
+
+// confirmRows are the review screen: the sections, the recipe, then the
+// confirmation.
+func (m *Model) confirmRows() []reviewRow {
+	return append(m.sectionRows(), reviewRow{"recipe", m.t("sec.recipe"), "x86qw setup --intent " + string(m.opts.Intent) + " …"},
+		reviewRow{"confirm", m.confirmLabel(), ""})
+}
+
+func (m *Model) confirmLabel() string {
+	switch {
+	case !m.preDone:
+		return m.t("rev.checking")
+	case m.preflightOutcome() == setup.CheckFailed:
+		return m.t("rev.blocked")
+	case m.preflightOutcome() == setup.CheckWarning:
+		return m.t("rev.anyway")
+	}
+	return m.t("rev.confirm")
 }
 
 func (m *Model) totalBytes() int64 {
@@ -264,38 +246,34 @@ func (m *Model) totalBytes() int64 {
 	return total
 }
 
-func (m *Model) reviewPage(p *page) {
+// rows draws section rows and the primary action at the end.
+func (m *Model) rows(p *page, rows []reviewRow, primaryEnabled bool, primaryRight string) {
 	t := m.theme
-	m.route(p)
-	p.title(m.t("rev.title"))
-	p.lead(m.t("rev.lead"))
-	p.gap(1)
-	total := m.totalBytes()
-	seconds := max(4, int(float64(total)/(34*1048576)))
-	sep := p.st(t.Dim).Render("  ·  ")
-	figure := func(value, label string) string {
-		return p.st(t.Text).Bold(true).Render(value) + p.st(t.Gray).Render(" "+label)
-	}
-	p.add(p.st(t.Base).Render("  ") + figure(size(total), m.t("rev.download")) + sep + figure(size(total*108/100), m.t("rev.disk")) + sep +
-		figure(fmt.Sprint(len(setup.Selected(m.catalog, m.opts))+1), m.t("rev.items")) + sep + figure("~"+duration(time.Duration(seconds)*time.Second), m.t("rev.time")))
-	p.gap(1)
-	rows := m.reviewRows()
 	for index, row := range rows {
 		focused := index == m.focus
 		hovered := m.hover == "row:"+row.id
-		if row.id == "install" {
+		if index == len(rows)-1 {
 			p.gap(1)
-			bg := t.Base
+			bg, fg := t.Base, t.Brand
 			switch {
+			case !primaryEnabled:
+				fg = t.Dim
+				if focused {
+					bg = t.Band
+				}
 			case focused:
 				bg = Blend(t.Base, t.Brand, 0.28)
 			case hovered:
 				bg = Blend(t.Base, t.Brand, 0.14)
 			}
 			base := lipgloss.NewStyle().Background(bg)
-			left := base.Render("  ") + base.Foreground(t.Brand).Bold(true).Render(m.glyphs.Chevron+" "+row.label)
-			right := base.Foreground(t.Gray).Render(size(total)+"  ↵") + base.Render("  ")
-			p.band(spread(left, right, p.width, bg), bg, "row:install")
+			glyph := m.glyphs.Chevron
+			if !primaryEnabled && !m.preDone {
+				glyph = m.spinner()
+			}
+			left := base.Render("  ") + base.Foreground(fg).Bold(primaryEnabled).Render(glyph+" "+row.label)
+			right := base.Foreground(t.Gray).Render(primaryRight) + base.Render("  ")
+			p.band(spread(left, right, p.width, bg), bg, "row:"+row.id)
 			continue
 		}
 		bg := p.rowBG(focused, hovered)
@@ -310,14 +288,99 @@ func (m *Model) reviewPage(p *page) {
 	}
 }
 
-func (m *Model) activateReview(id string) tea.Cmd {
-	switch id {
-	case "install":
-		if err := m.opts.Validate(); err != nil {
-			m.say(err.Error())
-			return nil
+func (m *Model) configurePage(p *page) {
+	m.route(p)
+	p.title(m.t("conf.title"))
+	p.lead(m.t("conf.lead"))
+	p.gap(1)
+	m.rows(p, m.configRows(), true, "↵")
+}
+
+func (m *Model) activateConfigure(id string) tea.Cmd {
+	if id != "install" {
+		m.openModal(id)
+		return nil
+	}
+	if err := m.opts.Validate(); err != nil {
+		m.say(err.Error())
+		return nil
+	}
+	return m.startPreflight()
+}
+
+// confirmPage is the preflight and the review together: the checks run
+// against the final choices and the screen waits for a confirmation or a
+// correction.
+func (m *Model) confirmPage(p *page) {
+	t := m.theme
+	if m.h >= 38 {
+		m.route(p)
+	}
+	p.title(m.t("rev.title"))
+	p.lead(m.t("rev.lead"))
+	p.gap(1)
+	total := m.totalBytes()
+	seconds := max(4, int(float64(total)/(34*1048576)))
+	sep := p.st(t.Dim).Render("  ·  ")
+	figure := func(value, label string) string {
+		return p.st(t.Text).Bold(true).Render(value) + p.st(t.Gray).Render(" "+label)
+	}
+	p.add(p.st(t.Base).Render("  ") + figure(size(total), m.t("rev.download")) + sep + figure(size(total*108/100), m.t("rev.disk")) + sep +
+		figure(fmt.Sprint(len(setup.Selected(m.catalog, m.opts))+1), m.t("rev.items")) + sep + figure("~"+duration(time.Duration(seconds)*time.Second), m.t("rev.time")))
+	p.gap(1)
+	p.rule(m.t("rule.pre"))
+	for _, check := range m.checks {
+		var mark lipgloss.Style
+		glyph := m.spinner()
+		value := p.st(t.Dim).Render(m.t("net.detecting"))
+		switch check.State {
+		case setup.CheckOK:
+			glyph, mark, value = m.glyphs.Ok, p.st(t.Success), p.st(t.Text2).Render(shortPath(check.Value))
+		case setup.CheckWarning:
+			glyph, mark, value = m.glyphs.Warn, p.st(t.Warning), p.st(t.Warning).Render(check.Value)
+		case setup.CheckFailed:
+			glyph, mark, value = m.glyphs.Fail, p.st(t.Error), p.st(t.Error).Render(check.Value)
+		default:
+			mark = p.st(t.Brand)
 		}
-		return m.startPreflight()
+		left := p.st(t.Base).Render("  ") + mark.Render(glyph) + p.st(t.Base).Render("  ") + p.st(t.Text).Render(check.Title)
+		p.add(spread(left, value+p.st(t.Base).Render("  "), p.width, t.Base))
+		if check.State == setup.CheckWarning || check.State == setup.CheckFailed {
+			if check.Detail != "" {
+				p.add(p.st(t.Gray).Render("     " + check.Detail))
+			}
+			if check.Fix != "" {
+				p.add(p.st(t.Warning).Render("     " + m.glyphs.Chevron + " " + check.Fix))
+			}
+		}
+	}
+	if m.preDone {
+		switch m.preflightOutcome() {
+		case setup.CheckFailed:
+			p.add(p.st(t.Error).Bold(true).Render("  " + m.t("pre.fail")))
+		case setup.CheckWarning:
+			p.add(p.st(t.Warning).Bold(true).Render("  " + m.t("pre.warn")))
+		default:
+			p.add(p.st(t.Success).Bold(true).Render("  " + m.t("pre.ok")))
+		}
+	}
+	p.gap(1)
+	p.rule(m.t("rule.choices"))
+	enabled := m.preDone && m.preflightOutcome() != setup.CheckFailed
+	right := ""
+	if enabled {
+		right = size(total) + "  ↵"
+	}
+	m.rows(p, m.confirmRows(), enabled, right)
+}
+
+func (m *Model) activateConfirm(id string) tea.Cmd {
+	switch id {
+	case "confirm":
+		if m.preDone && m.preflightOutcome() != setup.CheckFailed {
+			return m.startInstall()
+		}
+		return nil
 	default:
 		m.openModal(id)
 	}
@@ -687,7 +750,7 @@ func (m *Model) activatePanel(id string) tea.Cmd {
 	}
 	switch id {
 	case "change":
-		m.screen, m.focus, m.fromPanel = scReview, 0, true
+		m.screen, m.focus, m.fromPanel = scConfigure, 0, true
 	case "apply":
 		return m.startPreflight()
 	case "verify":

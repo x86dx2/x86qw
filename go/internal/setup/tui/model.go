@@ -20,8 +20,8 @@ type screen int
 
 const (
 	scIntent screen = iota
-	scPreflight
-	scReview
+	scConfirm
+	scConfigure
 	scInstall
 	scDone
 	scPanel
@@ -133,6 +133,7 @@ type catalogMsg struct {
 type checkMsg struct {
 	check setup.Check
 	ok    bool
+	run   int
 }
 type progressMsg struct {
 	progress setup.Progress
@@ -143,7 +144,6 @@ type dnsMsg setup.DNSCheck
 type dnsDebounceMsg string
 type tickMsg time.Time
 type advanceMsg screen
-type preflightPassedMsg int // the preflight run that passed
 
 // Init loads the catalog, looks for an installation, detects the network
 // and asks the terminal for its background.
@@ -176,7 +176,7 @@ func (m *Model) Init() tea.Cmd {
 // about 12 fps, spinners and progress at 30 fps.
 func (m *Model) tick() tea.Cmd {
 	interval := 83 * time.Millisecond
-	if m.screen == scPreflight || m.screen == scInstall || (m.screen == scPanel && m.panelView == "repair" && m.verify < 100) {
+	if m.screen == scConfirm || m.screen == scInstall || (m.screen == scPanel && m.panelView == "repair" && m.verify < 100) {
 		interval = 33 * time.Millisecond
 	}
 	return tea.Tick(interval, func(t time.Time) tea.Msg { return tickMsg(t) })
@@ -230,12 +230,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case checkMsg:
 		if !msg.ok {
-			m.preDone = true
-			if m.preflightOutcome() == setup.CheckOK {
-				run := m.preRun
-				return m, tea.Tick(900*time.Millisecond, func(time.Time) tea.Msg { return preflightPassedMsg(run) })
+			if msg.run == m.preRun {
+				m.preDone = true
+				m.focus = len(m.confirmRows()) - 1
 			}
 			break
+		}
+		if msg.run != m.preRun {
+			break // a check from a run that was restarted
 		}
 		m.recordCheck(msg.check)
 		return m, m.nextCheck()
@@ -248,10 +250,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Tick(900*time.Millisecond, func(time.Time) tea.Msg { return advanceMsg(scDone) })
 		}
 		return m, m.nextProgress()
-	case preflightPassedMsg:
-		if m.screen == scPreflight && int(msg) == m.preRun {
-			return m, m.startInstall()
-		}
 	case advanceMsg:
 		if m.screen == scInstall {
 			m.screen, m.focus = screen(msg), 0
@@ -294,10 +292,10 @@ func (m *Model) recordCheck(check setup.Check) {
 }
 
 func (m *Model) nextCheck() tea.Cmd {
-	ch := m.preCh
+	ch, run := m.preCh, m.preRun
 	return func() tea.Msg {
 		check, ok := <-ch
-		return checkMsg{check, ok}
+		return checkMsg{check, ok, run}
 	}
 }
 
@@ -324,7 +322,7 @@ func (m *Model) resolve(hostname string) tea.Cmd {
 
 // startPreflight runs the checks for the current options.
 func (m *Model) startPreflight() tea.Cmd {
-	m.screen, m.checks, m.preDone = scPreflight, nil, false
+	m.screen, m.checks, m.preDone, m.focus = scConfirm, nil, false, 0
 	m.preRun++
 	m.preCh = m.cfg.Backend.Preflight(context.Background(), m.opts)
 	return m.nextCheck()
@@ -355,7 +353,7 @@ func (m *Model) keyPress(msg tea.KeyPressMsg) tea.Cmd {
 		if m.screen == scInstall && !m.progress.Finished {
 			if m.armedFor("cancel") {
 				m.cancel()
-				m.screen, m.focus = scReview, 0
+				m.screen, m.focus = scConfigure, 0
 			}
 			return nil
 		}
@@ -413,29 +411,32 @@ func (m *Model) key(key string) tea.Cmd {
 				return tea.Quit
 			}
 		}
-	case scPreflight:
-		switch key {
-		case "enter", "space":
-			if m.preDone && m.preflightOutcome() != setup.CheckFailed {
-				return m.startInstall()
-			}
-		case "esc", "left", "backspace":
-			m.preRun++ // drop a pending auto-start
-			m.screen, m.focus = scReview, len(m.reviewRows())-1
-		}
-	case scReview:
-		rows := m.reviewRows()
+	case scConfirm:
+		rows := m.confirmRows()
 		switch key {
 		case "up", "k":
 			m.focus = (m.focus + len(rows) - 1) % len(rows)
 		case "down", "j", "tab":
 			m.focus = (m.focus + 1) % len(rows)
 		case "enter", "right", "space", " ":
-			return m.activateReview(rows[m.focus].id)
-		case "i":
-			return m.activateReview("install")
+			return m.activateConfirm(rows[m.focus].id)
 		case "c":
 			return m.copyRecipe()
+		case "esc", "left", "backspace":
+			m.preRun++ // drop checks still on their way
+			m.screen, m.focus = scConfigure, len(m.configRows())-1
+		}
+	case scConfigure:
+		rows := m.configRows()
+		switch key {
+		case "up", "k":
+			m.focus = (m.focus + len(rows) - 1) % len(rows)
+		case "down", "j", "tab":
+			m.focus = (m.focus + 1) % len(rows)
+		case "enter", "right", "space", " ":
+			return m.activateConfigure(rows[m.focus].id)
+		case "i":
+			return m.activateConfigure("install")
 		case "esc", "left", "backspace":
 			if m.fromPanel {
 				m.screen, m.focus = scPanel, 1
@@ -484,7 +485,7 @@ func (m *Model) leaveIntent() tea.Cmd {
 		return nil
 	}
 	m.opts.Nick = strings.TrimSpace(m.nick.String())
-	m.screen, m.focus = scReview, len(m.reviewRows())-1
+	m.screen, m.focus = scConfigure, len(m.configRows())-1
 	return nil
 }
 
@@ -514,7 +515,7 @@ func (m *Model) click(id string) tea.Cmd {
 			m.modal.tab, m.modal.focus = index, 0
 		}
 	case id == "close":
-		m.closeModal()
+		return m.closeModal()
 	case id == "lang":
 		return m.keyPress(tea.KeyPressMsg(keyFor("ctrl+l")))
 	case strings.HasPrefix(id, "row:"):
@@ -729,18 +730,16 @@ func (m *Model) footerHints() [][2]string {
 	switch m.screen {
 	case scIntent:
 		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"ctrl+c", m.t("k.quit")}}
-	case scPreflight:
-		switch {
-		case !m.preDone:
-			return [][2]string{{"esc", m.t("k.adjust")}, {"ctrl+c", m.t("k.quit")}}
-		case m.preflightOutcome() == setup.CheckWarning:
-			return [][2]string{{"enter", m.t("pre.anyway")}, {"esc", m.t("k.adjust")}}
-		case m.preflightOutcome() == setup.CheckFailed:
-			return [][2]string{{"esc", m.t("k.adjust")}, {"ctrl+c", m.t("k.quit")}}
+	case scConfirm:
+		items := [][2]string{{"↑↓", m.t("k.choose")}}
+		if m.preDone && m.preflightOutcome() != setup.CheckFailed {
+			items = append(items, [2]string{"enter", m.t("k.confirm")})
+		} else {
+			items = append(items, [2]string{"enter", m.t("k.edit")})
 		}
-		return [][2]string{{"esc", m.t("k.adjust")}}
-	case scReview:
-		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.edit")}, {"i", m.t("k.install")}, {"c", m.t("k.copy")}, {"esc", m.t("k.back")}}
+		return append(items, [2]string{"c", m.t("k.copy")}, [2]string{"esc", m.t("k.back")})
+	case scConfigure:
+		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.edit")}, {"i", m.t("k.install")}, {"esc", m.t("k.back")}}
 	case scInstall:
 		pause := m.t("k.pause")
 		if m.progress.Paused {

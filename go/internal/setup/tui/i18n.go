@@ -11,7 +11,7 @@ const (
 var texts = map[string][2]string{
 	// chrome
 	"subtitle":     {"instalador", "installer"},
-	"route.intent": {"intenção", "intent"}, "route.pre": {"pré-voo", "preflight"}, "route.review": {"revisão", "review"},
+	"route.intent": {"intenção", "intent"}, "route.config": {"configuração", "setup"}, "route.review": {"pré-voo e revisão", "preflight and review"},
 	"route.install": {"instalação", "install"}, "route.done": {"pronto", "done"}, "route.panel": {"painel", "panel"},
 	"k.choose": {"escolher", "choose"}, "k.next": {"seguir", "continue"}, "k.back": {"voltar", "back"}, "k.quit": {"sair", "quit"},
 	"k.edit": {"editar", "edit"}, "k.install": {"instalar", "install"}, "k.copy": {"copiar receita", "copy recipe"},
@@ -38,21 +38,14 @@ var texts = map[string][2]string{
 	"nick.team":  {"nas mensagens do time", "in team messages"},
 
 	// preflight
-	"pre.title":    {"Pré-voo", "Preflight"},
-	"pre.lead":     {"Conferindo a máquina com as suas escolhas antes de baixar qualquer coisa.", "Checking the machine against your choices before anything is downloaded."},
-	"pre.ok":       {"Tudo certo.", "All clear."},
-	"pre.warn":     {"Pronto, com uma observação. Instale mesmo assim ou volte para ajustar.", "Ready, with one note. Install anyway or go back to adjust."},
-	"pre.fail":     {"Algo impede a instalação. Volte para ajustar.", "Something blocks the install. Go back to adjust."},
-	"pre.starting": {"começando a instalação…", "starting the install…"},
-	"pre.anyway":   {"instalar mesmo assim", "install anyway"}, "k.adjust": {"ajustar", "adjust"},
+	"pre.title":  {"Pré-voo", "Preflight"},
+	"pre.lead":   {"Conferindo a máquina com as suas escolhas antes de baixar qualquer coisa.", "Checking the machine against your choices before anything is downloaded."},
+	"pre.anyway": {"instalar mesmo assim", "install anyway"}, "k.adjust": {"ajustar", "adjust"},
 
 	// review
-	"rev.title":    {"Pronto para instalar", "Ready to install"},
-	"rev.lead":     {"Enter abre cada item para ajustar. Nada foi baixado ainda.", "Enter opens each item to adjust it. Nothing has been downloaded yet."},
 	"rev.download": {"download", "download"}, "rev.disk": {"em disco", "on disk"}, "rev.items": {"componentes", "components"}, "rev.time": {"tempo", "time"},
 	"sec.comps": {"Componentes", "Components"}, "sec.config": {"Sua configuração", "Your setup"}, "sec.server": {"Servidor", "Server"},
 	"sec.integ": {"Integração", "Integration"}, "sec.folder": {"Pasta", "Folder"}, "sec.recipe": {"Receita", "Recipe"},
-	"rev.go":        {"Instalar", "Install"},
 	"recipe.d":      {"O mesmo resultado em outra máquina, sem perguntas.", "The same result on another machine, no questions asked."},
 	"recipe.copied": {"Receita copiada", "Recipe copied"},
 
@@ -132,8 +125,23 @@ var texts = map[string][2]string{
 	"m.repair": {"Reparar e verificar", "Repair and verify"}, "m.repair.d": {"confere cada arquivo com o recibo assinado", "checks every file against the signed receipt"},
 	"m.remove": {"Desinstalar", "Uninstall"}, "m.remove.d": {"remove a instalação e os caches", "removes the install and the caches"},
 	"keep.personal": {"Manter dados pessoais", "Keep personal data"}, "remove.again": {"pressione de novo para desinstalar", "press again to uninstall"},
-	"removed":   {"A instalação seria removida aqui (demonstração).", "The install would be removed here (demo)."},
-	"verify.ok": {"arquivos conferidos, nenhum divergente", "files checked, none differ"},
+	"removed":      {"A instalação seria removida aqui (demonstração).", "The install would be removed here (demo)."},
+	"verify.ok":    {"arquivos conferidos, nenhum divergente", "files checked, none differ"},
+	"pre.ok":       {"Tudo certo. Confirme para instalar.", "All clear. Confirm to install."},
+	"pre.warn":     {"Uma observação. Corrija nas escolhas abaixo ou instale mesmo assim.", "One note. Fix it in the choices below or install anyway."},
+	"pre.fail":     {"Algo impede a instalação. Corrija nas escolhas abaixo.", "Something blocks the install. Fix it in the choices below."},
+	"conf.title":   {"Configuração", "Setup"},
+	"conf.lead":    {"Os padrões já servem. Enter abre cada item para ajustar.", "The defaults already work. Enter opens each item to adjust it."},
+	"conf.go":      {"Instalar", "Install"},
+	"rev.title":    {"Pré-voo e revisão", "Preflight and review"},
+	"rev.lead":     {"A máquina é conferida com as suas escolhas. Nada é instalado até você confirmar.", "The machine is checked against your choices. Nothing is installed until you confirm."},
+	"rule.pre":     {"pré-voo", "preflight"},
+	"rule.choices": {"suas escolhas", "your choices"},
+	"rev.confirm":  {"Confirmar e instalar", "Confirm and install"},
+	"rev.anyway":   {"Instalar mesmo assim", "Install anyway"},
+	"rev.checking": {"Conferindo…", "Checking…"},
+	"rev.blocked":  {"Corrija os itens acima para instalar", "Fix the items above to install"},
+	"k.confirm":    {"confirmar", "confirm"},
 }
 
 // T returns the text for key in lang.

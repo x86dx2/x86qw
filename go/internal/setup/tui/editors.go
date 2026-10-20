@@ -28,11 +28,22 @@ func (m *Model) openModal(kind string) {
 	}
 }
 
-func (m *Model) closeModal() {
+// closeModal keeps what was typed; on the confirmation screen the checks
+// run again against the corrected choices.
+func (m *Model) closeModal() tea.Cmd {
+	var cmd tea.Cmd
 	if m.modal != nil {
-		m.fieldChanged()
+		cmd = m.fieldChanged()
+	}
+	kind := ""
+	if m.modal != nil {
+		kind = m.modal.kind
 	}
 	m.modal = nil
+	if m.screen == scConfirm && kind != "recipe" {
+		return tea.Batch(cmd, m.startPreflight())
+	}
+	return cmd
 }
 
 // fieldChanged copies the dialog fields into the options; a new hostname
@@ -97,8 +108,7 @@ func (m *Model) modalKey(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	switch key {
 	case "esc":
-		m.closeModal()
-		return nil
+		return m.closeModal()
 	case "tab", "shift+tab":
 		if tabs := m.modalTabs(); len(tabs) > 1 {
 			delta := 1
@@ -126,7 +136,7 @@ func (m *Model) modalNav(key string) tea.Cmd {
 	rows := focusables(m.modalRows())
 	if len(rows) == 0 {
 		if key == "enter" {
-			m.closeModal()
+			return m.closeModal()
 		}
 		return nil
 	}
@@ -188,11 +198,18 @@ func (m *Model) clickRow(id string) tea.Cmd {
 		return nil
 	}
 	switch m.screen {
-	case scReview:
-		for index, row := range m.reviewRows() {
+	case scConfigure:
+		for index, row := range m.configRows() {
 			if row.id == id {
 				m.focus = index
-				return m.activateReview(id)
+				return m.activateConfigure(id)
+			}
+		}
+	case scConfirm:
+		for index, row := range m.confirmRows() {
+			if row.id == id {
+				m.focus = index
+				return m.activateConfirm(id)
 			}
 		}
 	case scDone:

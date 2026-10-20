@@ -36,20 +36,24 @@ func TestKeyboardNavigation(t *testing.T) {
 		t.Fatalf("↓ deveria escolher Hospedar: %s", m.opts.Intent)
 	}
 	drive(m, key("up"), key("enter"))
-	want(scReview, "enter na intenção vai para a revisão")
+	want(scConfigure, "enter na intenção vai para a configuração")
 	drive(m, key("esc"))
-	want(scIntent, "esc na revisão volta à intenção")
+	want(scIntent, "esc na configuração volta à intenção")
 	drive(m, key("enter"))
-	want(scReview, "intenção → revisão")
+	want(scConfigure, "intenção → configuração")
 	m.Update(key("i")) // without running what it starts
-	want(scPreflight, "instalar roda o pré-voo")
+	want(scConfirm, "instalar abre o pré-voo e revisão")
 	m.Update(key("esc"))
-	want(scReview, "esc no pré-voo volta à revisão")
+	want(scConfigure, "esc no pré-voo e revisão volta à configuração")
 	drive(m, key("i"))
-	if m.screen != scInstall && m.screen != scDone {
-		t.Fatalf("pré-voo sem avisos deveria começar a instalação sozinho: %d", m.screen)
+	want(scConfirm, "o pré-voo termina e espera a confirmação")
+	if !m.preDone || m.confirmRows()[m.focus].id != "confirm" {
+		t.Fatalf("o foco deveria ir para Confirmar e instalar: %d", m.focus)
 	}
-	m.screen, m.focus, m.modal = scReview, 0, nil
+	m.Update(key("enter"))
+	want(scInstall, "enter confirma e instala")
+	m.cancel()
+	m.screen, m.focus, m.modal = scConfigure, 0, nil
 
 	// Dialog: open setup, change tabs with ← →, toggle with space.
 	m.focus = 1
@@ -87,7 +91,7 @@ func TestPanelNavigation(t *testing.T) {
 		t.Fatalf("instalação existente deveria abrir o painel: %d", m.screen)
 	}
 	drive(m, key("down"), key("enter"))
-	if m.screen != scReview {
+	if m.screen != scConfigure {
 		t.Fatalf("Componentes e configuração deveria abrir a revisão: %d", m.screen)
 	}
 	drive(m, key("esc"))
@@ -104,18 +108,29 @@ func TestPanelNavigation(t *testing.T) {
 	}
 }
 
-func TestPreflightWarningWaits(t *testing.T) {
+func TestPreflightWarningWaitsAndCorrects(t *testing.T) {
 	m := started(t, false)
 	drive(m, typeText("x86dx2")...)
 	drive(m, key("down"), key("down"), key("enter"), key("i"))
-	for !m.preDone {
-		drive(m, run(m.nextCheck())...)
+	if m.screen != scConfirm || m.preflightOutcome() != setup.CheckWarning {
+		t.Fatalf("aviso deveria esperar na revisão: tela %d", m.screen)
 	}
-	if m.screen != scPreflight || m.preflightOutcome() != setup.CheckWarning {
-		t.Fatalf("aviso deveria esperar a decisão: tela %d", m.screen)
+	// Correct it in place: Server → first port 27501, then close.
+	for index, row := range m.confirmRows() {
+		if row.id == "server" {
+			m.focus = index
+		}
 	}
-	drive(m, key("enter"))
-	if m.screen != scInstall && m.screen != scDone {
-		t.Fatalf("enter deveria instalar mesmo assim: %d", m.screen)
+	drive(m, key("enter"), key("down"), key("right"), key("esc"))
+	if m.opts.Server.BasePort != 27501 {
+		t.Fatalf("porta inicial: %d", m.opts.Server.BasePort)
 	}
+	if m.screen != scConfirm || !m.preDone || m.preflightOutcome() != setup.CheckOK {
+		t.Fatalf("o pré-voo deveria rodar de novo e passar: tela %d, %v", m.screen, m.preflightOutcome())
+	}
+	m.Update(key("enter"))
+	if m.screen != scInstall {
+		t.Fatalf("enter deveria instalar: %d", m.screen)
+	}
+	m.cancel()
 }
