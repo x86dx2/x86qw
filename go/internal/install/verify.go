@@ -382,6 +382,7 @@ func VerifyPlaySupport(root string, games []Game) error {
 // Runtime is one launchable ezQuake of the host platform.
 type Runtime struct {
 	Label     string // ezQuake <channel> <selection>
+	Channel   string // stable or nightly
 	Path      string // the executable (inside the bundle on macOS)
 	BinarySHA string
 }
@@ -419,7 +420,7 @@ func HostRuntimes(root string) ([]Runtime, error) {
 			}
 			executable = filepath.Join(bundle, "Contents", "MacOS", "ezQuake")
 		}
-		found = append(found, Runtime{Label: "ezQuake " + channel + " " + rec.Get("selection"), Path: executable, BinarySHA: rec.Get("binary_sha256")})
+		found = append(found, Runtime{Label: "ezQuake " + channel + " " + rec.Get("selection"), Channel: channel, Path: executable, BinarySHA: rec.Get("binary_sha256")})
 	}
 	if len(found) == 0 {
 		return nil, errors.New("Nenhum ezQuake gerenciado para este sistema está instalado. Execute install primeiro.")

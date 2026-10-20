@@ -1,11 +1,7 @@
 package main
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,6 +16,7 @@ func (e *usageError) Error() string { return e.msg }
 
 type playRequest struct {
 	game, target, mode, mapName, ruleset string
+	channel                              string
 	options                              play.Options
 	planJSON, menu, configureRuleset     bool
 	verbose, noColor                     bool
@@ -29,7 +26,7 @@ var (
 	valueFlags = map[string]bool{
 		"--target": true, "--ruleset": true, "--mode": true, "--map": true, "--bots": true, "--bot-skill": true,
 		"--bot-team": true, "--bot-weapon": true, "--bot-health": true, "--bot-names": true, "--ctf-hook": true,
-		"--ctf-runes": true, "--race-style": true, "--race-scoring": true, "--race-pacemaker": true,
+		"--ctf-runes": true, "--race-style": true, "--race-scoring": true, "--race-pacemaker": true, "--channel": true,
 	}
 	boolFlags = map[string]bool{
 		"-v": true, "--verbose": true, "--no-color": true, "--menu": true, "--configure-ruleset": true,
@@ -38,6 +35,7 @@ var (
 	}
 	choices = map[string][]string{
 		"--ruleset":    {"x86qw", "qcon", "smackdown", "thunderdome", "mtfl", "smackdrive"},
+		"--channel":    {"stable", "nightly"},
 		"--bot-weapon": {"random", "1", "2", "3", "4", "5", "6", "7", "8"}, "--bot-names": {"default", "x86qw", "one-piece", "personal"},
 		"--ctf-hook": {"smooth", "fast", "classic", "crhook", "off"}, "--ctf-runes": {"on", "off"},
 		"--race-style": {"solo", "simultaneous", "match"}, "--race-scoring": {"win", "scaled", "formula1"},
@@ -91,7 +89,7 @@ func parsePlay(args []string, games []play.Game) (*playRequest, error) {
 	if len(positional) > 1 {
 		return nil, &usageError{"argumentos não reconhecidos: " + strings.Join(positional[1:], " ")}
 	}
-	request := &playRequest{target: values["--target"], mode: values["--mode"], mapName: values["--map"], ruleset: values["--ruleset"], planJSON: flags["--plan-json"],
+	request := &playRequest{target: values["--target"], mode: values["--mode"], mapName: values["--map"], ruleset: values["--ruleset"], channel: values["--channel"], planJSON: flags["--plan-json"],
 		menu: flags["--menu"], configureRuleset: flags["--configure-ruleset"], verbose: flags["-v"] || flags["--verbose"], noColor: flags["--no-color"]}
 	if len(positional) == 1 {
 		selection := positional[0]
@@ -196,23 +194,4 @@ func parsePlay(args []string, games []play.Game) (*playRequest, error) {
 }
 
 // readRuleset loads .x86qw/launcher/client-ruleset.json when present.
-func readRuleset(target string) (string, error) {
-	path := filepath.Join(target, ".x86qw", "launcher", "client-ruleset.json")
-	payload, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return "", nil
-	}
-	if err != nil || len(payload) > 4096 {
-		return "", fmt.Errorf("Preferência de ruleset inválida: %s", path)
-	}
-	var document map[string]any
-	if json.Unmarshal(payload, &document) != nil || len(document) != 3 || document["project"] != "x86qw" {
-		return "", fmt.Errorf("Preferência de ruleset inválida: %s", path)
-	}
-	format, _ := document["format"].(float64)
-	ruleset, _ := document["ruleset"].(string)
-	if format != 1 || play.Rulesets[ruleset] == "" {
-		return "", fmt.Errorf("Preferência de ruleset inválida: %s", path)
-	}
-	return ruleset, nil
-}
+func readRuleset(target string) (string, error) { return play.SavedRuleset(target) }

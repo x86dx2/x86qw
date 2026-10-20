@@ -47,9 +47,24 @@ func playMain(args []string, stdout, stderr io.Writer, propagateExit bool) (int,
 		fmt.Fprintf(stdout, "\n%s · launcher QuakeWorld\nDestino: %s\n", con.paint("x86-qw", paletteAccent+"m\033[1"), filepath.Clean(request.target))
 	}
 	target, _ := filepath.Abs(request.target)
-	stop := trapInterrupt(stderr, "Operação cancelada. O jogo não foi iniciado.")
-	choice, err := choosePlay(con, target, request, games)
-	stop()
+	var choice *playChoice
+	ktxOrUnset := request.game == "" || request.game == "ktx"
+	if !request.menu && !request.configureRuleset && !(request.mode == "" && ktxOrUnset) {
+		// Everything was given: resolve without asking anything.
+		con.section("Jogo local")
+		resolved, resolveErr := play.Resolve(target, play.Request{Game: request.game, Mode: request.mode, Map: request.mapName,
+			Ruleset: request.ruleset, Channel: request.channel, Options: request.options})
+		err = resolveErr
+		if err == nil {
+			con.success(fmt.Sprintf("Componente %s íntegro (%s; seleção %s).", resolved.Component, fileCount(resolved.Files), resolved.Selection))
+			choice = &playChoice{game: resolved.Game, mode: resolved.Mode, mapName: resolved.Map, options: resolved.Options,
+				assets: resolved.Assets, runtime: resolved.Runtime, ruleset: resolved.Ruleset}
+		}
+	} else {
+		stop := trapInterrupt(stderr, "Operação cancelada. O jogo não foi iniciado.")
+		choice, err = choosePlay(con, target, request, games)
+		stop()
+	}
 	switch {
 	case err == nil:
 	case errors.Is(err, errBack):
