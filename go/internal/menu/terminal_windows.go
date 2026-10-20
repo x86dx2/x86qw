@@ -4,8 +4,8 @@ package menu
 
 import (
 	"os"
-	"time"
-	"unicode/utf8"
+	"unicode/utf16"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/term"
@@ -36,109 +36,95 @@ func enableVirtualTerminal() bool {
 	return windows.SetConsoleMode(handle, mode|windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING) == nil
 }
 
-// pending holds console bytes read past the current key (a VT sequence or
-// pasted text arrives as one burst).
-var pending []byte
+var procReadConsoleInput = windows.NewLazySystemDLL("kernel32.dll").NewProc("ReadConsoleInputW")
 
-// fill reads the next console burst, waiting at most timeout (0 = forever).
-func fill(timeout time.Duration) bool {
-	if len(pending) > 0 {
-		return true
-	}
-	if timeout > 0 {
-		event, err := windows.WaitForSingleObject(windows.Handle(os.Stdin.Fd()), uint32(timeout/time.Millisecond))
-		if err != nil || event != windows.WAIT_OBJECT_0 {
-			return false
+// inputRecord is INPUT_RECORD restricted to its KEY_EVENT_RECORD member.
+type inputRecord struct {
+	eventType       uint16
+	_               uint16
+	keyDown         int32
+	repeatCount     uint16
+	virtualKeyCode  uint16
+	virtualScanCode uint16
+	unicodeChar     uint16
+	controlKeyState uint32
+}
+
+// INPUT_RECORD is 20 bytes on every Windows architecture.
+var _ [20]byte = [unsafe.Sizeof(inputRecord{})]byte{}
+
+// keyDown returns the next key-down record, skipping key-up, focus, mouse
+// and resize events.
+func keyDown(handle windows.Handle) (inputRecord, error) {
+	for {
+		var record inputRecord
+		var read uint32
+		ok, _, err := procReadConsoleInput.Call(uintptr(handle), uintptr(unsafe.Pointer(&record)), 1, uintptr(unsafe.Pointer(&read)))
+		if ok == 0 {
+			return record, err
+		}
+		if read == 1 && record.eventType == windows.KEY_EVENT && record.keyDown != 0 {
+			return record, nil
 		}
 	}
-	buffer := make([]byte, 64)
-	n, err := os.Stdin.Read(buffer)
-	if err != nil || n == 0 {
-		return false
-	}
-	pending = append(pending, buffer[:n]...)
-	return true
 }
 
-func next(timeout time.Duration) (byte, bool) {
-	if !fill(timeout) {
-		return 0, false
-	}
-	b := pending[0]
-	pending = pending[1:]
-	return b, true
+var virtualKeys = map[uint16]string{
+	windows.VK_UP: "up", windows.VK_DOWN: "down", windows.VK_LEFT: "left", windows.VK_RIGHT: "right",
+	windows.VK_HOME: "home", windows.VK_END: "end", windows.VK_PRIOR: "pageup", windows.VK_NEXT: "pagedown",
+	windows.VK_ESCAPE: "escape", windows.VK_RETURN: "enter", windows.VK_BACK: "backspace",
 }
 
-// readTerminalKey reads one key in raw mode with VT input enabled, so arrows
-// and navigation keys arrive as the same escape sequences as on POSIX
-// (the getwch mapping of _read_windows_key).
+// modifierKeys produce no character on their own (getwch ignores them).
+var modifierKeys = map[uint16]bool{
+	windows.VK_SHIFT: true, windows.VK_CONTROL: true, windows.VK_MENU: true, windows.VK_CAPITAL: true,
+	windows.VK_LWIN: true, windows.VK_RWIN: true, windows.VK_NUMLOCK: true, windows.VK_SCROLL: true,
+}
+
+// readTerminalKey mirrors _read_windows_key: one key-down record read
+// with line input, echo and Ctrl-C processing disabled.
 func readTerminalKey() (string, error) {
-	fd := int(os.Stdin.Fd())
-	previous, err := term.MakeRaw(fd)
-	if err != nil {
+	handle := windows.Handle(os.Stdin.Fd())
+	var mode uint32
+	if err := windows.GetConsoleMode(handle, &mode); err != nil {
 		return "", err
 	}
-	defer term.Restore(fd, previous)
-	first, ok := next(0)
-	if !ok {
-		return "", os.ErrClosed
+	raw := mode &^ (windows.ENABLE_LINE_INPUT | windows.ENABLE_ECHO_INPUT | windows.ENABLE_PROCESSED_INPUT | windows.ENABLE_VIRTUAL_TERMINAL_INPUT)
+	if err := windows.SetConsoleMode(handle, raw); err != nil {
+		return "", err
 	}
-	switch first {
-	case 0x1b:
-		var sequence []byte
-		timeout := 120 * time.Millisecond
-		for len(sequence) < 16 {
-			b, ok := next(timeout)
-			if !ok {
-				break
-			}
-			sequence = append(sequence, b)
-			timeout = 40 * time.Millisecond
-			if sequence[0] == '[' {
-				if len(sequence) >= 2 && b >= 0x40 && b <= 0x7e {
-					break
-				}
-			} else if sequence[0] == 'O' {
-				if len(sequence) >= 2 {
-					break
-				}
-			} else {
-				break
-			}
+	defer windows.SetConsoleMode(handle, mode)
+	for {
+		record, err := keyDown(handle)
+		if err != nil {
+			return "", err
 		}
-		if len(sequence) == 0 {
-			return "escape", nil
+		if name, ok := virtualKeys[record.virtualKeyCode]; ok {
+			return name, nil
 		}
-		return decodeEscape(sequence), nil
-	case '\r', '\n':
-		return "enter", nil
-	case 0x7f, 0x08:
-		return "backspace", nil
-	case 0x03:
-		return "interrupt", nil
-	}
-	data := []byte{first}
-	need := 1
-	switch {
-	case first >= 0xC2 && first <= 0xDF:
-		need = 2
-	case first >= 0xE0 && first <= 0xEF:
-		need = 3
-	case first >= 0xF0 && first <= 0xF4:
-		need = 4
-	case first >= 0x80:
-		return "unknown", nil
-	}
-	for len(data) < need {
-		b, ok := next(40 * time.Millisecond)
-		if !ok {
+		char := record.unicodeChar
+		switch {
+		case char == 0x03:
+			return "interrupt", nil
+		case char == '\r':
+			return "enter", nil
+		case char == 0 && modifierKeys[record.virtualKeyCode]:
+			continue
+		case char == 0:
 			return "unknown", nil
 		}
-		data = append(data, b)
+		units := []uint16{char}
+		if utf16.IsSurrogate(rune(char)) {
+			low, err := keyDown(handle)
+			if err != nil {
+				return "", err
+			}
+			units = append(units, low.unicodeChar)
+		}
+		text := string(utf16.Decode(units))
+		if !printable(text) {
+			return "unknown", nil
+		}
+		return text, nil
 	}
-	r, _ := utf8.DecodeRune(data)
-	if r == utf8.RuneError || !printable(string(r)) {
-		return "unknown", nil
-	}
-	return string(r), nil
 }
