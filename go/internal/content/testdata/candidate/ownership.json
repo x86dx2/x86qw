@@ -1,0 +1,72 @@
+{
+  "artifacts": [
+    {
+      "copyright_text": "Copyright (c) 2026 x86dx2",
+      "kind": "file",
+      "license_concluded": "MIT",
+      "license_url": "https://github.com/x86dx2/x86qw/blob/v1.0.0/LICENSE",
+      "members": [],
+      "ownership": "project",
+      "ownership_basis": "project-source",
+      "path": "a.txt",
+      "sha256": "c299a26e2d4aed8ce1cbce3a114bded336d658c78fe6bf3d647e94345dcd1dfd",
+      "size": 13,
+      "source": "fixture"
+    },
+    {
+      "copyright_text": "NOASSERTION",
+      "kind": "file",
+      "license_concluded": "NOASSERTION",
+      "license_url": null,
+      "members": [],
+      "ownership": "upstream",
+      "ownership_basis": "upstream-release",
+      "path": "docs/c d.txt",
+      "sha256": "623c405d8dfad3ddfe6ac7edc5654a5e51d41c429ee4246c3147eb78bae88985",
+      "size": 13,
+      "source": "fixture"
+    },
+    {
+      "copyright_text": "NOASSERTION",
+      "kind": "archive",
+      "license_concluded": "NOASSERTION",
+      "license_url": null,
+      "members": [
+        {
+          "copyright_text": "Copyright (c) 2026 x86dx2",
+          "kind": "file",
+          "license_concluded": "MIT",
+          "license_url": "https://github.com/x86dx2/x86qw/blob/v1.0.0/LICENSE",
+          "members": [],
+          "ownership": "project",
+          "ownership_basis": "project-source",
+          "path": "inner/m1.txt",
+          "sha256": "ca0df2c95aa144c1d0ff2ff3c8f967fdc1de9ef0c4120b3726416701b519d619",
+          "size": 2,
+          "source": "fixture"
+        },
+        {
+          "copyright_text": "NOASSERTION",
+          "kind": "file",
+          "license_concluded": "NOASSERTION",
+          "license_url": null,
+          "members": [],
+          "ownership": "upstream",
+          "ownership_basis": "upstream-release",
+          "path": "inner/m2.txt",
+          "sha256": "29c1b289e7522195b362e44f54e05470b69ad20540ab60a18a05e5bf6951f13d",
+          "size": 2,
+          "source": "fixture"
+        }
+      ],
+      "ownership": "mixed",
+      "ownership_basis": "composed-archive",
+      "path": "pkg/b.zip",
+      "sha256": "33acc44d5563db5d2ad3905cfba689270701752308ebe035a35909df57af2bc1",
+      "size": 21,
+      "source": "fixture"
+    }
+  ],
+  "format": 1,
+  "project": "x86qw"
+}

@@ -48,9 +48,12 @@ jobs:
           ref: ${{ inputs.candidate_commit }}
           lfs: false
           fetch-depth: 1
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          python-version: "3.13"
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      - name: Build the release tool
+        run: go -C go build -o "$RUNNER_TEMP/x86qw-release" ./cmd/x86qw-release
       - name: Validate bounded coordinates
         env:
           CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
@@ -78,7 +81,7 @@ jobs:
           CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
           CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
         run: |
-          python3 maintenance/tools/verify_external_handoff.py \
+          "$RUNNER_TEMP/x86qw-release" verify-handoff \
             --run-id "$CANDIDATE_RUN_ID" \
             --commit "$CANDIDATE_COMMIT" \
             --artifact "$CANDIDATE_ARTIFACT_NAME" \
@@ -98,51 +101,41 @@ jobs:
         env:
           EXPECTED_CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
         run: |
-          actual="$(python3 -c 'import hashlib; print(hashlib.sha256(open("candidate/candidate.json", "rb").read()).hexdigest())')"
+          actual="$(sha256sum candidate/candidate.json | awk '{print $1}')"
           test "$actual" = "$EXPECTED_CANDIDATE_SHA256"
-          python3 maintenance/tools/release_candidate.py verify candidate
+          "$RUNNER_TEMP/x86qw-release" verify-candidate candidate
       - name: Decode bounded operation report
         env:
           OPERATION_REPORT_B64: ${{ inputs.operation_report_b64 }}
+        shell: bash
         run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/tuf-operation/report.json"
           mkdir -p "$RUNNER_TEMP/tuf-operation"
-          OPERATION_REPORT_B64="$OPERATION_REPORT_B64" python3 - "$RUNNER_TEMP/tuf-operation/report.json" <<'PY'
-          import base64
-          import os
-          import sys
-          from pathlib import Path
-
-          try:
-              payload = base64.b64decode(os.environ["OPERATION_REPORT_B64"], validate=True)
-          except (ValueError, UnicodeEncodeError) as error:
-              raise SystemExit(f"operation report base64 inválido: {error}")
-          if not payload or len(payload) > 2 * 1024 * 1024:
-              raise SystemExit("operation report ausente ou excede 2 MiB")
-          Path(sys.argv[1]).write_bytes(payload)
-          PY
+          # Strict alphabet and padding, like base64.b64decode(validate=True).
+          [[ "$OPERATION_REPORT_B64" =~ ^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$ ]] \
+            || { echo "operation report base64 inválido" >&2; exit 1; }
+          printf '%s' "$OPERATION_REPORT_B64" | base64 --decode > "$report"
+          size="$(wc -c < "$report")"
+          if [ "$size" -eq 0 ] || [ "$size" -gt 2097152 ]; then
+            echo "operation report ausente ou excede 2 MiB" >&2
+            exit 1
+          fi
       - name: Verify operation report against candidate target
         run: |
-          python3 maintenance/tools/verify_tuf_operation_report.py \
+          "$RUNNER_TEMP/x86qw-release" verify-tuf-operation \
             --candidate candidate \
             --report "$RUNNER_TEMP/tuf-operation/report.json" \
             > "$RUNNER_TEMP/tuf-operation/verified.json"
       - name: Record exact operation coordinates
         shell: bash
         run: |
-          python3 - "$RUNNER_TEMP/tuf-operation/report.json" <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import hashlib
-          import json
-          import sys
-          from pathlib import Path
-
-          path = Path(sys.argv[1])
-          report = json.loads(path.read_text(encoding="utf-8"))
-          operation = report["operation"]
-          print(f"report_sha256={hashlib.sha256(path.read_bytes()).hexdigest()}")
-          print(f"operator={operation['operator']}")
-          print(f"custody_host={operation['custody_host']}")
-          print(f"timestamp_sla_hours={operation['timestamp_sla_hours']}")
-          PY
+          set -euo pipefail
+          report="$RUNNER_TEMP/tuf-operation/report.json"
+          {
+            echo "report_sha256=$(sha256sum "$report" | awk '{print $1}')"
+            jq -r '.operation | "operator=\(.operator)", "custody_host=\(.custody_host)", "timestamp_sla_hours=\(.timestamp_sla_hours)"' "$report"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload exact operation report without overwrite
         id: upload
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0

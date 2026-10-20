@@ -1,0 +1,42 @@
+{
+  "artifact_count": 3,
+  "artifacts": {
+    "a.txt": {
+      "sha256": "c299a26e2d4aed8ce1cbce3a114bded336d658c78fe6bf3d647e94345dcd1dfd",
+      "size": 13
+    },
+    "docs/c d.txt": {
+      "sha256": "623c405d8dfad3ddfe6ac7edc5654a5e51d41c429ee4246c3147eb78bae88985",
+      "size": 13
+    },
+    "pkg/b.zip": {
+      "sha256": "33acc44d5563db5d2ad3905cfba689270701752308ebe035a35909df57af2bc1",
+      "size": 21
+    }
+  },
+  "candidate_sha256": "451ce065b8c05b91eed4bfe9f971552e7a7e4cc1af4fe456280859c47d0d311d",
+  "checksums": "checksums.txt",
+  "commit": "abababababababababababababababababababab",
+  "format": 2,
+  "generated_at": "2026-10-19T12:00:00Z",
+  "metadata": {
+    "checksums.txt": {
+      "sha256": "337eeb3b2364933599f7242abbf88a233d653084ffb8f0247495d9dd28625584",
+      "size": 227
+    },
+    "ownership.json": {
+      "sha256": "b196f20404afdae447d80a221f250bdc42c512b0731fd8ebbfd042554f40d1d5",
+      "size": 2253
+    },
+    "provenance.json": {
+      "sha256": "b587f513235c5f3751e48d1fa280fe4b4dedba478fda2751d7730b78f691327c",
+      "size": 701
+    },
+    "sbom.spdx.json": {
+      "sha256": "98583df964a96620888efc0a56ac975d1eb4053c92fa80a6040e4e740ed3b050",
+      "size": 2077
+    }
+  },
+  "project": "x86qw",
+  "version": "1.2.3-rc.1"
+}

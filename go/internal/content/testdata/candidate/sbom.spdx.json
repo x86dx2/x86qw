@@ -1,0 +1,75 @@
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "creationInfo": {
+    "created": "2026-10-19T12:00:00Z",
+    "creators": [
+      "Tool: x86QW release-candidate"
+    ]
+  },
+  "dataLicense": "CC0-1.0",
+  "documentNamespace": "https://qw.x86.com.br/release/1.2.3-rc.1/abababababababababababababababababababab",
+  "files": [
+    {
+      "SPDXID": "SPDXRef-file-1",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "c299a26e2d4aed8ce1cbce3a114bded336d658c78fe6bf3d647e94345dcd1dfd"
+        }
+      ],
+      "copyrightText": "Copyright (c) 2026 x86dx2",
+      "fileName": "a.txt",
+      "licenseConcluded": "MIT"
+    },
+    {
+      "SPDXID": "SPDXRef-file-2",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "623c405d8dfad3ddfe6ac7edc5654a5e51d41c429ee4246c3147eb78bae88985"
+        }
+      ],
+      "copyrightText": "NOASSERTION",
+      "fileName": "docs/c d.txt",
+      "licenseConcluded": "NOASSERTION"
+    },
+    {
+      "SPDXID": "SPDXRef-file-3",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "33acc44d5563db5d2ad3905cfba689270701752308ebe035a35909df57af2bc1"
+        }
+      ],
+      "copyrightText": "NOASSERTION",
+      "fileName": "pkg/b.zip",
+      "licenseConcluded": "NOASSERTION"
+    },
+    {
+      "SPDXID": "SPDXRef-file-4",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "ca0df2c95aa144c1d0ff2ff3c8f967fdc1de9ef0c4120b3726416701b519d619"
+        }
+      ],
+      "copyrightText": "Copyright (c) 2026 x86dx2",
+      "fileName": "pkg/b.zip::inner/m1.txt",
+      "licenseConcluded": "MIT"
+    },
+    {
+      "SPDXID": "SPDXRef-file-5",
+      "checksums": [
+        {
+          "algorithm": "SHA256",
+          "checksumValue": "29c1b289e7522195b362e44f54e05470b69ad20540ab60a18a05e5bf6951f13d"
+        }
+      ],
+      "copyrightText": "NOASSERTION",
+      "fileName": "pkg/b.zip::inner/m2.txt",
+      "licenseConcluded": "NOASSERTION"
+    }
+  ],
+  "name": "x86qw-1.2.3-rc.1",
+  "spdxVersion": "SPDX-2.3"
+}
