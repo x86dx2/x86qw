@@ -42,9 +42,7 @@ func (m *Model) body(width int) *page {
 	case scIntent:
 		m.intentPage(p)
 	case scConfigure:
-		m.configurePage(p)
-	case scConfirm:
-		m.confirmPage(p)
+		m.setupPage(p)
 	case scInstall:
 		m.installPage(p)
 	case scDone:
@@ -86,8 +84,8 @@ func (m *Model) logo(p *page) {
 // route draws the five steps as diamonds with the current step named.
 func (m *Model) route(p *page) {
 	t := m.theme
-	steps := []string{"route.intent", "route.config", "route.review", "route.install", "route.done"}
-	current := map[screen]int{scIntent: 0, scConfigure: 1, scConfirm: 2, scInstall: 3, scDone: 4}[m.screen]
+	steps := []string{"route.intent", "route.config", "route.install", "route.done"}
+	current := map[screen]int{scIntent: 0, scConfigure: 1, scInstall: 2, scDone: 3}[m.screen]
 	var b strings.Builder
 	for index := range steps {
 		if index > 0 {
@@ -207,13 +205,8 @@ func (m *Model) sectionRows() []reviewRow {
 	return append(rows, reviewRow{"folder", m.t("sec.folder"), shortPath(o.Target)})
 }
 
-// configRows are the setup screen: the sections, then Install.
-func (m *Model) configRows() []reviewRow {
-	return append(m.sectionRows(), reviewRow{"install", m.t("conf.go"), ""})
-}
-
-// confirmRows are the review screen: the sections, the recipe, then the
-// confirmation.
+// confirmRows are the setup screen: the sections, the recipe, then the
+// main action.
 func (m *Model) confirmRows() []reviewRow {
 	return append(m.sectionRows(), reviewRow{"recipe", m.t("sec.recipe"), "x86qw setup --intent " + string(m.opts.Intent) + " …"},
 		reviewRow{"confirm", m.confirmLabel(), ""})
@@ -221,6 +214,8 @@ func (m *Model) confirmRows() []reviewRow {
 
 func (m *Model) confirmLabel() string {
 	switch {
+	case !m.preOn:
+		return m.t("conf.go")
 	case !m.preDone:
 		return m.t("rev.checking")
 	case m.preflightOutcome() == setup.CheckFailed:
@@ -271,48 +266,6 @@ func (m *Model) primary(p *page, row reviewRow, focused, enabled bool, right str
 	}
 	left := base.Render("  ") + base.Foreground(fg).Bold(enabled).Render(glyph+" "+row.label)
 	p.band(spread(left, base.Foreground(t.Gray).Render(right)+base.Render("  "), p.width, bg), bg, "row:"+row.id)
-}
-
-// rows draws section rows and the primary action at the end.
-func (m *Model) rows(p *page, rows []reviewRow, primaryEnabled bool, primaryRight string) {
-	t := m.theme
-	for index, row := range rows {
-		focused := index == m.focus
-		if index == len(rows)-1 {
-			m.primary(p, row, focused, primaryEnabled, primaryRight)
-			continue
-		}
-		hovered := m.hover == "row:"+row.id
-		bg := p.rowBG(focused, hovered)
-		base := lipgloss.NewStyle().Background(bg)
-		label := base.Foreground(t.Text2)
-		if focused {
-			label = base.Foreground(t.Text).Bold(true)
-		}
-		left := base.Render("  ") + label.Render(padRight(row.label, 20))
-		right := base.Foreground(t.Gray).Render(row.summary) + base.Render("  ") + base.Foreground(t.Dim).Render(m.glyphs.Chevron) + base.Render("  ")
-		p.band(spread(left, right, p.width, bg), bg, "row:"+row.id)
-	}
-}
-
-func (m *Model) configurePage(p *page) {
-	m.route(p)
-	p.title(m.t("conf.title"))
-	p.lead(m.t("conf.lead"))
-	p.gap(1)
-	m.rows(p, m.configRows(), true, "↵")
-}
-
-func (m *Model) activateConfigure(id string) tea.Cmd {
-	if id != "install" {
-		m.openModal(id)
-		return nil
-	}
-	if err := m.opts.Validate(); err != nil {
-		m.say(err.Error())
-		return nil
-	}
-	return m.startPreflight()
 }
 
 // details lists everything chosen in one section, as label/value pairs.
@@ -410,15 +363,16 @@ func (m *Model) details(id string) [][2]string {
 	return nil
 }
 
-// confirmPage is the preflight and the review together: everything chosen,
-// the checks run against it, and a confirmation that waits.
-func (m *Model) confirmPage(p *page) {
+// setupPage shows everything that will be installed; each section opens
+// its editor. Install runs the preflight right above the button, which then
+// waits for a confirmation or a correction.
+func (m *Model) setupPage(p *page) {
 	t := m.theme
 	if m.h >= 52 {
 		m.route(p)
 	}
-	p.title(m.t("rev.title"))
-	p.lead(m.t("rev.lead"))
+	p.title(m.t("conf.title"))
+	p.lead(m.t("conf.lead"))
 	p.gap(1)
 	rows := m.confirmRows()
 	p.heading(m.t("rule.choices"))
@@ -468,7 +422,28 @@ func (m *Model) confirmPage(p *page) {
 		p.gap(1)
 	}
 
-	// The preflight sits right above the confirmation it decides.
+	// The preflight appears once Install is pressed, right above the
+	// confirmation it decides.
+	preStart := len(p.lines)
+	if m.preOn {
+		m.preflight(p)
+	}
+	enabled := !m.preOn || (m.preDone && m.preflightOutcome() != setup.CheckFailed)
+	right := ""
+	if enabled {
+		right = size(m.totalBytes()) + "  ↵"
+	}
+	start := len(p.lines)
+	focused := m.focus == len(rows)-1
+	m.primary(p, rows[len(rows)-1], focused, enabled, right)
+	if focused {
+		p.keep(min(start, preStart), len(p.lines)-1)
+	}
+}
+
+// preflight draws the checks and their verdict.
+func (m *Model) preflight(p *page) {
+	t := m.theme
 	p.heading(m.t("rule.pre"))
 	for _, check := range m.checks {
 		glyph, style, value := m.spinner(), p.st(t.Brand), p.st(t.Dim).Render(m.t("net.detecting"))
@@ -514,23 +489,19 @@ func (m *Model) confirmPage(p *page) {
 		p.add(p.st(color).Bold(true).Render("  " + text))
 	}
 
-	enabled := m.preDone && m.preflightOutcome() != setup.CheckFailed
-	right := ""
-	if enabled {
-		right = size(m.totalBytes()) + "  ↵"
-	}
-	start := len(p.lines)
-	focused := m.focus == len(rows)-1
-	m.primary(p, rows[len(rows)-1], focused, enabled, right)
-	if focused {
-		p.keep(start, len(p.lines)-1)
-	}
 }
 
 func (m *Model) activateConfirm(id string) tea.Cmd {
 	switch id {
 	case "confirm":
-		if m.preDone && m.preflightOutcome() != setup.CheckFailed {
+		switch {
+		case !m.preOn:
+			if err := m.opts.Validate(); err != nil {
+				m.say(err.Error())
+				return nil
+			}
+			return m.startPreflight()
+		case m.preDone && m.preflightOutcome() != setup.CheckFailed:
 			return m.startInstall()
 		}
 		return nil
@@ -903,7 +874,7 @@ func (m *Model) activatePanel(id string) tea.Cmd {
 	}
 	switch id {
 	case "change":
-		m.screen, m.focus, m.fromPanel = scConfigure, 0, true
+		m.screen, m.focus, m.fromPanel, m.preOn = scConfigure, 0, true, false
 	case "apply":
 		return m.startPreflight()
 	case "verify":

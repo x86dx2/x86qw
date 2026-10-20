@@ -20,7 +20,6 @@ type screen int
 
 const (
 	scIntent screen = iota
-	scConfirm
 	scConfigure
 	scInstall
 	scDone
@@ -58,7 +57,8 @@ type Model struct {
 
 	checks  []setup.Check
 	preDone bool
-	preRun  int // counts preflight runs, so a stale auto-start is ignored
+	preRun  int  // counts preflight runs, so late checks of an old run are ignored
+	preOn   bool // Install was pressed: the preflight shows on the setup screen
 	preCh   <-chan setup.Check
 
 	focus     int  // focused row on the current screen
@@ -177,7 +177,7 @@ func (m *Model) Init() tea.Cmd {
 // about 12 fps, spinners and progress at 30 fps.
 func (m *Model) tick() tea.Cmd {
 	interval := 83 * time.Millisecond
-	if m.screen == scConfirm || m.screen == scInstall || (m.screen == scPanel && m.panelView == "repair" && m.verify < 100) {
+	if (m.screen == scConfigure && m.preOn && !m.preDone) || m.screen == scInstall || (m.screen == scPanel && m.panelView == "repair" && m.verify < 100) {
 		interval = 33 * time.Millisecond
 	}
 	return tea.Tick(interval, func(t time.Time) tea.Msg { return tickMsg(t) })
@@ -321,9 +321,11 @@ func (m *Model) resolve(hostname string) tea.Cmd {
 	}
 }
 
-// startPreflight runs the checks for the current options.
+// startPreflight runs the checks for the current options under the setup,
+// right above the confirmation.
 func (m *Model) startPreflight() tea.Cmd {
-	m.screen, m.checks, m.preDone, m.focus = scConfirm, nil, false, 0
+	m.screen, m.preOn, m.checks, m.preDone = scConfigure, true, nil, false
+	m.focus = len(m.confirmRows()) - 1
 	m.preRun++
 	m.preCh = m.cfg.Backend.Preflight(context.Background(), m.opts)
 	return m.nextCheck()
@@ -412,7 +414,7 @@ func (m *Model) key(key string) tea.Cmd {
 				return tea.Quit
 			}
 		}
-	case scConfirm:
+	case scConfigure:
 		rows := m.confirmRows()
 		switch key {
 		case "up", "k":
@@ -423,25 +425,17 @@ func (m *Model) key(key string) tea.Cmd {
 			return m.activateConfirm(rows[m.focus].id)
 		case "c":
 			return m.copyRecipe()
-		case "esc", "left", "backspace":
-			m.preRun++ // drop checks still on their way
-			m.screen, m.focus = scConfigure, len(m.configRows())-1
-		}
-	case scConfigure:
-		rows := m.configRows()
-		switch key {
-		case "up", "k":
-			m.focus = (m.focus + len(rows) - 1) % len(rows)
-		case "down", "j", "tab":
-			m.focus = (m.focus + 1) % len(rows)
-		case "enter", "right", "space", " ":
-			return m.activateConfigure(rows[m.focus].id)
 		case "i":
-			return m.activateConfigure("install")
+			return m.activateConfirm("confirm")
 		case "esc", "left", "backspace":
-			if m.fromPanel {
+			switch {
+			case m.preOn:
+				// Fold the preflight away; Install brings it back.
+				m.preRun++
+				m.preOn, m.preDone, m.checks = false, false, nil
+			case m.fromPanel:
 				m.screen, m.focus = scPanel, 1
-			} else {
+			default:
 				m.screen, m.focus = scIntent, 0
 			}
 		}
@@ -486,7 +480,7 @@ func (m *Model) leaveIntent() tea.Cmd {
 		return nil
 	}
 	m.opts.Nick = strings.TrimSpace(m.nick.String())
-	m.screen, m.focus = scConfigure, len(m.configRows())-1
+	m.screen, m.focus, m.preOn = scConfigure, 0, false
 	return nil
 }
 
@@ -758,16 +752,27 @@ func (m *Model) footerHints() [][2]string {
 	switch m.screen {
 	case scIntent:
 		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"ctrl+c", m.t("k.quit")}}
-	case scConfirm:
+	case scConfigure:
+		// The main action keeps its i shortcut; on its row, enter is it.
+		action := ""
+		switch {
+		case !m.preOn:
+			action = m.t("k.install")
+		case m.preDone && m.preflightOutcome() != setup.CheckFailed:
+			action = m.t("k.confirm")
+		}
 		items := [][2]string{{"↑↓", m.t("k.choose")}}
-		if m.preDone && m.preflightOutcome() != setup.CheckFailed {
-			items = append(items, [2]string{"enter", m.t("k.confirm")})
-		} else {
+		rows := m.confirmRows()
+		switch {
+		case rows[m.focus].id != "confirm":
 			items = append(items, [2]string{"enter", m.t("k.edit")})
+			if action != "" {
+				items = append(items, [2]string{"i", action})
+			}
+		case action != "":
+			items = append(items, [2]string{"enter", action})
 		}
 		return append(items, [2]string{"c", m.t("k.copy")}, [2]string{"esc", m.t("k.back")})
-	case scConfigure:
-		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.edit")}, {"i", m.t("k.install")}, {"esc", m.t("k.back")}}
 	case scInstall:
 		pause := m.t("k.pause")
 		if m.progress.Paused {

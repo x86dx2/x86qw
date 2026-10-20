@@ -40,7 +40,7 @@ func (m *Model) closeModal() tea.Cmd {
 		kind = m.modal.kind
 	}
 	m.modal = nil
-	if m.screen == scConfirm && kind != "recipe" {
+	if m.screen == scConfigure && m.preOn && kind != "recipe" {
 		return tea.Batch(cmd, m.startPreflight())
 	}
 	return cmd
@@ -199,13 +199,6 @@ func (m *Model) clickRow(id string) tea.Cmd {
 	}
 	switch m.screen {
 	case scConfigure:
-		for index, row := range m.configRows() {
-			if row.id == id {
-				m.focus = index
-				return m.activateConfigure(id)
-			}
-		}
-	case scConfirm:
 		for index, row := range m.confirmRows() {
 			if row.id == id {
 				m.focus = index

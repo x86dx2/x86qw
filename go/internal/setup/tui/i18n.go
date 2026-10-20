@@ -11,7 +11,7 @@ const (
 var texts = map[string][2]string{
 	// chrome
 	"subtitle":     {"instalador", "installer"},
-	"route.intent": {"intenção", "intent"}, "route.config": {"configuração", "setup"}, "route.review": {"pré-voo e revisão", "preflight and review"},
+	"route.intent": {"intenção", "intent"}, "route.config": {"configuração", "setup"},
 	"route.install": {"instalação", "install"}, "route.done": {"pronto", "done"}, "route.panel": {"painel", "panel"},
 	"k.choose": {"escolher", "choose"}, "k.next": {"seguir", "continue"}, "k.back": {"voltar", "back"}, "k.quit": {"sair", "quit"},
 	"k.edit": {"editar", "edit"}, "k.install": {"instalar", "install"}, "k.copy": {"copiar receita", "copy recipe"},
@@ -131,10 +131,8 @@ var texts = map[string][2]string{
 	"pre.warn":        {"Uma observação. Corrija nas escolhas acima ou instale mesmo assim.", "One note. Fix it in the choices above or install anyway."},
 	"pre.fail":        {"Algo impede a instalação. Corrija nas escolhas acima.", "Something blocks the install. Fix it in the choices above."},
 	"conf.title":      {"Configuração", "Setup"},
-	"conf.lead":       {"Os padrões já servem. Enter abre cada item para ajustar.", "The defaults already work. Enter opens each item to adjust it."},
+	"conf.lead":       {"Tudo o que vai ser instalado. Enter abre cada item para ajustar; Instalar confere a máquina antes de começar.", "Everything that will be installed. Enter opens each item to adjust it; Install checks the machine before starting."},
 	"conf.go":         {"Instalar", "Install"},
-	"rev.title":       {"Pré-voo e revisão", "Preflight and review"},
-	"rev.lead":        {"A máquina é conferida com as suas escolhas. Nada é instalado até você confirmar.", "The machine is checked against your choices. Nothing is installed until you confirm."},
 	"rule.pre":        {"pré-voo", "preflight"},
 	"rule.choices":    {"suas escolhas", "your choices"},
 	"rev.confirm":     {"Confirmar e instalar", "Confirm and install"},

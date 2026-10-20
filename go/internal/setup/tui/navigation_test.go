@@ -42,11 +42,15 @@ func TestKeyboardNavigation(t *testing.T) {
 	drive(m, key("enter"))
 	want(scConfigure, "intenção → configuração")
 	m.Update(key("i")) // without running what it starts
-	want(scConfirm, "instalar abre o pré-voo e revisão")
+	if m.screen != scConfigure || !m.preOn {
+		t.Fatal("instalar deveria abrir o pré-voo na própria configuração")
+	}
 	m.Update(key("esc"))
-	want(scConfigure, "esc no pré-voo e revisão volta à configuração")
+	if m.screen != scConfigure || m.preOn {
+		t.Fatal("esc deveria recolher o pré-voo e ficar na configuração")
+	}
 	drive(m, key("i"))
-	want(scConfirm, "o pré-voo termina e espera a confirmação")
+	want(scConfigure, "o pré-voo termina e espera a confirmação")
 	if !m.preDone || m.confirmRows()[m.focus].id != "confirm" {
 		t.Fatalf("o foco deveria ir para Confirmar e instalar: %d", m.focus)
 	}
@@ -112,7 +116,7 @@ func TestPreflightWarningWaitsAndCorrects(t *testing.T) {
 	m := started(t, false)
 	drive(m, typeText("x86dx2")...)
 	drive(m, key("down"), key("down"), key("enter"), key("i"))
-	if m.screen != scConfirm || m.preflightOutcome() != setup.CheckWarning {
+	if m.screen != scConfigure || !m.preOn || m.preflightOutcome() != setup.CheckWarning {
 		t.Fatalf("aviso deveria esperar na revisão: tela %d", m.screen)
 	}
 	// Correct it in place: Server → first port 27501, then close.
@@ -125,7 +129,7 @@ func TestPreflightWarningWaitsAndCorrects(t *testing.T) {
 	if m.opts.Server.BasePort != 27501 {
 		t.Fatalf("porta inicial: %d", m.opts.Server.BasePort)
 	}
-	if m.screen != scConfirm || !m.preDone || m.preflightOutcome() != setup.CheckOK {
+	if m.screen != scConfigure || !m.preDone || m.preflightOutcome() != setup.CheckOK {
 		t.Fatalf("o pré-voo deveria rodar de novo e passar: tela %d, %v", m.screen, m.preflightOutcome())
 	}
 	m.Update(key("enter"))
