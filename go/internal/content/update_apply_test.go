@@ -260,3 +260,104 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 		t.Errorf("arquivos dos outros componentes sairam da revisao anterior: %v", err)
 	}
 }
+
+// TestUpdateFollowsNQuakeOneComponentAtATime runs a real update on a clone
+// after nQuake changed one file of x86qw-client-bootstrap and added an
+// unused one: only the bootstrap moves to the new revision, its x86QW
+// replacements are re-pinned, the inventory records the new revision and
+// every other package keeps its bytes.
+func TestUpdateFollowsNQuakeOneComponentAtATime(t *testing.T) {
+	if os.Getenv("X86QW_CONTENT_PARITY_BUILD") != "1" {
+		t.Skip("defina X86QW_CONTENT_PARITY_BUILD=1 para exercitar update completo")
+	}
+	root := repoRoot(t)
+	requireHydrated(t, root)
+	clone := cloneCheckout(t, root)
+	const moved = "x86qw-client-bootstrap"
+
+	project := NewProject(clone)
+	catalog, err := LoadJSONObject(project.Path(CatalogPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kept []any
+	for _, pkg := range objects(catalog.Value("packages")) {
+		if pkg.Value("channel") != "content" {
+			kept = append(kept, pkg)
+		}
+	}
+	catalog.Set("packages", kept)
+	if err := WriteJSON(project.Path(CatalogPath), catalog); err != nil {
+		t.Fatal(err)
+	}
+	built, err := project.BuildPackages(project.Path(DistDir), t.TempDir(), BuildOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := map[string]string{}
+	for _, pkg := range objects(built.Value("packages")) {
+		before[pyjson.Repr(pkg.Value("filename"))] = pyjson.Repr(pkg.Value("sha256"))
+	}
+	releases, _ := project.Releases()
+	previous := ReferenceRevisionOf(releases, moved)
+
+	web := movedReference(currentUpstreams(t, clone, ""), appendComment)
+	web.nquake.files["sv-maps/qw/maps/novo.bsp"] = NQuakeFile{3, sha256Hex([]byte("bsp")), gitBlob([]byte("bsp"))}
+	project.HTTP = web.client()
+	project.Run = (&recorder{}).run
+	var out bytes.Buffer
+	if err := project.Update(&out, UpdateOptions{Workers: 4, Yes: true}); err != nil {
+		t.Fatalf("update: %v\n%s", err, out.String())
+	}
+
+	fresh := NewProject(clone)
+	updated, err := fresh.Releases()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for identifier, pinned := range ReferenceRevisions(updated) {
+		want := previous
+		if identifier == moved {
+			want = movedRevision
+		}
+		if pinned != want {
+			t.Errorf("%s fixa %s, esperado %s", identifier, pinned, want)
+		}
+	}
+	if version := pyjson.Get(updated, "components", moved, "version"); version != "222222222222+x86qw.4" {
+		t.Errorf("versao do bootstrap: %v", version)
+	}
+	newFile, _ := web.nquake.body(changedFile)
+	for _, replacement := range objects(pyjson.Get(updated, "components", moved, "text_replacements")) {
+		if replacement.Value("source_sha256") != sha256Hex(newFile) {
+			t.Errorf("substituicao nao foi refixada no arquivo novo: %v", replacement.Value("before"))
+		}
+	}
+	inventory, err := LoadNQuakeInventory(fresh.Path(NQuakeInventoryPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := inventory.Files["sv-maps/qw/maps/novo.bsp"]; inventory.Revision != movedRevision || !ok {
+		t.Errorf("inventario nQuake nao avancou: %s", inventory.Revision)
+	}
+	components, _ := fresh.Components()
+	if _, err := LoadSourceContext(fresh.Path(DistDir), components, updated); err != nil {
+		t.Fatalf("dist depois do update: %v", err)
+	}
+	after, _ := LoadJSONObject(fresh.Path(CatalogPath))
+	movedFile := moved + "-222222222222+x86qw.4.zip"
+	found := false
+	for _, pkg := range objects(after.Value("packages")) {
+		filename := pyjson.Repr(pkg.Value("filename"))
+		switch {
+		case pkg.Value("channel") != "content" || filename == "x86qw-core-id1-0.1.0.zip":
+		case filename == movedFile:
+			found = pkg.Value("source_commit") == movedRevision
+		case before[filename] != pyjson.Repr(pkg.Value("sha256")):
+			t.Errorf("pacote de outro componente mudou: %s", filename)
+		}
+	}
+	if !found {
+		t.Fatalf("catalogo nao registrou %s:\n%s", movedFile, out.String())
+	}
+}

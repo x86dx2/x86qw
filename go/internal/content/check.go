@@ -335,6 +335,7 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool, selected []st
 	var delta []DeltaItem
 	var review []string
 	var referenceNote *Object
+	var nquakeNote *NQuakeReport
 	unavailable := Unavailable{}
 	if !offline {
 		progress := out
@@ -376,6 +377,11 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool, selected []st
 				changedList = append(changedList, owner)
 			}
 			referenceNote = object("pinned", pinned, "upstream", head, "changed_components", changedList)
+			if len(selected) == 0 {
+				if nquakeNote, _, err = p.nquakeReport(); err != nil {
+					return 0, err
+				}
+			}
 			moving := func(owner string) bool { return changed[owner] && inScope(owner) }
 			if assets, err = PreserveCurrentReferenceAssets(assets, manifest, p.Path(DistDir), func(owner string) bool { return !moving(owner) }); err != nil {
 				return 0, err
@@ -445,6 +451,11 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool, selected []st
 		}
 		payload, _ := pyjson.Encode(object("components", components, "distribution", distribution, "reference", note,
 			"review_required", reviewList, "unavailable_sources", sources), false)
+		if nquakeNote != nil {
+			decoded, _ := pyjson.Decode(payload, pyjson.LastWins)
+			decoded.(*Object).Set("nquake", nquakeNote.Object())
+			payload, _ = pyjson.Encode(decoded, false)
+		}
 		fmt.Fprintln(out, string(payload))
 	} else {
 		for _, item := range shown {
@@ -470,6 +481,11 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool, selected []st
 		if len(review) > 0 {
 			fmt.Fprintf(out, "[REVISAR] %d candidato(s) remoto(s) ainda não possuem SHA-256 previamente fixado; nenhum deles pode ser promovido por update.\n", len(review))
 		}
+		if nquakeNote != nil {
+			for _, line := range nquakeNote.Lines() {
+				fmt.Fprintln(out, line)
+			}
+		}
 		unchecked := len(failed)
 		if ezquakeDown {
 			unchecked++
@@ -481,7 +497,7 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool, selected []st
 		fmt.Fprintln(out, ".")
 	}
 	switch {
-	case len(outdated) > 0 || len(delta) > 0 || len(review) > 0:
+	case len(outdated) > 0 || len(delta) > 0 || len(review) > 0 || (nquakeNote != nil && nquakeNote.Pending()):
 		return 2, nil
 	case len(failed) > 0 || ezquakeDown:
 		return 1, nil

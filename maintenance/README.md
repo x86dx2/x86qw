@@ -95,11 +95,34 @@ Pro-X) fixam cada um sua própria revisão em `reference_revision`
 arquivo consumido existe em exatamente uma delas, a do seu dono, e uma
 revisão que nenhum componente fixa mais é removida.
 
-Quando o nQuake anda, `check` compara os arquivos que cada componente consome
-e marca para atualização somente os componentes cujos arquivos mudaram; os
-demais continuam na revisão que já fixam. `update` nunca promove uma revisão
-nova: o componente afetado aparece como `[PULADO]` (ou `[REVISAR]`, quando
-também tem upstream próprio) e é incorporado com `add`.
+O nQuake é a base da distribuição. `maintenance/inventory/nquake.json`
+registra todos os arquivos da última revisão revisada (caminho, tamanho,
+SHA-256 e hash Git) e, em `unused`, o motivo de cada parte que a distribuição
+não usa. Todo arquivo do nQuake é consumido por um componente (fonte
+`reference` em `components.json`) ou declarado não usado; `verify` exige essa
+classificação completa e sem sobreposição.
+
+Quando o nQuake anda:
+
+- `check` lê a árvore Git e o `manifest.json` que o nQuake publica (SHA-256 de
+  cada arquivo, conferido contra a árvore) e marca para atualização somente os
+  componentes cujos arquivos consumidos mudaram; os demais continuam na
+  revisão que já fixam. Mudanças em partes não usadas aparecem como
+  `[NQUAKE] nao usado pela distro, <parte>: N novo(s)...` e um arquivo que
+  ninguém classificou aparece como `[CLASSIFICAR]`;
+- `update` leva cada componente afetado à revisão nova sozinho: baixa só os
+  arquivos que mudaram (os iguais são reaproveitados do `dist`), confere
+  SHA-256 e hash Git, troca a revisão na versão (ou incrementa `+x86qw.N`
+  quando a versão não carrega a revisão) e refixa as customizações x86QW
+  (`text_replacements`, `archive_text_replacements`) cujo texto ainda se
+  aplica ao arquivo novo. Uma customização que não se aplica mais, ou a camada
+  de composição do `ktx.pk3`, para apenas aquele componente
+  (`[PULADO]`/`[REVISAR]`) para revisão;
+- sem seleção, `update` também avança `nquake.json` para a revisão nova, desde
+  que todo arquivo esteja classificado.
+
+Para adotar uma parte hoje não usada, crie o componente com `add` e remova a
+regra correspondente de `unused`.
 
 O snapshot nQuake já registrado pode ser reparado mecanicamente porque caminho,
 URL, tamanho e SHA-256 estão fixados no manifesto. Uma revisão nQuake nova, um

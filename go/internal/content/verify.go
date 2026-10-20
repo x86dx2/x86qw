@@ -74,6 +74,13 @@ func (p *Project) Verify(out io.Writer, options VerifyOptions) error {
 	if err != nil {
 		return err
 	}
+	nquake, err := LoadNQuakeInventory(p.Path(NQuakeInventoryPath))
+	if err != nil {
+		return err
+	}
+	if err := ValidateNQuakeInventory(nquake, components); err != nil {
+		return err
+	}
 	var revisions []string
 	for _, revision := range sources.Revisions() {
 		revisions = append(revisions, revision[:12])

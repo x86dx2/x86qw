@@ -270,6 +270,7 @@ func (p *Project) prepareWorkspace() (string, error) {
 		func() error { return copyFile(p.Path(ComponentsPath), filepath.Join(work, "components.json")) },
 		func() error { return copyFile(p.Path(ReleasesPath), filepath.Join(work, "component-releases.json")) },
 		func() error { return copyFile(p.Path(CatalogPath), filepath.Join(work, "catalog.json")) },
+		func() error { return copyFile(p.Path(NQuakeInventoryPath), filepath.Join(work, "nquake.json")) },
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {
@@ -287,7 +288,8 @@ func (p *Project) applyWorkspace(work string, includeComponents bool) error {
 		targets = append(targets, [2]string{filepath.Join(work, "components.json"), p.Path(ComponentsPath)},
 			[2]string{filepath.Join(work, "component-releases.json"), p.Path(ReleasesPath)})
 	}
-	targets = append(targets, [2]string{filepath.Join(work, "catalog.json"), p.Path(CatalogPath)})
+	targets = append(targets, [2]string{filepath.Join(work, "catalog.json"), p.Path(CatalogPath)},
+		[2]string{filepath.Join(work, "nquake.json"), p.Path(NQuakeInventoryPath)})
 	if exists(filepath.Join(work, "packages")) {
 		targets = append(targets, [2]string{filepath.Join(work, "packages"), p.Path(BuildsDir)})
 	}
@@ -338,7 +340,7 @@ func (p *Project) requireCleanWorktree() error {
 type Confirm func(message string) error
 
 // downloadAsset mirrors sync_distribution.download_asset.
-func (p *Project) downloadAsset(root string, asset Asset, known *Object) (*Object, bool, error) {
+func (p *Project) downloadAsset(root string, asset Asset, known *Object, reuse string) (*Object, bool, error) {
 	if asset.ExpectedSize <= 0 || asset.ExpectedSize > MaxArtifactBytes || !sha256Pattern.MatchString(asset.ExpectedSHA256) {
 		return nil, false, fmt.Errorf("distribution asset requires reviewed size and SHA-256 before download: %s", asset.Path)
 	}
@@ -361,8 +363,20 @@ func (p *Project) downloadAsset(root string, asset Asset, known *Object) (*Objec
 	}
 	staging := target + ".x86qw-download"
 	defer os.Remove(staging)
-	if err := p.Pinned(asset.URL, staging, asset.ExpectedSize, asset.ExpectedSHA256, 3); err != nil {
-		return nil, false, err
+	reused := false
+	if reuse != "" && reuse != target && isFile(reuse) && !isSymlink(reuse) {
+		if os.Link(reuse, staging) != nil {
+			copyFile(reuse, staging)
+		}
+		size, _ := fileSize(staging)
+		digest, _ := fileSHA256(staging)
+		reused = size == asset.ExpectedSize && digest == asset.ExpectedSHA256
+	}
+	if !reused {
+		os.Remove(staging)
+		if err := p.Pinned(asset.URL, staging, asset.ExpectedSize, asset.ExpectedSHA256, 3); err != nil {
+			return nil, false, err
+		}
 	}
 	if asset.ExpectedGitSHA1 != "" {
 		file, err := os.Open(staging)
@@ -389,7 +403,7 @@ func (p *Project) downloadAsset(root string, asset Asset, known *Object) (*Objec
 	if asset.Subcomponent != "" {
 		metadata.Set("package", asset.Subcomponent)
 	}
-	return metadata, false, nil
+	return metadata, reused, nil
 }
 
 func removeEmptyDirectories(root string) {
@@ -414,6 +428,14 @@ func (p *Project) syncCandidate(out io.Writer, candidate string, assets []Asset,
 		return nil, err
 	}
 	files := manifest.Value("files").(*Object)
+	// A component that moves to another nQuake revision keeps most of its
+	// files byte for byte; reuse the local copy instead of downloading it.
+	local := map[string]string{}
+	for _, relative := range files.Keys() {
+		if digest, ok := pyjson.Get(files, relative, "sha256").(string); ok {
+			local[digest] = joinPosix(candidate, relative)
+		}
+	}
 	desired := map[string]bool{}
 	for _, asset := range assets {
 		desired[asset.Path] = true
@@ -434,7 +456,7 @@ func (p *Project) syncCandidate(out io.Writer, candidate string, assets []Asset,
 			defer group.Done()
 			for asset := range jobs {
 				known, _ := files.Value(asset.Path).(*Object)
-				metadata, cached, err := p.downloadAsset(candidate, asset, known)
+				metadata, cached, err := p.downloadAsset(candidate, asset, known, local[asset.ExpectedSHA256])
 				results <- outcome{asset, metadata, cached, err}
 			}
 		}()
@@ -633,13 +655,18 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 			}
 		}
 	}
-	// A moved nQuake revision is never promoted here: a component whose
-	// consumed files changed needs a reviewed definition ('add'), and every
-	// component keeps the nQuake files it pins.
+	// A component whose consumed nQuake files changed follows the
+	// discovered revision on its own, unless one of its x86QW
+	// customizations no longer applies; every other component keeps the
+	// nQuake files it pins. Without a selection the whole nQuake inventory
+	// is refreshed too.
 	var notices []string
+	var moves []referenceMove
+	var head string
+	var nquakeReport *NQuakeReport
+	var nquakeInventory *NQuakeInventory
 	if unavailable["nquake"] == "" {
-		head, err := ReferenceRevision(assets)
-		if err != nil {
+		if head, err = ReferenceRevision(assets); err != nil {
 			return err
 		}
 		changed, err := ReferenceChanges(assets, manifest, p.Path(DistDir))
@@ -650,16 +677,46 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 		for _, item := range results {
 			strategies[item.Component] = item.Strategy
 		}
+		if err := os.MkdirAll(p.Path("maintenance/build"), 0o755); err != nil {
+			return err
+		}
+		scratch, err := os.MkdirTemp(p.Path("maintenance/build"), "nquake-")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(scratch)
+		moving := map[string]bool{}
 		for _, owner := range sortedKeys(changed) {
-			reason := fmt.Sprintf("nQuake %s alterou arquivos consumidos; incorpore com 'add' e uma definicao revisada", head[:12])
-			if !IsReferenceStrategy(strategies[owner]) {
-				notices = append(notices, fmt.Sprintf("[REVISAR] %s: %s", owner, reason))
-			} else if err := skip(owner, reason); err != nil {
+			if _, out := skipped[owner]; out || (len(explicit) > 0 && !explicit[owner]) {
+				continue
+			}
+			release, _ := pyjson.Get(releases, "components", owner).(*Object)
+			if release == nil {
+				continue
+			}
+			move, reason, err := p.planReferenceMove(owner, release, p.nquake, assets, manifest, scratch)
+			if err != nil {
 				return err
 			}
+			if reason != "" {
+				reason = "nQuake " + head[:12] + ": " + reason
+				if !IsReferenceStrategy(strategies[owner]) {
+					notices = append(notices, fmt.Sprintf("[REVISAR] %s: %s", owner, reason))
+				} else if err := skip(owner, reason); err != nil {
+					return err
+				}
+				continue
+			}
+			moves = append(moves, move)
+			moving[owner] = true
 		}
-		if assets, err = PreserveCurrentReferenceAssets(assets, manifest, p.Path(DistDir), func(string) bool { return true }); err != nil {
+		if assets, err = PreserveCurrentReferenceAssets(assets, manifest, p.Path(DistDir), func(owner string) bool { return !moving[owner] }); err != nil {
 			return err
+		}
+		if len(explicit) == 0 {
+			if nquakeReport, nquakeInventory, err = p.nquakeReport(); err != nil {
+				return err
+			}
 		}
 	}
 	inScope := func(id string) bool {
@@ -692,6 +749,23 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 	for _, notice := range notices {
 		fmt.Fprintln(out, notice)
 	}
+	for _, move := range moves {
+		fmt.Fprintf(out, "[NQUAKE] %s: %s -> %s (%d arquivo(s) do nQuake alterado(s); %d customizacao(oes) x86QW reaplicada(s))\n",
+			move.owner, prefix(ReferenceRevisionOf(releases, move.owner), 12), head[:12], len(move.changed), len(move.repins))
+	}
+	inventoryChanged := false
+	if nquakeReport != nil {
+		for _, line := range nquakeReport.Lines() {
+			fmt.Fprintln(out, line)
+		}
+		inventoryChanged = len(nquakeReport.Unclassified) == 0 && (nquakeInventory.Revision != head || !nquakeInventory.Same(p.nquake))
+		if len(nquakeReport.Unclassified) > 0 {
+			fmt.Fprintf(out, "[INFO] O inventario nQuake so avanca quando todo arquivo estiver classificado em %s.\n", NQuakeInventoryPath)
+		}
+		if inventoryChanged {
+			fmt.Fprintf(out, "[INFO] Inventario nQuake: %s -> %s.\n", nquakeInventory.Revision[:12], head[:12])
+		}
+	}
 	if assets, err = PinAssetsFromManifest(assets, manifest); err != nil {
 		return err
 	}
@@ -701,7 +775,27 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 		return err
 	}
 	if len(delta) == 0 && len(review) == 0 {
-		fmt.Fprintln(out, "[OK] O dist e os inventarios ja representam os upstreams atuais.")
+		if !inventoryChanged {
+			fmt.Fprintln(out, "[OK] O dist e os inventarios ja representam os upstreams atuais.")
+			return nil
+		}
+		// Only the inventory of the unused nQuake files moves: no package
+		// changes, so nothing is rebuilt.
+		if options.DryRun {
+			return nil
+		}
+		if err := p.requireCleanWorktree(); err != nil {
+			return err
+		}
+		if !options.Yes {
+			if err := options.Confirm("Atualizar o inventario nQuake?"); err != nil {
+				return err
+			}
+		}
+		if err := WriteJSON(p.Path(NQuakeInventoryPath), nquakeInventory.Document(p.nquake)); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "[OK] Inventario nQuake atualizado para %s.\n", head[:12])
 		return nil
 	}
 	fmt.Fprintf(out, "[INFO] %d alteracao(oes) de arquivo.\n", len(delta))
@@ -748,6 +842,14 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 		return err
 	}
 	updateClientCompatibility(stagedReleases, stable, nightly)
+	for _, move := range moves {
+		applyReferenceMove(pyjson.Get(stagedReleases, "components", move.owner).(*Object), head, move)
+	}
+	if inventoryChanged {
+		if err := WriteJSON(filepath.Join(work, "nquake.json"), nquakeInventory.Document(p.nquake)); err != nil {
+			return err
+		}
+	}
 	if err := WriteJSON(filepath.Join(work, "component-releases.json"), stagedReleases); err != nil {
 		return err
 	}

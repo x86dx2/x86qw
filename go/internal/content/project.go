@@ -68,6 +68,9 @@ type Project struct {
 	upstreams     *Object
 	upstreamsErr  error
 	upstreamsDone bool
+
+	// nquake is the whole nQuake revision the last discovery saw.
+	nquake *NQuakeUpstream
 }
 
 // NewProject returns a project rooted at root.

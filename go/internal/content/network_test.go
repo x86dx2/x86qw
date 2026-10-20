@@ -2,6 +2,7 @@ package content
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -24,6 +25,66 @@ type fakeWeb struct {
 	mu       sync.Mutex
 	handler  http.HandlerFunc
 	requests []string
+	nquake   *fakeNQuake
+}
+
+// fakeNQuake is the nQuake repository a fake serves: every file of the
+// inventory, with the consumed ones as the checkout pins them, its Git tree
+// and its manifest.json.
+type fakeNQuake struct {
+	revision string
+	files    map[string]NQuakeFile
+	local    map[string]string // consumed path -> file in dist
+	data     map[string][]byte // path -> content that replaces local
+}
+
+func (n *fakeNQuake) tree() string {
+	sum := sha1.Sum([]byte(n.revision))
+	return hex.EncodeToString(sum[:])
+}
+
+func (n *fakeNQuake) treeEntries() []any {
+	var entries []any
+	for _, path := range sortedKeys(n.files) {
+		file := n.files[path]
+		entries = append(entries, object("path", path, "mode", "100644", "type", "blob", "sha", file.GitSHA1,
+			"size", pyjson.Number(fmt.Sprint(file.Size))))
+	}
+	return entries
+}
+
+func (n *fakeNQuake) manifest() *Object {
+	packages := pyjson.NewObject()
+	for _, path := range sortedKeys(n.files) {
+		name, relative, _ := strings.Cut(path, "/")
+		group, _ := packages.Value(name).(*Object)
+		if group == nil {
+			group = object("bytes", pyjson.Number("0"), "files", []any{})
+			packages.Set(name, group)
+		}
+		file := n.files[path]
+		group.Set("files", append(group.Value("files").([]any), object("path", relative,
+			"size", pyjson.Number(fmt.Sprint(file.Size)), "sha256", file.SHA256)))
+	}
+	return object("schema", pyjson.Number("1"), "commit", n.revision, "generated", "2026-10-20T00:00:00Z", "packages", packages)
+}
+
+func (n *fakeNQuake) body(path string) ([]byte, bool) {
+	if data, ok := n.data[path]; ok {
+		return data, true
+	}
+	if source, ok := n.local[path]; ok {
+		data, err := os.ReadFile(source)
+		return data, err == nil
+	}
+	return nil, false
+}
+
+func gitBlob(data []byte) string {
+	digest := sha1.New()
+	fmt.Fprintf(digest, "blob %d\x00", len(data))
+	digest.Write(data)
+	return hex.EncodeToString(digest.Sum(nil))
 }
 
 func (f *fakeWeb) RoundTrip(request *http.Request) (*http.Response, error) {
@@ -75,8 +136,14 @@ func currentUpstreams(t *testing.T, root string, extraNightly string) *fakeWeb {
 		t.Fatal(err)
 	}
 	revision := ReferenceRevisionOf(releases, "nquake-maps")
-	const tree = "1111111111111111111111111111111111111111"
-	var entries []any
+	inventory, err := LoadNQuakeInventory(filepath.Join(root, NQuakeInventoryPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nquake := &fakeNQuake{revision: revision, files: map[string]NQuakeFile{}, local: map[string]string{}, data: map[string][]byte{}}
+	for path, file := range inventory.Files {
+		nquake.files[path] = file
+	}
 	sizes := map[string]int64{}
 	bodies := map[string]string{} // url -> dist path for GET
 	for _, relative := range files.Keys() {
@@ -85,12 +152,14 @@ func currentUpstreams(t *testing.T, root string, extraNightly string) *fakeWeb {
 		sizes[url] = int64Of(metadata.Value("size"))
 		bodies[url] = relative
 		if parts, ok := nquakeSnapshotParts(relative); ok {
-			digest, err := GitBlobSHA1(filepath.Join(root, "dist", filepath.FromSlash(relative)))
+			local := filepath.Join(root, "dist", filepath.FromSlash(relative))
+			digest, err := GitBlobSHA1(local)
 			if err != nil {
 				t.Fatal(err)
 			}
-			entries = append(entries, object("path", strings.Join(parts[3:], "/"), "mode", "100644", "type", "blob",
-				"sha", digest, "size", metadata.Value("size")))
+			upstream := strings.Join(parts[3:], "/")
+			nquake.files[upstream] = NQuakeFile{int64Of(metadata.Value("size")), pyjson.Repr(metadata.Value("sha256")), digest}
+			nquake.local[upstream] = local
 		}
 	}
 	latest := map[string]string{"QW-Group/ezquake-source": "3.6.9"}
@@ -112,17 +181,26 @@ func currentUpstreams(t *testing.T, root string, extraNightly string) *fakeWeb {
 			nightlies[directory] = append(nightlies[directory], posixName(relative))
 		}
 	}
-	web := &fakeWeb{}
+	web := &fakeWeb{nquake: nquake}
 	web.handler = func(w http.ResponseWriter, r *http.Request) {
 		full := "https://" + r.URL.Host + r.URL.Path
 		switch {
 		case r.URL.Host == "api.github.com" && r.URL.Path == "/repos/nQuake/distfiles/git/ref/heads/master":
-			writeJSONResponse(w, object("ref", "refs/heads/master", "object", object("type", "commit", "sha", revision,
-				"url", "https://api.github.com/repos/nQuake/distfiles/git/commits/"+revision)))
-		case r.URL.Host == "api.github.com" && r.URL.Path == "/repos/nQuake/distfiles/git/commits/"+revision:
-			writeJSONResponse(w, object("sha", revision, "tree", object("sha", tree, "url", "https://api.github.com/repos/nQuake/distfiles/git/trees/"+tree)))
-		case r.URL.Host == "api.github.com" && r.URL.Path == "/repos/nQuake/distfiles/git/trees/"+tree && r.URL.RawQuery == "recursive=1":
-			writeJSONResponse(w, object("sha", tree, "truncated", false, "tree", entries))
+			writeJSONResponse(w, object("ref", "refs/heads/master", "object", object("type", "commit", "sha", nquake.revision,
+				"url", "https://api.github.com/repos/nQuake/distfiles/git/commits/"+nquake.revision)))
+		case r.URL.Host == "api.github.com" && r.URL.Path == "/repos/nQuake/distfiles/git/commits/"+nquake.revision:
+			writeJSONResponse(w, object("sha", nquake.revision, "tree", object("sha", nquake.tree(), "url", "https://api.github.com/repos/nQuake/distfiles/git/trees/"+nquake.tree())))
+		case r.URL.Host == "api.github.com" && r.URL.Path == "/repos/nQuake/distfiles/git/trees/"+nquake.tree() && r.URL.RawQuery == "recursive=1":
+			writeJSONResponse(w, object("sha", nquake.tree(), "truncated", false, "tree", nquake.treeEntries()))
+		case r.URL.Host == "raw.githubusercontent.com" && r.URL.Path == "/nQuake/distfiles/"+nquake.revision+"/manifest.json":
+			writeJSONResponse(w, nquake.manifest())
+		case r.URL.Host == "raw.githubusercontent.com" && strings.HasPrefix(r.URL.Path, "/nQuake/distfiles/"+nquake.revision+"/"):
+			data, ok := nquake.body(strings.TrimPrefix(r.URL.Path, "/nQuake/distfiles/"+nquake.revision+"/"))
+			if !ok {
+				http.NotFound(w, r)
+				return
+			}
+			w.Write(data)
 		case r.URL.Host == "github.com" && strings.HasSuffix(r.URL.Path, "/releases/latest"):
 			repository := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), "/releases/latest")
 			tag, ok := latest[repository]
@@ -583,38 +661,24 @@ func TestEachComponentIsCheckedOnItsOwn(t *testing.T) {
 	}
 }
 
-// movedReference serves a new nQuake revision in which only changedFile, a
-// file of x86qw-client-bootstrap, changed.
+// movedReference moves the fake nQuake to a new revision in which only
+// changedFile, a file of x86qw-client-bootstrap, changed to edit(original).
 const changedFile = "non-gpl/qw/nquake_default.cfg"
 
-func movedReference(web *fakeWeb) *fakeWeb {
-	const revision, tree = "2222222222222222222222222222222222222222", "3333333333333333333333333333333333333333"
-	upstream := web.handler
-	web.handler = func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/repos/nQuake/distfiles/git/ref/heads/master":
-			writeJSONResponse(w, object("ref", "refs/heads/master", "object", object("type", "commit", "sha", revision,
-				"url", "https://api.github.com/repos/nQuake/distfiles/git/commits/"+revision)))
-		case "/repos/nQuake/distfiles/git/commits/" + revision:
-			writeJSONResponse(w, object("sha", revision, "tree", object("sha", tree, "url", "https://api.github.com/repos/nQuake/distfiles/git/trees/"+tree)))
-		case "/repos/nQuake/distfiles/git/trees/" + tree:
-			original := r.Clone(r.Context())
-			original.URL.Path = "/repos/nQuake/distfiles/git/trees/1111111111111111111111111111111111111111"
-			recorded := httptest.NewRecorder()
-			upstream(recorded, original)
-			listing, _ := pyjson.Decode(recorded.Body.Bytes(), pyjson.RejectDuplicates)
-			for _, entry := range objects(pyjson.Get(listing, "tree")) {
-				if entry.Value("path") == changedFile {
-					entry.Set("sha", "4444444444444444444444444444444444444444")
-				}
-			}
-			listing.(*Object).Set("sha", tree)
-			writeJSONResponse(w, listing)
-		default:
-			upstream(w, r)
-		}
-	}
+const movedRevision = "2222222222222222222222222222222222222222"
+
+func movedReference(web *fakeWeb, edit func([]byte) []byte) *fakeWeb {
+	original, _ := web.nquake.body(changedFile)
+	data := edit(original)
+	web.nquake.revision = movedRevision
+	web.nquake.data[changedFile] = data
+	web.nquake.files[changedFile] = NQuakeFile{int64(len(data)), sha256Hex(data), gitBlob(data)}
 	return web
+}
+
+// appendComment changes the file without touching what x86QW replaces.
+func appendComment(data []byte) []byte {
+	return append(append([]byte{}, data...), "\n// nQuake mudou\n"...)
 }
 
 func TestEachComponentKeepsItsOwnNQuakeRevision(t *testing.T) {
@@ -624,7 +688,7 @@ func TestEachComponentKeepsItsOwnNQuakeRevision(t *testing.T) {
 
 	// Only the component whose consumed file changed is reported.
 	project := NewProject(root)
-	project.HTTP = movedReference(currentUpstreams(t, root, "")).client()
+	project.HTTP = movedReference(currentUpstreams(t, root, ""), appendComment).client()
 	code, err := project.Check(&out, &info, false, true, nil)
 	if err != nil || code != 2 {
 		t.Fatalf("check com nQuake movido: %d %v\n%s", code, err, out.String())
@@ -646,7 +710,7 @@ func TestEachComponentKeepsItsOwnNQuakeRevision(t *testing.T) {
 	}
 	for _, item := range objects(pyjson.Get(report, "distribution")) {
 		path := pyjson.Repr(item.Value("path"))
-		if parts, ok := nquakeSnapshotParts(path); ok && parts[2] == "2222222222222222222222222222222222222222" {
+		if parts, ok := nquakeSnapshotParts(path); ok && parts[2] == movedRevision {
 			continue
 		}
 		if parts, ok := nquakeSnapshotParts(path); ok {
@@ -657,29 +721,74 @@ func TestEachComponentKeepsItsOwnNQuakeRevision(t *testing.T) {
 		}
 	}
 
-	// update never promotes it: the component is skipped, the others and
-	// their files stay as they are.
+	// update moves it alone and re-pins the x86QW replacements that still
+	// apply; the others and their files stay as they are.
 	update := NewProject(root)
-	update.HTTP = movedReference(currentUpstreams(t, root, "")).client()
+	update.HTTP = movedReference(currentUpstreams(t, root, ""), appendComment).client()
 	out.Reset()
 	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true}); err != nil {
 		t.Fatalf("update geral com nQuake movido: %v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "[PULADO] x86qw-client-bootstrap: nQuake 222222222222 alterou") || strings.Contains(out.String(), "distributions/nquake") {
-		t.Fatalf("update geral deveria pular so o bootstrap:\n%s", out.String())
+	if !strings.Contains(out.String(), "[NQUAKE] x86qw-client-bootstrap: e4cb23d40aa2 -> 222222222222 (1 arquivo(s) do nQuake alterado(s); 3 customizacao(oes) x86QW reaplicada(s))") ||
+		!strings.Contains(out.String(), "snapshot nQuake: e4cb23d40aa2 (12 removidos) -> 222222222222 (12 novos)") ||
+		!strings.Contains(out.String(), "[INFO] Inventario nQuake: ") {
+		t.Fatalf("update geral deveria mover so o bootstrap:\n%s", out.String())
 	}
 	update = NewProject(root)
-	update.HTTP = movedReference(currentUpstreams(t, root, "")).client()
+	update.HTTP = movedReference(currentUpstreams(t, root, ""), appendComment).client()
 	out.Reset()
-	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true, Components: []string{"nquake-maps", "ktx"}}); err != nil {
-		t.Fatalf("componentes sem mudanca no nQuake deveriam atualizar sozinhos: %v\n%s", err, out.String())
+	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true, Components: []string{"nquake-maps", "ktx"}}); err != nil ||
+		!strings.Contains(out.String(), "[OK] O dist e os inventarios ja representam os upstreams atuais.") {
+		t.Fatalf("componentes sem mudanca no nQuake deveriam ficar como estao: %v\n%s", err, out.String())
+	}
+
+	// A replacement that no longer applies stops only that component.
+	broken := func(data []byte) []byte {
+		return bytes.Replace(data, []byte("gl_max_size                          \"32768\""), []byte("gl_max_size 4096"), 1)
 	}
 	update = NewProject(root)
-	update.HTTP = movedReference(currentUpstreams(t, root, "")).client()
+	update.HTTP = movedReference(currentUpstreams(t, root, ""), broken).client()
+	out.Reset()
+	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true}); err != nil ||
+		!strings.Contains(out.String(), "[PULADO] x86qw-client-bootstrap: nQuake 222222222222: a substituicao x86QW em non-gpl/qw/nquake_default.cfg nao se aplica mais") ||
+		strings.Contains(out.String(), "snapshot nQuake") {
+		t.Fatalf("update deveria pular so o bootstrap com substituicao quebrada: %v\n%s", err, out.String())
+	}
+	update = NewProject(root)
+	update.HTTP = movedReference(currentUpstreams(t, root, ""), broken).client()
 	out.Reset()
 	err = update.Update(&out, UpdateOptions{Workers: 4, DryRun: true, Components: []string{"x86qw-client-bootstrap"}})
-	if err == nil || !strings.Contains(err.Error(), "incorpore com 'add'") {
-		t.Fatalf("update do bootstrap deveria exigir add: %v\n%s", err, out.String())
+	if err == nil || !strings.Contains(err.Error(), "revise text_replacements") {
+		t.Fatalf("update explicito do bootstrap deveria pedir revisao: %v\n%s", err, out.String())
+	}
+}
+
+func TestEveryNQuakeFileIsClassified(t *testing.T) {
+	root := repoRoot(t)
+	requireHydrated(t, root)
+	web := currentUpstreams(t, root, "")
+	web.nquake.files["sv-maps/qw/maps/novo.bsp"] = NQuakeFile{3, sha256Hex([]byte("bsp")), gitBlob([]byte("bsp"))}
+	web.nquake.files["sv-novo/leia.txt"] = NQuakeFile{4, sha256Hex([]byte("novo")), gitBlob([]byte("novo"))}
+	project := NewProject(root)
+	project.HTTP = web.client()
+	var out, info bytes.Buffer
+	code, err := project.Check(&out, &info, false, false, nil)
+	if err != nil || code != 2 {
+		t.Fatalf("check com arquivos novos no nQuake: %d %v\n%s", code, err, out.String())
+	}
+	if !strings.Contains(out.String(), "[NQUAKE] nao usado pela distro, sv-maps: 1 novo(s), 0 alterado(s), 0 removido(s)") ||
+		!strings.Contains(out.String(), "[CLASSIFICAR] sv-novo/leia.txt: ") {
+		t.Fatalf("check deveria classificar as mudancas do nQuake:\n%s", out.String())
+	}
+
+	// Unclassified files keep the inventory where it is; the rest of the
+	// update goes on.
+	update := NewProject(root)
+	update.HTTP = web.client()
+	out.Reset()
+	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true}); err != nil ||
+		!strings.Contains(out.String(), "[CLASSIFICAR] sv-novo/leia.txt: ") || strings.Contains(out.String(), "[INFO] Inventario nQuake") {
+		t.Fatalf("update nao deveria avancar o inventario com arquivo nao classificado: %v\n%s", err, out.String())
 	}
 }
 
