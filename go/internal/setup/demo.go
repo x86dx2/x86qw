@@ -1,0 +1,314 @@
+package setup
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"math/rand/v2"
+	"sort"
+	"time"
+)
+
+// Demo is a Backend that installs nothing: the catalog is the real x86QW
+// content, the network is detected for real, and preflight and install are
+// simulated. It drives prototypes, screenshots and interface tests.
+type Demo struct {
+	// ExistingInstall makes Existing report an installation.
+	ExistingInstall bool
+	// Speed scales the simulated install (1 = about 14 s for any size).
+	Speed float64
+}
+
+var demoComponents = []Component{
+	{"x86qw-client-bootstrap", "Base do cliente x86QW", "Inicialização, defaults e camadas globais sobre o nQuake.", "core", 28919, nil},
+	{"nquake-visual-core", "Interface nQuake", "Pacotes principais do ezQuake e a identidade visual nQuake.", "core", 15351608, []string{"x86qw-client-bootstrap"}},
+	{"ktx", "KTX x86QW", "KTX 1.47 com 24 modos, Frogbots e Coach de Quad.", "gameplay", 2542965, []string{"x86qw-client-bootstrap"}},
+	{"nquake-maps", "Mapas nQuake", "Os mapas da distribuição nQuake com ENT e textos.", "content", 20471003, []string{"x86qw-client-bootstrap"}},
+	{"nquake-base-textures", "Texturas base", "Pacote de texturas base selecionado pelo nQuake.", "content", 21149469, []string{"nquake-visual-core"}},
+	{"nquake-player-skins", "Skins de jogadores", "Skins GPL e comunitárias para jogadores e times.", "content", 14552089, []string{"nquake-visual-core"}},
+	{"nquake-models", "Modelos", "Modelos atualizados empacotados pelo nQuake.", "content", 4045436, []string{"nquake-visual-core"}},
+	{"nquake-skyboxes", "Skyboxes", "Céus de alta resolução.", "content", 3988263, []string{"nquake-visual-core"}},
+	{"nquake-external-textures", "Texturas externas", "Texturas avulsas mantidas pelo nQuake.", "content", 3835861, []string{"nquake-visual-core"}},
+	{"nquake-scoreboard-flags", "Bandeiras do placar", "Bandeiras de países no placar.", "content", 368135, []string{"nquake-visual-core"}},
+	{"nquake-crosshairs", "Miras", "A coleção de miras do nQuake.", "content", 14979, []string{"nquake-visual-core"}},
+	{"nquake-documentation", "Documentação e licenças", "Licenças upstream e guias x86QW.", "documentation", 13000, nil},
+	{"nquake-matchinfo", "Demos históricas", "Demos de partidas e treino mantidas pelo nQuake.", "content", 7411045, []string{"x86qw-client-bootstrap"}},
+	{"qrp-hires", "QRP alta resolução", "Texturas e brush models do Quake Retexturing Project.", "addon", 404142164, []string{"nquake-visual-core"}},
+	{"final-arena", "Final Arena", "Duelos em fila com perfil x86QW.", "addon", 6984652, []string{"x86qw-client-bootstrap"}},
+	{"pro-x", "Pro-X", "Rounds, times e votações.", "addon", 9081189, []string{"x86qw-client-bootstrap"}},
+	{"team-fortress", "Team Fortress", "TF 2.9 com assets e mapas nQuake.", "addon", 8566807, []string{"x86qw-client-bootstrap"}},
+	{"total-destruction-2", "Total Destruction 2", "Armas, magias e runas do TD2QW 2.22.", "addon", 502676, []string{"x86qw-client-bootstrap"}},
+	{"mvdsv", "MVDSV dedicado", "Servidor QuakeWorld 1.11 com MVD e QTV.", "server", 1121507, nil},
+	{"qtv", "QTV", "Transmissão ao vivo e demos MVD.", "server", 12079507, nil},
+	{"qwfwd", "QWFWD", "Proxy QuakeWorld 1.30.", "server", 287467, nil},
+}
+
+var demoModes = []Mode{
+	{"duel", "Duel", "dm6", []string{"dm6", "dm2", "dm4", "aerowalk", "ztndm3"}},
+	{"2on2", "2on2", "dm6", []string{"dm6", "dm4", "aerowalk", "ztndm3"}},
+	{"4on4", "4on4", "dm3", []string{"dm3", "dm2", "e1m2", "schloss"}},
+	{"ffa", "Free For All", "dm6", []string{"dm6", "dm3", "dm4", "e1m1"}},
+	{"clan-arena", "Clan Arena", "dm6", []string{"dm6", "dm3", "aerowalk"}},
+	{"ctf", "Capture The Flag", "e2m2", []string{"e2m2", "e1m5", "e1m3", "e2m5"}},
+	{"midair", "Midair", "dm4", []string{"dm4", "dm6"}},
+	{"instagib", "Instagib", "dm4", []string{"dm4", "dm3", "dm6"}},
+	{"race", "Race", "dm6", []string{"dm6", "dm4"}},
+	{"practice", "Practice", "dm6", []string{"dm6", "dm2", "dm4", "dm3"}},
+}
+
+// Catalog returns the real x86QW content.
+func (d *Demo) Catalog(context.Context) (*Catalog, error) {
+	profiles := map[string][]string{
+		"essential":   {"x86qw-client-bootstrap", "nquake-visual-core", "ktx"},
+		"recommended": {"x86qw-client-bootstrap", "nquake-visual-core", "ktx", "nquake-player-skins", "nquake-crosshairs", "nquake-skyboxes", "nquake-models", "nquake-scoreboard-flags", "nquake-external-textures", "nquake-base-textures", "nquake-maps", "nquake-documentation"},
+	}
+	for _, component := range demoComponents {
+		if component.Kind != "server" {
+			profiles["complete"] = append(profiles["complete"], component.ID)
+		}
+	}
+	return &Catalog{
+		Components: demoComponents, Profiles: profiles, CoreSize: 23817401,
+		ClientSize: map[string]int64{"macos": 23400000, "linux": 9800000, "windows": 11900000}, Modes: demoModes,
+	}, nil
+}
+
+// Existing reports the demo installation when ExistingInstall is set.
+func (d *Demo) Existing(_ context.Context, target string) (*Existing, error) {
+	if !d.ExistingInstall {
+		return nil, nil
+	}
+	options := Defaults(Play, target)
+	options.Nick = "x86dx2"
+	return &Existing{Target: target, CLIVersion: "2.0.3", Components: 12, Options: options, Updates: []Update{
+		{"x86qw-client-bootstrap", "Base do cliente x86QW", "e4cb23d40aa2+x86qw.4", "dfb2ac9299f7+x86qw.4", "nQuake"},
+		{"ktx", "KTX x86QW", "1.47+x86qw.19", "1.47+x86qw.20", ""},
+		{"x86qw-core-id1", "Dados do Quake", "0.1.0", "0.1.1", ""},
+	}}, nil
+}
+
+// Network detects the real addresses.
+func (d *Demo) Network(ctx context.Context) Network { return DetectNetwork(ctx) }
+
+// CheckHostname resolves for real.
+func (d *Demo) CheckHostname(ctx context.Context, hostname string, network Network) DNSCheck {
+	return CheckHostname(ctx, hostname, network)
+}
+
+// Preflight simulates the checks with plausible values.
+func (d *Demo) Preflight(ctx context.Context, options Options) <-chan Check {
+	out := make(chan Check)
+	checks := []Check{
+		{ID: "folder", Title: "Pasta de instalação", Detail: "Vazia e com permissão de escrita.", Value: options.Target, State: CheckOK},
+		{ID: "disk", Title: "Espaço em disco", Detail: "Sobra espaço de sobra.", Value: "412 GB livres", State: CheckOK},
+		{ID: "net", Title: "Conexão", Detail: "Medida baixando 4 MB do catálogo.", Value: "41,3 MB/s", State: CheckOK},
+		{ID: "catalog", Title: "Catálogo assinado", Detail: "TUF v51, válido até 18/01/2027.", Value: "33 pacotes", State: CheckOK},
+	}
+	if options.Intent.WantsClient() {
+		checks = append(checks, Check{ID: "screen", Title: "Tela", Detail: "O vídeo começa ajustado a ela.", Value: "2560×1440 · 144 Hz", State: CheckOK})
+	}
+	if options.Intent.WantsServer() {
+		ports := options.Server.Ports()
+		check := Check{ID: "ports", Title: "Portas do servidor", Detail: fmt.Sprintf("UDP %d–%d livres.", ports[0], ports[len(ports)-1]), Value: "livres", State: CheckOK}
+		if options.Server.BasePort == 27500 {
+			// The demo shows the warning path: something already holds 27500.
+			check = Check{ID: "ports", Title: "Portas do servidor", Detail: "UDP 27500 está em uso por outro processo.", Value: "27500 ocupada",
+				Fix: "Mude a porta inicial para 27510 em Servidor, ou instale mesmo assim.", State: CheckWarning}
+		}
+		checks = append(checks, check)
+	}
+	go func() {
+		defer close(out)
+		for _, check := range checks {
+			running := check
+			running.State, running.Value = CheckRunning, ""
+			select {
+			case out <- running:
+			case <-ctx.Done():
+				return
+			}
+			select {
+			case <-time.After(time.Duration(280+rand.IntN(260)) * time.Millisecond):
+			case <-ctx.Done():
+				return
+			}
+			select {
+			case out <- check:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return out
+}
+
+var demoFiles = map[string][]string{
+	"core":                 {"id1/pak0.pak"},
+	"ezquake":              {"ezquake/ezquake.pk3", "ezQuake"},
+	"nquake-maps":          {"qw/maps/dm6.bsp", "qw/maps/dm4.bsp", "qw/maps/aerowalk.bsp", "qw/maps/ztndm3.bsp", "qw/maps/e1m2.bsp", "qw/maps/schloss.bsp"},
+	"nquake-base-textures": {"qw/textures.pk3"},
+	"nquake-visual-core":   {"qw/nquake.pk3", "ezquake/ezquake.pk3"},
+	"ktx":                  {"qw/ktx.pk3", "qw/qwprogs.qvm"},
+	"qrp-hires":            {"qw/qrp_maps_textures_1.pk3", "qw/qrp_maps_textures_2.pk3", "qw/qrp_maps_textures_3.pk3", "qw/qrp_b-models.pk3"},
+	"nquake-player-skins":  {"qw/skins/base.png", "qw/skins/blue.png", "qw/skins/red.png"},
+	"nquake-skyboxes":      {"qw/env/tron_up.tga", "qw/env/tron_dn.tga"},
+	"mvdsv":                {"mvdsv"},
+	"qtv":                  {"qtv/qtv.bin", "qtv/levelshots/dm6.jpg"},
+}
+
+// Install simulates the download with a fluctuating speed; sending on
+// control pauses (true) or resumes (false).
+func (d *Demo) Install(ctx context.Context, options Options, control <-chan bool) <-chan Progress {
+	out := make(chan Progress)
+	catalog, _ := d.Catalog(ctx)
+	lanes := []Lane{{ID: "core", Label: "Dados do Quake", Size: catalog.CoreSize}}
+	if options.Intent.WantsClient() {
+		lanes = append(lanes, Lane{ID: "ezquake", Label: "ezQuake 3.6.9", Size: catalog.ClientSize["macos"]})
+	}
+	for _, id := range Selected(catalog, options) {
+		for _, component := range catalog.Components {
+			if component.ID == id {
+				lanes = append(lanes, Lane{ID: id, Label: component.Label, Size: component.Size})
+			}
+		}
+	}
+	sort.SliceStable(lanes, func(i, j int) bool { return lanes[i].Size > lanes[j].Size })
+	for index := range lanes {
+		lanes[index].FileCount = max(1, len(demoFiles[lanes[index].ID]))
+	}
+	var total int64
+	for _, lane := range lanes {
+		total += lane.Size
+	}
+	speedFactor := d.Speed
+	if speedFactor <= 0 {
+		speedFactor = 1
+	}
+	scale := math.Max(1, float64(total)/(14*38e6)) * speedFactor
+	go func() {
+		defer close(out)
+		progress := Progress{Lanes: lanes, Total: total}
+		ticker := time.NewTicker(50 * time.Millisecond)
+		defer ticker.Stop()
+		var elapsed time.Duration
+		smoothed := 0.0
+		for {
+			select {
+			case <-ctx.Done():
+				progress.Err = ctx.Err()
+				out <- progress
+				return
+			case paused := <-control:
+				progress.Paused = paused
+			case <-ticker.C:
+			}
+			if progress.Paused {
+				out <- snapshot(progress)
+				continue
+			}
+			elapsed += 50 * time.Millisecond
+			t := elapsed.Seconds()
+			mbs := 26 + 14*math.Sin(t*1.7) + 6*math.Sin(t*4.3) + rand.Float64()*4
+			smoothed = smoothed*0.8 + mbs*0.2
+			budget := mbs * 1048576 * 0.05 * scale
+			var active []int
+			for index := range progress.Lanes {
+				if progress.Lanes[index].Done < progress.Lanes[index].Size && len(active) < 4 {
+					active = append(active, index)
+				}
+			}
+			for _, index := range active {
+				lane := &progress.Lanes[index]
+				take := int64(budget / float64(len(active)))
+				if lane.Size < 2e6 {
+					take = lane.Size
+				}
+				if take > lane.Size-lane.Done {
+					take = lane.Size - lane.Done
+				}
+				lane.Done += take
+				progress.Done += take
+				files := demoFiles[lane.ID]
+				if len(files) == 0 {
+					files = []string{lane.ID + ".pk3"}
+				}
+				per := lane.Size / int64(len(files))
+				for lane.Files < len(files) && lane.Done >= per*int64(lane.Files+1)-1 {
+					kind := byte('+')
+					if lane.ID == "nquake-crosshairs" {
+						kind, lane.Kept = '=', lane.Kept+1
+					}
+					progress.Log = append(progress.Log, LogLine{At: elapsed, Kind: kind, Path: files[lane.Files], Size: per})
+					lane.Files++
+				}
+			}
+			progress.Speed = smoothed * 1048576 * scale
+			if progress.Speed > 0 {
+				progress.ETA = time.Duration(float64(progress.Total-progress.Done) / progress.Speed * float64(time.Second))
+			}
+			if progress.Done >= progress.Total {
+				progress.Done, progress.Finished, progress.ETA = progress.Total, true, 0
+				progress.Log = append(progress.Log, LogLine{At: elapsed, Kind: '+', Path: "configs geradas: preset.cfg, servidores e integração"})
+				out <- snapshot(progress)
+				return
+			}
+			select {
+			case out <- snapshot(progress):
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return out
+}
+
+func snapshot(progress Progress) Progress {
+	progress.Lanes = append([]Lane(nil), progress.Lanes...)
+	progress.Log = append([]LogLine(nil), progress.Log...)
+	return progress
+}
+
+// Selected resolves the components an installation includes, with their
+// dependencies, in catalog order.
+func Selected(catalog *Catalog, options Options) []string {
+	chosen := map[string]bool{}
+	if options.Intent.WantsClient() {
+		ids := catalog.Profiles[options.Content]
+		if options.Content == "custom" {
+			ids = options.Components
+		}
+		for _, id := range ids {
+			chosen[id] = true
+		}
+	}
+	if options.Intent.WantsServer() {
+		chosen["mvdsv"], chosen["ktx"] = true, true
+		if options.Server.QTVPort != 0 {
+			chosen["qtv"] = true
+		}
+		if options.Server.QWFWDPort != 0 {
+			chosen["qwfwd"] = true
+		}
+	}
+	requires := map[string][]string{}
+	for _, component := range catalog.Components {
+		requires[component.ID] = component.Requires
+	}
+	for grew := true; grew; {
+		grew = false
+		for id := range chosen {
+			for _, dependency := range requires[id] {
+				if !chosen[dependency] && options.Intent.WantsClient() {
+					chosen[dependency], grew = true, true
+				}
+			}
+		}
+	}
+	var ids []string
+	for _, component := range catalog.Components {
+		if chosen[component.ID] {
+			ids = append(ids, component.ID)
+		}
+	}
+	return ids
+}
