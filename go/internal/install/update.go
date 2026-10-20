@@ -273,7 +273,7 @@ func prepareCache(root string) error {
 			return nil
 		}
 		entries, _ := os.ReadDir(root)
-		if len(entries) > 0 {
+		if len(entries) > 0 && !download.AdoptableCache(root) {
 			return fmt.Errorf("o diretório de cache contém arquivos que não pertencem ao instalador e foi preservado: %s", root)
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {

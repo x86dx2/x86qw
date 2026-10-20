@@ -146,6 +146,11 @@ func ownedCaches() ([]string, error) {
 		}
 		markerPath := filepath.Join(candidate.path, candidate.marker)
 		marker, err := os.ReadFile(markerPath)
+		if errors.Is(err, fs.ErrNotExist) && candidate.marker == cacheMarker && download.AdoptableCache(candidate.path) {
+			// Only the CLI's TUF metadata, written before any install.
+			owned = append(owned, candidate.path)
+			continue
+		}
 		if err != nil || strings.TrimRight(string(marker), "\n") != candidate.value {
 			return nil, fmt.Errorf("O diretório de cache contém arquivos que não pertencem ao instalador e foi preservado: %s", candidate.path)
 		}
