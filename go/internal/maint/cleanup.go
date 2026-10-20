@@ -206,7 +206,9 @@ func quarantineRemove(paths []string) error {
 	}
 	var errs []error
 	for _, item := range done {
-		errs = append(errs, os.RemoveAll(item.aside))
+		if err := os.RemoveAll(item.aside); err != nil && !removeAfterExit(item.original, item.aside) {
+			errs = append(errs, err)
+		}
 	}
 	return errors.Join(errs...)
 }
