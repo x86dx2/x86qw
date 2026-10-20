@@ -1,0 +1,98 @@
+name: Windows e2e
+
+# Manual end-to-end check of the Windows path: the served install.ps1, setup,
+# shortcuts, private ACLs, background services and uninstall. It installs
+# the complete profile (about 1 GB).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: windows e2e
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          lfs: false
+      # The site challenges GitHub's Windows runner IPs (Cloudflare "Just a
+      # moment..."), so the served install.ps1 runs from the checkout and the
+      # catalog comes from the repository instead of the site's TUF chain.
+      - name: Instalar com o install.ps1 publicado (cópia do repositório)
+        run: |
+          $ErrorActionPreference = "Stop"
+          $inst = Join-Path $env:RUNNER_TEMP "inst"
+          & .\site\public\install.ps1 --target $inst --profile complete --catalog-file "$PWD\site\public\api\v1\catalog.json"
+          if ($LASTEXITCODE -ne 0) { throw "setup falhou: $LASTEXITCODE" }
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      - name: Adotar a CLI desta branch na instalação
+        run: |
+          $ErrorActionPreference = "Stop"
+          $inst = Join-Path $env:RUNNER_TEMP "inst"
+          go -C go build -o "$env:RUNNER_TEMP\x86qw-branch.exe" ./cmd/x86qw
+          & "$env:RUNNER_TEMP\x86qw-branch.exe" setup --target $inst --catalog-file "$PWD\site\public\api\v1\catalog.json"
+          if ($LASTEXITCODE -ne 0) { throw "setup da branch: $LASTEXITCODE" }
+      - name: verify, doctor, atalhos e ACL
+        run: |
+          $ErrorActionPreference = "Stop"
+          $inst = Join-Path $env:RUNNER_TEMP "inst"
+          Set-Location $inst
+          .\x86qw.cmd verify; if ($LASTEXITCODE -ne 0) { throw "verify" }
+          .\x86qw.cmd doctor; if ($LASTEXITCODE -ne 0) { throw "doctor" }
+          foreach ($lnk in @("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\x86QW.lnk", "$env:USERPROFILE\Desktop\x86QW.lnk")) {
+            if (-not (Test-Path -LiteralPath $lnk -PathType Leaf)) { throw "atalho ausente: $lnk" }
+            $target = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk).TargetPath
+            Write-Host "atalho $lnk -> $target"
+          }
+          icacls .x86qw
+          $sddl = (Get-Acl .x86qw).Sddl
+          Write-Host $sddl
+          if ($sddl -notmatch "D:P") { throw "DACL de .x86qw não é protegida" }
+      - name: hospedar KTX em segundo plano, consultar e encerrar
+        run: |
+          $ErrorActionPreference = "Stop"
+          $inst = Join-Path $env:RUNNER_TEMP "inst"
+          Set-Location $inst
+          .\x86qw.cmd host ktx --mode duel --map dm6 --background
+          if ($LASTEXITCODE -ne 0) { throw "host --background: $LASTEXITCODE" }
+          $active = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            $out = .\x86qw.cmd status | Out-String
+            if ($out -match "MVDSV") { $active = $true; Write-Host $out; break }
+            Start-Sleep -Seconds 1
+          }
+          if (-not $active) { .\x86qw.cmd status; throw "stack não ficou ativa" }
+          Get-Process mvdsv
+          .\x86qw.cmd status --stop --yes
+          if ($LASTEXITCODE -ne 0) { throw "status --stop: $LASTEXITCODE" }
+          Start-Sleep -Seconds 2
+          if (Get-Process mvdsv -ErrorAction SilentlyContinue) { throw "mvdsv sobreviveu ao stop" }
+          $out = .\x86qw.cmd status | Out-String
+          Write-Host $out
+          if ($out -notmatch "Nenhum servi") { throw "stack ainda ativa" }
+      - name: desinstalar remove os atalhos e a CLI
+        run: |
+          $ErrorActionPreference = "Stop"
+          $inst = Join-Path $env:RUNNER_TEMP "inst"
+          & "$inst\x86qw.cmd" uninstall
+          if ($LASTEXITCODE -ne 0) { throw "uninstall: $LASTEXITCODE" }
+          if (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\x86QW.lnk") { throw "atalho do Menu Iniciar ficou" }
+          if (Test-Path "$env:USERPROFILE\Desktop\x86QW.lnk") { throw "atalho da Area de Trabalho ficou" }
+          $deadline = (Get-Date).AddSeconds(30)
+          do {
+            Start-Sleep -Seconds 1
+            $left = @(Get-ChildItem -Force (Join-Path $inst ".x86qw") -ErrorAction SilentlyContinue | Where-Object Name -match "quarantine")
+            if (Test-Path "$inst\x86qw.cmd") { $left += "x86qw.cmd" }
+          } while ($left.Count -gt 0 -and (Get-Date) -lt $deadline)
+          if ($left.Count -gt 0) { throw "nao removidos apos a saida: $($left -join ', ')" }
+          Write-Host "CLI removida apos a saida; restante: $((Get-ChildItem -Force (Join-Path $inst '.x86qw')).Name -join ', ')"
+          exit 0

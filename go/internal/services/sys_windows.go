@@ -286,3 +286,19 @@ func spawnBackgroundController(executable string, arguments []string, request []
 	}
 	return command, nil
 }
+
+// replaceFile atomically moves temporary over path. A reader (status, or
+// the foreground half of a background launch polling the journal) holds the
+// destination open without delete sharing for a moment, which makes the
+// replace fail with a sharing error; retry for up to two seconds.
+func replaceFile(temporary, path string) error {
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		err := os.Rename(temporary, path)
+		if err == nil || time.Now().After(deadline) ||
+			!(errors.Is(err, windows.ERROR_ACCESS_DENIED) || errors.Is(err, windows.ERROR_SHARING_VIOLATION)) {
+			return err
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
