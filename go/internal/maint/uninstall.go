@@ -6,10 +6,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/catalog"
+	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/download"
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
@@ -50,9 +52,13 @@ func lexists(path string) bool {
 	return err == nil
 }
 
-// removeShellIntegration drops ~/.local/bin/x86qw when it points at this
-// installation's launcher.
+// removeShellIntegration drops ~/.local/bin/x86qw (or, on Windows, the
+// Start Menu and Desktop shortcuts) when it points at this installation.
 func removeShellIntegration(target string) {
+	if runtime.GOOS == "windows" {
+		cli.RemoveShortcuts(target)
+		return
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return

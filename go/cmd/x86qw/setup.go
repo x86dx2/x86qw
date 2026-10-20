@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/x86dx2/x86qw/go/internal/buildinfo"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
@@ -62,7 +63,10 @@ func publishCLI(target string, stdout, stderr io.Writer) error {
 		layer.Rollback()
 		return err
 	}
-	if command != "" {
+	switch {
+	case command != "" && runtime.GOOS == "windows":
+		fmt.Fprintf(stdout, "Atalhos do x86QW criados no Menu Iniciar e na Área de Trabalho (%s).\n", command)
+	case command != "":
 		fmt.Fprintf(stdout, "Comando x86qw disponível em %s\n", command)
 	}
 	return nil
