@@ -239,6 +239,26 @@ func retryAfter(value string) time.Duration {
 // CacheEnv overrides the cache root (tests and isolated runs).
 const CacheEnv = "X86QW_CACHE_DIR"
 
+// TrustCacheName is the directory the CLI keeps its TUF metadata in. On
+// Windows and Linux it sits inside the installer cache root
+// (os.UserCacheDir()/x86qw/tuf), and the CLI writes it before any install.
+const TrustCacheName = "tuf"
+
+// AdoptableCache reports whether root holds nothing but the CLI's own TUF
+// metadata, so the installer may claim it as its cache.
+func AdoptableCache(root string) bool {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.Name() != TrustCacheName || !entry.IsDir() {
+			return false
+		}
+	}
+	return true
+}
+
 // CacheDir is the Python installer's download cache, shared with it;
 // X86QW_CACHE_DIR overrides it.
 func CacheDir() (string, error) {
