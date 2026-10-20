@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	clicatalog "github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
@@ -231,6 +232,29 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("catalogo nao registrou %s na release nquake-%s", movedFile, revision)
+	}
+
+	// The installed CLI reads this mixed-revision catalog package by package.
+	raw, err := os.ReadFile(fresh.Path(CatalogPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := clicatalog.Parse(raw)
+	if err != nil {
+		t.Fatalf("a CLI recusa o catalogo: %v", err)
+	}
+	for _, pkg := range objects(after.Value("packages")) {
+		if pkg.Value("channel") != "content" {
+			continue
+		}
+		id := pyjson.Repr(getOr(pkg, "package", pkg.Value("component")))
+		current, err := parsed.ComponentPackage(id, []string{pyjson.Repr(pkg.Value("component"))})
+		if err != nil {
+			t.Fatalf("a CLI recusa o pacote %s: %v", id, err)
+		}
+		if id == moved && current.Revision() != revision {
+			t.Fatalf("a CLI le %s na revisao %s", id, current.Revision())
+		}
 	}
 	if _, err := os.Stat(filepath.Join(clone, DistDir, "distributions/nquake", previous, "non-gpl/qw/maps")); err != nil {
 		t.Errorf("arquivos dos outros componentes sairam da revisao anterior: %v", err)
