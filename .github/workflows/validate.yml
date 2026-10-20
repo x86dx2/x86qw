@@ -36,7 +36,7 @@ jobs:
         with:
           fetch-depth: 0
           lfs: false
-      - uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+      - uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         id: lfs-cache
         with:
           path: .git/lfs/objects
@@ -58,7 +58,16 @@ jobs:
           fi
           git lfs checkout
           git lfs fsck --pointers
-          "$RUNNER_TEMP/x86qw-content" --root "$GITHUB_WORKSPACE" verify
+      # Saved before verify so a data-check failure here does not also starve
+      # the other jobs of the verified LFS objects.
+      - uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        if: ${{ steps.lfs-cache.outputs.cache-hit != 'true' }}
+        with:
+          path: .git/lfs/objects
+          key: x86qw-lfs-v3-${{ github.event.pull_request.head.sha || github.sha }}
+          enableCrossOsArchive: true
+      - name: Verify the distribution and repository hygiene
+        run: '"$RUNNER_TEMP/x86qw-content" --root "$GITHUB_WORKSPACE" verify'
 
   portable:
     name: portable-contract / ${{ matrix.os }} / Python ${{ matrix.python }}
