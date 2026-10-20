@@ -18,26 +18,38 @@ import (
 
 var hex40Strict = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
-// UpdateResult is one component freshness line.
+// UpdateResult is one component freshness line. Error is set when the
+// component's upstream could not be consulted; the others are unaffected.
 type UpdateResult struct {
-	Component, Installed, LatestSource, Status, Strategy string
+	Component, Installed, LatestSource, Status, Strategy, Error string
 }
 
 func (r UpdateResult) object() *Object {
-	return object("component", r.Component, "installed", r.Installed, "latest_source", r.LatestSource, "status", r.Status, "strategy", r.Strategy)
+	var failure any
+	if r.Error != "" {
+		failure = r.Error
+	}
+	return object("component", r.Component, "installed", r.Installed, "latest_source", r.LatestSource, "status", r.Status,
+		"strategy", r.Strategy, "error", failure)
+}
+
+// IsReferenceStrategy reports the strategies pinned to the nQuake reference.
+func IsReferenceStrategy(strategy string) bool {
+	return strategy == "reference-snapshot" || strategy == "reference-overlay"
 }
 
 // CheckUpdates mirrors check_component_updates.check_updates.
 func (p *Project) CheckUpdates(releases *Object, online bool) ([]UpdateResult, error) {
 	reference := releases.Value("reference").(*Object)
 	referenceRevision := pyjson.Repr(reference.Value("revision"))
-	current := referenceRevision
+	current, referenceErr := referenceRevision, error(nil)
 	if online {
 		revision, err := p.GitHubRefRevision(pyjson.Repr(reference.Value("repository")), "refs/heads/master")
-		if err != nil {
-			return nil, err
+		if err == nil {
+			current = revision
+		} else {
+			referenceErr = err
 		}
-		current = revision
 	}
 	var results []UpdateResult
 	components := releases.Value("components").(*Object)
@@ -46,6 +58,10 @@ func (p *Project) CheckUpdates(releases *Object, online bool) ([]UpdateResult, e
 		expected := pyjson.Repr(release.Value("version"))
 		actual, status := expected, "current"
 		strategy := pyjson.Repr(release.Value("strategy"))
+		if referenceErr != nil && IsReferenceStrategy(strategy) {
+			results = append(results, UpdateResult{identifier, expected, expected, "unavailable", strategy, referenceErr.Error()})
+			continue
+		}
 		if strategy == "reference-snapshot" && current != referenceRevision {
 			actual, status = current[:12], "update-available"
 		}
@@ -59,7 +75,8 @@ func (p *Project) CheckUpdates(releases *Object, online bool) ([]UpdateResult, e
 		if repository, ok := pyjson.Get(release, "upstream", "repository").(string); online && hasUpstream && ok {
 			latest, err := p.GitHubLatestRelease(repository)
 			if err != nil {
-				return nil, err
+				results = append(results, UpdateResult{identifier, expected, expected, "unavailable", strategy, err.Error()})
+				continue
 			}
 			actual = latest
 			if !pyjson.Eq(latest, upstream.Value("release")) {
@@ -71,16 +88,19 @@ func (p *Project) CheckUpdates(releases *Object, online bool) ([]UpdateResult, e
 			gotSize, gotDigest, found, err := p.RemoteFingerprint(pyjson.Repr(artifact.Value("url")), size, digest)
 			var integrity *IntegrityError
 			if err != nil && !errors.As(err, &integrity) {
-				return nil, err
+				results = append(results, UpdateResult{identifier, expected, expected, "unavailable", strategy, err.Error()})
+				continue
 			}
-			if err != nil || !found || gotSize != size || gotDigest != digest {
-				if !found && err == nil {
-					return nil, &HTTPError{Status: 404, URL: pyjson.Repr(artifact.Value("url"))}
-				}
+			if err == nil && !found {
+				failure := (&HTTPError{Status: 404, URL: pyjson.Repr(artifact.Value("url"))}).Error()
+				results = append(results, UpdateResult{identifier, expected, expected, "unavailable", strategy, failure})
+				continue
+			}
+			if err != nil || gotSize != size || gotDigest != digest {
 				actual, status = "source-artifact-changed", "update-available"
 			}
 		}
-		results = append(results, UpdateResult{identifier, expected, actual, status, strategy})
+		results = append(results, UpdateResult{identifier, expected, actual, status, strategy, ""})
 	}
 	return results, nil
 }
@@ -285,12 +305,22 @@ func PreserveCurrentReferenceAssets(assets []Asset, manifest *Object, root strin
 	return preserved, nil
 }
 
-// Check mirrors manage.py check and returns the exit code (2 = updates).
-func (p *Project) Check(out, info io.Writer, offline, asJSON bool) (int, error) {
+// Check reports, component by component, which upstreams moved. selected
+// limits the report (empty = every component). An upstream that cannot be
+// consulted is reported for its own components only. The exit code is 2
+// when any update exists, 1 when nothing moved but some component could not
+// be checked, and 0 otherwise.
+func (p *Project) Check(out, info io.Writer, offline, asJSON bool, selected []string) (int, error) {
 	releases, err := p.Releases()
 	if err != nil {
 		return 0, err
 	}
+	ids := UpdatableIDs(releases)
+	if err := ValidateSelection(selected, ids); err != nil {
+		return 0, err
+	}
+	wanted := setOf(selected...)
+	inScope := func(id string) bool { return len(selected) == 0 || wanted[id] }
 	results, err := p.CheckUpdates(releases, !offline)
 	if err != nil {
 		return 0, err
@@ -298,39 +328,58 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool) (int, error) 
 	var delta []DeltaItem
 	var review []string
 	var referenceNote *Object
+	unavailable := Unavailable{}
 	if !offline {
 		progress := out
 		if asJSON {
 			progress = info
 		}
 		fmt.Fprintln(progress, "[INFO] Consultando clientes e arquivos incorporados...")
-		assets, err := p.DiscoverAssets()
-		if err != nil {
+		var assets []Asset
+		if assets, unavailable, err = p.DiscoverAssets(); err != nil {
 			return 0, err
 		}
 		manifest, err := LoadManifest(p.Path(ManifestPath))
 		if err != nil {
 			return 0, err
 		}
-		head, err := ReferenceRevision(assets)
-		if err != nil {
-			return 0, err
-		}
-		pinned := pyjson.Repr(pyjson.Get(releases, "reference", "revision"))
-		changed, err := ReferenceContentChanged(assets, manifest, p.Path(DistDir))
-		if err != nil {
-			return 0, err
-		}
-		referenceNote = object("pinned", pinned, "upstream", head, "consumed_content_changed", changed)
-		if head != pinned && !changed {
-			if assets, err = PreserveCurrentReferenceAssets(assets, manifest, p.Path(DistDir)); err != nil {
-				return 0, err
-			}
+		nquakeOwners := NQuakeOwners(manifest, ids)
+		if reason := unavailable["nquake"]; reason != "" {
 			for index := range results {
-				if results[index].Strategy == "reference-snapshot" || results[index].Strategy == "reference-overlay" {
-					results[index].Status, results[index].LatestSource = "current", results[index].Installed
+				if nquakeOwners[results[index].Component] && results[index].Error == "" && IsReferenceStrategy(results[index].Strategy) {
+					results[index].Status, results[index].LatestSource, results[index].Error = "unavailable", results[index].Installed, reason
 				}
 			}
+		} else {
+			head, err := ReferenceRevision(assets)
+			if err != nil {
+				return 0, err
+			}
+			pinned := pyjson.Repr(pyjson.Get(releases, "reference", "revision"))
+			changed, err := ReferenceContentChanged(assets, manifest, p.Path(DistDir))
+			if err != nil {
+				return 0, err
+			}
+			referenceNote = object("pinned", pinned, "upstream", head, "consumed_content_changed", changed)
+			if head != pinned && !changed {
+				if assets, err = PreserveCurrentReferenceAssets(assets, manifest, p.Path(DistDir)); err != nil {
+					return 0, err
+				}
+				for index := range results {
+					if IsReferenceStrategy(results[index].Strategy) && results[index].Error == "" {
+						results[index].Status, results[index].LatestSource = "current", results[index].Installed
+					}
+				}
+			}
+		}
+		sourceDown := func(owner string) bool {
+			if owner == "ezquake" {
+				return unavailable["ezquake"] != ""
+			}
+			return unavailable["nquake"] != "" && nquakeOwners[owner]
+		}
+		if assets, err = KeepCurrent(assets, manifest, ids, func(owner string) bool { return !inScope(owner) || sourceDown(owner) }); err != nil {
+			return 0, err
 		}
 		if assets, err = PinAssetsFromManifest(assets, manifest); err != nil {
 			return 0, err
@@ -340,15 +389,23 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool) (int, error) 
 			return 0, err
 		}
 	}
-	var outdated []UpdateResult
+	var shown, outdated, failed []UpdateResult
 	for _, item := range results {
-		if item.Status != "current" {
+		if !inScope(item.Component) {
+			continue
+		}
+		shown = append(shown, item)
+		switch {
+		case item.Error != "":
+			failed = append(failed, item)
+		case item.Status != "current":
 			outdated = append(outdated, item)
 		}
 	}
+	ezquakeDown := inScope("ezquake") && unavailable["ezquake"] != ""
 	if asJSON {
-		components := make([]any, len(results))
-		for index, item := range results {
+		components := make([]any, len(shown))
+		for index, item := range shown {
 			components[index] = item.object()
 		}
 		distribution := make([]any, len(delta))
@@ -359,16 +416,21 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool) (int, error) 
 		for index, path := range review {
 			reviewList[index] = path
 		}
+		sources := pyjson.NewObject()
+		for _, source := range sortedKeys(setOfKeys(unavailable)) {
+			sources.Set(source, unavailable[source])
+		}
 		var note any
 		if referenceNote != nil {
 			note = referenceNote
 		}
-		payload, _ := pyjson.Encode(object("components", components, "distribution", distribution, "reference", note, "review_required", reviewList), false)
+		payload, _ := pyjson.Encode(object("components", components, "distribution", distribution, "reference", note,
+			"review_required", reviewList, "unavailable_sources", sources), false)
 		fmt.Fprintln(out, string(payload))
 	} else {
 		var referenceUpdates []UpdateResult
 		for _, item := range outdated {
-			if item.Strategy == "reference-snapshot" || item.Strategy == "reference-overlay" {
+			if IsReferenceStrategy(item.Strategy) {
 				referenceUpdates = append(referenceUpdates, item)
 			}
 		}
@@ -380,15 +442,19 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool) (int, error) 
 			}
 			return false
 		}
-		for _, item := range results {
-			if isReferenceUpdate(item) {
-				continue
-			}
-			if item.Status == "current" {
+		for _, item := range shown {
+			switch {
+			case isReferenceUpdate(item):
+			case item.Error != "":
+				fmt.Fprintf(out, "[INDISPONIVEL] %s: %s\n", item.Component, item.Error)
+			case item.Status == "current":
 				fmt.Fprintf(out, "[OK] %s: %s\n", item.Component, item.Installed)
-			} else {
+			default:
 				fmt.Fprintf(out, "[ATUALIZAR] %s: %s -> %s\n", item.Component, item.Installed, item.LatestSource)
 			}
+		}
+		if ezquakeDown {
+			fmt.Fprintf(out, "[INDISPONIVEL] ezquake: %s\n", unavailable["ezquake"])
 		}
 		if len(referenceUpdates) > 0 {
 			first := referenceUpdates[0]
@@ -404,12 +470,31 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool) (int, error) 
 		if len(review) > 0 {
 			fmt.Fprintf(out, "[REVISAR] %d candidato(s) remoto(s) ainda não possuem SHA-256 previamente fixado; nenhum deles pode ser promovido por update.\n", len(review))
 		}
-		fmt.Fprintf(out, "\n%d componente(s) e %d arquivo(s) envolvidos em mudancas.\n", len(outdated), len(delta))
+		unchecked := len(failed)
+		if ezquakeDown {
+			unchecked++
+		}
+		fmt.Fprintf(out, "\n%d componente(s) e %d arquivo(s) envolvidos em mudancas", len(outdated), len(delta))
+		if unchecked > 0 {
+			fmt.Fprintf(out, "; %d componente(s) nao puderam ser consultados", unchecked)
+		}
+		fmt.Fprintln(out, ".")
 	}
-	if len(outdated) > 0 || len(delta) > 0 || len(review) > 0 {
+	switch {
+	case len(outdated) > 0 || len(delta) > 0 || len(review) > 0:
 		return 2, nil
+	case len(failed) > 0 || ezquakeDown:
+		return 1, nil
 	}
 	return 0, nil
+}
+
+func setOfKeys(values Unavailable) map[string]bool {
+	keys := map[string]bool{}
+	for key := range values {
+		keys[key] = true
+	}
+	return keys
 }
 
 func prefix(value string, length int) string {

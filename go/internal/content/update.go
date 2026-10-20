@@ -585,29 +585,128 @@ type UpdateOptions struct {
 	Push    bool
 	Message string
 	Confirm Confirm
+	// Components limits the update (empty = every component that can be
+	// checked and needs no reviewed definition).
+	Components []string
 }
 
-// Update mirrors manage.py update.
+// Update brings the selected components to their upstreams. Each component
+// moves on its own: one that is unavailable or needs a reviewed definition
+// is skipped (or, when named explicitly, fails the update) and keeps its
+// current files.
 func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 	if options.Workers < 1 || options.Workers > 32 {
 		return managerError("--workers deve estar entre 1 e 32")
 	}
-	fmt.Fprintln(out, "[INFO] Consultando todos os upstreams declarados...")
 	releases, err := p.Releases()
 	if err != nil {
 		return err
 	}
+	ids := UpdatableIDs(releases)
+	if err := ValidateSelection(options.Components, ids); err != nil {
+		return err
+	}
+	explicit := setOf(options.Components...)
+	fmt.Fprintln(out, "[INFO] Consultando os upstreams declarados...")
 	results, err := p.CheckUpdates(releases, true)
 	if err != nil {
 		return err
 	}
-	assets, err := p.DiscoverAssets()
+	assets, unavailable, err := p.DiscoverAssets()
 	if err != nil {
 		return err
 	}
 	catalog, err := LoadJSONObject(p.Path(CatalogPath))
 	if err != nil {
 		return err
+	}
+	manifest, err := LoadManifest(p.Path(ManifestPath))
+	if err != nil {
+		return err
+	}
+	nquakeOwners := NQuakeOwners(manifest, ids)
+	skipped := map[string]string{}
+	skip := func(id, reason string) error {
+		if explicit[id] {
+			return managerError("%s: %s", id, reason)
+		}
+		skipped[id] = reason
+		return nil
+	}
+	for _, item := range results {
+		switch {
+		case item.Error != "":
+			err = skip(item.Component, "upstream indisponível ("+item.Error+")")
+		case item.Status != "current" && !IsReferenceStrategy(item.Strategy):
+			err = skip(item.Component, "exige nova versao/revisao explicita; use 'add' com uma definicao revisada")
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if reason := unavailable["ezquake"]; reason != "" {
+		if err := skip("ezquake", "upstream indisponível ("+reason+")"); err != nil {
+			return err
+		}
+	}
+	if reason := unavailable["nquake"]; reason != "" {
+		for owner := range nquakeOwners {
+			if err := skip(owner, "referência nQuake indisponível ("+reason+")"); err != nil {
+				return err
+			}
+		}
+	}
+	inScope := func(id string) bool {
+		if _, out := skipped[id]; out {
+			return false
+		}
+		return len(explicit) == 0 || explicit[id]
+	}
+	oldReference := pyjson.Repr(pyjson.Get(releases, "reference", "revision"))
+	newReference := oldReference
+	if unavailable["nquake"] == "" {
+		discovered, err := ReferenceRevision(assets)
+		if err != nil {
+			return err
+		}
+		changed, err := ReferenceContentChanged(assets, manifest, p.Path(DistDir))
+		if err != nil {
+			return err
+		}
+		var selectedOwners, otherOwners []string
+		for owner := range nquakeOwners {
+			if inScope(owner) {
+				selectedOwners = append(selectedOwners, owner)
+			} else {
+				otherOwners = append(otherOwners, owner)
+			}
+		}
+		switch {
+		case discovered == oldReference:
+		case !changed:
+			fmt.Fprintf(out, "[INFO] nQuake %s nao alterou nenhum arquivo consumido; mantendo a referencia imutavel %s.\n", discovered[:12], prefix(oldReference, 12))
+		case len(selectedOwners) == 0:
+		case len(otherOwners) > 0:
+			sort.Strings(otherOwners)
+			return managerError("a referencia nQuake %s e compartilhada; inclua tambem: %s", discovered[:12], strings.Join(otherOwners, ", "))
+		default:
+			newReference = discovered
+		}
+	}
+	if newReference == oldReference && unavailable["nquake"] == "" {
+		if assets, err = PreserveCurrentReferenceAssets(assets, manifest, p.Path(DistDir)); err != nil {
+			return err
+		}
+	}
+	if assets, err = KeepCurrent(assets, manifest, ids, func(owner string) bool { return !inScope(owner) }); err != nil {
+		return err
+	}
+	// The report shows what this update does: components left out keep
+	// their current version.
+	for index := range results {
+		if !inScope(results[index].Component) {
+			results[index].Status, results[index].LatestSource = "current", results[index].Installed
+		}
 	}
 	fmt.Fprintln(out, "\nComponentes e clientes verificados:")
 	lines, err := p.UpdateInventoryLines(results, assets, releases, catalog)
@@ -617,35 +716,8 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 	for _, line := range lines {
 		fmt.Fprintln(out, line)
 	}
-	var blocked []string
-	for _, item := range results {
-		if item.Status != "current" && item.Strategy != "reference-snapshot" && item.Strategy != "reference-overlay" {
-			blocked = append(blocked, item.Component)
-		}
-	}
-	if len(blocked) > 0 {
-		return managerError("%s exige nova versao/revisao explicita. Use 'add' com uma definicao revisada antes do update", strings.Join(blocked, ", "))
-	}
-	manifest, err := LoadManifest(p.Path(ManifestPath))
-	if err != nil {
-		return err
-	}
-	discovered, err := ReferenceRevision(assets)
-	if err != nil {
-		return err
-	}
-	oldReference := pyjson.Repr(pyjson.Get(releases, "reference", "revision"))
-	newReference := discovered
-	changed, err := ReferenceContentChanged(assets, manifest, p.Path(DistDir))
-	if err != nil {
-		return err
-	}
-	if discovered != oldReference && !changed {
-		fmt.Fprintf(out, "[INFO] nQuake %s nao alterou nenhum arquivo consumido; mantendo a referencia imutavel %s.\n", discovered[:12], prefix(oldReference, 12))
-		if assets, err = PreserveCurrentReferenceAssets(assets, manifest, p.Path(DistDir)); err != nil {
-			return err
-		}
-		newReference = oldReference
+	for _, id := range sortedKeys(setOfKeys(Unavailable(skipped))) {
+		fmt.Fprintf(out, "[PULADO] %s: %s\n", id, skipped[id])
 	}
 	if assets, err = PinAssetsFromManifest(assets, manifest); err != nil {
 		return err

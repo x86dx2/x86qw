@@ -203,7 +203,7 @@ func TestCheckAndUpdateAgainstFakeUpstreams(t *testing.T) {
 	project := NewProject(root)
 	project.HTTP = web.client()
 	var out, info bytes.Buffer
-	code, err := project.Check(&out, &info, false, false)
+	code, err := project.Check(&out, &info, false, false, nil)
 	if err != nil {
 		t.Fatalf("check: %v\n%s", err, out.String())
 	}
@@ -248,7 +248,7 @@ func TestCheckAndUpdateAgainstFakeUpstreams(t *testing.T) {
 	project = NewProject(root)
 	project.HTTP = newer.client()
 	out.Reset()
-	code, err = project.Check(&out, &info, false, true)
+	code, err = project.Check(&out, &info, false, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -478,5 +478,197 @@ func TestCommitSequence(t *testing.T) {
 	var out bytes.Buffer
 	if err := project.Commit(&out, "", true); err != nil || len(clean.commands) != 1 || !strings.Contains(out.String(), "Nao ha alteracoes") {
 		t.Fatalf("commit sem mudanças: %v %v", err, clean.commands)
+	}
+}
+
+// limited answers 429 for every URL that matches, like web.archive.org did
+// for pro-x, and serves everything else from the current upstreams.
+func limited(web *fakeWeb, matches func(*http.Request) bool) *fakeWeb {
+	upstream := web.handler
+	web.handler = func(w http.ResponseWriter, r *http.Request) {
+		if matches(r) {
+			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+			return
+		}
+		upstream(w, r)
+	}
+	return web
+}
+
+func TestEachComponentIsCheckedOnItsOwn(t *testing.T) {
+	root := repoRoot(t)
+	requireHydrated(t, root)
+	archive := func(r *http.Request) bool { return r.URL.Host == "web.archive.org" }
+
+	project := NewProject(root)
+	project.HTTP = limited(currentUpstreams(t, root, ""), archive).client()
+	var out, info bytes.Buffer
+	code, err := project.Check(&out, &info, false, false, []string{"pro-x", "ktx"})
+	if err != nil {
+		t.Fatalf("check: %v\n%s", err, out.String())
+	}
+	if code != 1 || !strings.Contains(out.String(), "[INDISPONIVEL] pro-x: ") || !strings.Contains(out.String(), "[OK] ktx: ") {
+		t.Fatalf("pro-x indisponivel deveria afetar so pro-x (exit %d):\n%s", code, out.String())
+	}
+	if strings.Contains(out.String(), "mvdsv") || strings.Contains(out.String(), "ezquake") {
+		t.Fatalf("check selecionado reportou componentes fora da selecao:\n%s", out.String())
+	}
+
+	// A new nightly elsewhere still counts as an update, and the unavailable
+	// upstream is listed without hiding it.
+	project = NewProject(root)
+	project.HTTP = limited(currentUpstreams(t, root, "20990101-000000_abcdef0"), archive).client()
+	out.Reset()
+	if code, err = project.Check(&out, &info, false, true, nil); err != nil || code != 2 {
+		t.Fatalf("check deveria sair 2 com nightly novo e pro-x indisponivel: %d %v", code, err)
+	}
+	report, err := pyjson.Decode(out.Bytes(), pyjson.RejectDuplicates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statuses := map[string]string{}
+	for _, item := range objects(pyjson.Get(report, "components")) {
+		statuses[pyjson.Repr(item.Value("component"))] = pyjson.Repr(item.Value("status"))
+	}
+	if statuses["pro-x"] != "unavailable" || statuses["ktx"] != "current" || statuses["mvdsv"] != "current" {
+		t.Fatalf("status por componente inesperado: %v", statuses)
+	}
+
+	// Selecting a component outside ezQuake ignores the unreviewed nightly.
+	project = NewProject(root)
+	project.HTTP = currentUpstreams(t, root, "20990101-000000_abcdef0").client()
+	out.Reset()
+	if code, err = project.Check(&out, &info, false, false, []string{"ktx"}); err != nil || code != 0 {
+		t.Fatalf("check ktx nao deveria ver o nightly do ezQuake: %d %v\n%s", code, err, out.String())
+	}
+	update := NewProject(root)
+	update.HTTP = currentUpstreams(t, root, "20990101-000000_abcdef0").client()
+	out.Reset()
+	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true, Components: []string{"ktx"}}); err != nil {
+		t.Fatalf("update ktx nao deveria depender do ezQuake: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "[OK] ezQuake nightly: ") {
+		t.Fatalf("update ktx tocou o ezQuake:\n%s", out.String())
+	}
+
+	// Explicitly selecting an unavailable component fails; selecting
+	// everything skips it and keeps going.
+	update = NewProject(root)
+	update.HTTP = limited(currentUpstreams(t, root, ""), archive).client()
+	out.Reset()
+	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true, Components: []string{"pro-x"}}); err == nil {
+		t.Fatalf("update pro-x deveria falhar com upstream indisponivel:\n%s", out.String())
+	}
+	update = NewProject(root)
+	update.HTTP = limited(currentUpstreams(t, root, ""), archive).client()
+	out.Reset()
+	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true}); err != nil || !strings.Contains(out.String(), "[PULADO] pro-x: ") {
+		t.Fatalf("update geral deveria pular pro-x: %v\n%s", err, out.String())
+	}
+
+	// nQuake down: its components are unavailable, ezQuake is still checked.
+	nquake := func(r *http.Request) bool { return strings.HasPrefix(r.URL.Path, "/repos/nQuake/") }
+	project = NewProject(root)
+	project.HTTP = limited(currentUpstreams(t, root, ""), nquake).client()
+	out.Reset()
+	if code, err = project.Check(&out, &info, false, false, []string{"nquake-maps", "ezquake"}); err != nil || code != 1 {
+		t.Fatalf("check com nQuake fora: %d %v\n%s", code, err, out.String())
+	}
+	if !strings.Contains(out.String(), "[INDISPONIVEL] nquake-maps: ") || strings.Contains(out.String(), "[INDISPONIVEL] ezquake") {
+		t.Fatalf("nQuake fora deveria afetar so seus componentes:\n%s", out.String())
+	}
+
+	if _, err := NewProject(root).Check(&out, &info, true, false, []string{"nao-existe"}); err == nil || !strings.Contains(err.Error(), "desconhecido") {
+		t.Fatalf("componente desconhecido deveria ser recusado: %v", err)
+	}
+}
+
+// movedReference serves a new nQuake revision in which one consumed file
+// changed.
+func movedReference(web *fakeWeb) *fakeWeb {
+	const revision, tree = "2222222222222222222222222222222222222222", "3333333333333333333333333333333333333333"
+	upstream := web.handler
+	web.handler = func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/nQuake/distfiles/git/ref/heads/master":
+			writeJSONResponse(w, object("ref", "refs/heads/master", "object", object("type", "commit", "sha", revision,
+				"url", "https://api.github.com/repos/nQuake/distfiles/git/commits/"+revision)))
+		case "/repos/nQuake/distfiles/git/commits/" + revision:
+			writeJSONResponse(w, object("sha", revision, "tree", object("sha", tree, "url", "https://api.github.com/repos/nQuake/distfiles/git/trees/"+tree)))
+		case "/repos/nQuake/distfiles/git/trees/" + tree:
+			original := r.Clone(r.Context())
+			original.URL.Path = "/repos/nQuake/distfiles/git/trees/1111111111111111111111111111111111111111"
+			recorded := httptest.NewRecorder()
+			upstream(recorded, original)
+			listing, _ := pyjson.Decode(recorded.Body.Bytes(), pyjson.RejectDuplicates)
+			entries := objects(pyjson.Get(listing, "tree"))
+			entries[0].Set("sha", "4444444444444444444444444444444444444444")
+			listing.(*Object).Set("sha", tree)
+			writeJSONResponse(w, listing)
+		default:
+			upstream(w, r)
+		}
+	}
+	return web
+}
+
+func TestTheSharedNQuakeReferenceMovesTogether(t *testing.T) {
+	root := repoRoot(t)
+	requireHydrated(t, root)
+	var out bytes.Buffer
+
+	// Components outside the reference update without it.
+	update := NewProject(root)
+	update.HTTP = movedReference(currentUpstreams(t, root, "")).client()
+	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true, Components: []string{"mvdsv", "qwfwd", "qtv", "total-destruction-2", "ezquake"}}); err != nil {
+		t.Fatalf("update fora da referencia nao deveria depender do nQuake: %v\n%s", err, out.String())
+	}
+	// Only the selected components' own pending files may show up.
+	for _, line := range strings.Split(out.String(), "\n") {
+		if strings.HasPrefix(line, "  - ") && !strings.HasPrefix(line, "  - servers/mvdsv/") && !strings.HasPrefix(line, "  - services/") {
+			t.Fatalf("update fora da referencia tocou outro componente: %s\n%s", line, out.String())
+		}
+	}
+	if strings.Contains(out.String(), "[ATUALIZAR]") || !strings.Contains(out.String(), "nQuake e4cb23d40aa2 -> e4cb23d40aa2") && !strings.Contains(out.String(), "[OK] O dist") {
+		t.Fatalf("update fora da referencia moveu a referencia:\n%s", out.String())
+	}
+
+	// Part of the reference cannot move alone.
+	update = NewProject(root)
+	update.HTTP = movedReference(currentUpstreams(t, root, "")).client()
+	out.Reset()
+	err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true, Components: []string{"nquake-maps"}})
+	if err == nil || !strings.Contains(err.Error(), "e compartilhada; inclua tambem: ") {
+		t.Fatalf("update parcial da referencia deveria ser recusado: %v\n%s", err, out.String())
+	}
+}
+
+func TestSymbolicLinksInTheNQuakeTreeAreIgnored(t *testing.T) {
+	root := repoRoot(t)
+	requireHydrated(t, root)
+	web := currentUpstreams(t, root, "")
+	upstream := web.handler
+	web.handler = func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/git/trees/") {
+			upstream(w, r)
+			return
+		}
+		recorded := httptest.NewRecorder()
+		upstream(recorded, r)
+		listing, _ := pyjson.Decode(recorded.Body.Bytes(), pyjson.RejectDuplicates)
+		entries := append(pyjson.Get(listing, "tree").([]any), object("path", "CLAUDE.md", "mode", "120000", "type", "blob",
+			"sha", "5555555555555555555555555555555555555555", "size", 9))
+		listing.(*Object).Set("tree", entries)
+		writeJSONResponse(w, listing)
+	}
+	project := NewProject(root)
+	project.HTTP = web.client()
+	var out, info bytes.Buffer
+	code, err := project.Check(&out, &info, false, false, []string{"nquake-maps"})
+	if err != nil || code != 0 || !strings.Contains(out.String(), "[OK] Conteudo baseado no nQuake") && !strings.Contains(out.String(), "nquake-maps") {
+		t.Fatalf("symlink na arvore nQuake deveria ser ignorado: %d %v\n%s", code, err, out.String())
+	}
+	if strings.Contains(out.String(), "INDISPONIVEL") {
+		t.Fatalf("symlink tornou o nQuake indisponivel:\n%s", out.String())
 	}
 }
