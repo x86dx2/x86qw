@@ -65,7 +65,7 @@ var runtimePaths = map[string]map[string]string{
 // runtimeBinary mirrors runtime_launch_target: verified component, host
 // variant, executable file and the inventory hash used at exec time.
 func runtimeBinary(target, component string) (string, string, error) {
-	record, err := install.VerifyComponent(target, component)
+	record, err := install.VerifyComponentRecord(target, component)
 	if err != nil {
 		return "", "", err
 	}
@@ -148,7 +148,7 @@ func SelectHosted(target string, o *HostOptions) (*Hosted, error) {
 			}
 		}
 	}
-	if _, err := install.VerifyComponent(target, component); err != nil {
+	if _, err := install.VerifyComponentRecord(target, component); err != nil {
 		return nil, err
 	}
 	issues, _, err := install.PlaySupportIssues(target, available)
