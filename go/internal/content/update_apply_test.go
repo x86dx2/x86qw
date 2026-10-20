@@ -222,7 +222,7 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 	for _, pkg := range objects(after.Value("packages")) {
 		filename := pyjson.Repr(pkg.Value("filename"))
 		switch {
-		case pkg.Value("channel") != "content" || filename == "x86qw-core-id1-0.1.0.zip":
+		case pkg.Value("channel") != "content" || strings.HasPrefix(filename, "x86qw-core-id1-"):
 		case filename == movedFile:
 			found = strings.Contains(pyjson.Repr(pkg.Value("origin_url")), "/releases/download/nquake-"+revision+"/") &&
 				pkg.Value("source_commit") == revision
@@ -350,7 +350,7 @@ func TestUpdateFollowsNQuakeOneComponentAtATime(t *testing.T) {
 	for _, pkg := range objects(after.Value("packages")) {
 		filename := pyjson.Repr(pkg.Value("filename"))
 		switch {
-		case pkg.Value("channel") != "content" || filename == "x86qw-core-id1-0.1.0.zip":
+		case pkg.Value("channel") != "content" || strings.HasPrefix(filename, "x86qw-core-id1-"):
 		case filename == movedFile:
 			found = pkg.Value("source_commit") == movedRevision
 		case before[filename] != pyjson.Repr(pkg.Value("sha256")):

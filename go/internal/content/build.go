@@ -18,7 +18,7 @@ import (
 
 const (
 	gitlabProjectID  = "84813414"
-	coreVersion      = "0.1.0"
+	coreVersion      = "0.1.1"
 	corePackage      = "x86qw-core-id1"
 	coreReleaseTag   = "x86qw-content-core-" + coreVersion
 	maxCorePakBytes  = 128 * 1024 * 1024
