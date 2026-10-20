@@ -13,3 +13,7 @@ site/node_modules/
 /go/cmd/x86qw-content/x86qw-content
 /go/cmd/x86qw-release/x86qw-release
 /go/cmd/x86qw-setup-demo/x86qw-setup-demo
+/go/x86qw
+/go/x86qw-content
+/go/x86qw-release
+/go/x86qw-setup-demo
