@@ -72,7 +72,7 @@ func atomicWritePrivate(path string, payload []byte) error {
 		os.Remove(temporary)
 		return err
 	}
-	if err := os.Rename(temporary, path); err != nil {
+	if err := replaceFile(temporary, path); err != nil {
 		os.Remove(temporary)
 		return err
 	}
