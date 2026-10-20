@@ -246,36 +246,43 @@ func (m *Model) totalBytes() int64 {
 	return total
 }
 
+// primary draws the screen's main action: brand coloured when it can run,
+// dim (with a spinner while checks run) when it cannot.
+func (m *Model) primary(p *page, row reviewRow, focused, enabled bool, right string) {
+	t := m.theme
+	hovered := m.hover == "row:"+row.id
+	p.gap(1)
+	bg, fg := t.Base, t.Brand
+	switch {
+	case !enabled:
+		fg = t.Dim
+		if focused {
+			bg = t.Band
+		}
+	case focused:
+		bg = Blend(t.Base, t.Brand, 0.28)
+	case hovered:
+		bg = Blend(t.Base, t.Brand, 0.14)
+	}
+	base := lipgloss.NewStyle().Background(bg)
+	glyph := m.glyphs.Chevron
+	if !enabled && !m.preDone {
+		glyph = m.spinner()
+	}
+	left := base.Render("  ") + base.Foreground(fg).Bold(enabled).Render(glyph+" "+row.label)
+	p.band(spread(left, base.Foreground(t.Gray).Render(right)+base.Render("  "), p.width, bg), bg, "row:"+row.id)
+}
+
 // rows draws section rows and the primary action at the end.
 func (m *Model) rows(p *page, rows []reviewRow, primaryEnabled bool, primaryRight string) {
 	t := m.theme
 	for index, row := range rows {
 		focused := index == m.focus
-		hovered := m.hover == "row:"+row.id
 		if index == len(rows)-1 {
-			p.gap(1)
-			bg, fg := t.Base, t.Brand
-			switch {
-			case !primaryEnabled:
-				fg = t.Dim
-				if focused {
-					bg = t.Band
-				}
-			case focused:
-				bg = Blend(t.Base, t.Brand, 0.28)
-			case hovered:
-				bg = Blend(t.Base, t.Brand, 0.14)
-			}
-			base := lipgloss.NewStyle().Background(bg)
-			glyph := m.glyphs.Chevron
-			if !primaryEnabled && !m.preDone {
-				glyph = m.spinner()
-			}
-			left := base.Render("  ") + base.Foreground(fg).Bold(primaryEnabled).Render(glyph+" "+row.label)
-			right := base.Foreground(t.Gray).Render(primaryRight) + base.Render("  ")
-			p.band(spread(left, right, p.width, bg), bg, "row:"+row.id)
+			m.primary(p, row, focused, primaryEnabled, primaryRight)
 			continue
 		}
+		hovered := m.hover == "row:"+row.id
 		bg := p.rowBG(focused, hovered)
 		base := lipgloss.NewStyle().Background(bg)
 		label := base.Foreground(t.Text2)
@@ -308,79 +315,211 @@ func (m *Model) activateConfigure(id string) tea.Cmd {
 	return m.startPreflight()
 }
 
-// confirmPage is the preflight and the review together: the checks run
-// against the final choices and the screen waits for a confirmation or a
-// correction.
+// details lists everything chosen in one section, as label/value pairs.
+func (m *Model) details(id string) [][2]string {
+	o := m.opts
+	switch id {
+	case "comps":
+		var names []string
+		for _, sel := range setup.Selected(m.catalog, o) {
+			for _, component := range m.catalog.Components {
+				if component.ID == sel {
+					names = append(names, component.Label)
+				}
+			}
+		}
+		pack := m.t("p." + o.Content)
+		if !o.Intent.WantsClient() {
+			pack = m.t("needed.host")
+		}
+		total := m.totalBytes()
+		return [][2]string{
+			{m.t("d.bundle"), pack},
+			{m.t("d.items"), strings.Join(names, " · ")},
+			{m.t("d.size"), fmt.Sprintf("%s %s · %s %s", size(total), m.t("rev.download"), size(total*108/100), m.t("rev.disk"))},
+		}
+	case "config":
+		k := o.Keys
+		layout := strings.ToUpper(k.Preset)
+		if k.Preset == "custom" {
+			layout = m.t("l.custom")
+		}
+		keys := fmt.Sprintf("%s · %s %s  %s %s  %s %s  %s %s  %s %s", layout,
+			keyLabel(k.Forward), m.t("a.fwd"), keyLabel(k.Back), m.t("a.back"), keyLabel(k.Left), m.t("a.left"),
+			keyLabel(k.Right), m.t("a.right"), keyLabel(k.Jump), m.t("a.jump"))
+		axis := m.t("d.axis.normal")
+		if o.Mouse.Invert {
+			axis = m.t("d.axis.inverted")
+		}
+		resolution := m.t("res.auto")
+		if o.Video.Width > 0 {
+			resolution = fmt.Sprintf("%d×%d", o.Video.Width, o.Video.Height)
+		}
+		experience := m.t("exp.ruleset")
+		if o.Experience == "competitive" {
+			experience = m.t("exp.comp")
+		}
+		return [][2]string{
+			{m.t("nick"), o.Nick},
+			{m.t("tab.keys"), keys},
+			{m.t("tab.mouse"), fmt.Sprintf("%s · %d dpi · %s %s · %s", m.num(o.Mouse.Sensitivity), o.Mouse.DPI, m.num(o.Mouse.CentimetersPer360()), m.t("cm360"), axis)},
+			{m.t("tab.exp"), experience},
+			{m.t("d.video"), fmt.Sprintf("%s · %s · FOV %d°", resolution, m.t("d."+o.Video.Display), o.Video.FOV)},
+			{m.t("d.sound"), fmt.Sprintf("%d%%", o.Volume)},
+		}
+	case "server":
+		sv := o.Server
+		rows := [][2]string{{m.t("srv.name"), sv.Name}, {m.t("d.address"), m.connectHost()}}
+		for index, instance := range sv.Instances {
+			bots := m.t("bots.off")
+			if instance.Bots {
+				bots = m.t("bots.on")
+			}
+			label := ""
+			if index == 0 {
+				label = m.t("srv.inst")
+			}
+			rows = append(rows, [2]string{label, fmt.Sprintf("#%d  UDP %d · %s · %s · %s", index+1, sv.BasePort+index, m.mode(instance.Mode).Label, instance.Map, bots)})
+		}
+		services := []string{}
+		if sv.QTVPort != 0 {
+			services = append(services, fmt.Sprintf("QTV TCP %d", sv.QTVPort))
+		}
+		if sv.QWFWDPort != 0 {
+			services = append(services, fmt.Sprintf("QWFWD UDP %d", sv.QWFWDPort))
+		}
+		if len(services) == 0 {
+			services = []string{m.t("off")}
+		}
+		return append(rows, [2]string{m.t("tab.services"), strings.Join(services, " · ")}, [2]string{"rcon", sv.Rcon})
+	case "integ":
+		in := o.Integration
+		mark := func(on bool, key string) string {
+			if on {
+				return m.glyphs.Ok + " " + m.t(key)
+			}
+			return m.glyphs.Fail + " " + m.t(key)
+		}
+		return [][2]string{
+			{"", padRight(mark(in.Shortcuts, "i.short"), 30) + mark(in.Path, "i.path")},
+			{"", padRight(mark(in.QWLinks, "i.qw"), 30) + mark(in.Demos, "i.demo")},
+		}
+	case "folder":
+		return [][2]string{{"", shortPath(o.Target)}}
+	}
+	return nil
+}
+
+// confirmPage is the preflight and the review together: everything chosen,
+// the checks run against it, and a confirmation that waits.
 func (m *Model) confirmPage(p *page) {
 	t := m.theme
-	if m.h >= 38 {
+	if m.h >= 52 {
 		m.route(p)
 	}
 	p.title(m.t("rev.title"))
 	p.lead(m.t("rev.lead"))
 	p.gap(1)
-	total := m.totalBytes()
-	seconds := max(4, int(float64(total)/(34*1048576)))
-	sep := p.st(t.Dim).Render("  ·  ")
-	figure := func(value, label string) string {
-		return p.st(t.Text).Bold(true).Render(value) + p.st(t.Gray).Render(" "+label)
+	rows := m.confirmRows()
+	for index, row := range rows[:len(rows)-1] {
+		focused, hovered := index == m.focus, m.hover == "row:"+row.id
+		start := len(p.lines)
+		bg := p.rowBG(focused, hovered)
+		base := lipgloss.NewStyle().Background(bg)
+		label := base.Foreground(t.Text).Bold(true)
+		right := base.Foreground(t.Dim).Render(m.t("k.edit")+" "+m.glyphs.Chevron) + base.Render("  ")
+		if focused {
+			right = base.Foreground(t.Brand).Render(m.t("k.edit")+" "+m.glyphs.Chevron) + base.Render("  ")
+		}
+		if row.id == "recipe" {
+			right = base.Foreground(t.Gray).Render(m.t("d.recipe")) + base.Render("  ")
+		}
+		p.band(spread(base.Render("  ")+label.Render(row.label), right, p.width, bg), bg, "row:"+row.id)
+		pairs := m.details(row.id)
+		labelWidth := 0 // sections without labels use the whole width
+		for _, pair := range pairs {
+			if pair[0] != "" {
+				labelWidth = 14
+			}
+		}
+		for _, pair := range pairs {
+			valueWidth := p.width - labelWidth - 6
+			lines := wrapSegments(pair[1], valueWidth)
+			for n, line := range lines {
+				key := ""
+				if n == 0 {
+					key = strings.ToLower(pair[0])
+				}
+				y := p.add(p.st(t.Gray).Render("    "+padRight(key, labelWidth)) + p.st(t.Text2).Render(line))
+				p.hits = append(p.hits, hit{y: y, x0: 0, x1: p.width, id: "row:" + row.id})
+			}
+		}
+		if focused {
+			if index == 0 {
+				start = 0 // the first section brings the title along
+			}
+			p.keep(start, len(p.lines)-1)
+		}
+		p.gap(1)
 	}
-	p.add(p.st(t.Base).Render("  ") + figure(size(total), m.t("rev.download")) + sep + figure(size(total*108/100), m.t("rev.disk")) + sep +
-		figure(fmt.Sprint(len(setup.Selected(m.catalog, m.opts))+1), m.t("rev.items")) + sep + figure("~"+duration(time.Duration(seconds)*time.Second), m.t("rev.time")))
-	p.gap(1)
+
+	// The preflight sits right above the confirmation it decides.
 	p.rule(m.t("rule.pre"))
 	for _, check := range m.checks {
-		var mark lipgloss.Style
-		glyph := m.spinner()
-		value := p.st(t.Dim).Render(m.t("net.detecting"))
+		glyph, style, value := m.spinner(), p.st(t.Brand), p.st(t.Dim).Render(m.t("net.detecting"))
 		switch check.State {
 		case setup.CheckOK:
-			glyph, mark, value = m.glyphs.Ok, p.st(t.Success), p.st(t.Text2).Render(shortPath(check.Value))
+			glyph, style, value = m.glyphs.Ok, p.st(t.Success), p.st(t.Text2).Render(shortPath(check.Value))
 		case setup.CheckWarning:
-			glyph, mark, value = m.glyphs.Warn, p.st(t.Warning), p.st(t.Warning).Render(check.Value)
+			glyph, style, value = m.glyphs.Warn, p.st(t.Warning), p.st(t.Warning).Render(check.Value)
 		case setup.CheckFailed:
-			glyph, mark, value = m.glyphs.Fail, p.st(t.Error), p.st(t.Error).Render(check.Value)
-		default:
-			mark = p.st(t.Brand)
+			glyph, style, value = m.glyphs.Fail, p.st(t.Error), p.st(t.Error).Render(check.Value)
 		}
-		left := p.st(t.Base).Render("  ") + mark.Render(glyph) + p.st(t.Base).Render("  ") + p.st(t.Text).Render(check.Title)
+		left := p.st(t.Base).Render("  ") + style.Render(glyph) + p.st(t.Gray).Render("  "+check.Title)
 		p.add(spread(left, value+p.st(t.Base).Render("  "), p.width, t.Base))
-		if check.State == setup.CheckWarning || check.State == setup.CheckFailed {
-			wrap := func(text string, style lipgloss.Style, lead string) {
-				for index, line := range strings.Split(lipgloss.Wrap(text, p.width-9, " "), "\n") {
-					prefix := "       "
-					if index == 0 {
-						prefix = "     " + lead
-					}
-					p.add(style.Render(prefix + line))
-				}
+	}
+	for _, check := range m.checks {
+		if check.State != setup.CheckWarning && check.State != setup.CheckFailed {
+			continue
+		}
+		color := t.Warning
+		if check.State == setup.CheckFailed {
+			color = t.Error
+		}
+		text := check.Title + ": " + check.Detail
+		if check.Fix != "" {
+			text += " " + check.Fix
+		}
+		for n, line := range strings.Split(lipgloss.Wrap(text, p.width-6, " "), "\n") {
+			lead := "    "
+			if n == 0 {
+				lead = "  " + m.glyphs.Chevron + " "
 			}
-			if check.Detail != "" {
-				wrap(check.Detail, p.st(t.Gray), "  ")
-			}
-			if check.Fix != "" {
-				wrap(check.Fix, p.st(t.Warning), m.glyphs.Chevron+" ")
-			}
+			p.add(p.st(color).Render(lead + line))
 		}
 	}
 	if m.preDone {
+		color, text := t.Success, m.t("pre.ok")
 		switch m.preflightOutcome() {
 		case setup.CheckFailed:
-			p.add(p.st(t.Error).Bold(true).Render("  " + m.t("pre.fail")))
+			color, text = t.Error, m.t("pre.fail")
 		case setup.CheckWarning:
-			p.add(p.st(t.Warning).Bold(true).Render("  " + m.t("pre.warn")))
-		default:
-			p.add(p.st(t.Success).Bold(true).Render("  " + m.t("pre.ok")))
+			color, text = t.Warning, m.t("pre.warn")
 		}
+		p.add(p.st(color).Bold(true).Render("  " + text))
 	}
-	p.gap(1)
-	p.rule(m.t("rule.choices"))
+
 	enabled := m.preDone && m.preflightOutcome() != setup.CheckFailed
 	right := ""
 	if enabled {
-		right = size(total) + "  ↵"
+		right = size(m.totalBytes()) + "  ↵"
 	}
-	m.rows(p, m.confirmRows(), enabled, right)
+	start := len(p.lines)
+	focused := m.focus == len(rows)-1
+	m.primary(p, rows[len(rows)-1], focused, enabled, right)
+	if focused {
+		p.keep(start, len(p.lines)-1)
+	}
 }
 
 func (m *Model) activateConfirm(id string) tea.Cmd {
@@ -828,4 +967,37 @@ func shellJoin(args []string) string {
 		}
 	}
 	return strings.Join(out, " ")
+}
+
+// wrapSegments breaks a " · " separated value between segments, falling
+// back to word wrapping for a segment longer than the width.
+func wrapSegments(value string, width int) []string {
+	var lines []string
+	line := ""
+	for _, segment := range strings.Split(value, " · ") {
+		switch {
+		case line == "":
+			line = segment
+		case lipgloss.Width(line)+3+lipgloss.Width(segment) <= width:
+			line += " · " + segment
+		default:
+			lines = append(lines, line)
+			line = segment
+		}
+	}
+	lines = append(lines, line)
+	var out []string
+	for _, l := range lines {
+		out = append(out, strings.Split(lipgloss.Wrap(l, width, " "), "\n")...)
+	}
+	return out
+}
+
+// num formats a decimal the way the interface language writes it.
+func (m *Model) num(value float64) string {
+	text := fmt.Sprintf("%.1f", value)
+	if m.lang == PT {
+		text = strings.Replace(text, ".", ",", 1)
+	}
+	return text
 }

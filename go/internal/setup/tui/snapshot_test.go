@@ -104,6 +104,10 @@ func TestSnapshots(t *testing.T) {
 		drive(m, key("esc"))
 		drive(m, key("i"))
 		save(m, theme+"-06-preflight-review")
+		focus := m.focus
+		m.focus = 0
+		save(m, theme+"-06b-preflight-review-top")
+		m.focus = focus
 		demo.Speed = 0.2
 		m.update(func() tea.Cmd { return m.startInstall() })
 		for i := 0; i < 4000 && (m.progress.Total == 0 || m.progress.Done < m.progress.Total*45/100); i++ {

@@ -88,6 +88,7 @@ type Model struct {
 	armedUntil time.Time
 
 	pending tea.Cmd
+	scroll  map[screen]int
 	speeds  []float64
 
 	hits     []hit
@@ -110,7 +111,7 @@ func New(cfg Config) *Model {
 	if cfg.Lang == "" {
 		cfg.Lang = PT
 	}
-	m := &Model{cfg: cfg, glyphs: DetectGlyphs(), lang: cfg.Lang, keepPersonal: true, started: time.Now()}
+	m := &Model{cfg: cfg, glyphs: DetectGlyphs(), lang: cfg.Lang, keepPersonal: true, started: time.Now(), scroll: map[screen]int{}}
 	switch cfg.Theme {
 	case "light":
 		m.theme, m.themed = Day(), true
@@ -629,17 +630,44 @@ func (m *Model) View() tea.View {
 	// Body: in the upper third of the free space, centred.
 	room := m.h - 4
 	top := 2 + max(0, (room-len(body.lines))/3)
-	if len(body.lines) > room {
-		top = 2
-		body.lines = body.lines[:room]
-	}
 	left := (m.w - width) / 2
+	offset := 0
+	if total := len(body.lines); total > room {
+		// Scroll just enough to keep the focused block on screen.
+		top = 2
+		offset = min(m.scroll[m.screen], total-room)
+		if body.focusBottom >= offset+room {
+			offset = body.focusBottom - room + 1
+		}
+		if body.focusTop < offset {
+			offset = body.focusTop
+		}
+		offset = max(0, min(offset, total-room))
+		m.scroll[m.screen] = offset
+		body.lines = body.lines[offset : offset+room]
+		thumb := max(1, room*room/total)
+		at := offset * (room - thumb) / max(1, total-room)
+		var bar strings.Builder
+		for y := range room {
+			glyph, color := "│", t.Faint()
+			if y >= at && y < at+thumb {
+				glyph, color = "┃", t.Gray
+			}
+			if y > 0 {
+				bar.WriteString("\n")
+			}
+			bar.WriteString(t.Style(color).Render(glyph))
+		}
+		place(bar.String(), left+width+2, top)
+	}
 	place(strings.Join(body.lines, "\n"), left, top)
 	for _, h := range body.hits {
-		m.hits = append(m.hits, hit{y: h.y + top, x0: h.x0 + left, x1: h.x1 + left, id: h.id})
+		if y := h.y - offset; y >= 0 && y < len(body.lines) {
+			m.hits = append(m.hits, hit{y: y + top, x0: h.x0 + left, x1: h.x1 + left, id: h.id})
+		}
 	}
 	if body.caret != nil && m.modal == nil {
-		view.Cursor = tea.NewCursor(left+body.caret[0], top+body.caret[1])
+		view.Cursor = tea.NewCursor(left+body.caret[0], top+body.caret[1]-offset)
 		view.Cursor.Color, view.Cursor.Shape, view.Cursor.Blink = t.Brand, tea.CursorBar, true
 	}
 

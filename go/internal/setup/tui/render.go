@@ -17,7 +17,12 @@ type page struct {
 	lines  []string
 	hits   []hit
 	caret  *[2]int // x, y inside the page
+	// focus is the line range that must stay visible when the page scrolls.
+	focusTop, focusBottom int
 }
+
+// keep marks lines from..to as the part that must stay on screen.
+func (p *page) keep(from, to int) { p.focusTop, p.focusBottom = from, to }
 
 // hit is a clickable region; y and x are page coordinates until the frame
 // places the page.
