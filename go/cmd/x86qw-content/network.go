@@ -32,10 +32,11 @@ func runCheck(env *environment, args []string) (int, error) {
 	flags := flag.NewFlagSet("check", flag.ContinueOnError)
 	offline := flags.Bool("offline", false, "valida somente versoes declaradas")
 	asJSON := flags.Bool("json", false, "saida estruturada")
-	if err := parseFlags("check", flags, args, env.stderr); err != nil {
+	components, rest := splitPositional(args)
+	if err := parseFlags("check", flags, rest, env.stderr); err != nil {
 		return 0, err
 	}
-	code, err := env.project.Check(env.stdout, env.stderr, *offline, *asJSON)
+	code, err := env.project.Check(env.stdout, env.stderr, *offline, *asJSON, components)
 	if err != nil {
 		return exitError, err
 	}
@@ -51,9 +52,11 @@ func runUpdate(env *environment, args []string) (int, error) {
 	flags.BoolVar(&options.Commit, "commit", false, "cria commit apos atualizar")
 	flags.BoolVar(&options.Push, "push", false, "envia o commit para origin e gitlab")
 	flags.StringVar(&options.Message, "message", "", "mensagem do commit")
-	if err := parseFlags("update", flags, args, env.stderr); err != nil {
+	components, rest := splitPositional(args)
+	if err := parseFlags("update", flags, rest, env.stderr); err != nil {
 		return 0, err
 	}
+	options.Components = components
 	if err := env.project.Update(env.stdout, options); err != nil {
 		return exitError, err
 	}
@@ -119,10 +122,30 @@ func runCommit(env *environment, args []string) (int, error) {
 }
 
 func init() {
-	register("check", "consulta upstreams sem alterar arquivos (exit 2 = atualizacoes)", runCheck)
-	register("update", "atualiza dist, inventarios, receitas e catalogo em conjunto", runUpdate)
+	register("check", "consulta upstreams sem alterar arquivos; [COMPONENTE...] (exit 2 = atualizacoes, 1 = indisponivel)", runCheck)
+	register("update", "atualiza cada componente de forma independente; [COMPONENTE...]", runUpdate)
 	register("add", "incorpora pacote/configuracao por definicao revisada", runAdd)
 	register("publish", "publica os artefatos nos mirrors GitHub e GitLab", runPublish)
 	register("commit", "registra no Git somente mudancas da distribuicao", runCommit)
 	_ = os.Stdin
+}
+
+// splitPositional separates component names from flags, which may come in
+// any order; a flag that takes a value keeps it.
+func splitPositional(args []string) (positional, flags []string) {
+	valued := map[string]bool{"--workers": true, "-workers": true, "--message": true, "-message": true}
+	for index := 0; index < len(args); index++ {
+		arg := args[index]
+		switch {
+		case strings.HasPrefix(arg, "-"):
+			flags = append(flags, arg)
+			if valued[arg] && index+1 < len(args) {
+				index++
+				flags = append(flags, args[index])
+			}
+		default:
+			positional = append(positional, arg)
+		}
+	}
+	return positional, flags
 }

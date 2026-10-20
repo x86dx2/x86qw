@@ -20,12 +20,14 @@ x86qw-content publish
 x86qw-content commit --push
 ```
 
-- `check`: consulta os upstreams declarados sem escrever no projeto; retorna
-  codigo 2 quando encontra novidade;
-- `update`: sincroniza somente bytes stable/nightly e nQuake cuja identidade já
-  foi revisada, exige Git limpo antes da mutação, usa staging, reconcilia
-  arquivos antigos, atualiza os metadados dependentes, valida e troca a árvore
-  de forma transacional;
+- `check [COMPONENTE...]`: consulta os upstreams declarados sem escrever no
+  projeto, componente por componente; retorna 2 quando encontra novidade, 1
+  quando nada mudou mas algum upstream nao pôde ser consultado e 0 quando
+  tudo está atual;
+- `update [COMPONENTE...]`: sincroniza somente bytes stable/nightly e nQuake
+  cuja identidade já foi revisada, exige Git limpo antes da mutação, usa
+  staging, reconcilia arquivos antigos, atualiza os metadados dependentes,
+  valida e troca a árvore de forma transacional;
 - `add`: incorpora um novo pacote, add-on ou configuracao a partir de uma
   definicao local revisada;
 - `verify`: valida catalogo, receitas, componentes, hashes, estrutura, TUF e Git LFS;
@@ -66,6 +68,30 @@ SHA-256 observado na própria transferência não pode se tornar a referência q
 valida esses mesmos bytes.
 
 ## Atualizacoes independentes
+
+Cada componente da distribuição (`ezquake`, `ktx`, `mvdsv`, `nquake-maps`...)
+é consultado e atualizado por conta própria:
+
+```sh
+x86qw-content check                 # todos
+x86qw-content check mvdsv ktx       # só esses
+x86qw-content update --dry-run mvdsv
+x86qw-content update mvdsv
+```
+
+- um upstream fora do ar (HTTP 429, timeout) aparece como
+  `[INDISPONIVEL] componente: motivo` e não impede a consulta dos demais;
+- sem seleção, `update` pula (`[PULADO]`) o que estiver indisponível ou exigir
+  definição revisada e atualiza o resto; com seleção explícita, o componente
+  pedido que não puder ser atualizado faz o comando falhar;
+- componente fora da seleção ou pulado mantém exatamente os arquivos que o
+  manifesto registra, sem mudar nem sumir.
+
+A referência nQuake ainda é uma revisão única no caminho
+`dist/distributions/nquake/<revisão>/`: os 16 componentes que consomem
+arquivos dela (os 13 do snapshot, os overlays Final Arena e Team Fortress e o
+`ktx.pk3` do KTX) só mudam de revisão juntos. Pedir apenas parte deles quando
+a referência mudou é recusado com a lista dos que faltam.
 
 O snapshot nQuake já registrado pode ser reparado mecanicamente porque caminho,
 URL, tamanho e SHA-256 estão fixados no manifesto. Uma revisão nQuake nova, um

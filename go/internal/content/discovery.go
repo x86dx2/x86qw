@@ -250,7 +250,7 @@ func (p *Project) GitHubRecursiveTree(repository, branch string) (string, []GitT
 		}
 		kind, _ := entry.Value("type").(string)
 		sha, shaOK := entry.Value("sha").(string)
-		modes := map[string]map[string]bool{"blob": setOf("100644", "100755"), "tree": setOf("040000")}[kind]
+		modes := map[string]map[string]bool{"blob": setOf("100644", "100755", "120000"), "tree": setOf("040000")}[kind]
 		if modes == nil || !inSet(entry.Value("mode"), modes) || !shaOK || !hex40Pattern.MatchString(sha) {
 			return "", nil, fmt.Errorf("a API do GitHub retornou uma entrada de arvore invalida")
 		}
@@ -265,6 +265,11 @@ func (p *Project) GitHubRecursiveTree(repository, branch string) (string, []GitT
 			high, _ := pyjson.IntCmp(size, MaxArtifactBytes)
 			if !pyjson.IsExactInt(size) || low < 0 || high > 0 {
 				return "", nil, fmt.Errorf("a API do GitHub retornou um tamanho de blob invalido")
+			}
+			// A symbolic link is never consumed; a consumed file that turns
+			// into one disappears from the entries and shows up as a change.
+			if pyjson.Eq(entry.Value("mode"), "120000") {
+				continue
 			}
 			value, _ := size.(pyjson.Number).Int()
 			entries = append(entries, GitTreeEntry{path, sha, value})
@@ -394,7 +399,56 @@ func releaseVariant(name string) (string, error) {
 }
 
 // DiscoverAssets mirrors sync_distribution.discover_assets.
-func (p *Project) DiscoverAssets() ([]Asset, error) {
+// Unavailable maps a network source ("ezquake" or "nquake") to the error
+// that kept it from being consulted.
+type Unavailable map[string]string
+
+// DiscoverAssets lists every distribution asset. A network source that
+// fails is reported in Unavailable instead of failing the whole discovery;
+// its components keep their current files.
+func (p *Project) DiscoverAssets() ([]Asset, Unavailable, error) {
+	unavailable := Unavailable{}
+	var discovered []Asset
+	if ezquake, err := p.discoverEZQuake(); err != nil {
+		unavailable["ezquake"] = err.Error()
+	} else {
+		discovered = append(discovered, ezquake...)
+	}
+	if nquake, err := p.discoverNQuake(); err != nil {
+		unavailable["nquake"] = err.Error()
+	} else {
+		discovered = append(discovered, nquake...)
+	}
+	local, err := p.discoverLocalAssets()
+	if err != nil {
+		return nil, nil, err
+	}
+	discovered = append(discovered, local...)
+	unique := map[string]Asset{}
+	for _, asset := range discovered {
+		path := asset.Path
+		if err := p.RequireComponent(asset.Component, &path); err != nil {
+			return nil, nil, err
+		}
+		key := Casefold(asset.Path)
+		existing, ok := unique[key]
+		if ok && existing.Path == asset.Path && existing.URL != asset.URL {
+			return nil, nil, fmt.Errorf("two URLs resolve to the same distribution path: %s", asset.Path)
+		}
+		if !ok || asset.Path < existing.Path {
+			unique[key] = asset
+		}
+	}
+	result := make([]Asset, 0, len(unique))
+	for _, asset := range unique {
+		result = append(result, asset)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
+	return result, unavailable, nil
+}
+
+// discoverEZQuake lists the latest stable release and nightly builds.
+func (p *Project) discoverEZQuake() ([]Asset, error) {
 	var discovered []Asset
 	tag, err := p.GitHubLatestRelease(ezquakeReleaseRepository)
 	if err != nil {
@@ -437,37 +491,7 @@ func (p *Project) DiscoverAssets() ([]Asset, error) {
 		build, _, _ := strings.Cut(name, "_ez")
 		discovered = append(discovered, Asset{Component: "ezquake", URL: assetURL, Path: "clients/ezquake/nightly/" + build + "/" + source.platform + "/" + name, ExpectedSize: size})
 	}
-	nquake, err := p.discoverNQuake()
-	if err != nil {
-		return nil, err
-	}
-	discovered = append(discovered, nquake...)
-	local, err := p.discoverLocalAssets()
-	if err != nil {
-		return nil, err
-	}
-	discovered = append(discovered, local...)
-	unique := map[string]Asset{}
-	for _, asset := range discovered {
-		path := asset.Path
-		if err := p.RequireComponent(asset.Component, &path); err != nil {
-			return nil, err
-		}
-		key := Casefold(asset.Path)
-		existing, ok := unique[key]
-		if ok && existing.Path == asset.Path && existing.URL != asset.URL {
-			return nil, fmt.Errorf("two URLs resolve to the same distribution path: %s", asset.Path)
-		}
-		if !ok || asset.Path < existing.Path {
-			unique[key] = asset
-		}
-	}
-	result := make([]Asset, 0, len(unique))
-	for _, asset := range unique {
-		result = append(result, asset)
-	}
-	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
-	return result, nil
+	return discovered, nil
 }
 
 func (p *Project) discoverNQuake() ([]Asset, error) {
