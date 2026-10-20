@@ -195,6 +195,9 @@ func quarantineRemove(paths []string) error {
 	type moved struct{ original, aside string }
 	var done []moved
 	for _, path := range paths {
+		if deferLauncher(path) {
+			continue
+		}
 		aside := filepath.Join(filepath.Dir(path), fmt.Sprintf(".x86qw-%s-quarantine.%d", filepath.Base(path), os.Getpid()))
 		if err := os.Rename(path, aside); err != nil {
 			for index := len(done) - 1; index >= 0; index-- {

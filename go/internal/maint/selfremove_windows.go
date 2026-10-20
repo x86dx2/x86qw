@@ -27,9 +27,29 @@ func removeAfterExit(original, aside string) bool {
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return false
 	}
-	// Wait for this process to exit (at most a minute), then remove aside.
-	script := fmt.Sprintf("Wait-Process -Id %d -Timeout 60 -ErrorAction SilentlyContinue; Remove-Item -LiteralPath '%s' -Recurse -Force",
-		os.Getpid(), strings.ReplaceAll(aside, "'", "''"))
+	return removeWhenGone([]int{os.Getpid()}, aside)
+}
+
+// deferLauncher keeps x86qw.cmd in place while the cmd.exe running it is
+// alive (cmd.exe rereads the batch file after each command, so deleting it
+// fails the launcher with "The batch file cannot be found") and removes it
+// once this process and its parent have exited.
+func deferLauncher(path string) bool {
+	if !strings.EqualFold(filepath.Base(path), "x86qw.cmd") {
+		return false
+	}
+	return removeWhenGone([]int{os.Getpid(), os.Getppid()}, path)
+}
+
+// removeWhenGone starts a hidden PowerShell that waits (at most a minute)
+// for pids to exit and then removes path.
+func removeWhenGone(pids []int, path string) bool {
+	ids := make([]string, len(pids))
+	for index, pid := range pids {
+		ids[index] = fmt.Sprint(pid)
+	}
+	script := fmt.Sprintf("Wait-Process -Id %s -Timeout 60 -ErrorAction SilentlyContinue; Remove-Item -LiteralPath '%s' -Recurse -Force",
+		strings.Join(ids, ","), strings.ReplaceAll(path, "'", "''"))
 	command := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script)
 	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NO_WINDOW | windows.CREATE_NEW_PROCESS_GROUP}
 	if err := command.Start(); err != nil {
