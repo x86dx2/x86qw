@@ -53,7 +53,11 @@ func openArguments(target, item string) ([]string, error) {
 		if err != nil || (parsed.Host != "" && parsed.Host != "localhost") {
 			return nil, fmt.Errorf("arquivo inválido: %q", item)
 		}
-		path = filepath.FromSlash(parsed.Path)
+		path = parsed.Path
+		if len(path) > 2 && path[0] == '/' && path[2] == ':' {
+			path = path[1:] // file:///C:/demos/x.mvd on Windows
+		}
+		path = filepath.FromSlash(path)
 	}
 	extension := strings.ToLower(filepath.Ext(path))
 	known := false

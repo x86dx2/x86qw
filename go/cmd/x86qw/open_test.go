@@ -28,7 +28,11 @@ func TestOpenCopiesTheDemoUnderItsOwnName(t *testing.T) {
 	target, elsewhere := t.TempDir(), t.TempDir()
 	demo := filepath.Join(elsewhere, "final; quit $name.mvd")
 	os.WriteFile(demo, []byte("demo bytes"), 0o644)
-	for _, item := range []string{demo, "file://" + (&url.URL{Path: filepath.ToSlash(demo)}).EscapedPath()} {
+	slashed := filepath.ToSlash(demo)
+	if !strings.HasPrefix(slashed, "/") {
+		slashed = "/" + slashed // C:/… becomes file:///C:/…
+	}
+	for _, item := range []string{demo, "file://" + (&url.URL{Path: slashed}).EscapedPath()} {
 		args, err := openArguments(target, item)
 		if err != nil || args[0] != "+playdemo" || strings.ContainsAny(args[1], " ;$\"") {
 			t.Fatalf("%s: %v %v", item, args, err)
