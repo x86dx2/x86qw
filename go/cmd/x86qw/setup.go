@@ -191,15 +191,15 @@ func runSetupInterface(backend *setup.Real, root string, stdout, stderr io.Write
 	// The interface owns the screen: what publishing prints is dropped.
 	backend.Publish = func(target string) error { return publishCLI(target, false, io.Discard, io.Discard) }
 	backend.Integrate = setup.Integrate
-	next, err := tui.Run(tui.Config{Backend: backend, Target: root, Lang: interfaceLanguage()})
+	result, err := tui.Run(tui.Config{Backend: backend, Target: root, Lang: interfaceLanguage()})
 	if err != nil {
 		fmt.Fprintf(stderr, "✗ %v\n", err)
 		return output.ExitFailure
 	}
-	if next == nil {
+	if result.Next == nil {
 		return output.ExitSuccess
 	}
-	return run(next, stdout, stderr)
+	return run(result.Next, stdout, stderr)
 }
 
 // interfaceLanguage follows the locale: Portuguese unless it says otherwise.

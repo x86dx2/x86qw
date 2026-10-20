@@ -90,10 +90,10 @@ func (d *Demo) Existing(_ context.Context, target string) (*Existing, error) {
 	if !d.ExistingInstall {
 		return nil, nil
 	}
-	options := Defaults(Play, target)
+	options := Defaults(Both, target)
 	options.Nick = "x86dx2"
 	catalog, _ := d.Catalog(context.Background())
-	return &Existing{Target: target, CLIVersion: "2.0.3", Components: 12, Installed: catalog.Profiles["recommended"], Options: options, Updates: []Update{
+	return &Existing{Target: target, CLIVersion: "2.0.3", Components: 12, Installed: append(catalog.Profiles["recommended"], "mvdsv", "qtv", "qwfwd"), Options: options, Updates: []Update{
 		{"x86qw-client-bootstrap", "Base do cliente x86QW", "e4cb23d40aa2+x86qw.4", "dfb2ac9299f7+x86qw.4", "nQuake"},
 		{"ktx", "KTX x86QW", "1.47+x86qw.19", "1.47+x86qw.20", ""},
 		{"x86qw-core-id1", "Dados do Quake", "0.1.0", "0.1.1", ""},

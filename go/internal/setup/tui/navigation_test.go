@@ -98,7 +98,8 @@ func TestPanelNavigation(t *testing.T) {
 	if m.screen != scPanel {
 		t.Fatalf("instalação existente deveria abrir o painel: %d", m.screen)
 	}
-	drive(m, key("down"), key("enter"))
+	m.focus = homeRow(m, "change")
+	drive(m, key("enter"))
 	if m.screen != scConfigure {
 		t.Fatalf("Componentes e configuração deveria abrir a revisão: %d", m.screen)
 	}
@@ -106,7 +107,8 @@ func TestPanelNavigation(t *testing.T) {
 	if m.screen != scPanel {
 		t.Fatalf("esc na revisão deveria voltar ao painel: %d", m.screen)
 	}
-	drive(m, key("up"), key("enter"))
+	m.focus = homeRow(m, "update")
+	drive(m, key("enter"))
 	if m.panelView != "update" {
 		t.Fatalf("enter em Atualizar: %q", m.panelView)
 	}
@@ -183,7 +185,7 @@ func TestDialogEnterKeepsEscCancels(t *testing.T) {
 	m.focus = 0
 	drive(m, key("enter")) // Components
 	content := m.opts.Content
-	drive(m, key("down"), key("down"), space())
+	drive(m, key("down"), space())
 	if m.modal == nil || m.opts.Content == content {
 		t.Fatal("espaço deveria mudar o pacote e manter o diálogo aberto")
 	}
@@ -191,7 +193,7 @@ func TestDialogEnterKeepsEscCancels(t *testing.T) {
 	if m.modal != nil || m.opts.Content != content {
 		t.Fatalf("esc deveria cancelar: %q", m.opts.Content)
 	}
-	drive(m, key("enter"), key("down"), key("down"), key("down"), key("enter"))
+	drive(m, key("enter"), key("down"), key("enter"))
 	if m.modal != nil || m.opts.Content == content {
 		t.Fatalf("enter deveria escolher o pacote em foco e fechar: %q", m.opts.Content)
 	}
@@ -268,7 +270,8 @@ func TestDoneHandsTheNextCommandToTheCLI(t *testing.T) {
 
 func TestPanelRepairsForReal(t *testing.T) {
 	m := started(t, true)
-	drive(m, key("down"), key("down"), key("enter"))
+	m.focus = homeRow(m, "repair")
+	drive(m, key("enter"))
 	if m.panelView != "repair" {
 		t.Fatalf("painel: %q", m.panelView)
 	}
@@ -276,4 +279,14 @@ func TestPanelRepairsForReal(t *testing.T) {
 	if m.busy || m.report == nil || m.report.Files == 0 {
 		t.Fatalf("reparo: ocupado %v, %+v", m.busy, m.report)
 	}
+}
+
+// homeRow is where a row sits on the home screen.
+func homeRow(m *Model, id string) int {
+	for index, row := range m.panelRows() {
+		if row.id == id {
+			return index
+		}
+	}
+	return -1
 }

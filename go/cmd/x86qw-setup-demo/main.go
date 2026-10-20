@@ -16,10 +16,11 @@ func main() {
 	lang := flag.String("lang", "pt", "pt ou en")
 	theme := flag.String("theme", "", "dark, light ou vazio para seguir o terminal")
 	speed := flag.Float64("speed", 1, "velocidade da instalação simulada")
+	start := flag.String("start", "", "abrir direto em match, servers ou host (com --existing)")
 	flag.Parse()
 	_, err := tui.Run(tui.Config{
 		Backend: &setup.Demo{ExistingInstall: *existing, Speed: *speed},
-		Target:  tui.DefaultTarget(), Lang: tui.Lang(*lang), Demo: true, Theme: *theme,
+		Target:  tui.DefaultTarget(), Lang: tui.Lang(*lang), Demo: true, Theme: *theme, Start: *start,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

@@ -51,6 +51,12 @@ func (m *Model) body(width int) *page {
 		m.donePage(p)
 	case scPanel:
 		m.panelPage(p)
+	case scMatch:
+		m.matchPage(p)
+	case scServers:
+		m.serversPage(p)
+	case scHost:
+		m.hostPage(p)
 	}
 	return p
 }
@@ -244,7 +250,7 @@ func (m *Model) totalBytes() int64 {
 
 // primary draws the screen's main action: brand coloured when it can run,
 // dim (with a spinner while checks run) when it cannot.
-func (m *Model) primary(p *page, row reviewRow, focused, enabled bool, right string) {
+func (m *Model) primary(p *page, row reviewRow, focused, enabled, busy bool, right string) {
 	t := m.theme
 	hovered := m.hover == "row:"+row.id
 	bg, fg := t.Base, t.Brand
@@ -261,7 +267,7 @@ func (m *Model) primary(p *page, row reviewRow, focused, enabled bool, right str
 	}
 	base := lipgloss.NewStyle().Background(bg)
 	glyph := m.glyphs.Chevron
-	if !enabled && !m.preDone {
+	if busy {
 		glyph = m.spinner()
 	}
 	left := base.Render("  ") + base.Foreground(fg).Bold(enabled).Render(glyph+" "+row.label)
@@ -270,6 +276,9 @@ func (m *Model) primary(p *page, row reviewRow, focused, enabled bool, right str
 
 // details lists everything chosen in one section, as label/value pairs.
 func (m *Model) details(id string) [][2]string {
+	if strings.HasPrefix(id, "m.") {
+		return m.matchDetails(id)
+	}
 	o := m.opts
 	switch id {
 	case "comps":
@@ -379,7 +388,6 @@ func (m *Model) details(id string) [][2]string {
 // the section in focus open with everything in it. Install and the
 // preflight live in the dock under it.
 func (m *Model) setupPage(p *page) {
-	t := m.theme
 	if m.h >= 52 {
 		m.route(p)
 	}
@@ -387,7 +395,14 @@ func (m *Model) setupPage(p *page) {
 	p.lead(m.t("conf.lead"))
 	p.gap(1)
 	rows := m.confirmRows()
-	for index, row := range rows[:len(rows)-1] {
+	m.accordion(p, rows[:len(rows)-1])
+}
+
+// accordion lists sections one line each, the focused one open with
+// everything in it; the setup, the match and the server screens share it.
+func (m *Model) accordion(p *page, rows []reviewRow) {
+	t := m.theme
+	for index, row := range rows {
 		if index == m.focus {
 			m.openSection(p, row, index == 0)
 			continue
@@ -456,7 +471,14 @@ func (m *Model) openSection(p *page, row reviewRow, first bool) {
 // dock is the fixed bar under the setup: the preflight, once Install is
 // pressed, and the button it decides. It never scrolls away.
 func (m *Model) dock(width int) *page {
-	if m.screen != scConfigure || m.catalog == nil || m.err != nil {
+	if m.catalog == nil || m.err != nil {
+		return nil
+	}
+	switch m.screen {
+	case scMatch, scHost:
+		return m.gameDock(width)
+	case scConfigure:
+	default:
 		return nil
 	}
 	t := m.theme
@@ -523,7 +545,7 @@ func (m *Model) dock(width int) *page {
 	if enabled {
 		right = size(m.totalBytes()) + "  ↵"
 	}
-	m.primary(p, rows[len(rows)-1], m.focus == len(rows)-1, enabled, right)
+	m.primary(p, rows[len(rows)-1], m.focus == len(rows)-1, enabled, m.preOn && !m.preDone, right)
 	return p
 }
 
@@ -902,18 +924,61 @@ func (m *Model) panelRows() []reviewRow {
 		return []reviewRow{{"keep", keep + "  " + m.t("keep.personal"), m.t("keep.where")}, {"remove", m.t("m.remove"), ""}}
 	}
 	return []reviewRow{
+		{"play", m.t("h.play"), m.homeSummary("play")},
+		{"servers", m.t("h.servers"), m.homeSummary("servers")},
+		{"host", m.t("h.host"), m.homeSummary("host")},
 		{"update", m.t("m.update"), fmt.Sprintf("%d %s", len(m.existing.Updates), m.t("m.update.d"))},
 		{"change", m.t("m.change"), m.t("m.change.d")},
 		{"repair", m.t("m.repair"), m.t("m.repair.d")},
+		{"tools", m.t("h.tools"), m.t("h.tools.d")},
 		{"remove", m.t("m.remove"), m.t("m.remove.d")},
 	}
+}
+
+// homeSummary is the live line beside a game row of home.
+func (m *Model) homeSummary(id string) string {
+	g := m.game
+	switch id {
+	case "play":
+		if g.catalog != nil && g.catalog.Last != nil {
+			return m.matchTitle() + " · " + m.t("rs."+g.match.Ruleset)
+		}
+		return m.t("h.play.d")
+	case "servers":
+		switch {
+		case g.serversLoading:
+			return m.t("servers.loading")
+		case g.serversErr != nil:
+			return m.t("h.servers.off")
+		}
+		players := 0
+		for _, server := range g.servers {
+			players += server.Humans
+		}
+		return fmt.Sprintf(m.t("h.servers.d"), len(g.servers), players)
+	case "host":
+		switch {
+		case !m.serverInstalled():
+			return m.t("h.host.none")
+		case g.stack != nil:
+			running := 0
+			for _, process := range g.stack.Processes {
+				if strings.HasPrefix(process.Label, "MVDSV") {
+					running++
+				}
+			}
+			return fmt.Sprintf(m.t("h.host.on"), running)
+		}
+		return fmt.Sprintf(m.t("h.host.off"), len(m.opts.Server.Instances))
+	}
+	return ""
 }
 
 func (m *Model) panelPage(p *page) {
 	t := m.theme
 	m.logo(p)
 	e := m.existing
-	p.title(m.t("panel.title"))
+	p.title(m.t("home.title"))
 	p.add(p.st(t.Gray).Render(fmt.Sprintf("%s · %d %s · CLI %s", shortPath(e.Target), e.Components, m.t("rev.items"), e.CLIVersion)))
 	p.gap(1)
 	switch m.panelView {
@@ -938,6 +1003,16 @@ func (m *Model) panelPage(p *page) {
 		return
 	}
 	for index, row := range m.panelRows() {
+		if m.panelView == "" {
+			// Home groups the game and the installation.
+			switch row.id {
+			case "play":
+				p.heading(m.t("h.group.play"))
+			case "update":
+				p.gap(1)
+				p.heading(m.t("h.group.install"))
+			}
+		}
 		focused, hovered := index == m.focus, m.hover == "row:"+row.id
 		bg := p.rowBG(focused, hovered)
 		danger := row.id == "remove" && m.panelView == "remove"
@@ -1036,6 +1111,14 @@ func (m *Model) activatePanel(id string) tea.Cmd {
 		return nil
 	}
 	switch id {
+	case "play":
+		return m.openScreen(scMatch)
+	case "servers":
+		return m.openScreen(scServers)
+	case "host":
+		return m.openScreen(scHost)
+	case "tools":
+		m.openModal("tools")
 	case "change":
 		m.screen, m.focus, m.fromPanel, m.preOn = scConfigure, 0, true, false
 	case "apply":

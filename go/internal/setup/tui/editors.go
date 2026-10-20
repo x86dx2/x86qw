@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 )
 
 func (m *Model) openModal(kind string) {
-	m.modal = &modal{kind: kind, field: map[string]*Field{}, before: cloneOptions(m.opts), dns: m.dns, dnsPending: m.dnsPending}
+	m.modal = &modal{kind: kind, field: map[string]*Field{}, before: cloneOptions(m.opts), match: m.game.match, dns: m.dns, dnsPending: m.dnsPending}
 	add := func(name, value string, limit int) {
 		field := NewField(value, limit)
 		m.modal.field[name] = &field
@@ -27,7 +28,19 @@ func (m *Model) openModal(kind string) {
 	m.modal.field["hostname"].Accept = func(r rune) bool {
 		return r == '.' || r == '-' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
 	}
+	if picker(kind) {
+		add("filter", "", 30)
+	}
+	// A list opens on what is chosen.
+	for index, row := range focusables(m.modalRows()) {
+		if row.kind == rowRadio && row.on {
+			m.modal.focus = index
+		}
+	}
 }
+
+// picker reports whether a dialog is a list searched by typing.
+func picker(kind string) bool { return kind == "m.mode" || kind == "m.map" }
 
 // closeModal keeps the changes (enter) or puts the choices back as they
 // were (esc). With the preflight open, kept changes are checked again.
@@ -37,8 +50,22 @@ func (m *Model) closeModal(keep bool) tea.Cmd {
 	}
 	if !keep {
 		m.opts, m.dns, m.dnsPending = m.modal.before, m.modal.dns, m.modal.dnsPending
+		m.game.match = m.modal.match
 		m.modal = nil
 		return nil
+	}
+	if strings.HasPrefix(m.modal.kind, "m.") {
+		// A match editor: the maps follow the game, mode and bots.
+		changed := m.game.match != m.modal.match
+		m.modal = nil
+		if changed {
+			return m.loadMaps()
+		}
+		return nil
+	}
+	if m.modal.kind == "tools" {
+		m.modal = nil
+		return m.takePending()
 	}
 	cmd := m.fieldChanged()
 	changed := !reflect.DeepEqual(m.opts, m.modal.before)
@@ -102,6 +129,10 @@ func (m *Model) modalTitle() string {
 		return m.t("sec.recipe")
 	case "servers":
 		return m.t("servers")
+	case "tools":
+		return m.t("h.tools")
+	case "m.game", "m.mode", "m.opts", "m.map", "m.rules":
+		return m.t(m.modal.kind)
 	}
 	return ""
 }
@@ -115,6 +146,17 @@ func (m *Model) modalKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		m.modal.capture = ""
 		return nil
+	}
+	if picker(m.modal.kind) {
+		switch key {
+		case "up", "down", "enter", "esc", "pgup", "pgdown", "space", "tab", "shift+tab":
+		default:
+			// Typing searches the list.
+			if m.modal.field["filter"].Key(msg) {
+				m.modal.focus = 0
+				return nil
+			}
+		}
 	}
 	switch key {
 	case "esc":
@@ -231,6 +273,28 @@ func (m *Model) clickRow(id string) tea.Cmd {
 				return m.activateConfirm(id)
 			}
 		}
+	case scMatch, scHost:
+		rows, activate := m.matchRows(), m.activateMatch
+		if m.screen == scHost {
+			rows, activate = m.hostRows(), m.activateHost
+		}
+		for index, row := range rows {
+			if row.id == id {
+				if m.focus != index && index < len(rows)-1 {
+					m.focus = index
+					return nil
+				}
+				m.focus = index
+				return activate(id)
+			}
+		}
+	case scServers:
+		if index, err := strconv.Atoi(strings.TrimPrefix(id, "srv")); err == nil && strings.HasPrefix(id, "srv") {
+			if m.focus == index {
+				return m.joinServer(false)
+			}
+			m.focus = index
+		}
 	case scDone:
 		for index, row := range m.doneRows() {
 			if row.id == id {
@@ -273,7 +337,12 @@ func (m *Model) bindKey(action, key string) {
 // modalRows builds the rows of the open dialog from the current state.
 func (m *Model) modalRows() []formRow {
 	o := &m.opts
+	if strings.HasPrefix(m.modal.kind, "m.") {
+		return m.gameModalRows()
+	}
 	switch m.modal.kind {
+	case "tools":
+		return m.toolRows()
 	case "comps":
 		return m.compRows()
 	case "config":
