@@ -22,6 +22,7 @@ func TestWithoutATerminalNothingAsks(t *testing.T) {
 		want string
 	}{
 		{nil, 0, "Uso: " + play.Launcher() + " <comando> [opções]\nExemplo: " + play.Launcher() + " play\n" + commandList},
+		{[]string{"--target", target}, 0, "Uso: " + play.Launcher() + " <comando> [opções]"},
 		{[]string{"play", "--target", target}, 2, "informe o modo (--mode)"},
 		{[]string{"install", target}, 2, "informe --profile"},
 		{[]string{"setup", "--target", target}, 2, "uso: x86qw setup --profile"},
