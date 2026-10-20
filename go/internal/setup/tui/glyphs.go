@@ -1,9 +1,6 @@
 package tui
 
-import (
-	"os"
-	"runtime"
-)
+import "os"
 
 // Glyphs are the symbols the interface draws with; every one is a single
 // column. The legacy Windows console gets plain fallbacks.
@@ -34,9 +31,19 @@ var legacyGlyphs = Glyphs{
 	Spark:   []string{"_", "_", ".", ".", "-", "-", "=", "#"},
 }
 
-// DetectGlyphs picks the legacy set only on the classic Windows console.
+// DetectGlyphs picks the legacy set only on the classic console of
+// Windows 10, whose default font has no braille. Windows 11 hands
+// consoles to Windows Terminal without setting WT_SESSION, so the system
+// version decides, not the variable. X86QW_GLYPHS=unicode or ascii
+// overrides both ways.
 func DetectGlyphs() Glyphs {
-	if runtime.GOOS == "windows" && os.Getenv("WT_SESSION") == "" && os.Getenv("TERM_PROGRAM") == "" {
+	switch os.Getenv("X86QW_GLYPHS") {
+	case "unicode":
+		return unicodeGlyphs
+	case "ascii":
+		return legacyGlyphs
+	}
+	if legacyConsole() {
 		return legacyGlyphs
 	}
 	return unicodeGlyphs
