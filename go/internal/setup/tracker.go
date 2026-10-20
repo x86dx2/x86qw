@@ -170,7 +170,9 @@ func (t *tracker) tick(now time.Time) Progress {
 // track runs work with the tracker's observer and streams snapshots until
 // it ends; the last one is Finished, or carries the error.
 func track(ctx context.Context, t *tracker, control <-chan bool, work func(ctx context.Context) ([]string, error)) <-chan Progress {
-	out := make(chan Progress)
+	// One slot of buffer lets the last snapshot be left behind when nobody
+	// reads any more.
+	out := make(chan Progress, 1)
 	done := make(chan struct{})
 	var warnings []string
 	var failure error
@@ -182,42 +184,44 @@ func track(ctx context.Context, t *tracker, control <-chan bool, work func(ctx c
 		defer close(out)
 		ticker := time.NewTicker(120 * time.Millisecond)
 		defer ticker.Stop()
-		send := func(progress Progress) bool {
-			select {
-			case out <- progress:
-				return true
-			case <-ctx.Done():
-				return false
-			}
-		}
+		// Snapshots go out while the work runs; once cancelled, only the
+		// last one, after the rollback.
+	running:
 		for {
 			select {
 			case on := <-control:
 				t.pause(on)
 			case <-ticker.C:
-				if !send(t.tick(time.Now())) {
-					<-done
-					return
+				select {
+				case out <- t.tick(time.Now()):
+				case <-ctx.Done():
+					break running
 				}
 			case <-done:
-				last := t.tick(time.Now())
-				last.Holding, last.Paused, last.Speed, last.ETA = false, false, 0, 0
-				last.Warnings = warnings
-				if failure != nil {
-					last.Err = failure
-				} else {
-					last.Finished = true
-					for index := range last.Lanes {
-						last.Lanes[index].Done = last.Lanes[index].Size
-					}
-					last.Done = last.Total
-				}
-				// The last snapshot always arrives, even after a cancel,
-				// so the interface learns how the installation ended.
-				out <- last
-				return
+				break running
 			}
 		}
+		<-done
+		last := t.tick(time.Now())
+		last.Holding, last.Paused, last.Speed, last.ETA = false, false, 0, 0
+		last.Warnings = warnings
+		if failure != nil {
+			last.Err = failure
+		} else {
+			last.Finished = true
+			for index := range last.Lanes {
+				last.Lanes[index].Done = last.Lanes[index].Size
+			}
+			last.Done = last.Total
+		}
+		// The last snapshot always arrives, even after a cancel, so the
+		// interface learns how the installation ended: a stale one still
+		// in the buffer makes room for it.
+		select {
+		case <-out:
+		default:
+		}
+		out <- last
 	}()
 	return out
 }

@@ -129,6 +129,8 @@ func ClientConfig(o Options, stamp int64) string {
 	line("fov", strconv.Itoa(o.Video.FOV))
 	line("volume", strconv.FormatFloat(float64(o.Volume)/100, 'f', -1, 64))
 	b.WriteString("\n")
+	// ezQuake saves user-created variables in config.cfg, so the stamp
+	// outlives the session and the script does not run again.
 	fmt.Fprintf(&b, "set _x86qw_setup %q\n", strconv.FormatInt(stamp, 10))
 	// The renderer started before this ran; restart it so the video
 	// choices hold from the first match.
@@ -148,7 +150,10 @@ func WriteClientConfig(target string, o Options, stamp int64) error {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	block := fmt.Sprintf("// x86qw setup: begin\nif \"$_x86qw_setup\" != \"%d\" \"exec x86qw-setup.cfg\"\n// x86qw setup: end\n", stamp)
+	// Unquoted, like nQuake's own guard: QuakeWorld expands $ only outside
+	// quotes, and leaves an unknown variable as written, so the first run
+	// compares "$_x86qw_setup" and executes the script.
+	block := fmt.Sprintf("// x86qw setup: begin\nif $_x86qw_setup != %d \"exec x86qw-setup.cfg\"\n// x86qw setup: end\n", stamp)
 	text := string(user)
 	if userBlock.MatchString(text) {
 		text = userBlock.ReplaceAllLiteralString(text, block)

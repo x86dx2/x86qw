@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -23,19 +24,7 @@ import (
 )
 
 // hasInstallation reports whether target already holds an x86QW install.
-func hasInstallation(target string) bool {
-	if _, err := os.Stat(filepath.Join(target, ".x86qw", "state.json")); err == nil {
-		return true
-	}
-	for _, spec := range catalog.ClientSpecs {
-		for _, channel := range []string{"stable", "nightly"} {
-			if _, err := os.Stat(filepath.Join(target, filepath.FromSlash(spec.Receipt(channel)))); err == nil {
-				return true
-			}
-		}
-	}
-	return false
-}
+func hasInstallation(target string) bool { return setup.Installed(target) }
 
 // publishCLI installs this executable as the installation's CLI and, with
 // link, links ~/.local/bin/x86qw to its launcher (shortcuts on Windows).
@@ -251,7 +240,8 @@ func runRecipe(backend *setup.Real, options setup.Options, yes bool, stdout, std
 	if blocked {
 		return output.ExitFailure
 	}
-	stop := trapInterrupt(stderr, "Instalação cancelada; a pasta voltou ao que era.")
+	// Ctrl+C cancels and waits for the rollback instead of exiting midway.
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
 	announced := map[string]bool{}
 	var last setup.Progress
@@ -264,7 +254,11 @@ func runRecipe(backend *setup.Real, options setup.Options, yes bool, stdout, std
 		}
 		last = progress
 	}
-	if last.Err != nil {
+	switch {
+	case errors.Is(last.Err, context.Canceled):
+		con.failure("Instalação cancelada; a pasta voltou ao que era.")
+		return exitInterrupted
+	case last.Err != nil:
 		con.failure(last.Err.Error() + " — a pasta voltou ao que era.")
 		return output.ExitFailure
 	}

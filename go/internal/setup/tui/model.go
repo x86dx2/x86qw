@@ -37,12 +37,14 @@ type Config struct {
 
 // Model is the installer program.
 type Model struct {
-	cfg    Config
-	next   []string // the x86qw command to run once the interface closes
-	theme  Theme
-	glyphs Glyphs
-	lang   Lang
-	themed bool // the theme was chosen explicitly or detected
+	cfg  Config
+	next []string // the x86qw command to run once the interface closes
+	// cancelling is a cancelled installation still rolling back.
+	cancelling bool
+	theme      Theme
+	glyphs     Glyphs
+	lang       Lang
+	themed     bool // the theme was chosen explicitly or detected
 
 	w, h int
 
@@ -273,7 +275,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		if m.screen != scInstall {
-			break // a cancelled installation reporting how it ended
+			break
+		}
+		if m.cancelling {
+			// Wait for the rollback: the installation ends with the
+			// folder as it was, then the interface steps back.
+			if msg.ok && !msg.progress.Finished && msg.progress.Err == nil {
+				return m, m.nextProgress()
+			}
+			m.cancelling = false
+			if !msg.progress.Finished {
+				m.leaveInstall()
+				m.say(m.t("cancelled"))
+				break
+			}
 		}
 		m.progress = msg.progress
 		if m.progress.Err != nil {
@@ -392,10 +407,9 @@ func (m *Model) keyPress(msg tea.KeyPressMsg) tea.Cmd {
 	switch key {
 	case "ctrl+c":
 		if m.screen == scInstall && !m.progress.Finished {
-			if m.armedFor("cancel") {
+			if !m.cancelling && m.armedFor("cancel") {
+				m.cancelling = true
 				m.cancel()
-				m.leaveInstall()
-				m.say(m.t("cancelled"))
 			}
 			return nil
 		}
@@ -855,6 +869,9 @@ func (m *Model) footerHints() [][2]string {
 	case scInstall:
 		if m.progress.Err != nil {
 			return [][2]string{{"enter", m.t("k.back")}}
+		}
+		if m.cancelling {
+			return [][2]string{{m.spinner(), m.t("inst.cancelling")}}
 		}
 		pause := m.t("k.pause")
 		if m.progress.Paused {

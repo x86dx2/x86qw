@@ -2,6 +2,7 @@ package setup
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -128,5 +129,65 @@ func TestDeepFolderWarnsAServer(t *testing.T) {
 	options.Intent = Play
 	if check := r.checkFolder(options); check.State != CheckOK {
 		t.Fatalf("jogador não precisa do aviso: %+v", check)
+	}
+}
+
+func TestCancelledWorkStillReportsHowItEnded(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	release := make(chan struct{})
+	out := track(ctx, newTracker([]Lane{{ID: "a", Label: "A", Size: 10}}, nil), nil, func(ctx context.Context) ([]string, error) {
+		<-ctx.Done()
+		<-release // the rollback takes a while
+		return nil, ctx.Err()
+	})
+	time.Sleep(300 * time.Millisecond)
+	cancel()
+	time.Sleep(200 * time.Millisecond)
+	close(release)
+	var last Progress
+	for progress := range out {
+		last = progress
+	}
+	if !errors.Is(last.Err, context.Canceled) || last.Finished {
+		t.Fatalf("o fim deveria dizer cancelado: %+v", last)
+	}
+}
+
+// TestRealCancelThenInstallAgain cancels a real install once its first
+// package is in, then installs into the same folder: the retry must start
+// fresh, not treat the leftovers as an installation.
+func TestRealCancelThenInstallAgain(t *testing.T) {
+	r := realBackend(t)
+	if os.Getenv("X86QW_REAL_INSTALL") == "" {
+		t.Skip("defina X86QW_REAL_INSTALL=1 para instalar de verdade")
+	}
+	t.Setenv("X86QW_CACHE_DIR", t.TempDir())
+	t.Setenv("X86QW_NO_MACOS_PREFERENCES", "1")
+	target := filepath.Join(t.TempDir(), "x86qw")
+	options := Defaults(Play, target)
+	options.Nick, options.Content = "tester", "essential"
+	ctx, cancel := context.WithCancel(context.Background())
+	var last Progress
+	for progress := range r.Install(ctx, options, nil) {
+		if len(progress.Lanes) > 0 && progress.Lanes[0].FileCount > 0 && progress.Lanes[0].Files >= progress.Lanes[0].FileCount {
+			cancel()
+		}
+		last = progress
+	}
+	cancel()
+	if !errors.Is(last.Err, context.Canceled) {
+		t.Fatalf("deveria terminar cancelada: %+v", last.Err)
+	}
+	if Installed(target) {
+		t.Fatal("o que sobrou do cancelamento passou por instalação")
+	}
+	for progress := range r.Install(context.Background(), options, nil) {
+		last = progress
+	}
+	if last.Err != nil || !last.Finished {
+		t.Fatalf("segunda tentativa: %v", last.Err)
+	}
+	if _, err := install.Verify(target); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"golang.org/x/sys/windows/registry"
 	"os"
 	"path/filepath"
 	"testing"
@@ -51,16 +52,41 @@ func TestShortcutsLifecycle(t *testing.T) {
 	}
 }
 
-func TestUserPathLifecycle(t *testing.T) {
-	root := t.TempDir()
-	if err := AddUserPath(root); err != nil {
+func TestUserPathKeepsOtherEntriesUnexpanded(t *testing.T) {
+	key, err := registry.OpenKey(registry.CURRENT_USER, "Environment", registry.QUERY_VALUE|registry.SET_VALUE)
+	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { RemoveUserPath(root) })
-	if err := AddUserPath(root); err != nil {
-		t.Fatalf("adicionar de novo: %v", err)
+	defer key.Close()
+	original, kind, err := key.GetStringValue("Path")
+	if err == nil {
+		t.Cleanup(func() {
+			if kind == registry.EXPAND_SZ {
+				key.SetExpandStringValue("Path", original)
+			} else {
+				key.SetStringValue("Path", original)
+			}
+		})
+	} else {
+		t.Cleanup(func() { key.DeleteValue("Path") })
+	}
+	if err := key.SetExpandStringValue("Path", `%USERPROFILE%\bin;C:\Tools`); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	for _, step := range []func(string) error{AddUserPath, AddUserPath} {
+		if err := step(root); err != nil {
+			t.Fatal(err)
+		}
+	}
+	value, kind, err := key.GetStringValue("Path")
+	if err != nil || kind != registry.EXPAND_SZ || value != `%USERPROFILE%\bin;C:\Tools;`+root {
+		t.Fatalf("PATH depois de adicionar: %q (%d) %v", value, kind, err)
 	}
 	if err := RemoveUserPath(root); err != nil {
 		t.Fatal(err)
+	}
+	if value, _, _ := key.GetStringValue("Path"); value != `%USERPROFILE%\bin;C:\Tools` {
+		t.Fatalf("PATH depois de remover: %q", value)
 	}
 }

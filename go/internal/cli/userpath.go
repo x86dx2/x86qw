@@ -13,18 +13,32 @@ import (
 
 // The Windows user PATH gets the installation folder, where x86qw.cmd
 // lives, so a new terminal finds the x86qw command. Only the user's own
-// PATH changes; entries are compared without case or trailing slash.
+// PATH changes, read and written in the registry as stored: entries such
+// as %USERPROFILE%\bin stay unexpanded and the value keeps its kind.
+// Entries are compared without case or trailing backslash.
 const userPathScript = `param(
   [ValidateSet("add", "remove")][string]$Mode,
   [string]$Dir
 )
 $ErrorActionPreference = "Stop"
 $Wanted = $Dir.TrimEnd('\')
-$Current = [Environment]::GetEnvironmentVariable("Path", "User")
-$Parts = @()
-if ($Current) { $Parts = @($Current -split ';' | Where-Object { $_ -ne '' -and $_.TrimEnd('\') -ine $Wanted }) }
-if ($Mode -eq "add") { $Parts += $Wanted }
-[Environment]::SetEnvironmentVariable("Path", ($Parts -join ';'), "User")
+$Key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("Environment")
+try {
+  $Kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
+  $Current = ""
+  if ($Key.GetValueNames() -contains "Path") {
+    $Kind = $Key.GetValueKind("Path")
+    $Current = [string]$Key.GetValue("Path", "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+  }
+  $Parts = @($Current -split ';' | Where-Object { $_ -ne '' -and $_.TrimEnd('\') -ine $Wanted })
+  if ($Mode -eq "add") { $Parts += $Wanted }
+  $Key.SetValue("Path", ($Parts -join ';'), $Kind)
+} finally {
+  $Key.Close()
+}
+# Tell running programs the environment changed, so new terminals see it.
+[Environment]::SetEnvironmentVariable("X86QW_PATH_REFRESH", "1", "User")
+[Environment]::SetEnvironmentVariable("X86QW_PATH_REFRESH", $null, "User")
 `
 
 // AddUserPath puts root on the Windows user PATH.

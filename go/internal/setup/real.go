@@ -152,10 +152,20 @@ func (r *Real) Catalog(ctx context.Context) (*Catalog, error) {
 	return out, nil
 }
 
-// installed reports whether target holds an x86QW installation.
-func installed(target string) bool {
-	evidence, err := maint.ManagedIdentity(target)
-	return err == nil && len(evidence) > 0
+// Installed reports whether target holds an x86QW installation: its state
+// or a client receipt. What a rolled-back install leaves in .x86qw is not.
+func Installed(target string) bool {
+	if _, err := os.Stat(filepath.Join(target, ".x86qw", "state.json")); err == nil {
+		return true
+	}
+	for _, spec := range catalog.ClientSpecs {
+		for _, channel := range []string{"stable", "nightly"} {
+			if _, err := os.Stat(filepath.Join(target, filepath.FromSlash(spec.Receipt(channel)))); err == nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (r *Real) planInput(target string) plan.Input {
@@ -165,7 +175,7 @@ func (r *Real) planInput(target string) plan.Input {
 
 // Existing describes the installation at target, nil when there is none.
 func (r *Real) Existing(ctx context.Context, target string) (*Existing, error) {
-	if !installed(target) {
+	if !Installed(target) {
 		return nil, nil
 	}
 	if err := r.load(); err != nil {
@@ -287,7 +297,7 @@ func (r *Real) checkFolder(o Options) Check {
 		check.State, check.Detail = CheckFailed, "O caminho precisa ser absoluto."
 		return check
 	}
-	if installed(o.Target) {
+	if Installed(o.Target) {
 		check.Detail = "Já tem uma instalação x86QW: ela recebe as mudanças."
 		if held, err := lock.Acquire(o.Target, "setup"); err != nil {
 			check.State, check.Detail = CheckFailed, err.Error()
@@ -485,7 +495,7 @@ func (r *Real) Install(ctx context.Context, options Options, control <-chan bool
 	for _, component := range cat.Components {
 		sizes[component.ID] = component.Size
 	}
-	if installed(target) {
+	if Installed(target) {
 		return r.apply(ctx, options, selected, labels, control)
 	}
 	lanes := []Lane{{ID: corePackage, Label: labels[corePackage], Size: cat.CoreSize}, {ID: "client", Label: labels["client"], Size: cat.ClientSize[r.platform()]}}

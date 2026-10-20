@@ -42,7 +42,7 @@ func TestClientConfigAppliesOnceAndKeepsUserLines(t *testing.T) {
 	}
 	user, _ := os.ReadFile(filepath.Join(target, "qw", "x86qw-user.cfg"))
 	if !strings.HasPrefix(string(user), "bind F11 \"toggleconsole\"\n") || strings.Count(string(user), "x86qw setup: begin") != 1 ||
-		!strings.Contains(string(user), `if "$_x86qw_setup" != "200" "exec x86qw-setup.cfg"`) {
+		!strings.Contains(string(user), `if $_x86qw_setup != 200 "exec x86qw-setup.cfg"`) {
 		t.Fatalf("x86qw-user.cfg:\n%s", user)
 	}
 	cfg := ClientConfig(options, 200)
