@@ -222,3 +222,6 @@ func WriteBundle(envelope []byte, destination, target string) (string, error) {
 	}
 	return absolute, os.Rename(staging, absolute)
 }
+
+// FreeBytes is the space left for the user on the volume holding path.
+func FreeBytes(path string) (int64, error) { return freeBytes(path) }

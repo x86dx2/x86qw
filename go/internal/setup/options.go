@@ -3,6 +3,7 @@
 package setup
 
 import (
+	"slices"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -103,7 +104,7 @@ type Options struct {
 	Components  []string // the custom selection
 	Keys        Keys
 	Mouse       Mouse
-	Experience  string // ruleset or competitive
+	Experience  string // the client ruleset, one of RulesetKeys
 	Video       Video
 	Volume      int
 	Server      Server
@@ -115,7 +116,7 @@ type Options struct {
 func Defaults(intent Intent, target string) Options {
 	return Options{
 		Intent: intent, Content: "recommended", Keys: KeyPresets["wasd"],
-		Mouse: Mouse{Sensitivity: 2.6, DPI: 800}, Experience: "ruleset",
+		Mouse: Mouse{Sensitivity: 2.6, DPI: 800}, Experience: "x86qw",
 		Video: Video{Display: "fullscreen", FOV: 110}, Volume: 70,
 		Server: Server{
 			Name: "x86QW KTX", BasePort: 27500, Rcon: Password(14),
@@ -163,6 +164,9 @@ func (o Options) Validate() error {
 	}
 	if o.Intent.WantsClient() && strings.TrimSpace(o.Nick) == "" {
 		return fmt.Errorf("escolha um nick")
+	}
+	if o.Intent.WantsClient() && !slices.Contains(RulesetKeys, o.Experience) {
+		return fmt.Errorf("ruleset desconhecido: %q", o.Experience)
 	}
 	if o.Intent.WantsServer() {
 		s := o.Server
@@ -276,3 +280,7 @@ func (o Options) RecipeJSON() ([]byte, error) {
 		Options
 	}{1, copy}, "", "  ")
 }
+
+// RulesetKeys are the client rulesets `x86qw play` knows, the recommended
+// one first.
+var RulesetKeys = []string{"x86qw", "qcon", "smackdown", "thunderdome", "mtfl", "smackdrive"}
