@@ -16,6 +16,7 @@ var ComponentsJSON []byte
 type Component struct {
 	ID             string          `json:"id"`
 	Label          string          `json:"label"`
+	Description    string          `json:"description"`
 	Kind           string          `json:"kind"`
 	Requires       []string        `json:"requires"`
 	ProjectSources []ProjectSource `json:"project_sources"`

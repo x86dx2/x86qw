@@ -71,7 +71,7 @@ func runPlan(command string, args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail("operation", err)
 	}
-	input := plan.Input{Root: target, Catalog: parsed, Inventory: inventory,
+	input := plan.Input{Root: target, Catalog: parsed, Inventory: inventory, ClientAction: install.ClientAction(target),
 		CLIVersion: buildinfo.Version, GOOS: runtime.GOOS, GOARCH: runtime.GOARCH}
 	compute := plan.Update
 	if command == "upgrade" {
@@ -122,12 +122,16 @@ func applyPlan(command string, input plan.Input, planned *plan.Plan, yes bool, s
 	for _, warning := range result.Warnings {
 		fmt.Fprintf(stderr, "! %s\n", warning)
 	}
+	for _, client := range result.Clients {
+		fmt.Fprintf(stdout, "✓ %s atualizado\n", client)
+	}
 	if len(result.Installed) > 0 {
-		fmt.Fprintf(stdout, "✓ %d componentes atualizados e validados · %d arquivos\n", len(result.Installed), result.Files)
+		fmt.Fprintf(stdout, "✓ %d componentes atualizados · %d arquivos\n", len(result.Installed), result.Files)
 	}
 	if result.CLIVersion != "" {
 		fmt.Fprintf(stdout, "✓ CLI x86QW atualizada para %s\n", result.CLIVersion)
 	}
+	fmt.Fprintln(stdout, "✓ Conteúdo instalado atualizado e validado.")
 	return output.ExitSuccess
 }
 

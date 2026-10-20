@@ -4,16 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/x86dx2/x86qw/go/internal/install"
-	"github.com/x86dx2/x86qw/go/internal/output"
 	"github.com/x86dx2/x86qw/go/internal/play"
 )
 
@@ -25,7 +21,8 @@ func (e *usageError) Error() string { return e.msg }
 type playRequest struct {
 	game, target, mode, mapName, ruleset string
 	options                              play.Options
-	planJSON                             bool
+	planJSON, menu, configureRuleset     bool
+	verbose, noColor                     bool
 }
 
 var (
@@ -94,7 +91,8 @@ func parsePlay(args []string, games []play.Game) (*playRequest, error) {
 	if len(positional) > 1 {
 		return nil, &usageError{"argumentos não reconhecidos: " + strings.Join(positional[1:], " ")}
 	}
-	request := &playRequest{target: values["--target"], mode: values["--mode"], mapName: values["--map"], ruleset: values["--ruleset"], planJSON: flags["--plan-json"]}
+	request := &playRequest{target: values["--target"], mode: values["--mode"], mapName: values["--map"], ruleset: values["--ruleset"], planJSON: flags["--plan-json"],
+		menu: flags["--menu"], configureRuleset: flags["--configure-ruleset"], verbose: flags["-v"] || flags["--verbose"], noColor: flags["--no-color"]}
 	if len(positional) == 1 {
 		selection := positional[0]
 		for _, game := range games {
@@ -217,180 +215,4 @@ func readRuleset(target string) (string, error) {
 		return "", fmt.Errorf("Preferência de ruleset inválida: %s", path)
 	}
 	return ruleset, nil
-}
-
-func runPlay(args []string, stdout, stderr io.Writer) int {
-	games, err := play.LoadGames()
-	if err != nil {
-		fmt.Fprintf(stderr, "✗ %v\n", err)
-		return output.ExitFailure
-	}
-	request, err := parsePlay(args, games)
-	if err != nil {
-		fmt.Fprintf(stderr, "x86qw play: erro: %v\n", err)
-		return output.ExitUsage
-	}
-	if request.target == "" {
-		request.target = defaultTarget()
-	}
-	target, _ := filepath.Abs(request.target)
-	launch, err := planPlay(target, request, games)
-	if err != nil {
-		fmt.Fprintf(stderr, "✗ %v\n", err)
-		return output.ExitFailure
-	}
-	if request.planJSON {
-		document := map[string]any{"argv": launch.Arguments, "startup_commands": launch.StartupCommands, "bot_name_settings": launch.BotNameSettings}
-		encoder := json.NewEncoder(stdout)
-		encoder.SetEscapeHTML(false)
-		encoder.Encode(document)
-		return output.ExitSuccess
-	}
-	return launchPlay(target, request, launch, stdout, stderr)
-}
-
-// planPlay runs every precondition and builds the launch for a
-// non-interactive play request.
-func planPlay(target string, request *playRequest, games []play.Game) (*play.Launch, error) {
-	if info, err := os.Lstat(target); err != nil || !info.IsDir() {
-		return nil, fmt.Errorf("diretório de destino não existe: %s", target)
-	}
-	if request.mapName == "" {
-		return nil, errors.New("esta versão exige --map (e --mode para KTX); use a CLI Python para o menu interativo")
-	}
-	ruleset := request.ruleset
-	if ruleset == "" {
-		saved, err := readRuleset(target)
-		if err != nil {
-			return nil, err
-		}
-		ruleset = saved
-	}
-	if ruleset == "" {
-		ruleset = "x86qw"
-	}
-	installGames, err := install.LoadGames()
-	if err != nil {
-		return nil, err
-	}
-	available := install.AvailableGames(target, installGames)
-	if len(available) == 0 {
-		return nil, errors.New("nenhum jogo local está instalado")
-	}
-	if request.game == "" {
-		if len(available) != 1 {
-			return nil, errors.New("informe o jogo (ktx, final-arena, pro-x, team-fortress ou td2)")
-		}
-		request.game = available[0].ID
-	}
-	var game *play.Game
-	for index := range games {
-		if games[index].ID == request.game {
-			game = &games[index]
-		}
-	}
-	installed := false
-	for _, item := range available {
-		installed = installed || item.ID == request.game
-	}
-	if game == nil || !installed {
-		return nil, fmt.Errorf("%s não está instalado nesta instalação", request.game)
-	}
-	if err := install.VerifyForPlay(target, game.Component, available); err != nil {
-		return nil, err
-	}
-	var mode *play.Mode
-	var assets map[string]bool
-	options := request.options
-	label := game.Label
-	var requirements []play.Requirement
-	if game.UsesModeCatalog() {
-		if request.mode == "" {
-			return nil, errors.New("esta versão exige --mode para KTX; use a CLI Python para o menu interativo")
-		}
-		modes, err := play.LoadModes()
-		if err != nil {
-			return nil, err
-		}
-		found, err := play.FindMode(modes, request.mode)
-		if err != nil {
-			return nil, err
-		}
-		mode = &found
-		label = "KTX · " + found.Label
-		if options, err = play.ResolveNames(target, *game, options, mode); err != nil {
-			return nil, err
-		}
-		if assets, err = play.KtxAssets(target); err != nil {
-			return nil, err
-		}
-		requirements = play.ActiveRequirements(found, options)
-	}
-	mapName, err := play.ResolveMap(target, *game, request.mapName, requirements, assets, label)
-	if err != nil {
-		return nil, err
-	}
-	return play.Build(*game, mode, mapName, assets, options, ruleset)
-}
-
-func launchPlay(target string, request *playRequest, launch *play.Launch, stdout, stderr io.Writer) int {
-	executable, err := install.ClientRuntime(target)
-	if err != nil {
-		fmt.Fprintf(stderr, "✗ %v\n", err)
-		return output.ExitFailure
-	}
-	arguments := launch.Arguments
-	var config *play.RuntimeConfig
-	if len(launch.StartupCommands) > 0 {
-		payload, err := play.Payload(launch.BotNameSettings, launch.StartupCommands)
-		if err == nil {
-			config, err = play.Create(target, payload)
-		}
-		if err != nil {
-			fmt.Fprintf(stderr, "✗ %v\n", err)
-			return output.ExitFailure
-		}
-		replaced := make([]string, len(arguments))
-		for index, argument := range arguments {
-			replaced[index] = strings.ReplaceAll(argument, play.RuntimeConfigPlaceholder, config.Name)
-		}
-		arguments = replaced
-	}
-	argv := append([]string{"-nohome", "-basedir", target}, arguments...)
-	process, err := play.Spawn(executable, argv, target)
-	if err != nil {
-		if config != nil {
-			config.Release()
-		}
-		fmt.Fprintf(stderr, "✗ não foi possível abrir o ezQuake: %v\n", err)
-		return output.ExitFailure
-	}
-	if config != nil {
-		if err := config.Transfer(process.Pid); err != nil {
-			process.Kill()
-			config.Release()
-			fmt.Fprintf(stderr, "✗ %v\n", err)
-			return output.ExitFailure
-		}
-		if exited, code := play.ExitsWithin(process, 15*time.Second); exited {
-			config.Release()
-			fmt.Fprintf(stderr, "✗ O ezQuake encerrou antes de carregar a configuração KTX (código %d).\n", code)
-			return output.ExitFailure
-		}
-	}
-	fmt.Fprintf(stdout, "✓ Partida aberta no mapa %s.\n", launch.Arguments[indexOf(launch.Arguments, "+map")+1])
-	return output.ExitSuccess
-}
-
-func indexOf(values []string, wanted string) int {
-	for index, value := range values {
-		if value == wanted {
-			return index
-		}
-	}
-	return -1
-}
-
-func init() {
-	register("play", 70, "play JOGO --map MAPA inicia uma partida local (KTX exige --mode)", noName(runPlay))
 }

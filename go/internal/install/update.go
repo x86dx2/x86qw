@@ -30,6 +30,7 @@ var (
 // Result reports an applied plan.
 type Result struct {
 	Installed  []string
+	Clients    []string
 	Files      int
 	Warnings   []string
 	CLIVersion string // set when the native CLI was replaced
@@ -41,6 +42,12 @@ type Result struct {
 func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Plan) (*Result, error) {
 	var outdated, missing []string
 	var cliPackage *catalog.Package
+	type clientStep struct {
+		spec    catalog.ClientSpec
+		channel string
+		action  string
+	}
+	var clients []clientStep
 	labels := map[string]string{}
 	for _, component := range in.Inventory.Components {
 		labels[component.Label] = component.ID
@@ -48,6 +55,12 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 	for _, row := range planned.Operations {
 		id, known := labels[row.Item]
 		switch {
+		case row.Kind == "Cliente":
+			spec, channel, ok := clientRowTarget(row.Item)
+			if !ok {
+				return nil, fmt.Errorf("cliente desconhecido no plano: %s", row.Item)
+			}
+			clients = append(clients, clientStep{spec, channel, row.Action})
 		case row.Kind == "Componente" && row.Action == "Atualizar" && known:
 			outdated = append(outdated, id)
 		case row.Kind == "Componente" && row.Action == "Adicionar" && known:
@@ -63,7 +76,7 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 		}
 	}
 	result := &Result{}
-	if len(outdated)+len(missing) == 0 && cliPackage == nil {
+	if len(outdated)+len(missing)+len(clients) == 0 && cliPackage == nil {
 		return result, nil
 	}
 	if err := refuseConfigMigrations(in.Root, append(append([]string{}, outdated...), missing...)); err != nil {
@@ -94,6 +107,20 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 			return nil, fmt.Errorf("%w; rollback incompleto: %v", err, undoErr)
 		}
 		return nil, err
+	}
+	// Clients first, like manager.py update(): update_runtime per runtime.
+	for _, step := range clients {
+		var err error
+		switch step.action {
+		case "Reparar":
+			err = tx.RepairNightly(step.spec)
+		default: // Atualizar or Restaurar reinstall the catalog release.
+			_, err = tx.InstallClient(ctx, in.Catalog, step.spec, step.channel)
+		}
+		if err != nil {
+			return fail(err)
+		}
+		result.Clients = append(result.Clients, "ezQuake "+step.spec.Label+" "+step.channel)
 	}
 	for _, batch := range [][]string{outdated, missing} {
 		if len(batch) == 0 {
