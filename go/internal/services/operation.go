@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -162,10 +161,6 @@ func (op *Operation) readBackgroundRequest() error {
 func (op *Operation) Run() (code int) {
 	c := op.Console
 	common := op.common()
-	if runtime.GOOS == "windows" {
-		c.Error("Os serviços x86QW (host, proxy, qtv) ainda não são suportados no Windows.")
-		return 1
-	}
 	if common.Menu {
 		c.Error("O menu interativo de serviços ainda não foi portado para a CLI nativa; informe os parâmetros na linha de comando.")
 		return 2

@@ -557,6 +557,9 @@ func Stdio(noColor bool) *UI {
 	_, noColorEnv := os.LookupEnv("NO_COLOR")
 	ui.Color = !noColor && !noColorEnv && isTerminal(os.Stdout)
 	ui.Width, ui.Lines = terminalSize()
+	if (ui.Navigation || ui.Color) && !enableVirtualTerminal() {
+		ui.Navigation, ui.Color = false, false
+	}
 	if ui.Navigation {
 		ui.ReadKey = readTerminalKey
 	}

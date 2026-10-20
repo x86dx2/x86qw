@@ -156,7 +156,7 @@ func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, e
 			if err != nil {
 				return fail(err)
 			}
-			directory := &MaterializedDirectory{Path: missing[index], Identity: identityOf(info)}
+			directory := &MaterializedDirectory{Path: missing[index], Identity: identityAt(missing[index], info)}
 			result.Directories = append(result.Directories, directory)
 			if journal != nil {
 				if err := journal.RecordDirectory(directory); err != nil {
@@ -170,7 +170,7 @@ func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, e
 				return fail(err)
 			}
 			entry := &MaterializedFile{Path: member.destination, ExpectedHash: member.digest, Origin: origin,
-				Existed: true, Identity: identityOf(info), Size: member.size}
+				Existed: true, Identity: identityAt(member.destination, info), Size: member.size}
 			if journal != nil {
 				if err := journal.RecordMaterialized(entry); err != nil {
 					return fail(err)

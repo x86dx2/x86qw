@@ -1,5 +1,3 @@
-//go:build !windows
-
 package play
 
 import (
@@ -12,13 +10,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"syscall"
 
 	"github.com/x86dx2/x86qw/go/internal/lock"
 )
 
 // Ephemeral KTX launch configuration, journaled like
-// x86qw_runtime/gameplay/runtime_configs.py so either CLI can recover it.
+// x86qw_runtime/gameplay/runtime_configs.py did.
 
 const journalDir = ".x86qw/gameplay/ktx-runtime-configs"
 
@@ -193,12 +190,9 @@ func Create(target string, payload []byte) (*RuntimeConfig, error) {
 	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
 		return fail(err)
 	}
-	info, err := os.Lstat(config.staging)
-	if err != nil {
+	if config.device, config.inode, err = fileIdentity(config.staging); err != nil {
 		return fail(err)
 	}
-	stat := info.Sys().(*syscall.Stat_t)
-	config.device, config.inode = uint64(stat.Dev), uint64(stat.Ino)
 	document.State = "ready"
 	document.Config.Device, document.Config.Inode = &config.device, &config.inode
 	if err := writeJournal(config.journal, document, false); err != nil {

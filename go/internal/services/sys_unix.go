@@ -12,7 +12,8 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/lock"
 )
 
-func identityOf(info os.FileInfo) [2]int64 {
+// identityAt is the (st_dev, st_ino) of the entry at path, read from info.
+func identityAt(path string, info os.FileInfo) [2]int64 {
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
 		return [2]int64{}
@@ -25,7 +26,7 @@ func identityOfFile(file *os.File) ([2]int64, error) {
 	if err != nil {
 		return [2]int64{}, err
 	}
-	return identityOf(info), nil
+	return identityAt(file.Name(), info), nil
 }
 
 // processGroupStatus mirrors posix_process_group_status (kill -0 probe).
