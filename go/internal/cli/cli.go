@@ -37,8 +37,10 @@ root=$(CDPATH='' cd -- "$(dirname -- "$path")" && pwd)
 exec "$root/.x86qw/cli/x86qw" "$@"
 `
 
-// CmdShim is the Windows launcher.
-const CmdShim = "@echo off\r\n\"%~dp0.x86qw\\cli\\x86qw.exe\" %*\r\nexit /b %ERRORLEVEL%\r\n"
+// CmdShim is the Windows launcher. cmd.exe reads a batch file line by line,
+// so the exit sits on the CLI's own line: uninstall deletes this file while
+// the CLI runs, and a following line could no longer be read.
+const CmdShim = "@echo off\r\n\"%~dp0.x86qw\\cli\\x86qw.exe\" %* & exit /b\r\n"
 
 // BinaryName is the CLI file name for this OS.
 func BinaryName() string {
