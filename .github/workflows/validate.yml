@@ -42,18 +42,23 @@ jobs:
           path: .git/lfs/objects
           key: x86qw-lfs-v3-${{ github.event.pull_request.head.sha || github.sha }}
           enableCrossOsArchive: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      - name: Build the content tool
+        run: go -C go build -o "$RUNNER_TEMP/x86qw-content" ./cmd/x86qw-content
       - name: Materialize the single LFS cache
         shell: bash
         run: |
           if [ "${{ steps.lfs-cache.outputs.cache-hit }}" != "true" ]; then
-            python3 maintenance/tools/materialize_lfs.py \
+            "$RUNNER_TEMP/x86qw-content" --root "$GITHUB_WORKSPACE" lfs-materialize \
               --repository "$GITHUB_REPOSITORY" \
               --commit "$GITHUB_SHA"
           fi
           git lfs checkout
           git lfs fsck --pointers
-          python3 maintenance/tools/check_lfs.py
-          python3 maintenance/tools/check_committed_diff.py
+          "$RUNNER_TEMP/x86qw-content" --root "$GITHUB_WORKSPACE" verify
 
   portable:
     name: portable-contract / ${{ matrix.os }} / Python ${{ matrix.python }}
