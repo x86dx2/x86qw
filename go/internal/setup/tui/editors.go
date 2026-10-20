@@ -201,6 +201,11 @@ func (m *Model) clickRow(id string) tea.Cmd {
 	case scConfigure:
 		for index, row := range m.confirmRows() {
 			if row.id == id {
+				// A closed section opens first; a second click edits it.
+				if m.focus != index && id != "confirm" {
+					m.focus = index
+					return nil
+				}
 				m.focus = index
 				return m.activateConfirm(id)
 			}

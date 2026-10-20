@@ -10,6 +10,7 @@ import (
 type Glyphs struct {
 	Radio, RadioOff, Check, CheckOff, Ok, Fail, Warn string
 	Diamond, DiamondOff, Chevron, Ellipsis, Rail     string
+	Focus                                            string // marks the open section
 	Spinner                                          []string
 	Eighths                                          []string // progress bar partial blocks, emptiest first
 	Spark                                            []string
@@ -18,7 +19,7 @@ type Glyphs struct {
 
 var unicodeGlyphs = Glyphs{
 	Radio: "●", RadioOff: "○", Check: "■", CheckOff: "□", Ok: "✓", Fail: "✗", Warn: "!",
-	Diamond: "◆", DiamondOff: "◇", Chevron: "›", Ellipsis: "…", Rail: "▏",
+	Diamond: "◆", DiamondOff: "◇", Chevron: "›", Ellipsis: "…", Rail: "▏", Focus: "▌",
 	Spinner: []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"},
 	Eighths: []string{" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"},
 	Spark:   []string{"▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"},
@@ -27,7 +28,7 @@ var unicodeGlyphs = Glyphs{
 
 var legacyGlyphs = Glyphs{
 	Radio: "•", RadioOff: "o", Check: "x", CheckOff: " ", Ok: "√", Fail: "x", Warn: "!",
-	Diamond: "♦", DiamondOff: "o", Chevron: ">", Ellipsis: "...", Rail: "|",
+	Diamond: "♦", DiamondOff: "o", Chevron: ">", Ellipsis: "...", Rail: "|", Focus: "▌",
 	Spinner: []string{"|", "/", "-", "\\"},
 	Eighths: []string{" ", "░", "░", "▒", "▒", "▓", "▓", "█", "█"},
 	Spark:   []string{"_", "_", ".", ".", "-", "-", "=", "#"},

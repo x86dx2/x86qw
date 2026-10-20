@@ -127,14 +127,13 @@ var texts = map[string][2]string{
 	"keep.personal": {"Manter dados pessoais", "Keep personal data"}, "remove.again": {"pressione de novo para desinstalar", "press again to uninstall"},
 	"removed":         {"A instalação seria removida aqui (demonstração).", "The install would be removed here (demo)."},
 	"verify.ok":       {"arquivos conferidos, nenhum divergente", "files checked, none differ"},
-	"pre.ok":          {"Tudo certo. Confirme para instalar.", "All clear. Confirm to install."},
-	"pre.warn":        {"Uma observação. Corrija nas escolhas acima ou instale mesmo assim.", "One note. Fix it in the choices above or install anyway."},
-	"pre.fail":        {"Algo impede a instalação. Corrija nas escolhas acima.", "Something blocks the install. Fix it in the choices above."},
+	"pre.ok":          {"tudo certo", "all clear"},
+	"pre.warn":        {"atenção", "heads-up"},
+	"pre.fail":        {"bloqueado", "blocked"},
 	"conf.title":      {"Configuração", "Setup"},
 	"conf.lead":       {"Tudo o que vai ser instalado. Enter abre cada item para ajustar; Instalar confere a máquina antes de começar.", "Everything that will be installed. Enter opens each item to adjust it; Install checks the machine before starting."},
 	"conf.go":         {"Instalar", "Install"},
 	"rule.pre":        {"pré-voo", "preflight"},
-	"rule.choices":    {"suas escolhas", "your choices"},
 	"rev.confirm":     {"Confirmar e instalar", "Confirm and install"},
 	"rev.anyway":      {"Instalar mesmo assim", "Install anyway"},
 	"rev.checking":    {"Conferindo…", "Checking…"},
@@ -150,6 +149,10 @@ var texts = map[string][2]string{
 	"d.axis.inverted": {"eixo invertido", "inverted axis"},
 	"d.recipe":        {"c copia · enter mostra", "c copies · enter shows"},
 	"k.edit.hint":     {"enter editar", "enter edit"},
+	"pre.running":     {"conferindo…", "checking…"},
+	"d.itemsN":        {"itens", "items"}, "d.instancesN": {"instâncias", "instances"}, "d.integN": {"%d de 4 ativas", "%d of 4 on"},
+	"chk.folder": {"pasta", "folder"}, "chk.disk": {"disco", "disk"}, "chk.net": {"rede", "network"},
+	"chk.catalog": {"catálogo", "catalog"}, "chk.screen": {"tela", "screen"}, "chk.ports": {"portas", "ports"},
 }
 
 // T returns the text for key in lang.

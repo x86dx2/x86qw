@@ -621,9 +621,17 @@ func (m *Model) View() tea.View {
 	langX := m.w - 2 - lipgloss.Width(right)
 	m.hits = append(m.hits, hit{y: 0, x0: langX, x1: m.w - 2, id: "lang"})
 
-	// Body: in the upper third of the free space, centred.
+	// The dock sits on the footer and takes its rows from the body.
 	room := m.h - 4
+	dock := m.dock(width)
+	if dock != nil {
+		room -= len(dock.lines) + 1
+	}
+	// Body: in the upper third of the free space, centred.
 	top := 2 + max(0, (room-len(body.lines))/3)
+	if dock != nil {
+		top = 3 // the accordion grows and shrinks; its title stays put
+	}
 	left := (m.w - width) / 2
 	offset := 0
 	if total := len(body.lines); total > room {
@@ -663,6 +671,14 @@ func (m *Model) View() tea.View {
 	if body.caret != nil && m.modal == nil {
 		view.Cursor = tea.NewCursor(left+body.caret[0], top+body.caret[1]-offset)
 		view.Cursor.Color, view.Cursor.Shape, view.Cursor.Blink = t.Brand, tea.CursorBar, true
+	}
+
+	if dock != nil {
+		y := m.h - 2 - len(dock.lines)
+		place(strings.Join(dock.lines, "\n"), left, y)
+		for _, h := range dock.hits {
+			m.hits = append(m.hits, hit{y: h.y + y, x0: h.x0 + left, x1: h.x1 + left, id: h.id})
+		}
 	}
 
 	footerX := max(2, (m.w-lipgloss.Width(footer))/2)

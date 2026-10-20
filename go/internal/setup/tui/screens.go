@@ -3,6 +3,7 @@ package tui
 import (
 	_ "embed"
 	"fmt"
+	"github.com/charmbracelet/x/ansi"
 	"math"
 	"runtime"
 	"strings"
@@ -176,13 +177,13 @@ func (m *Model) sectionRows() []reviewRow {
 	if !o.Intent.WantsClient() {
 		contents = "MVDSV · KTX"
 	}
-	rows = append(rows, reviewRow{"comps", m.t("sec.comps"), fmt.Sprintf("%s · %d · %s", contents, len(selected), size(m.totalBytes()))})
+	rows = append(rows, reviewRow{"comps", m.t("sec.comps"), fmt.Sprintf("%s · %d %s · %s", contents, len(selected), m.t("d.itemsN"), size(m.totalBytes()))})
 	if o.Intent.WantsClient() {
 		keys := strings.ToUpper(o.Keys.Preset)
 		if o.Keys.Preset == "custom" {
 			keys = m.t("l.custom")
 		}
-		rows = append(rows, reviewRow{"config", m.t("sec.config"), fmt.Sprintf("%s · %s · %.1f · FOV %d", o.Nick, keys, o.Mouse.Sensitivity, o.Video.FOV)})
+		rows = append(rows, reviewRow{"config", m.t("sec.config"), fmt.Sprintf("%s · %s · %s · FOV %d", o.Nick, keys, m.num(o.Mouse.Sensitivity), o.Video.FOV)})
 	}
 	if o.Intent.WantsServer() {
 		ports := o.Server.Ports()
@@ -190,18 +191,15 @@ func (m *Model) sectionRows() []reviewRow {
 		if where == "" {
 			where = fmt.Sprintf("UDP %d–%d", ports[0], ports[len(ports)-1])
 		}
-		rows = append(rows, reviewRow{"server", m.t("sec.server"), fmt.Sprintf("%d× KTX · %s", len(ports), where)})
+		rows = append(rows, reviewRow{"server", m.t("sec.server"), fmt.Sprintf("%d %s · %s", len(ports), m.t("d.instancesN"), where)})
 	}
-	var integ []string
-	for _, item := range []struct {
-		on  bool
-		key string
-	}{{o.Integration.Shortcuts, "i.short"}, {o.Integration.Path, "i.path"}, {o.Integration.QWLinks, "i.qw"}, {o.Integration.Demos, "i.demo"}} {
-		if item.on {
-			integ = append(integ, strings.Fields(m.t(item.key))[0])
+	on := 0
+	for _, enabled := range []bool{o.Integration.Shortcuts, o.Integration.Path, o.Integration.QWLinks, o.Integration.Demos} {
+		if enabled {
+			on++
 		}
 	}
-	rows = append(rows, reviewRow{"integ", m.t("sec.integ"), strings.Join(integ, " · ")})
+	rows = append(rows, reviewRow{"integ", m.t("sec.integ"), fmt.Sprintf(m.t("d.integN"), on)})
 	return append(rows, reviewRow{"folder", m.t("sec.folder"), shortPath(o.Target)})
 }
 
@@ -246,7 +244,6 @@ func (m *Model) totalBytes() int64 {
 func (m *Model) primary(p *page, row reviewRow, focused, enabled bool, right string) {
 	t := m.theme
 	hovered := m.hover == "row:"+row.id
-	p.gap(1)
 	bg, fg := t.Base, t.Brand
 	switch {
 	case !enabled:
@@ -363,9 +360,9 @@ func (m *Model) details(id string) [][2]string {
 	return nil
 }
 
-// setupPage shows everything that will be installed; each section opens
-// its editor. Install runs the preflight right above the button, which then
-// waits for a confirmation or a correction.
+// setupPage lists the choices as an accordion: one line per section, and
+// the section in focus open with everything in it. Install and the
+// preflight live in the dock under it.
 func (m *Model) setupPage(p *page) {
 	t := m.theme
 	if m.h >= 52 {
@@ -375,120 +372,155 @@ func (m *Model) setupPage(p *page) {
 	p.lead(m.t("conf.lead"))
 	p.gap(1)
 	rows := m.confirmRows()
-	p.heading(m.t("rule.choices"))
 	for index, row := range rows[:len(rows)-1] {
-		focused, hovered := index == m.focus, m.hover == "row:"+row.id
-		start := len(p.lines)
-		// A thin rail groups each section; it lights up on the one in focus.
-		railColor, headColor := t.Faint(), t.Text2
-		hint := p.st(t.Dim).Render(m.glyphs.Chevron)
-		switch {
-		case focused:
-			railColor, headColor = t.Brand, t.Text
-			hint = p.st(t.Brand).Render(m.t("k.edit.hint"))
-		case hovered:
-			railColor = t.Gray
+		if index == m.focus {
+			m.openSection(p, row, index == 0)
+			continue
 		}
-		if row.id == "recipe" {
-			hint = p.st(t.Gray).Render(m.t("d.recipe"))
+		bg := p.rowBG(false, m.hover == "row:"+row.id)
+		base := lipgloss.NewStyle().Background(bg)
+		left := base.Render("  ") + base.Foreground(t.Text2).Render(row.label)
+		right := base.Foreground(t.Dim).Render(m.t("d.recipe"))
+		if row.id != "recipe" {
+			room := p.width - lipgloss.Width(row.label) - 10
+			right = base.Foreground(t.Gray).Render(ansi.Truncate(row.summary, room, "…")) + base.Render("  ") + base.Foreground(t.Dim).Render(m.glyphs.Chevron)
 		}
-		rail := p.st(t.Base).Render("  ") + p.st(railColor).Render(m.glyphs.Rail) + p.st(t.Base).Render(" ")
-		y := p.add(spread(rail+p.st(headColor).Bold(true).Render(row.label), hint+p.st(t.Base).Render("  "), p.width, t.Base))
-		p.hits = append(p.hits, hit{y: y, x0: 0, x1: p.width, id: "row:" + row.id})
-		pairs := m.details(row.id)
-		labelWidth := 0 // sections without labels use the whole width
-		for _, pair := range pairs {
-			if pair[0] != "" {
-				labelWidth = 14
-			}
-		}
-		for _, pair := range pairs {
-			valueWidth := p.width - labelWidth - 8
-			for n, line := range wrapSegments(pair[1], valueWidth) {
-				key := ""
-				if n == 0 {
-					key = strings.ToLower(pair[0])
-				}
-				y := p.add(rail + p.st(t.Base).Render("  ") + p.st(t.Gray).Render(padRight(key, labelWidth)) + p.st(t.Text2).Render(line))
-				p.hits = append(p.hits, hit{y: y, x0: 0, x1: p.width, id: "row:" + row.id})
-			}
-		}
-		if focused {
-			if index == 0 {
-				start = 0 // the first section brings the title along
-			}
-			p.keep(start, len(p.lines)-1)
-		}
+		p.band(spread(left, right+base.Render("  "), p.width, bg), bg, "row:"+row.id)
+	}
+}
+
+// openSection draws the section in focus: a marked header and every
+// choice in it, label and value.
+func (m *Model) openSection(p *page, row reviewRow, first bool) {
+	t := m.theme
+	start := len(p.lines)
+	if !first {
 		p.gap(1)
 	}
-
-	// The preflight appears once Install is pressed, right above the
-	// confirmation it decides.
-	preStart := len(p.lines)
-	if m.preOn {
-		m.preflight(p)
+	base := lipgloss.NewStyle().Background(t.Band)
+	hint := m.t("k.edit.hint")
+	if row.id == "recipe" {
+		hint = m.t("d.recipe")
 	}
+	left := base.Foreground(t.Brand).Render(m.glyphs.Focus+" ") + base.Foreground(t.Text).Bold(true).Render(row.label)
+	p.band(spread(left, base.Foreground(t.Gray).Render(hint)+base.Render("  "), p.width, t.Band), t.Band, "row:"+row.id)
+	indent := p.st(t.Base).Render("    ")
+	if row.id == "recipe" {
+		lines := strings.Split(lipgloss.Wrap(shellJoin(m.opts.Recipe()), p.width-6, " "), "\n")
+		if len(lines) > 4 {
+			lines = append(lines[:3], m.glyphs.Ellipsis)
+		}
+		for _, line := range lines {
+			p.add(indent + p.st(t.Gray).Render(line))
+		}
+	}
+	pairs := m.details(row.id)
+	labelWidth := 0 // sections without labels use the whole width
+	for _, pair := range pairs {
+		if pair[0] != "" {
+			labelWidth = 13
+		}
+	}
+	for _, pair := range pairs {
+		for n, line := range wrapSegments(pair[1], p.width-labelWidth-6) {
+			key := ""
+			if n == 0 {
+				key = strings.ToLower(pair[0])
+			}
+			y := p.add(indent + p.st(t.Gray).Render(padRight(key, labelWidth)) + p.st(t.Text2).Render(line))
+			p.hits = append(p.hits, hit{y: y, x0: 0, x1: p.width, id: "row:" + row.id})
+		}
+	}
+	p.gap(1)
+	if first {
+		start = 0 // the first section brings the title along
+	}
+	p.keep(start, len(p.lines)-1)
+}
+
+// dock is the fixed bar under the setup: the preflight, once Install is
+// pressed, and the button it decides. It never scrolls away.
+func (m *Model) dock(width int) *page {
+	if m.screen != scConfigure || m.catalog == nil || m.err != nil {
+		return nil
+	}
+	t := m.theme
+	p := newPage(t, m.glyphs, width)
+	faint := p.st(t.Faint())
+	if !m.preOn {
+		p.add(faint.Render(strings.Repeat("─", width)))
+	} else {
+		// The rule names the bar; the line under it is one chip per check.
+		label := faint.Render("──") + p.st(t.Gray).Render(" "+m.t("rule.pre")+" ")
+		p.add(label + faint.Render(strings.Repeat("─", max(0, width-lipgloss.Width(label)))))
+		chips := ""
+		for _, check := range m.checks {
+			glyph, color := m.spinner(), t.Brand
+			switch check.State {
+			case setup.CheckOK:
+				glyph, color = m.glyphs.Ok, t.Success
+			case setup.CheckWarning:
+				glyph, color = m.glyphs.Warn, t.Warning
+			case setup.CheckFailed:
+				glyph, color = m.glyphs.Fail, t.Error
+			}
+			if chips != "" {
+				chips += p.st(t.Base).Render("  ")
+			}
+			chips += p.st(color).Bold(true).Render(glyph) + p.st(t.Text2).Render(" "+m.checkName(check))
+		}
+		verdict := p.st(t.Dim).Render(m.t("pre.running"))
+		if m.preDone {
+			switch m.preflightOutcome() {
+			case setup.CheckFailed:
+				verdict = p.st(t.Error).Bold(true).Render(m.t("pre.fail"))
+			case setup.CheckWarning:
+				verdict = p.st(t.Warning).Bold(true).Render(m.t("pre.warn"))
+			default:
+				verdict = p.st(t.Success).Bold(true).Render(m.t("pre.ok"))
+			}
+		}
+		pad := p.st(t.Base).Render("  ")
+		p.add(spread(pad+chips, verdict+pad, width, t.Base))
+		for _, check := range m.checks {
+			color := t.Warning
+			switch check.State {
+			case setup.CheckFailed:
+				color = t.Error
+			case setup.CheckWarning:
+			default:
+				continue
+			}
+			text := strings.TrimSpace(check.Detail + " " + check.Fix)
+			for n, line := range strings.Split(lipgloss.Wrap(text, width-6, " "), "\n") {
+				lead := "    "
+				if n == 0 {
+					lead = "  " + m.glyphs.Warn + " "
+					if check.State == setup.CheckFailed {
+						lead = "  " + m.glyphs.Fail + " "
+					}
+				}
+				p.add(p.st(color).Render(lead + line))
+			}
+		}
+	}
+	p.gap(1)
+	rows := m.confirmRows()
 	enabled := !m.preOn || (m.preDone && m.preflightOutcome() != setup.CheckFailed)
 	right := ""
 	if enabled {
 		right = size(m.totalBytes()) + "  ↵"
 	}
-	start := len(p.lines)
-	focused := m.focus == len(rows)-1
-	m.primary(p, rows[len(rows)-1], focused, enabled, right)
-	if focused {
-		p.keep(min(start, preStart), len(p.lines)-1)
-	}
+	m.primary(p, rows[len(rows)-1], m.focus == len(rows)-1, enabled, right)
+	return p
 }
 
-// preflight draws the checks and their verdict.
-func (m *Model) preflight(p *page) {
-	t := m.theme
-	p.heading(m.t("rule.pre"))
-	for _, check := range m.checks {
-		glyph, style, value := m.spinner(), p.st(t.Brand), p.st(t.Dim).Render(m.t("net.detecting"))
-		switch check.State {
-		case setup.CheckOK:
-			glyph, style, value = m.glyphs.Ok, p.st(t.Success), p.st(t.Gray).Render(shortPath(check.Value))
-		case setup.CheckWarning:
-			glyph, style, value = m.glyphs.Warn, p.st(t.Warning), p.st(t.Warning).Render(check.Value)
-		case setup.CheckFailed:
-			glyph, style, value = m.glyphs.Fail, p.st(t.Error), p.st(t.Error).Render(check.Value)
-		}
-		left := p.st(t.Base).Render("  ") + style.Render(glyph) + p.st(t.Text2).Render("  "+check.Title)
-		p.add(spread(left, value+p.st(t.Base).Render("  "), p.width, t.Base))
+// checkName is a check's one-word name for the dock.
+func (m *Model) checkName(check setup.Check) string {
+	if name := m.t("chk." + check.ID); name != "chk."+check.ID {
+		return name
 	}
-	for _, check := range m.checks {
-		if check.State != setup.CheckWarning && check.State != setup.CheckFailed {
-			continue
-		}
-		color := t.Warning
-		if check.State == setup.CheckFailed {
-			color = t.Error
-		}
-		text := check.Title + ": " + check.Detail
-		if check.Fix != "" {
-			text += " " + check.Fix
-		}
-		for n, line := range strings.Split(lipgloss.Wrap(text, p.width-6, " "), "\n") {
-			lead := "    "
-			if n == 0 {
-				lead = "  " + m.glyphs.Chevron + " "
-			}
-			p.add(p.st(color).Render(lead + line))
-		}
-	}
-	if m.preDone {
-		color, text := t.Success, m.t("pre.ok")
-		switch m.preflightOutcome() {
-		case setup.CheckFailed:
-			color, text = t.Error, m.t("pre.fail")
-		case setup.CheckWarning:
-			color, text = t.Warning, m.t("pre.warn")
-		}
-		p.add(p.st(color).Bold(true).Render("  " + text))
-	}
-
+	return strings.ToLower(check.Title)
 }
 
 func (m *Model) activateConfirm(id string) tea.Cmd {
