@@ -53,9 +53,10 @@ func lexists(path string) bool {
 }
 
 // removeShellIntegration drops ~/.local/bin/x86qw and the Linux desktop
-// entry (or, on Windows, the shortcuts and the PATH entry) when they point
-// at this installation.
+// entry (or, on Windows, the shortcuts and the PATH entry), and the qw://
+// and demo handlers, when they point at this installation.
 func removeShellIntegration(target string) {
+	cli.SetHandlers(target, false, false)
 	if runtime.GOOS == "windows" {
 		cli.RemoveShortcuts(target)
 		cli.RemoveUserPath(target)

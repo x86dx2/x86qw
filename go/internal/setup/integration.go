@@ -9,13 +9,14 @@ import (
 )
 
 // SupportedIntegration is what this system can do for an installation:
-// the x86qw command everywhere, menu shortcuts on Windows and Linux.
-// Opening qw:// links and demos needs a command that starts ezQuake on
-// them, which does not exist yet, so it is offered nowhere.
+// the x86qw command, qw:// links and demos everywhere, and menu shortcuts
+// on Windows and Linux.
 func SupportedIntegration() Integration {
 	switch runtime.GOOS {
 	case "windows", "linux":
-		return Integration{Shortcuts: true, Path: true}
+		return Integration{Shortcuts: true, Path: true, QWLinks: true, Demos: true}
+	case "darwin":
+		return Integration{Path: true, QWLinks: true, Demos: true}
 	}
 	return Integration{Path: true}
 }
@@ -63,5 +64,6 @@ func Integrate(target string, choices Integration) error {
 			}
 		}
 	}
+	errs = append(errs, cli.SetHandlers(target, choices.QWLinks, choices.Demos))
 	return errors.Join(errs...)
 }

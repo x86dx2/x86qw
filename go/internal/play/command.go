@@ -30,8 +30,8 @@ type Launch struct {
 	BotNameSettings [][2]string
 }
 
-// Build mirrors the argument construction of gameplay.play_local.
-func Build(game Game, mode *Mode, mapName string, assets map[string]bool, o Options, ruleset string) (*Launch, error) {
+// RulesetArguments start ezQuake under ruleset, with its x86QW profile.
+func RulesetArguments(ruleset string) []string {
 	var args []string
 	if ruleset != defaultRuleset {
 		args = append(args, "-ruleset", Rulesets[ruleset])
@@ -41,9 +41,19 @@ func Build(game Game, mode *Mode, mapName string, assets map[string]bool, o Opti
 		flag = "1"
 	}
 	args = append(args, "+set", "x86qw_ruleset", flag)
-	profile, hasProfile := rulesetConfigs[ruleset]
-	if hasProfile {
+	if profile, ok := rulesetConfigs[ruleset]; ok {
 		args = append(args, "+exec", profile)
+	}
+	return args
+}
+
+// Build mirrors the argument construction of gameplay.play_local.
+func Build(game Game, mode *Mode, mapName string, assets map[string]bool, o Options, ruleset string) (*Launch, error) {
+	args := RulesetArguments(ruleset)
+	_, hasProfile := rulesetConfigs[ruleset]
+	flag := "0"
+	if ruleset == defaultRuleset {
+		flag = "1"
 	}
 	args = append(args, "+sb_listcache", "0", "+spectator", "0", "+bind", "F12", "quit")
 	for _, setting := range game.LocalServerSettings {
