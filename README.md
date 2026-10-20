@@ -63,7 +63,7 @@ powershell -c "irm https://qw.x86.com.br/install.ps1 | iex"
 No Windows, a instalação cria atalhos do x86QW no Menu Iniciar e na Área de
 Trabalho com o ícone oficial do projeto.
 
-O bootstrap baixa a CLI nativa `x86qw` da release `x86qw-cli-2.1.0` no
+O bootstrap baixa a CLI nativa `x86qw` da release `x86qw-cli-2.2.0` no
 GitHub, confere tamanho e SHA-256 fixados no próprio script e executa
 `x86qw setup`, que consulta o catálogo TUF público e pergunta onde instalar.
 Nada além do sistema é necessário: macOS e Linux usam `curl`, e o Windows usa
@@ -84,7 +84,7 @@ curl -fsS https://qw.x86.com.br/install.sh | bash -s -- --platform windows
 ```
 
 Os valores aceitos são `macos`, `linux` e `windows`. Os binários da CLI também
-estão na [release `x86qw-cli-2.1.0`](https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.1.0),
+estão na [release `x86qw-cli-2.2.0`](https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.2.0),
 com `SHA256SUMS`.
 
 Na árvore de desenvolvimento, artefatos promovidos à instalação também exigem
@@ -95,7 +95,7 @@ autoridade declarada de release, upstream, pacote ou referência nQuake antes do
 download persistente. URLs armazenadas em catálogo, manifesto e inventários
 passam pela mesma política HTTPS e não aceitam credenciais, fragmentos, queries,
 espaços ou controles. Sua autenticação versionada pertence a uma etapa
-posterior. A CLI current é a `2.1.0`, nativa em Go; os instaladores Python
+posterior. A CLI current é a `2.2.0`, nativa em Go; os instaladores Python
 `0.x` e `1.0.x` permanecem históricos e imutáveis nos mirrors. Nenhum conteúdo
 desta árvore muda os bytes já publicados.
 
@@ -281,9 +281,9 @@ docs/           arquitetura, hosting, decisões e roadmaps
 
 ## Estado do projeto
 
-A CLI current é `2.1.0` owner-only: um usuário, validada no Apple M3. Os
+A CLI current é `2.2.0` owner-only: um usuário, validada no Apple M3. Os
 binários de macOS, Windows e Linux estão no catálogo e na release
-`x86qw-cli-2.1.0`; Windows e Linux seguem em preview até a evidência nativa da
+`x86qw-cli-2.2.0`; Windows e Linux seguem em preview até a evidência nativa da
 fase correspondente.
 Soak, migração histórica e audiência `external-public` não bloqueiam
 desenvolvimento. Consulte o [status operacional](docs/PROJECT-STATUS.md).
