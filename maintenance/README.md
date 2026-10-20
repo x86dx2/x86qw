@@ -2,21 +2,22 @@
 
 Este diretorio e o plano de controle do `dist/`. Ele nao e uma segunda copia do
 produto: inventarios e receitas explicam como montar a arvore canonica, os
-modulos internos executam o processo e `build/` recebe somente derivados
+o binario `x86qw-content` (codigo em `go/cmd/x86qw-content`) executa o processo e `build/` recebe somente derivados
 temporarios.
 
 ## Fonte unica de operacao
 
-Use apenas o gerenciador da raiz do contexto:
+Use apenas o `x86qw-content` (`go -C go run ./cmd/x86qw-content ...` ou o
+binario compilado), que encontra o checkout a partir do diretorio atual:
 
 ```sh
-./maintenance/manage.py check
-./maintenance/manage.py update
-./maintenance/manage.py add caminho/change.json
-./maintenance/manage.py verify
-./maintenance/manage.py build
-./maintenance/manage.py publish
-./maintenance/manage.py commit --push
+x86qw-content check
+x86qw-content update
+x86qw-content add caminho/change.json
+x86qw-content verify
+x86qw-content build
+x86qw-content publish
+x86qw-content commit --push
 ```
 
 - `check`: consulta os upstreams declarados sem escrever no projeto; retorna
@@ -27,7 +28,7 @@ Use apenas o gerenciador da raiz do contexto:
   de forma transacional;
 - `add`: incorpora um novo pacote, add-on ou configuracao a partir de uma
   definicao local revisada;
-- `verify`: valida catalogo, receitas, componentes, hashes, estrutura e testes;
+- `verify`: valida catalogo, receitas, componentes, hashes, estrutura, TUF e Git LFS;
 - `build`: valida os binarios stable e gera 21 ZIPs de componentes mais o
   pacote obrigatório `x86qw-core-id1` em `maintenance/build/packages/`;
 - `publish`: publica/verifica GitHub Releases e GitLab Generic Packages nos
@@ -36,25 +37,18 @@ Use apenas o gerenciador da raiz do contexto:
   identificados como conteúdo;
 - `commit`: adiciona ao Git somente `dist/`, inventarios, receitas e o catalogo.
 
-As suítes executadas por `verify` exportam `X86QW_TEST_WINDOWED=1`. Portanto,
-qualquer smoke que abra um cliente usa uma janela de `1280x720` e não captura o
-monitor do desenvolvedor. O launcher também força `cfg_save_onquit 0`, impedindo
-que o modo janela do teste seja gravado no `config.cfg` pessoal. Somente um teste
-cujo objetivo declarado seja validar fullscreen deve remover essa variável no
-próprio caso de teste.
-
 `update --commit --push` existe para automacao, mas a rotina recomendada e
 separar revisao e publicacao:
 
 ```sh
-./maintenance/manage.py check
-./maintenance/manage.py update --dry-run
-./maintenance/manage.py update
-./maintenance/manage.py verify
+x86qw-content check
+x86qw-content update --dry-run
+x86qw-content update
+x86qw-content verify
 git diff --stat
-./maintenance/manage.py commit --push
+x86qw-content commit --push
 # após revisão, checks verdes e aprovação separada:
-./maintenance/manage.py publish
+x86qw-content publish
 ```
 
 As comparacoes com upstreams publicos usam a API HTTPS oficial do GitHub e URLs
@@ -64,33 +58,12 @@ autenticacao no GitHub. Credenciais sao necessarias apenas no comando
 
 ## Fronteira de bytes remotos
 
-`maintenance/tools/downloader.py` é a única API Python do zipapp e da manutenção
-para receber bytes HTTP. O bootstrap PowerShell incorpora uma projeção mínima
-antes de o zipapp existir.
-Um artefato persistente usa `PinnedArtifact` e exige HTTPS, destino, tamanho,
-SHA-256, máximo, deadline e retry. `BoundedMetadata` serve somente a respostas
-dinâmicas efêmeras e nunca grava payload gerenciado. Não existe contrato para
-promover conteúdo não fixado: o SHA-256 observado na própria transferência não
-pode se tornar a referência que valida esses mesmos bytes.
-
-Descobertas HTTP possuem limite de 4 MiB e artefatos, de 512 MiB. A resolução
-DNS da fronteira usa um subprocesso isolado e cancelável; conexões TCP,
-redirects, headers, leituras, retries e backoff permanecem no mesmo deadline.
-A coleta recebe uma janela dentro desse orçamento, sem prometer prazo absoluto
-de reap pelo sistema operacional depois de `kill`.
-Referências, commits e árvores recursivas do nQuake são consultados pela API oficial do
-GitHub com `BoundedMetadata`, limite de 4 MiB e deadline compartilhado. Respostas
-truncadas, schemas divergentes, tipos, hashes, tamanhos ou caminhos não portáveis
-são rejeitados antes de gerar a lista de assets. Catálogo, manifesto,
-inventários de releases e upstreams e intake usam o mesmo validador HTTPS; URLs
-persistentes também rejeitam query. O `curl` de publicação envia bytes e não é
-uma rota de ingestão; ele começa com `--disable`, exige HTTPS e não segue
-redirects. Um novo consumidor Python de `urlopen` ou `urlretrieve` falha na
-suíte estática. Limite e TLS não autenticam metadados dinâmicos.
-
-O contrato completo está no
-[`ADR 0001`](../docs/adr/0001-fronteira-limitada-de-bytes-remotos.md) e sua
-rastreabilidade, na [issue #45](https://github.com/x86dx2/x86qw/issues/45).
+`go/internal/download` é a única fronteira de manutenção e da CLI para receber
+bytes HTTP persistentes. Um artefato exige HTTPS, destino, tamanho, SHA-256,
+deadline e retry; metadados dinâmicos usam leitura limitada e nunca gravam
+payload gerenciado. Não existe contrato para promover conteúdo não fixado: o
+SHA-256 observado na própria transferência não pode se tornar a referência que
+valida esses mesmos bytes.
 
 ## Atualizacoes independentes
 
@@ -223,8 +196,6 @@ inventory/component-releases.json  versoes, estrategias, artefatos e hashes
 inventory/upstreams.json           versoes, fontes preservadas e receitas de build
 recipes/                            receitas dos clientes stable preservados
 recipes/sources/                    instrucoes de compilacao por upstream
-tools/                              implementacao interna importada por manage.py
-tests/                              regressao exclusiva da distribuicao
 build/                              artefatos derivados ignorados pelo Git
 docs/                               componentes e proveniencia
 ```

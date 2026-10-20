@@ -31,9 +31,7 @@ var (
 // allowedUnmanaged are dist files that need no manifest entry.
 var allowedUnmanaged = []string{
 	"installer/README.md", "installer/VERSION", "installer/docs/installer.md",
-	"installer/bin/install.ps1", "installer/bin/install.sh", "installer/bin/manager.py",
-	"installer/bin/menu.py", "installer/bin/python_runtime.py", "installer/bin/gameplay.py",
-	"installer/bin/services.py", "installer/bin/session_control.py", "installer/bin/x86qw.sh",
+	"installer/bin/install.ps1", "installer/bin/install.sh", "installer/bin/x86qw.sh",
 	"installer/bin/x86qw.cmd", "installer/assets/x86qw.svg", "installer/assets/x86qw.ico",
 	"installer/assets/x86qw.icns", "installer/assets/x86qw-16.png", "installer/assets/x86qw-32.png",
 	"installer/assets/x86qw-48.png", "installer/assets/x86qw-64.png", "installer/assets/x86qw-128.png",

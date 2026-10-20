@@ -9,9 +9,7 @@ import (
 	"testing"
 )
 
-// Synthetic repositories exercise check_lfs.py and check_committed_diff.py
-// against their Go ports; the Python side runs only under
-// X86QW_CONTENT_PARITY=1.
+// Synthetic repositories exercise the Git LFS and committed-diff checks.
 
 func gitRun(t *testing.T, dir string, args ...string) string {
 	t.Helper()
@@ -53,27 +51,6 @@ func lfsRepository(t *testing.T, files map[string][]byte) string {
 	return dir
 }
 
-func pythonCheckLFS(t *testing.T, python, repo string) int {
-	t.Helper()
-	source := filepath.Join(repoRoot(t), "maintenance/tools/check_lfs.py")
-	payload, err := os.ReadFile(source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	script := filepath.Join(repo, "maintenance/tools/check_lfs.py")
-	os.MkdirAll(filepath.Dir(script), 0o755)
-	os.WriteFile(script, payload, 0o644)
-	command := exec.Command(python, "-I", "-B", script)
-	command.Dir = repo
-	output, err := command.CombinedOutput()
-	os.RemoveAll(filepath.Join(repo, "maintenance"))
-	if exit, ok := err.(*exec.ExitError); ok {
-		t.Logf("check_lfs.py: %s", output)
-		return exit.ExitCode()
-	}
-	return 0
-}
-
 func TestCheckLFS(t *testing.T) {
 	isolateGit(t)
 	binary := append(bytes.Repeat([]byte{1}, 10), 0)
@@ -88,10 +65,6 @@ func TestCheckLFS(t *testing.T) {
 		{"unhydrated-pointer", map[string][]byte{"a.bin": pointer}, 1},
 		{"large-direct-binary", map[string][]byte{"big.dat": large}, 1},
 	}
-	python := ""
-	if os.Getenv("X86QW_CONTENT_PARITY") == "1" {
-		python, _ = exec.LookPath("python3.13")
-	}
 	for _, item := range cases {
 		t.Run(item.name, func(t *testing.T) {
 			repo := lfsRepository(t, item.files)
@@ -101,11 +74,6 @@ func TestCheckLFS(t *testing.T) {
 			}
 			if len(problems) != item.problems {
 				t.Fatalf("problemas: %v", problems)
-			}
-			if python != "" {
-				if code := pythonCheckLFS(t, python, repo); (code != 0) != (item.problems > 0) {
-					t.Fatalf("check_lfs.py exit %d diverge de %v", code, problems)
-				}
 			}
 		})
 	}
@@ -126,10 +94,6 @@ func TestCommittedDiffCheck(t *testing.T) {
 	gitRun(t, dir, "commit", "-q", "-am", "dirty change")
 	dirty := gitRun(t, dir, "rev-parse", "HEAD")
 
-	python := ""
-	if os.Getenv("X86QW_CONTENT_PARITY") == "1" {
-		python, _ = exec.LookPath("python3.13")
-	}
 	for _, item := range []struct {
 		name, before, after string
 		fails               bool
@@ -147,17 +111,6 @@ func TestCommittedDiffCheck(t *testing.T) {
 			_, goErr := CheckCommittedDiff(dir, command)
 			if (goErr != nil) != item.fails {
 				t.Fatalf("Go: %v", goErr)
-			}
-			if python == "" {
-				return
-			}
-			eventFile := filepath.Join(t.TempDir(), "event.json")
-			os.WriteFile(eventFile, []byte(`{"before": "`+item.before+`", "after": "`+item.after+`"}`), 0o644)
-			script := filepath.Join(repoRoot(t), "maintenance/tools/check_committed_diff.py")
-			process := exec.Command(python, "-I", "-B", script, "--event-name", "push", "--event-file", eventFile)
-			process.Dir = dir
-			if err := process.Run(); (err != nil) != item.fails {
-				t.Fatalf("check_committed_diff.py: %v", err)
 			}
 		})
 	}

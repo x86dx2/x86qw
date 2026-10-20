@@ -1,10 +1,9 @@
 package pyjson
 
-import (
-	"os/exec"
-	"testing"
-)
+import "testing"
 
+// The expected strings are what Python's json.dumps(..., ensure_ascii=False,
+// sort_keys=True[, indent=2]) printed for the same value.
 func TestMatchesPython(t *testing.T) {
 	value := map[string]any{
 		"b": []any{1, "ç\"\n\x01", map[string]any{}, []any{}},
@@ -22,12 +21,6 @@ func TestMatchesPython(t *testing.T) {
 		}
 		if got != want {
 			t.Fatalf("indent %d:\n got %q\nwant %q", indent, got, want)
-		}
-	}
-	if _, err := exec.LookPath("python3"); err == nil {
-		out, err := exec.Command("python3", "-c", `import json;print(json.dumps({"b":[1,"ç\"\n\x01",{},[]],"a":{"z":True,"y":None},"É":"x","Z":2.5},ensure_ascii=False,sort_keys=True),end="")`).Output()
-		if err == nil && string(out) != cases[-1] {
-			t.Fatalf("python: %q", out)
 		}
 	}
 }

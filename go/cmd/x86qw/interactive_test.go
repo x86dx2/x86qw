@@ -158,7 +158,7 @@ func TestSummaryTextMatchesPython(t *testing.T) {
   Nomes   | KTX Default
 
 Comando equivalente:
-  ./x86qw.sh play ktx --ruleset qcon --mode duel --bots 1 --bot-skill 5 --map dm6`
+  ` + play.Launcher() + ` play ktx --ruleset qcon --mode duel --bots 1 --bot-skill 5 --map dm6`
 	if text != want {
 		t.Fatalf("got\n%s", text)
 	}
@@ -215,7 +215,7 @@ func TestMainMenuContracts(t *testing.T) {
 		code          int
 		tty           bool
 	}{
-		{"", "Uso: ./x86qw.sh <comando> [opções]\nExemplo: ./x86qw.sh play\n" + commandList + "\n", 0, false},
+		{"", "Uso: " + play.Launcher() + " <comando> [opções]\nExemplo: " + play.Launcher() + " play\n" + commandList + "\n", 0, false},
 		{"", "· Operação cancelada; nenhuma seleção pendente foi aplicada.\n", 130, true},
 		{"8\n", "\nAté a próxima partida.\n", 0, false},
 		{"b\n", "\nAté a próxima partida.\n", 0, false},

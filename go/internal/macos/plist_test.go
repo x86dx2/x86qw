@@ -2,13 +2,12 @@ package macos
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 )
 
-// TestPlistRoundTripMatchesPlistlib compares with Python's plistlib when the
-// nightly Info.plist sample is available.
+// TestPlistRoundTripMatchesPlistlib compares with the output Python's
+// plistlib produced for the same edit (testdata/nightly-Info.safe-area.plist).
 func TestPlistRoundTripMatchesPlistlib(t *testing.T) {
 	sample := filepath.Join("testdata", "nightly-Info.plist")
 	payload, err := os.ReadFile(sample)
@@ -23,14 +22,11 @@ func TestPlistRoundTripMatchesPlistlib(t *testing.T) {
 		t.Fatal("round-trip difere do original")
 	}
 	root.Set(safeAreaKey, &Value{Kind: "false"})
-	python, err := exec.Command("python3", "-c", `
-import plistlib,sys
-d=plistlib.loads(open(sys.argv[1],'rb').read()); d['NSPrefersDisplaySafeAreaCompatibilityMode']=False
-sys.stdout.buffer.write(plistlib.dumps(d,fmt=plistlib.FMT_XML,sort_keys=False))`, sample).Output()
+	want, err := os.ReadFile(filepath.Join("testdata", "nightly-Info.safe-area.plist"))
 	if err != nil {
-		t.Skip("sem python3")
+		t.Fatal(err)
 	}
-	if string(MarshalPlist(root)) != string(python) {
+	if string(MarshalPlist(root)) != string(want) {
 		t.Fatalf("difere do plistlib:\n%s", MarshalPlist(root))
 	}
 }

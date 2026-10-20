@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/archive"
+	"github.com/x86dx2/x86qw/go/internal/privfs"
 )
 
 const temporaryHeader = "// x86QW: configuração efêmera removida ao encerrar.\n"
@@ -156,7 +157,7 @@ func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, e
 			if err != nil {
 				return fail(err)
 			}
-			directory := &MaterializedDirectory{Path: missing[index], Identity: identityOf(info)}
+			directory := &MaterializedDirectory{Path: missing[index], Identity: identityAt(missing[index], info)}
 			result.Directories = append(result.Directories, directory)
 			if journal != nil {
 				if err := journal.RecordDirectory(directory); err != nil {
@@ -170,7 +171,7 @@ func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, e
 				return fail(err)
 			}
 			entry := &MaterializedFile{Path: member.destination, ExpectedHash: member.digest, Origin: origin,
-				Existed: true, Identity: identityOf(info), Size: member.size}
+				Existed: true, Identity: identityAt(member.destination, info), Size: member.size}
 			if journal != nil {
 				if err := journal.RecordMaterialized(entry); err != nil {
 					return fail(err)
@@ -281,8 +282,8 @@ func ReadPasswordFile(path, label string) (string, error) {
 	if info.Size() > 4096 {
 		return "", errorf("O arquivo de %s excede o limite de 4096 bytes.", label)
 	}
-	if info.Mode().Perm()&0o077 != 0 {
-		return "", errorf("Permissões inseguras no arquivo de %s; use chmod 600.", label)
+	if !privfs.IsPrivateFile(path, info) {
+		return "", errorf("Permissões inseguras no arquivo de %s; %s.", label, privfs.Guidance())
 	}
 	payload, err := os.ReadFile(path)
 	if err != nil {

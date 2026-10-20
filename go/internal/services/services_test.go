@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/x86dx2/x86qw/go/internal/privfs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -100,10 +101,13 @@ func TestReadPasswordFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "pw")
 	os.WriteFile(path, []byte("segredo\n"), 0o600)
+	if err := privfs.ProtectFile(path); err != nil {
+		t.Fatal(err)
+	}
 	if value, err := ReadPasswordFile(path, "senha"); err != nil || value != "segredo" {
 		t.Fatalf("%q %v", value, err)
 	}
-	os.Chmod(path, 0o644)
+	exposeToOthers(t, path)
 	if _, err := ReadPasswordFile(path, "senha"); err == nil {
 		t.Fatal("world-readable password file accepted")
 	}

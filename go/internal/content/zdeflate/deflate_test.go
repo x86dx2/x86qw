@@ -16,7 +16,7 @@ import (
 	"testing"
 )
 
-// cacheDir is where the Python installer caches published packages.
+// cacheDir is where installations cache published packages.
 func cacheDir() string {
 	if dir := os.Getenv("X86QW_COMPONENT_CACHE"); dir != "" {
 		return dir
@@ -133,8 +133,6 @@ var syntheticDigests = map[string]string{
 }
 
 func TestSyntheticInputs(t *testing.T) {
-	python, _ := exec.LookPath("python3.13")
-	parity := os.Getenv("X86QW_CONTENT_PARITY") == "1" && python != ""
 	for name, input := range syntheticInputs() {
 		output := Compress(input)
 		plain, err := io.ReadAll(flate.NewReader(bytes.NewReader(output)))
@@ -145,19 +143,6 @@ func TestSyntheticInputs(t *testing.T) {
 		digest := hex.EncodeToString(sum[:])
 		if expected, ok := syntheticDigests[name]; ok && expected != digest {
 			t.Errorf("%s: digest %s, esperado %s", name, digest, expected)
-		}
-		if parity {
-			command := exec.Command(python, "-I", "-c",
-				"import sys,zlib,hashlib;d=sys.stdin.buffer.read();c=zlib.compressobj(6,zlib.DEFLATED,-15);print(hashlib.sha256(c.compress(d)+c.flush()).hexdigest())")
-			command.Stdin = bytes.NewReader(input)
-			reference, err := command.Output()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if strings.TrimSpace(string(reference)) != digest {
-				t.Errorf("%s: diverge do zlib do CPython", name)
-			}
-			t.Logf("%q: %q,", name, digest)
 		}
 	}
 }

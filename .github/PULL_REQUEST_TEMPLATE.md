@@ -25,7 +25,7 @@ Branches que podem ser apagadas:
 
 ## Validação
 
-- [ ] `./maintenance/manage.py verify`
+- [ ] `go -C go test ./...` e `go -C go run ./cmd/x86qw-content verify`
 - [ ] CLI pública relevante analisada com `--help`
 - [ ] `cd site && npm ci && npm run deploy:dry-run` quando aplicável
 - [ ] Validação executada diretamente no Mac local, com comandos e resultados registrados

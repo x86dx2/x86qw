@@ -151,11 +151,16 @@ func mainMenuLoop(ui *menu.UI, con console, target string, verbose, noColor bool
 				return result, nil
 			}
 		case "host", "hub":
-			args := common(target)
+			var result int
 			if selected == "host" {
-				args = common("--target", target, "--menu")
+				code, err := serviceMain("host", common("--target", target, "--menu"), stdout, stderr, true)
+				if err != nil {
+					return 0, err
+				}
+				result = code
+			} else {
+				result = dispatch(con, selected, common(target))
 			}
-			result := dispatch(con, selected, args)
 			if result == exitInterrupted {
 				return result, nil
 			}
@@ -171,12 +176,19 @@ func mainMenuLoop(ui *menu.UI, con console, target string, verbose, noColor bool
 				if back {
 					break
 				}
-				action, args := service, common("--target", target, "--menu")
-				if service == "stop" {
-					action = "status"
-					args = common("--target", target, "--menu", "--stop")
+				var result int
+				switch service {
+				case "qtv", "proxy":
+					code, err := serviceMain(service, common("--target", target, "--menu"), stdout, stderr, true)
+					if err != nil {
+						return 0, err
+					}
+					result = code
+				case "stop":
+					result = dispatch(con, "status", common("--target", target, "--menu", "--stop"))
+				default:
+					result = dispatch(con, service, common("--target", target, "--menu"))
 				}
-				result := dispatch(con, action, args)
 				if result == exitInterrupted {
 					return result, nil
 				}

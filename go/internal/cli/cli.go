@@ -159,9 +159,6 @@ func Install(root, source, version string) (*Layer, error) {
 	if err := layer.write(filepath.Join(dir, "receipt"), Receipt(version), 0o644); err != nil {
 		return fail(err)
 	}
-	if err := layer.remove(filepath.Join(dir, "x86qw.pyz")); err != nil {
-		return fail(err)
-	}
 	if runtime.GOOS == "windows" {
 		if err := layer.write(filepath.Join(root, "x86qw.cmd"), []byte(CmdShim), 0o644); err != nil {
 			return fail(err)
@@ -191,9 +188,10 @@ func readExecutable(source string) ([]byte, error) {
 
 // LinkUserCommand points ~/.local/bin/x86qw at root/x86qw.sh. An existing
 // link to another target or a regular file is refused, like the Python CLI.
+// On Windows it creates the Start Menu and Desktop shortcuts instead.
 func LinkUserCommand(root, home string) (string, error) {
 	if runtime.GOOS == "windows" {
-		return "", nil
+		return InstallShortcuts(root)
 	}
 	command := filepath.Join(home, ".local", "bin", "x86qw")
 	launcher := filepath.Join(root, "x86qw.sh")

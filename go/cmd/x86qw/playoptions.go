@@ -18,7 +18,7 @@ func stringPointer(value string) *string { return &value }
 // only the options that matter for the selected KTX mode.
 func (f *playFlow) chooseOptions(mode play.Mode, selected play.Options) (play.Options, bool, error) {
 	ui := f.ui
-	crumb := "x86QW › Jogar › KTX › " + mode.Label
+	crumb := "x86QW › " + f.area() + " › KTX › " + mode.Label
 	switch mode.Key {
 	case "race":
 		for {
@@ -44,6 +44,12 @@ func (f *playFlow) chooseOptions(mode play.Mode, selected play.Options) (play.Op
 					continue
 				}
 				scoring = stringPointer(chosen)
+			}
+			if f.hosting {
+				// A dedicated race has no local runner: no pacemaker or hiding.
+				result := selected
+				result.RaceStyle, result.RaceScoring, result.RacePacemaker, result.RaceHidePlayers = stringPointer(style), scoring, nil, false
+				return result, false, nil
 			}
 			for {
 				pacemakers := []menu.Option{option("none", "Nenhum", "correr sem referência")}

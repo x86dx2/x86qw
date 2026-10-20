@@ -11,6 +11,7 @@ import (
 
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/lock"
+	"github.com/x86dx2/x86qw/go/internal/menu"
 	"github.com/x86dx2/x86qw/go/internal/output"
 	"github.com/x86dx2/x86qw/go/internal/services"
 )
@@ -40,7 +41,7 @@ func runStatus(args []string, stdout, stderr io.Writer) int {
 		console.Error("Nenhuma stack de serviços x86QW está ativa.")
 		return output.ExitFailure
 	}
-	if !options.Yes && !confirmStop(stdout) {
+	if !options.Yes && !confirmStop(options.Menu, options.NoColor, stdout) {
 		console.Info("Encerramento cancelado; a stack continua ativa.")
 		return output.ExitSuccess
 	}
@@ -53,7 +54,13 @@ func runStatus(args []string, stdout, stderr io.Writer) int {
 }
 
 // confirmStop asks on a terminal; without one it declines (use --yes).
-func confirmStop(stdout io.Writer) bool {
+// From the menu it is the navigation confirm of services.main.
+func confirmStop(fromMenu, noColor bool, stdout io.Writer) bool {
+	if fromMenu {
+		yes, _, err := interactiveUI(noColor).Confirm("Encerrar a stack ativa?", menu.Settings{Breadcrumb: "x86QW › Serviços › Encerrar"},
+			"finalizar dependentes, serviços, servidor e temporários", false)
+		return err == nil && yes
+	}
 	if !isTerminal(os.Stdin) {
 		return false
 	}

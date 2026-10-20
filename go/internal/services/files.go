@@ -44,7 +44,7 @@ func cleanupSensitive(path string, identity [2]int64) bool {
 	if os.IsNotExist(err) {
 		return true
 	}
-	if err != nil || !info.Mode().IsRegular() || identityOf(info) != identity {
+	if err != nil || !info.Mode().IsRegular() || identityAt(path, info) != identity {
 		return false
 	}
 	if os.Remove(path) != nil {
@@ -64,7 +64,7 @@ func cleanupMaterializedFile(file *MaterializedFile) bool {
 	if os.IsNotExist(err) {
 		return true
 	}
-	if err != nil || !info.Mode().IsRegular() || identityOf(info) != file.Identity || info.Size() != file.Size {
+	if err != nil || !info.Mode().IsRegular() || identityAt(file.Path, info) != file.Identity || info.Size() != file.Size {
 		return false
 	}
 	digest, _, err := fileSHA256(file.Path)
@@ -80,7 +80,7 @@ func cleanupDirectory(path string, identity [2]int64) bool {
 	if os.IsNotExist(err) {
 		return true
 	}
-	if err != nil || !info.IsDir() || identityOf(info) != identity {
+	if err != nil || !info.IsDir() || identityAt(path, info) != identity {
 		return false
 	}
 	return os.Remove(path) == nil

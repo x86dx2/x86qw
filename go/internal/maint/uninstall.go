@@ -6,10 +6,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/catalog"
+	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/download"
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
@@ -50,9 +52,13 @@ func lexists(path string) bool {
 	return err == nil
 }
 
-// removeShellIntegration drops ~/.local/bin/x86qw when it points at this
-// installation's launcher.
+// removeShellIntegration drops ~/.local/bin/x86qw (or, on Windows, the
+// Start Menu and Desktop shortcuts) when it points at this installation.
 func removeShellIntegration(target string) {
+	if runtime.GOOS == "windows" {
+		cli.RemoveShortcuts(target)
+		return
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return
@@ -114,7 +120,7 @@ func Uninstall(target string) (*Report, error) {
 		return nil, err
 	}
 	if lexists(filepath.Join(target, filepath.FromSlash(nquakeReceipt))) || legacyLayout(target) {
-		return nil, errors.New("esta instalação usa metadados legados; desinstale com a CLI Python 1.0.16 ou reinstale antes")
+		return nil, errors.New("esta instalação usa metadados anteriores ao 1.0 que esta versão não desinstala; reinstale antes")
 	}
 	metadataNames := []string{nquakeInventory, nquakeReceipt, cliReceipt, legacyCLIReceipt, stateRelative}
 	for _, id := range componentRecordIDs(target) {

@@ -289,13 +289,10 @@ Consulte o
 
 O repositório é a fonte canônica. `dist/` preserva os inputs; inventários declaram consumidores e dependências; o catálogo projeta pacotes públicos; o instalador materializa apenas o perfil e a plataforma escolhidos. GitHub Releases é o canal principal de artefatos e GitLab Generic Packages mantém o mirror de contingência.
 
-Na release `0.7.2`, contratos reutilizáveis foram
-movidos incrementalmente para `x86qw_runtime`: downloader, archive,
-persistência e filesystem privado, catálogos, estado e recibos, migrações,
-transações, UI, gameplay, adapters de plataforma, lock da instalação e
-supervisor de processos/sessões. A direção de dependências impede o runtime de
-importar manutenção ou entrypoints. Um manifesto declarativo é a fonte da
-projeção mínima do zipapp, que não incorpora `maintenance/`.
+Todo o código vive em `go/`: a CLI `x86qw` (instalação, jogo, hub, serviços e
+manutenção da instalação), `x86qw-content` (verificação, atualização, build e
+publicação do `dist/`) e `x86qw-release` (bootstraps, catálogo da CLI,
+assinatura TUF, montagem do site e monitor). O repositório não contém Python.
 
 Mutações duráveis de instalação, atualização, repair, cleanup e uninstall
 retêm inversos até o resultado lógico final. Logs produzidos durante execução
@@ -350,17 +347,16 @@ Quem clonou o repositório usa as fontes locais canônicas:
 
 ```sh
 git lfs pull
-./dist/installer/bin/manager.py verify
-./dist/installer/bin/manager.py play
+go -C go run ./cmd/x86qw --help
+go -C go run ./cmd/x86qw play --help
 ```
 
-A validação integral não instala dependências Python adicionais:
+A validação integral:
 
 ```sh
-./maintenance/manage.py verify
-./dist/installer/bin/manager.py --help
-./dist/installer/bin/manager.py play --help
-cd site && npm run deploy:dry-run
+go -C go test ./...
+go -C go run ./cmd/x86qw-content verify
+cd site && npm test && npm run deploy:dry-run
 ```
 
 Para visualizar o portal localmente:
@@ -383,7 +379,7 @@ Contribuições são bem-vindas quando preservam proveniência, reprodutibilidad
 
 1. leia o [guia de contribuição](.github/CONTRIBUTING.md);
 2. mantenha cada mudança pequena e rastreável;
-3. execute `./maintenance/manage.py verify`;
+3. execute `go -C go test ./...` e `go -C go run ./cmd/x86qw-content verify`;
 4. explique a origem e o consumidor de qualquer novo arquivo distribuído.
 
 [Reportar um bug](https://github.com/x86dx2/x86qw/issues/new?template=bug-report.yml) · [Propor uma melhoria](https://github.com/x86dx2/x86qw/issues/new?template=feature-request.yml) · [Obter suporte](.github/SUPPORT.md) · [Política de segurança](.github/SECURITY.md)

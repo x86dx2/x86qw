@@ -9,11 +9,14 @@ import (
 	"os/signal"
 	"sync"
 	"time"
+
+	"github.com/x86dx2/x86qw/go/internal/launchguard"
 )
 
 // Supervisor ported from x86qw_runtime/supervisor/core.run_processes. Go has
 // no guardian: each runtime is exec'd directly in its own session after its
-// bytes are re-checked against the verified inventory hash.
+// bytes are re-checked against the verified inventory hash (held open
+// through process creation on Windows, see launchguard).
 
 type started struct {
 	spec    *Spec
@@ -98,13 +101,12 @@ func RunProcesses(specs []*Spec, journal *Journal, console *Console, output *os.
 			return onSignal()
 		}
 		console.Detail(fmt.Sprintf("Iniciando %s: %s", spec.Label, spec.Arguments[0]))
-		if spec.ExpectedSHA256 != "" {
-			digest, _, hashErr := fileSHA256(spec.Arguments[0])
-			if hashErr != nil || digest != spec.ExpectedSHA256 {
-				return 0, errorf("O comando de %s diverge do alvo validado.", spec.Label)
-			}
+		release, holdErr := launchguard.Hold(spec.Arguments[0], spec.ExpectedSHA256)
+		if holdErr != nil {
+			return 0, errorf("O comando de %s diverge do alvo validado.", spec.Label)
 		}
 		command, startErr := startDetached(spec.Arguments, spec.Cwd, output)
+		release()
 		if startErr != nil {
 			var installerErr *Error
 			if errors.As(startErr, &installerErr) {

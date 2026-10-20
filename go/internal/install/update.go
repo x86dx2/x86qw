@@ -15,6 +15,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/download"
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/plan"
+	"github.com/x86dx2/x86qw/go/internal/privfs"
 	"github.com/x86dx2/x86qw/go/internal/state"
 )
 
@@ -72,7 +73,7 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 			}
 			cliPackage = &pkg
 		default:
-			return nil, fmt.Errorf("esta versão ainda não aplica %q (%s); use a CLI Python para esta etapa", row.Item, row.Action)
+			return nil, fmt.Errorf("esta versão ainda não aplica %q (%s)", row.Item, row.Action)
 		}
 	}
 	result := &Result{}
@@ -278,7 +279,7 @@ func prepareCache(root string) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if err := os.MkdirAll(root, 0o700); err != nil {
+	if err := privfs.MkdirAll(root); err != nil {
 		return err
 	}
 	return atomicWrite(filepath.Join(root, cacheMarker), []byte("x86qw-cache-v1\n"), 0o600)
@@ -318,7 +319,7 @@ func refuseConfigMigrations(root string, batch []string) error {
 			needs = true
 		}
 		if needs {
-			return fmt.Errorf("a configuração pessoal %s precisa de migração; use a CLI Python para esta atualização", config)
+			return fmt.Errorf("a configuração pessoal %s usa um formato antigo que esta versão não migra; reinstale o x86QW", config)
 		}
 	}
 	return nil

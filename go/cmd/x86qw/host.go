@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/x86dx2/x86qw/go/internal/output"
-	"github.com/x86dx2/x86qw/go/internal/play"
 	"github.com/x86dx2/x86qw/go/internal/services"
 )
 
@@ -47,17 +46,8 @@ func serviceUsage(name string, err error, stderr io.Writer) int {
 }
 
 func runHost(args []string, stdout, stderr io.Writer) int {
-	games, err := play.LoadGames()
-	if err != nil {
-		fmt.Fprintf(stderr, "✗ %v\n", err)
-		return output.ExitFailure
-	}
-	options, err := services.ParseHost(args, games)
-	if err != nil {
-		return serviceUsage("host", err, stderr)
-	}
-	op := &services.Operation{Action: "host", Host: options, Args: args}
-	return runService(op, &options.Common, stdout, stderr)
+	code, _ := serviceMain("host", args, stdout, stderr, false)
+	return code
 }
 
 func init() {

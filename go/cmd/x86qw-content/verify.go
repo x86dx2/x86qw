@@ -9,12 +9,10 @@ import (
 
 func runVerify(env *environment, args []string) (int, error) {
 	flags := flag.NewFlagSet("verify", flag.ContinueOnError)
-	noTests := flags.Bool("no-tests", false, "aceito por compatibilidade; as suítes Python não fazem parte do verify nativo")
 	noGit := flags.Bool("no-git", false, "pula as verificações de Git LFS e diff commitado")
 	if err := parseFlags("verify", flags, args, env.stderr); err != nil {
 		return 0, err
 	}
-	_ = noTests
 	if err := env.project.Verify(env.stdout, content.VerifyOptions{SkipGit: *noGit}); err != nil {
 		return exitError, err
 	}

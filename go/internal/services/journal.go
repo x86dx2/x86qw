@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/lock"
+	"github.com/x86dx2/x86qw/go/internal/privfs"
 )
 
 // Session journal compatible with x86qw_runtime/supervisor/sessions.py.
@@ -49,17 +50,14 @@ func tokenHex(size int) string {
 }
 
 func ensurePrivateDirectory(dir string) error {
-	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+	if err := privfs.Mkdir(dir); err != nil && !errors.Is(err, os.ErrExist) {
 		return err
 	}
 	info, err := os.Lstat(dir)
 	if err != nil || !info.IsDir() {
 		return errorf("Diretório de serviço ausente ou inseguro: %s", dir)
 	}
-	if info.Mode().Perm()&0o077 != 0 {
-		return os.Chmod(dir, 0o700)
-	}
-	return nil
+	return privfs.Ensure(dir, info)
 }
 
 // atomicWritePrivate writes path through a ".<name>.<hex>.tmp" sibling (0600).
@@ -92,7 +90,7 @@ func NewJournal(target string, owner *lock.Owner, background bool, backgroundLog
 	}
 	journal := &Journal{Target: target, SessionID: owner.SessionID}
 	journal.Directory = filepath.Join(sessions, owner.SessionID)
-	if err := os.Mkdir(journal.Directory, 0o700); err != nil {
+	if err := privfs.Mkdir(journal.Directory); err != nil {
 		return nil, errorf("Diretório exclusivo da sessão não pôde ser criado: %s", journal.Directory)
 	}
 	journal.Path = filepath.Join(journal.Directory, "session.json")

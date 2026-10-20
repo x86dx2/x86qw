@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -59,12 +60,13 @@ func TestExtractsValidArchive(t *testing.T) {
 	if string(data) != "set a 1\n" {
 		t.Fatalf("conteúdo %q", data)
 	}
+	// Windows has no POSIX mode bits to preserve.
 	info, _ := os.Stat(filepath.Join(destination, "payload/bin/run"))
-	if info.Mode().Perm() != 0o755 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o755 {
 		t.Fatalf("modo %v", info.Mode())
 	}
 	info, _ = os.Stat(filepath.Join(destination, "payload/qw/ktx.cfg"))
-	if info.Mode().Perm() != 0o644 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o644 {
 		t.Fatalf("modo %v", info.Mode())
 	}
 	if err := plan.Extract(destination); err == nil {

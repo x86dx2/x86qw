@@ -107,6 +107,15 @@ type playFlow struct {
 	target    string
 	games     []play.Game
 	available []install.Game
+	hosting   bool // the pickers serve host instead of play (activity="hospedar")
+}
+
+// area is the breadcrumb root of the current activity.
+func (f *playFlow) area() string {
+	if f.hosting {
+		return "Hospedar"
+	}
+	return "Jogar"
 }
 
 // playChoice is everything needed to launch.
@@ -172,7 +181,11 @@ func (f *playFlow) chooseGame(requested string) (*play.Game, bool, error) {
 	for index, game := range f.available {
 		options[index] = menu.Option{Key: game.ID, Label: game.Label, Description: "v" + install.InstalledVersion(f.target, game), Detail: game.Description}
 	}
-	key, back, err := f.ui.SelectOne("O que deseja jogar localmente?", options, menu.Settings{Breadcrumb: "x86QW › Jogar", Searchable: true, AllowBack: true})
+	title := "O que deseja jogar localmente?"
+	if f.hosting {
+		title = "O que deseja hospedar?"
+	}
+	key, back, err := f.ui.SelectOne(title, options, menu.Settings{Breadcrumb: "x86QW › " + f.area(), Searchable: true, AllowBack: true})
 	if err != nil || back {
 		return nil, back, err
 	}
@@ -193,7 +206,7 @@ func (f *playFlow) chooseMode(modes []play.Mode, requested string) (*play.Mode, 
 	if err != nil {
 		return nil, false, err
 	}
-	root := "x86QW › Jogar › KTX"
+	root := "x86QW › " + f.area() + " › KTX"
 	for {
 		var options []menu.Option
 		for _, group := range groups {
@@ -221,7 +234,11 @@ func (f *playFlow) chooseMode(modes []play.Mode, requested string) (*play.Mode, 
 			}
 			visible = append(visible, menu.Option{Key: mode.Key, Label: mode.Label, Description: play.PlayerCountLabel(mode.RecommendedPlayers), Detail: mode.Description, Aliases: mode.Aliases})
 		}
-		selected, back, err := f.ui.SelectOne("Qual modo KTX deseja jogar?", visible, menu.Settings{
+		verb := "jogar"
+		if f.hosting {
+			verb = "hospedar"
+		}
+		selected, back, err := f.ui.SelectOne("Qual modo KTX deseja "+verb+"?", visible, menu.Settings{
 			Breadcrumb: crumb, Subtitle: "Use a busca para localizar um modo neste grupo.", Searchable: true, AllowBack: true,
 		})
 		if err != nil {

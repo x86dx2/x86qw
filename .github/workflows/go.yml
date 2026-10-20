@@ -2,26 +2,8 @@ name: Go
 
 on:
   pull_request:
-    paths:
-      - "go/**"
-      - "maintenance/trust/root.json"
-      - "maintenance/inventory/components.json"
-      - "maintenance/inventory/games.json"
-      - "dist/mods/ktx/1.47/x86qw/catalog/**"
-      - "site/public/api/v1/trust/**"
-      - "site/public/api/v1/catalog.json"
-      - ".github/workflows/go.yml"
   push:
     branches: [main]
-    paths:
-      - "go/**"
-      - "maintenance/trust/root.json"
-      - "maintenance/inventory/components.json"
-      - "maintenance/inventory/games.json"
-      - "dist/mods/ktx/1.47/x86qw/catalog/**"
-      - "site/public/api/v1/trust/**"
-      - "site/public/api/v1/catalog.json"
-      - ".github/workflows/go.yml"
   workflow_dispatch:
 
 permissions:
@@ -49,6 +31,30 @@ jobs:
           cache-dependency-path: go/go.sum
       - name: Check formatting
         run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test ./...
+
+  test-windows:
+    name: go / test windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: go
+    steps:
+      # The tests compare checked-in documents byte for byte.
+      - name: Keep LF line endings
+        working-directory: .
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          lfs: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
       - run: go vet ./...
       - run: go test ./...
 

@@ -40,13 +40,13 @@ git switch -c tipo/descricao-curta
 Faça uma mudança por contexto. Antes de enviar:
 
 ```sh
-./maintenance/manage.py verify
-./dist/installer/bin/manager.py --help
-./dist/installer/bin/manager.py play --help
-cd site && npx --yes wrangler@4.114.0 deploy --dry-run
+go -C go test ./...
+go -C go run ./cmd/x86qw-content verify
+go -C go run ./cmd/x86qw --help
+cd site && npm test && npx --yes wrangler@4.114.0 deploy --dry-run
 ```
 
-O primeiro comando valida distribuição, inventários, receitas, catálogos, instalador e testes. A CI repete contratos portáveis em macOS, Linux e Windows com Python 3.10 e 3.13.
+`x86qw-content verify` valida distribuição, inventários, receitas, catálogo, TUF e Git LFS. A CI roda os testes Go, compila a CLI para macOS, Linux e Windows e valida o site.
 
 A validação operacional da implementação é registrada diretamente no Mac; Linux e Windows permanecem nos contratos de compatibilidade até haver evidência nativa do candidato.
 
@@ -56,7 +56,7 @@ A validação operacional da implementação é registrada diretamente no Mac; L
 |---|---|---|
 | Cliente, mod ou conteúdo distribuído | `dist/` | `maintenance/inventory/` |
 | Origem, versão ou receita | `maintenance/` | `dist/manifest.json` |
-| CLI ou bootstrap | `dist/installer/` | catálogo e testes do instalador |
+| CLI ou bootstrap | `go/` | catálogo e testes Go |
 | Portal ou API pública | `site/` | `site/tests/` |
 | Arquitetura e operação | `docs/` | fatos públicos do produto |
 

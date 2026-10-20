@@ -338,7 +338,7 @@ func publishStopRequest(request string, payload []byte) ([2]int64, error) {
 }
 
 func unlinkStopRequest(request string, identity [2]int64) {
-	if info, err := os.Lstat(request); err == nil && info.Mode().IsRegular() && identityOf(info) == identity {
+	if info, err := os.Lstat(request); err == nil && info.Mode().IsRegular() && identityAt(request, info) == identity {
 		os.Remove(request)
 	}
 }

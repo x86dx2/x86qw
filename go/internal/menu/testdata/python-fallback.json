@@ -1,0 +1,62 @@
+[
+ {
+  "input": "2\n",
+  "call": "select_one(\"O que você quer fazer?\", opts, breadcrumb=\"x86QW 1.0.16\", searchable=True, allow_back=True, interactive=False)",
+  "output": "\nx86QW 1.0.16\n\nO que você quer fazer?\n  Partida\n  1) Jogar (padrão)     · mods locais e modos KTX          < Escolha jogo, modo, mapa e regras.\n  2) Encontrar servidor · jogar, observar ou assistir QTV\n  Instalação\n  3) Desativado         · não disponível                   < indisponível: sem rede\n  4) Sair               · encerrar o menu                \nEscolha [1-4] ou digite para buscar; b para voltar; q para sair: ",
+  "result": "'hub'"
+ },
+ {
+  "input": "\n",
+  "call": "select_one(\"Título\", opts, default=1, interactive=False)",
+  "output": "\nTítulo\n  Partida\n  1) Jogar                       · mods locais e modos KTX          < Escolha jogo, modo, mapa e regras.\n  2) Encontrar servidor (padrão) · jogar, observar ou assistir QTV\n  Instalação\n  3) Desativado                  · não disponível                   < indisponível: sem rede\n  4) Sair                        · encerrar o menu                \nEscolha [1-4]; q para sair: ",
+  "result": "'hub'"
+ },
+ {
+  "input": "3\nquit\n",
+  "call": "select_one(\"Título\", opts, interactive=False)",
+  "output": "\nTítulo\n  Partida\n  1) Jogar (padrão)     · mods locais e modos KTX          < Escolha jogo, modo, mapa e regras.\n  2) Encontrar servidor · jogar, observar ou assistir QTV\n  Instalação\n  3) Desativado         · não disponível                   < indisponível: sem rede\n  4) Sair               · encerrar o menu                \nEscolha [1-4]; q para sair: [ATENÇÃO] Esta opção não está disponível neste contexto.\n\nTítulo\n  Partida\n  1) Jogar (padrão)     · mods locais e modos KTX          < Escolha jogo, modo, mapa e regras.\n  2) Encontrar servidor · jogar, observar ou assistir QTV\n  Instalação\n  3) Desativado         · não disponível                   < indisponível: sem rede\n  4) Sair               · encerrar o menu                \nEscolha [1-4]; q para sair: ",
+  "result": "'exit'"
+ },
+ {
+  "input": "serv\n",
+  "call": "select_one(\"Título\", opts, searchable=True, interactive=False)",
+  "output": "\nTítulo\n  Partida\n  1) Jogar (padrão)     · mods locais e modos KTX          < Escolha jogo, modo, mapa e regras.\n  2) Encontrar servidor · jogar, observar ou assistir QTV\n  Instalação\n  3) Desativado         · não disponível                   < indisponível: sem rede\n  4) Sair               · encerrar o menu                \nEscolha [1-4] ou digite para buscar; q para sair: ",
+  "result": "'hub'"
+ },
+ {
+  "input": "jog\n/\n4\n",
+  "call": "select_one(\"Título\", opts, searchable=True, interactive=False)",
+  "output": "\nTítulo\n  Partida\n  1) Jogar (padrão)     · mods locais e modos KTX          < Escolha jogo, modo, mapa e regras.\n  2) Encontrar servidor · jogar, observar ou assistir QTV\n  Instalação\n  3) Desativado         · não disponível                   < indisponível: sem rede\n  4) Sair               · encerrar o menu                \nEscolha [1-4] ou digite para buscar; q para sair: \nTítulo\n  Partida\n  1) Jogar (padrão)     · mods locais e modos KTX          < Escolha jogo, modo, mapa e regras.\n  2) Encontrar servidor · jogar, observar ou assistir QTV\nEscolha [1-2] ou digite para buscar; / para limpar a busca; q para sair: \nTítulo\n  Partida\n  1) Jogar (padrão)     · mods locais e modos KTX          < Escolha jogo, modo, mapa e regras.\n  2) Encontrar servidor · jogar, observar ou assistir QTV\n  Instalação\n  3) Desativado         · não disponível                   < indisponível: sem rede\n  4) Sair               · encerrar o menu                \nEscolha [1-4] ou digite para buscar; q para sair: ",
+  "result": "'exit'"
+ },
+ {
+  "input": "zzz\nb\n",
+  "call": "select_one(\"Título\", opts, allow_back=True, interactive=False)",
+  "output": "\nTítulo\n  Partida\n  1) Jogar (padrão)     · mods locais e modos KTX          < Escolha jogo, modo, mapa e regras.\n  2) Encontrar servidor · jogar, observar ou assistir QTV\n  Instalação\n  3) Desativado         · não disponível                   < indisponível: sem rede\n  4) Sair               · encerrar o menu                \nEscolha [1-4]; b para voltar; q para sair: [ATENÇÃO] Seleção inválida; tente novamente.\n\nTítulo\n  Partida\n  1) Jogar (padrão)     · mods locais e modos KTX          < Escolha jogo, modo, mapa e regras.\n  2) Encontrar servidor · jogar, observar ou assistir QTV\n  Instalação\n  3) Desativado         · não disponível                   < indisponível: sem rede\n  4) Sair               · encerrar o menu                \nEscolha [1-4]; b para voltar; q para sair: ",
+  "result": "None"
+ },
+ {
+  "input": "q\n",
+  "call": "select_one(\"Título\", opts, interactive=False)",
+  "output": "\nTítulo\n  Partida\n  1) Jogar (padrão)     · mods locais e modos KTX          < Escolha jogo, modo, mapa e regras.\n  2) Encontrar servidor · jogar, observar ou assistir QTV\n  Instalação\n  3) Desativado         · não disponível                   < indisponível: sem rede\n  4) Sair               · encerrar o menu                \nEscolha [1-4]; q para sair: ",
+  "result": "'EXIT'"
+ },
+ {
+  "input": "",
+  "call": "select_one(\"Título\", opts, interactive=False)",
+  "output": "\nTítulo\n  Partida\n  1) Jogar (padrão)     · mods locais e modos KTX          < Escolha jogo, modo, mapa e regras.\n  2) Encontrar servidor · jogar, observar ou assistir QTV\n  Instalação\n  3) Desativado         · não disponível                   < indisponível: sem rede\n  4) Sair               · encerrar o menu                \nEscolha [1-4]; q para sair: ",
+  "result": "'CANCELLED'"
+ },
+ {
+  "input": "1,zz\n2,4\n",
+  "call": "select_many(\"Componentes\", opts, selected=(\"play\",), allow_back=True, interactive=False)",
+  "output": "\nComponentes\n  Partida\n  1) [x] Jogar              · mods locais e modos KTX          < Escolha jogo, modo, mapa e regras.\n  2) [ ] Encontrar servidor · jogar, observar ou assistir QTV\n  Instalação\n  3) [ ] Desativado         · não disponível                   < indisponível: sem rede\n  4) [ ] Sair               · encerrar o menu                \nInforme números ou identificadores separados por vírgula; b para voltar; q para sair: [ATENÇÃO] Seleção inválida; tente novamente.\n\nComponentes\n  Partida\n  1) [x] Jogar              · mods locais e modos KTX          < Escolha jogo, modo, mapa e regras.\n  2) [ ] Encontrar servidor · jogar, observar ou assistir QTV\n  Instalação\n  3) [ ] Desativado         · não disponível                   < indisponível: sem rede\n  4) [ ] Sair               · encerrar o menu                \nInforme números ou identificadores separados por vírgula; b para voltar; q para sair: ",
+  "result": "('hub', 'exit')"
+ },
+ {
+  "input": "talvez\nnão\n",
+  "call": "confirm(\"Confirma?\", interactive=False, default=True)",
+  "output": "\nConfirma?\n  1) Sim (padrão) · confirmar esta escolha\n  2) Não          · não executar esta ação\nEscolha [1-2]; q para sair: [ATENÇÃO] Resposta inválida. Digite sim ou não.\n\nConfirma?\n  1) Sim (padrão) · confirmar esta escolha\n  2) Não          · não executar esta ação\nEscolha [1-2]; q para sair: ",
+  "result": "False"
+ }
+]
