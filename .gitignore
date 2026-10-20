@@ -7,3 +7,9 @@
 .tuf-production/
 maintenance/build/
 site/node_modules/
+
+# Binaries `go build` leaves in a command's own folder
+/go/cmd/x86qw/x86qw
+/go/cmd/x86qw-content/x86qw-content
+/go/cmd/x86qw-release/x86qw-release
+/go/cmd/x86qw-setup-demo/x86qw-setup-demo
