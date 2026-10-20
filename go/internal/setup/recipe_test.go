@@ -12,6 +12,7 @@ func TestRecipeRoundTrips(t *testing.T) {
 	both.Mouse.Invert, both.Experience, both.Volume = true, "qcon", 55
 	both.Video = Video{Width: 2560, Height: 1440, Display: "borderless", FOV: 100}
 	both.Server.Hostname, both.Server.BasePort, both.Server.QWFWDPort = "qw.example.com", 27510, 0
+	both.Server.Local, both.Server.Slots, both.Server.NoRecord = true, 24, true
 	both.Integration.Demos = false
 	host := Defaults(Host, "/srv/qw")
 	play := Defaults(Play, "/games/qw")

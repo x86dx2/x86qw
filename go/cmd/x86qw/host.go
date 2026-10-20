@@ -46,8 +46,7 @@ func serviceUsage(name string, err error, stderr io.Writer) int {
 }
 
 func runHost(args []string, stdout, stderr io.Writer) int {
-	code, _ := serviceMain("host", args, stdout, stderr, false)
-	return code
+	return serviceMain("host", args, stdout, stderr)
 }
 
 func init() {

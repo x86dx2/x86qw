@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/install"
+	"github.com/x86dx2/x86qw/go/internal/play"
 	"github.com/x86dx2/x86qw/go/internal/services"
 	"github.com/x86dx2/x86qw/go/internal/trust"
 )
@@ -189,5 +190,44 @@ func TestRealCancelThenInstallAgain(t *testing.T) {
 	}
 	if _, err := install.Verify(target); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestRealResolve checks play.Resolve on a real essential installation:
+// defaults, narrowing by bots and CTF, and what it refuses.
+func TestRealResolve(t *testing.T) {
+	r := realBackend(t)
+	if os.Getenv("X86QW_REAL_INSTALL") == "" {
+		t.Skip("defina X86QW_REAL_INSTALL=1 para instalar de verdade")
+	}
+	t.Setenv("X86QW_CACHE_DIR", t.TempDir())
+	t.Setenv("X86QW_NO_MACOS_PREFERENCES", "1")
+	target := filepath.Join(t.TempDir(), "x86qw")
+	options := Defaults(Play, target)
+	options.Nick, options.Content = "tester", "essential"
+	var last Progress
+	for progress := range r.Install(context.Background(), options, nil) {
+		last = progress
+	}
+	if last.Err != nil {
+		t.Fatal(last.Err)
+	}
+	if _, err := play.Resolve(target, play.Request{}); err == nil {
+		t.Fatal("KTX sem modo deveria ser recusado")
+	}
+	duel, err := play.Resolve(target, play.Request{Mode: "duel"})
+	if err != nil || duel.Map != "dm6" || duel.Ruleset != "x86qw" || duel.Runtime.Channel != "stable" {
+		t.Fatalf("duel padrão: %+v %v", duel, err)
+	}
+	all, _ := r.Maps(context.Background(), target, Match{Game: "ktx", Mode: "duel"})
+	bots, _ := r.Maps(context.Background(), target, Match{Game: "ktx", Mode: "duel", Bots: 1})
+	ctf, _ := r.Maps(context.Background(), target, Match{Game: "ktx", Mode: "ctf"})
+	if all == nil || bots == nil || ctf == nil || !bots.Narrowed || len(bots.Maps) >= len(all.Maps) || !ctf.Narrowed || len(ctf.Maps) >= len(all.Maps) {
+		t.Fatalf("mapas: todos %v, bots %v, ctf %v", all, bots, ctf)
+	}
+	for _, refused := range []play.Request{{Mode: "duel", Map: "nao-existe"}, {Mode: "duel", Channel: "nightly"}, {Game: "pro-x"}} {
+		if _, err := play.Resolve(target, refused); err == nil {
+			t.Fatalf("%+v deveria ser recusado", refused)
+		}
 	}
 }

@@ -23,6 +23,9 @@ const (
 	choicesDir  = ".x86qw/setup"
 	choicesFile = choicesDir + "/choices.json"
 	RconFile    = choicesDir + "/rcon"
+	// PasswordFile and SpectatorFile hold the server's other passwords.
+	PasswordFile  = choicesDir + "/password"
+	SpectatorFile = choicesDir + "/spectator"
 	// SetupConfig holds the client choices; x86qw-user.cfg runs it once
 	// each time they are applied.
 	SetupConfig = "qw/x86qw-setup.cfg"
@@ -43,10 +46,39 @@ func SaveChoices(target string, options Options) error {
 	if err := writePrivate(filepath.Join(target, filepath.FromSlash(choicesFile)), append(payload, '\n')); err != nil {
 		return err
 	}
-	if options.Intent.WantsServer() {
-		return writePrivate(filepath.Join(target, filepath.FromSlash(RconFile)), []byte(options.Server.Rcon+"\n"))
+	if !options.Intent.WantsServer() {
+		return nil
+	}
+	for _, secret := range []struct{ file, value string }{
+		{RconFile, options.Server.Rcon}, {PasswordFile, options.Server.Password}, {SpectatorFile, options.Server.Spectators},
+	} {
+		path := filepath.Join(target, filepath.FromSlash(secret.file))
+		if secret.value == "" {
+			os.Remove(path)
+			continue
+		}
+		if err := writePrivate(path, []byte(secret.value+"\n")); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// bind is where the server listens: this machine only, or every
+// interface.
+func (s Server) bind() string {
+	if s.Local {
+		return "127.0.0.1"
+	}
+	return "0.0.0.0"
+}
+
+// slots is the player limit, 16 when none was chosen.
+func (s Server) slots() int {
+	if s.Slots == 0 {
+		return 16
+	}
+	return s.Slots
 }
 
 // LoadChoices reads what SaveChoices recorded; nil when nothing was.
@@ -182,15 +214,15 @@ func HostOptions(o Options, index int) *services.HostOptions {
 	instance := o.Server.Instances[index]
 	host := &services.HostOptions{
 		Game: "ktx", Selection: "ktx", Mode: instance.Mode, Map: instance.Map, ModeGiven: true,
-		Bind: "0.0.0.0", Hostname: o.Server.Name, Port: o.Server.BasePort + index, Maxclients: 16,
+		Bind: o.Server.bind(), Hostname: o.Server.Name, Port: o.Server.BasePort + index, Maxclients: o.Server.slots(), NoMVD: o.Server.NoRecord,
 		// Unused QTV and proxy keep the host command's own defaults.
 		QtvBind: "127.0.0.1", QtvPort: 28000, ProxyBind: "127.0.0.1", ProxyPort: 30000,
 	}
 	if index == 0 && o.Server.QTVPort != 0 {
-		host.WithQTV, host.QtvBind, host.QtvPort = true, "0.0.0.0", o.Server.QTVPort
+		host.WithQTV, host.QtvBind, host.QtvPort = true, o.Server.bind(), o.Server.QTVPort
 	}
 	if index == 0 && o.Server.QWFWDPort != 0 {
-		host.WithProxy, host.ProxyBind, host.ProxyPort = true, "0.0.0.0", o.Server.QWFWDPort
+		host.WithProxy, host.ProxyBind, host.ProxyPort = true, o.Server.bind(), o.Server.QWFWDPort
 	}
 	return host
 }
@@ -215,8 +247,32 @@ func HostCommand(target string, o Options) []string {
 	if o.Server.Instances[0].Bots {
 		args = append(args, "--fill-bots")
 	}
+	if o.Server.Password != "" {
+		args = append(args, "--password-file", filepath.Join(target, filepath.FromSlash(PasswordFile)))
+	}
+	if o.Server.Spectators != "" {
+		args = append(args, "--spectator-password-file", filepath.Join(target, filepath.FromSlash(SpectatorFile)))
+	}
 	for index, instance := range o.Server.Instances[1:] {
 		args = append(args, "--instance", services.Instance{Mode: instance.Mode, Map: instance.Map, Port: o.Server.BasePort + index + 1, Bots: instance.Bots}.String())
 	}
 	return args
+}
+
+// ServiceCommand starts QTV ("qtv") or QWFWD ("proxy") on its own, in
+// the background, where the server's choices put it.
+func ServiceCommand(target string, o Options, kind string) []string {
+	s := o.Server
+	if kind == "qtv" {
+		port := s.QTVPort
+		if port == 0 {
+			port = 28000
+		}
+		return []string{"qtv", "--target", target, "--bind", s.bind(), "--port", strconv.Itoa(port), "--hostname", s.Name + " QTV", "--background"}
+	}
+	port := s.QWFWDPort
+	if port == 0 {
+		port = 30000
+	}
+	return []string{"proxy", "--target", target, "--bind", s.bind(), "--port", strconv.Itoa(port), "--background"}
 }

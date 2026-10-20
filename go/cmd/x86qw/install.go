@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -10,8 +9,8 @@ import (
 
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/install"
-	"github.com/x86dx2/x86qw/go/internal/menu"
 	"github.com/x86dx2/x86qw/go/internal/output"
+	"github.com/x86dx2/x86qw/go/internal/setup/tui"
 )
 
 func runInstall(args []string, stdout, stderr io.Writer) int {
@@ -24,8 +23,8 @@ func runInstall(args []string, stdout, stderr io.Writer) int {
 	target := flags.String("target", "", "diretório da instalação")
 	catalogFile := flags.String("catalog-file", "", "catálogo local já autenticado (testes)")
 	nonInteractive := flags.Bool("non-interactive", false, "nunca perguntar; exige --profile")
-	noColor := flags.Bool("no-color", false, "desativa cores")
-	verbose := flags.Bool("verbose", false, "detalhes técnicos")
+	flags.Bool("no-color", false, "desativa cores")
+	flags.Bool("verbose", false, "detalhes técnicos")
 	if err := flags.Parse(args); err != nil {
 		return output.ExitUsage
 	}
@@ -34,36 +33,27 @@ func runInstall(args []string, stdout, stderr io.Writer) int {
 	if len(flags.Args()) == 1 && *target == "" {
 		*target = flags.Args()[0]
 	}
-	// Without --profile (and without --non-interactive) the missing choices
-	// are asked like the Python installer's wizard.
+	// Without --profile (and without --non-interactive) the installer
+	// interface asks what is missing.
 	wizard := *profile == "" && !*nonInteractive
 	if (!wizard && (*target == "" || *profile == "")) || len(flags.Args()) > 1 {
 		fmt.Fprintln(stderr, "uso: x86qw install [--profile essential|recommended|complete] [--platform SO] [--channel stable|nightly] [--release VERSÃO] [DESTINO]")
 		return output.ExitUsage
 	}
-	con := newConsole(stdout, stderr, *noColor, *verbose)
-	request := &installRequest{target: *target, platform: *platform, channel: *channel, release: *release, profile: *profile}
 	if wizard {
-		stop := trapInterrupt(stderr, "Operação cancelada. Nenhuma seleção pendente foi aplicada.")
-		proceed, err := runInstallWizard(con, request, *catalogFile, *noColor, given["platform"], given["channel"])
-		stop()
-		switch {
-		case err == nil && !proceed:
-			return output.ExitSuccess
-		case err == nil:
-		case errors.Is(err, menu.ErrInterrupt):
-			con.failure("Operação cancelada. Nenhuma seleção pendente foi aplicada.")
-			return exitInterrupted
-		case errors.Is(err, menu.ErrExit):
-			con.info("Menu encerrado; nenhuma seleção pendente foi aplicada.")
-			return output.ExitSuccess
-		case errors.Is(err, menu.ErrCancelled):
-			con.info("Operação cancelada; nenhuma seleção pendente foi aplicada.")
-			return exitInterrupted
-		default:
-			return con.failed(err)
+		// What is missing is chosen in the installer interface.
+		if !interactive() {
+			fmt.Fprintln(stderr, "x86qw install: sem terminal, informe --profile ou use x86qw setup --intent … --yes")
+			return output.ExitUsage
 		}
+		root := *target
+		if root == "" {
+			root = tui.DefaultTarget()
+		}
+		root, _ = filepath.Abs(root)
+		return runApp(realBackend(*catalogFile, *platform), root, "", stdout, stderr)
 	}
+	request := struct{ target, platform, channel, release, profile string }{*target, *platform, *channel, *release, *profile}
 	parsed, err := loadCatalog(*catalogFile)
 	if err != nil {
 		fmt.Fprintf(stderr, "✗ %v\n", err)
@@ -77,7 +67,7 @@ func runInstall(args []string, stdout, stderr io.Writer) int {
 	absolute, _ := filepath.Abs(request.target)
 	result, err := install.Install(context.Background(), absolute, parsed, inventory, install.InstallOptions{
 		Platform: request.platform, Channel: request.channel, Release: request.release,
-		Profile: request.profile, Requested: request.requested,
+		Profile: request.profile,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "✗ %v\n", err)
@@ -88,26 +78,6 @@ func runInstall(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintf(stdout, "✓ Instalação completa: ezQuake + %d componentes · %d arquivos em %s\n", len(result.Installed), result.Files, absolute)
 	return output.ExitSuccess
-}
-
-func runInstallWizard(con console, request *installRequest, catalogFile string, noColor, platformGiven, channelGiven bool) (bool, error) {
-	ui := interactiveUI(noColor)
-	if request.target == "" {
-		chosen, err := chooseTarget(ui)
-		if err != nil {
-			return false, err
-		}
-		request.target = chosen
-	}
-	parsed, err := loadCatalog(catalogFile)
-	if err != nil {
-		return false, err
-	}
-	inventory, err := catalog.LoadInventory()
-	if err != nil {
-		return false, err
-	}
-	return installWizard(ui, con, parsed, inventory, request, platformGiven, channelGiven)
 }
 
 func init() {

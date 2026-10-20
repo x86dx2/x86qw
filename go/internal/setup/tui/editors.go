@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 )
 
 func (m *Model) openModal(kind string) {
-	m.modal = &modal{kind: kind, field: map[string]*Field{}, before: cloneOptions(m.opts), dns: m.dns, dnsPending: m.dnsPending}
+	m.modal = &modal{kind: kind, field: map[string]*Field{}, before: cloneOptions(m.opts), match: m.game.match, dns: m.dns, dnsPending: m.dnsPending}
 	add := func(name, value string, limit int) {
 		field := NewField(value, limit)
 		m.modal.field[name] = &field
@@ -23,11 +24,25 @@ func (m *Model) openModal(kind string) {
 	add("srv.name", m.opts.Server.Name, 40)
 	add("hostname", m.opts.Server.Hostname, 253)
 	add("rcon", m.opts.Server.Rcon, 32)
+	add("password", m.opts.Server.Password, 32)
+	add("spectator", m.opts.Server.Spectators, 32)
 	add("folder", m.opts.Target, 400)
 	m.modal.field["hostname"].Accept = func(r rune) bool {
 		return r == '.' || r == '-' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
 	}
+	if picker(kind) {
+		add("filter", "", 30)
+	}
+	// A list opens on what is chosen.
+	for index, row := range focusables(m.modalRows()) {
+		if row.kind == rowRadio && row.on {
+			m.modal.focus = index
+		}
+	}
 }
+
+// picker reports whether a dialog is a list searched by typing.
+func picker(kind string) bool { return kind == "m.mode" || kind == "m.map" }
 
 // closeModal keeps the changes (enter) or puts the choices back as they
 // were (esc). With the preflight open, kept changes are checked again.
@@ -37,8 +52,22 @@ func (m *Model) closeModal(keep bool) tea.Cmd {
 	}
 	if !keep {
 		m.opts, m.dns, m.dnsPending = m.modal.before, m.modal.dns, m.modal.dnsPending
+		m.game.match = m.modal.match
 		m.modal = nil
 		return nil
+	}
+	if strings.HasPrefix(m.modal.kind, "m.") {
+		// A match editor: the maps follow the game, mode and bots.
+		changed := m.game.match != m.modal.match
+		m.modal = nil
+		if changed {
+			return m.loadMaps()
+		}
+		return nil
+	}
+	if m.modal.kind == "tools" {
+		m.modal = nil
+		return m.takePending()
 	}
 	cmd := m.fieldChanged()
 	changed := !reflect.DeepEqual(m.opts, m.modal.before)
@@ -65,6 +94,7 @@ func (m *Model) fieldChanged() tea.Cmd {
 	f := m.modal.field
 	m.opts.Server.Name = f["srv.name"].String()
 	m.opts.Server.Rcon = f["rcon"].String()
+	m.opts.Server.Password, m.opts.Server.Spectators = f["password"].String(), f["spectator"].String()
 	m.opts.Target = f["folder"].String()
 	host := strings.ToLower(f["hostname"].String())
 	if host != m.opts.Server.Hostname {
@@ -81,7 +111,7 @@ func (m *Model) modalTabs() []string {
 	case "config":
 		return []string{m.t("tab.keys"), m.t("tab.mouse"), m.t("tab.exp"), m.t("tab.video")}
 	case "server":
-		return []string{m.t("tab.general"), m.t("tab.network"), m.t("tab.services")}
+		return []string{m.t("tab.general"), m.t("tab.access"), m.t("tab.network"), m.t("tab.services")}
 	}
 	return nil
 }
@@ -102,6 +132,12 @@ func (m *Model) modalTitle() string {
 		return m.t("sec.recipe")
 	case "servers":
 		return m.t("servers")
+	case "tools":
+		return m.t("h.tools")
+	case "solo":
+		return m.t("host.solo")
+	case "m.game", "m.mode", "m.opts", "m.map", "m.rules":
+		return m.t(m.modal.kind)
 	}
 	return ""
 }
@@ -115,6 +151,17 @@ func (m *Model) modalKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		m.modal.capture = ""
 		return nil
+	}
+	if picker(m.modal.kind) {
+		switch key {
+		case "up", "down", "enter", "esc", "pgup", "pgdown", "space", "tab", "shift+tab":
+		default:
+			// Typing searches the list.
+			if m.modal.field["filter"].Key(msg) {
+				m.modal.focus = 0
+				return nil
+			}
+		}
 	}
 	switch key {
 	case "esc":
@@ -231,6 +278,28 @@ func (m *Model) clickRow(id string) tea.Cmd {
 				return m.activateConfirm(id)
 			}
 		}
+	case scMatch, scHost:
+		rows, activate := m.matchRows(), m.activateMatch
+		if m.screen == scHost {
+			rows, activate = m.hostRows(), m.activateHost
+		}
+		for index, row := range rows {
+			if row.id == id {
+				if m.focus != index && index < len(rows)-1 {
+					m.focus = index
+					return nil
+				}
+				m.focus = index
+				return activate(id)
+			}
+		}
+	case scServers:
+		if index, err := strconv.Atoi(strings.TrimPrefix(id, "srv")); err == nil && strings.HasPrefix(id, "srv") {
+			if m.focus == index {
+				return m.joinServer(false)
+			}
+			m.focus = index
+		}
 	case scDone:
 		for index, row := range m.doneRows() {
 			if row.id == id {
@@ -273,7 +342,14 @@ func (m *Model) bindKey(action, key string) {
 // modalRows builds the rows of the open dialog from the current state.
 func (m *Model) modalRows() []formRow {
 	o := &m.opts
+	if strings.HasPrefix(m.modal.kind, "m.") {
+		return m.gameModalRows()
+	}
 	switch m.modal.kind {
+	case "tools":
+		return m.toolRows()
+	case "solo":
+		return m.soloRows()
 	case "comps":
 		return m.compRows()
 	case "config":
@@ -329,6 +405,8 @@ func (m *Model) modalRows() []formRow {
 		case 0:
 			return m.serverGeneralRows()
 		case 1:
+			return m.accessRows()
+		case 2:
 			return m.networkRows()
 		default:
 			s := &o.Server
@@ -881,4 +959,24 @@ func remove(list []string, s string) []string {
 func homeDir() string {
 	home, _ := os.UserHomeDir()
 	return home
+}
+
+// accessRows decide who reaches the server and how many play.
+func (m *Model) accessRows() []formRow {
+	s := &m.opts.Server
+	slots := s.Slots
+	if slots == 0 {
+		slots = 16
+	}
+	return []formRow{
+		{kind: rowHeading, label: m.t("access.who")},
+		{id: "public", kind: rowRadio, label: m.t("access.public"), desc: m.t("access.public.d"), on: !s.Local, activate: func() { s.Local = false }},
+		{id: "local", kind: rowRadio, label: m.t("access.local"), desc: m.t("access.local.d"), on: s.Local, activate: func() { s.Local = true }},
+		{kind: rowHeading, label: m.t("access.match")},
+		{id: "slots", kind: rowStepper, label: m.t("access.slots"), value: fmt.Sprint(slots), step: func(d int) { s.Slots = cycleInt(setup.SlotChoices, slots, d) }},
+		{id: "record", kind: rowToggle, label: m.t("access.record"), desc: m.t("access.record.d"), on: !s.NoRecord, activate: func() { s.NoRecord = !s.NoRecord }},
+		{kind: rowHeading, label: m.t("access.passwords")},
+		{id: "password", kind: rowText, label: m.t("access.password"), field: m.modal.field["password"], desc: m.t("access.open")},
+		{id: "spectator", kind: rowText, label: m.t("access.spectator"), field: m.modal.field["spectator"], desc: m.t("access.open")},
+	}
 }

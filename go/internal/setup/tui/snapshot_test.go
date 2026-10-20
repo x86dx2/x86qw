@@ -39,7 +39,7 @@ func run(cmd tea.Cmd) []tea.Msg {
 				out = append(out, run(c)...)
 			}
 			return out
-		case tickMsg, nil:
+		case tickMsg, stackPollMsg, nil:
 			return nil
 		}
 		return []tea.Msg{msg}

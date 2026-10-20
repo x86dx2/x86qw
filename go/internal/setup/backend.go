@@ -26,6 +26,10 @@ type Mode struct {
 	ID, Label, DefaultMap string
 	Maps                  []string
 	Bots                  bool // the mode can fill a server with bots
+	// For the match screen: who it is for and what it asks.
+	Players, Description string
+	BotLimit             int    // a fixed roster's bots; 0 for an open mode
+	Kind                 string // race, ctf, tot or "" for the other modes
 }
 
 // CheckState is where one preflight check stands.
@@ -105,6 +109,25 @@ type Backend interface {
 	// Uninstall removes the installation; keepPersonal keeps configs,
 	// demos and screenshots.
 	Uninstall(ctx context.Context, target string, keepPersonal bool) error
+
+	// MatchCatalog lists the local games, KTX modes and clients.
+	MatchCatalog(ctx context.Context, target string) (*MatchCatalog, error)
+	// Maps lists the maps a match can run on with its options.
+	Maps(ctx context.Context, target string, match Match) (*MapList, error)
+	// Play launches the match in ezQuake and records it as the last one.
+	Play(ctx context.Context, target string, match Match) error
+	// Servers lists public servers, or the favorites when offline.
+	Servers(ctx context.Context, target string) ([]PublicServer, error)
+	// Open connects ezQuake to a qw:// address.
+	Open(ctx context.Context, target, address string) error
+	// Stack reports the running server session, nil when none runs.
+	Stack(ctx context.Context, target string) (*Stack, error)
+	// StartServer records the server choices and starts every instance.
+	StartServer(ctx context.Context, target string, options Options) error
+	// StartService starts QTV ("qtv") or QWFWD ("proxy") on its own.
+	StartService(ctx context.Context, target, kind string, options Options) error
+	// StopServer stops the running session.
+	StopServer(ctx context.Context, target string) error
 }
 
 // Report is what a repair found and did.

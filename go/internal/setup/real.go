@@ -41,6 +41,9 @@ type Real struct {
 	Platform string
 	// Integrate applies the operating system integration.
 	Integrate func(target string, integration Integration) error
+	// Run runs an x86qw command (play, open, host) and reports how it
+	// ended; the command line provides it.
+	Run func(args []string) error
 
 	mu      sync.Mutex
 	cat     *catalog.Catalog
@@ -147,7 +150,7 @@ func (r *Real) Catalog(ctx context.Context) (*Catalog, error) {
 		return nil, err
 	}
 	for _, mode := range modes {
-		out.Modes = append(out.Modes, Mode{ID: mode.Key, Label: mode.Label, DefaultMap: mode.DefaultMap, Maps: mode.SuggestedMaps, Bots: mode.Bots})
+		out.Modes = append(out.Modes, modeOf(mode))
 	}
 	return out, nil
 }

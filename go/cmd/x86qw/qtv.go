@@ -5,8 +5,7 @@ import (
 )
 
 func runQtv(args []string, stdout, stderr io.Writer) int {
-	code, _ := serviceMain("qtv", args, stdout, stderr, false)
-	return code
+	return serviceMain("qtv", args, stdout, stderr)
 }
 
 func init() {

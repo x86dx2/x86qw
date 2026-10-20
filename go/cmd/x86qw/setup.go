@@ -110,8 +110,9 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 		backend.Publish = func(target string) error { return publishCLI(target, false, stdout, stderr) }
 		backend.Integrate = setup.Integrate
 		return runRecipe(backend, options, *yes, stdout, stderr)
-	case *profile == "" && stdinIsTerminal() && isTerminal(os.Stdout):
-		return runSetupInterface(backend, root, stdout, stderr)
+	case *profile == "" && interactive():
+		app := realBackend(*catalogFile, *platform)
+		return runApp(app, root, "", stdout, stderr)
 	}
 	if hasInstallation(root) {
 		held, err := lock.Acquire(root, "install")
@@ -167,39 +168,6 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintln(stdout, "  Jogar agora: x86qw play")
 	return output.ExitSuccess
-}
-
-// runSetupInterface opens the installer interface. An installation
-// already at root first gets this CLI, as re-running the bootstrap always
-// did, then opens in the management panel.
-func runSetupInterface(backend *setup.Real, root string, stdout, stderr io.Writer) int {
-	if hasInstallation(root) {
-		held, err := lock.Acquire(root, "install")
-		if err == nil {
-			// Linked as before unless the setup recorded otherwise.
-			link := true
-			if choices, _ := setup.LoadChoices(root); choices != nil {
-				link = choices.Integration.Path
-			}
-			err = publishCLI(root, link, io.Discard, io.Discard)
-			held.Release()
-		}
-		if err != nil {
-			fmt.Fprintf(stderr, "! A CLI nativa não pôde ser publicada: %v\n", err)
-		}
-	}
-	// The interface owns the screen: what publishing prints is dropped.
-	backend.Publish = func(target string) error { return publishCLI(target, false, io.Discard, io.Discard) }
-	backend.Integrate = setup.Integrate
-	next, err := tui.Run(tui.Config{Backend: backend, Target: root, Lang: interfaceLanguage()})
-	if err != nil {
-		fmt.Fprintf(stderr, "✗ %v\n", err)
-		return output.ExitFailure
-	}
-	if next == nil {
-		return output.ExitSuccess
-	}
-	return run(next, stdout, stderr)
 }
 
 // interfaceLanguage follows the locale: Portuguese unless it says otherwise.

@@ -23,7 +23,10 @@ const (
 	scConfigure
 	scInstall
 	scDone
-	scPanel
+	scPanel // the home screen of an installation
+	scMatch
+	scServers
+	scHost
 )
 
 // Config starts the installer.
@@ -33,12 +36,26 @@ type Config struct {
 	Lang    Lang
 	Demo    bool
 	Theme   string // "", "dark" or "light"; "" follows the terminal
+	// Start opens an installation on one of its screens instead of home:
+	// match, servers or host.
+	Start string
+	// Notice greets the user once the interface is up, as a toast.
+	Notice string
+}
+
+// Result is how the interface ended: the x86qw command to run next, if
+// any, and whether the interface should open again after it.
+type Result struct {
+	Next []string
+	Back bool
 }
 
 // Model is the installer program.
 type Model struct {
 	cfg  Config
 	next []string // the x86qw command to run once the interface closes
+	back bool     // and open again once it ends
+	game gameState
 	// cancelling is a cancelled installation still rolling back.
 	cancelling bool
 	theme      Theme
@@ -116,6 +133,7 @@ type modal struct {
 	// before is what the choices were when the dialog opened; esc puts
 	// them back.
 	before     setup.Options
+	match      setup.Match // the match as it was, for the match editors
 	dns        *setup.DNSCheck
 	dnsPending string
 }
@@ -199,7 +217,8 @@ func (m *Model) Init() tea.Cmd {
 // about 12 fps, spinners and progress at 30 fps.
 func (m *Model) tick() tea.Cmd {
 	interval := 83 * time.Millisecond
-	if (m.screen == scConfigure && m.preOn && !m.preDone) || m.screen == scInstall || (m.screen == scPanel && m.busy) {
+	if (m.screen == scConfigure && m.preOn && !m.preDone) || m.screen == scInstall || (m.screen == scPanel && m.busy) || m.game.acting != "" ||
+		m.game.serversLoading || (m.screen == scMatch && m.game.catalog == nil) || (m.screen == scHost && !m.game.stackLoaded) {
 		interval = 33 * time.Millisecond
 	}
 	return tea.Tick(interval, func(t time.Time) tea.Msg { return tickMsg(t) })
@@ -213,6 +232,9 @@ func (m *Model) say(text string) {
 
 // Update handles one message.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if cmd, handled := m.gameUpdate(msg); handled {
+		return m, cmd
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
@@ -236,6 +258,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.opts = m.existing.Options
 			m.nick.Set(m.opts.Nick)
 			m.screen = scPanel
+			if m.cfg.Notice != "" {
+				m.say(m.cfg.Notice)
+			}
+			// Home shows the last match, the public servers and the
+			// server's state; the screen asked for opens at once.
+			cmds := []tea.Cmd{m.loadMatch(), m.loadStack(), m.loadServers()}
+			switch m.cfg.Start {
+			case "match":
+				m.screen = scMatch
+			case "servers":
+				cmds = append(cmds, m.openScreen(scServers))
+			case "host":
+				cmds = append(cmds, m.openScreen(scHost))
+			}
+			return m, tea.Batch(cmds...)
 		}
 	case networkMsg:
 		network := setup.Network(msg)
@@ -434,6 +471,10 @@ func (m *Model) keyPress(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	if m.modal != nil {
 		return m.modalKey(msg)
+	}
+	switch m.screen {
+	case scMatch, scServers, scHost:
+		return m.gameKey(msg)
 	}
 	if m.screen == scIntent && m.opts.Intent.WantsClient() {
 		switch key {
@@ -642,6 +683,15 @@ func (m *Model) activeField() *Field {
 	return nil
 }
 
+// subtitle names what the interface is: the installer, or the app of an
+// installation.
+func (m *Model) subtitle() string {
+	if m.existing != nil {
+		return "app.subtitle"
+	}
+	return "subtitle"
+}
+
 // View draws the frame.
 func (m *Model) View() tea.View {
 	view := tea.View{AltScreen: true, MouseMode: tea.MouseModeAllMotion, WindowTitle: "x86QW", BackgroundColor: m.theme.Base}
@@ -666,7 +716,7 @@ func (m *Model) View() tea.View {
 	footer, footerHits := hints(t, m.footerHints(), m.w-4, m.hover)
 
 	// Top bar: brand on the left, mode on the right.
-	brand := t.Style(t.Text).Bold(true).Render("x86") + t.Style(t.Brand).Bold(true).Render("QW") + t.Style(t.Gray).Render("  "+m.t("subtitle"))
+	brand := t.Style(t.Text).Bold(true).Render("x86") + t.Style(t.Brand).Bold(true).Render("QW") + t.Style(t.Gray).Render("  "+m.t(m.subtitle()))
 	if m.cfg.Demo {
 		brand += t.Style(t.Dim).Render("  ·  " + m.t("demo"))
 	}
@@ -886,7 +936,15 @@ func (m *Model) footerHints() [][2]string {
 			return [][2]string{{"esc", m.t("k.quit")}}
 		case m.busy:
 			return [][2]string{{"ctrl+c", m.t("k.quit")}}
+		case m.panelView == "":
+			return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.open")}, {"esc", m.t("k.quit")}}
 		}
+	case scMatch:
+		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.edit")}, {"p", m.t("k.play")}, {"c", m.t("k.copycmd")}, {"esc", m.t("k.home")}}
+	case scServers:
+		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.join")}, {"ctrl+o", m.t("k.observe")}, {"ctrl+r", m.t("k.refresh")}, {"esc", m.t("k.home")}}
+	case scHost:
+		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.open")}, {"esc", m.t("k.home")}}
 	}
 	return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"esc", m.t("k.back")}, {"ctrl+c", m.t("k.quit")}}
 }
@@ -900,15 +958,13 @@ func DefaultTarget() string {
 	return filepath.Join(home, "Games", "x86qw")
 }
 
-// Run starts the installer on the terminal.
-// Run shows the installer until it quits. It returns the x86qw command
-// the user chose to run next, such as play, or nil.
-func Run(cfg Config) ([]string, error) {
+// Run shows the interface until it quits and says what comes next.
+func Run(cfg Config) (Result, error) {
 	final, err := tea.NewProgram(New(cfg)).Run()
 	if m, ok := final.(*Model); ok && err == nil {
-		return m.next, nil
+		return Result{Next: m.next, Back: m.back}, nil
 	}
-	return nil, err
+	return Result{}, err
 }
 
 // preflightOutcome is the worst state among the finished checks.

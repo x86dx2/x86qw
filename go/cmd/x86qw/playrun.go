@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/launchguard"
-	"github.com/x86dx2/x86qw/go/internal/menu"
 	"github.com/x86dx2/x86qw/go/internal/output"
 	"github.com/x86dx2/x86qw/go/internal/play"
 )
@@ -20,25 +18,27 @@ import (
 const exitInterrupted = 130
 
 func runPlay(args []string, stdout, stderr io.Writer) int {
-	code, _ := playMain(args, stdout, stderr, false)
-	return code
-}
-
-// playMain mirrors gameplay.main. With propagateExit (the main menu), a
-// MenuExit is returned instead of being reported.
-func playMain(args []string, stdout, stderr io.Writer, propagateExit bool) (int, error) {
 	games, err := play.LoadGames()
 	if err != nil {
 		fmt.Fprintf(stderr, "✗ %v\n", err)
-		return output.ExitFailure, nil
+		return output.ExitFailure
 	}
 	request, err := parsePlay(args, games)
 	if err != nil {
 		fmt.Fprintf(stderr, "x86qw play: erro: %v\n", err)
-		return output.ExitUsage, nil
+		return output.ExitUsage
 	}
 	if request.target == "" {
 		request.target = defaultTarget()
+	}
+	ktxOrUnset := request.game == "" || request.game == "ktx"
+	if request.menu || request.configureRuleset || (request.mode == "" && ktxOrUnset) {
+		// Something is left to choose: the match screen chooses it.
+		if !interactive() {
+			fmt.Fprintln(stderr, "x86qw play: sem terminal, informe o modo (--mode) ou o jogo")
+			return output.ExitUsage
+		}
+		return runApp(realBackend("", install.HostPlatform()), appTarget(request.target), "match", stdout, stderr)
 	}
 	con := newConsole(stdout, stderr, request.noColor, request.verbose)
 	if request.planJSON {
@@ -47,41 +47,25 @@ func playMain(args []string, stdout, stderr io.Writer, propagateExit bool) (int,
 		fmt.Fprintf(stdout, "\n%s · launcher QuakeWorld\nDestino: %s\n", con.paint("x86-qw", paletteAccent+"m\033[1"), filepath.Clean(request.target))
 	}
 	target, _ := filepath.Abs(request.target)
-	stop := trapInterrupt(stderr, "Operação cancelada. O jogo não foi iniciado.")
-	choice, err := choosePlay(con, target, request, games)
-	stop()
-	switch {
-	case err == nil:
-	case errors.Is(err, errBack):
-		return output.ExitSuccess, nil
-	case errors.Is(err, menu.ErrInterrupt):
-		con.failure("Operação cancelada. O jogo não foi iniciado.")
-		return exitInterrupted, nil
-	case errors.Is(err, menu.ErrExit):
-		if propagateExit {
-			return output.ExitSuccess, err
-		}
-		con.info("Menu encerrado; o jogo não foi iniciado.")
-		return output.ExitSuccess, nil
-	case errors.Is(err, menu.ErrCancelled):
-		con.info("Operação cancelada; o jogo não foi iniciado.")
-		return exitInterrupted, nil
-	default:
-		return con.failed(err), nil
+	con.section("Jogo local")
+	resolved, err := play.Resolve(target, play.Request{Game: request.game, Mode: request.mode, Map: request.mapName,
+		Ruleset: request.ruleset, Channel: request.channel, Options: request.options})
+	if err != nil {
+		return con.failed(err)
 	}
-	if choice == nil {
-		return output.ExitSuccess, nil
-	}
+	con.success(fmt.Sprintf("Componente %s íntegro (%s; seleção %s).", resolved.Component, fileCount(resolved.Files), resolved.Selection))
+	choice := &playChoice{game: resolved.Game, mode: resolved.Mode, mapName: resolved.Map, options: resolved.Options,
+		assets: resolved.Assets, runtime: resolved.Runtime, ruleset: resolved.Ruleset}
 	launch, err := play.Build(choice.game, choice.mode, choice.mapName, choice.assets, choice.options, choice.ruleset)
 	if err != nil {
-		return con.failed(err), nil
+		return con.failed(err)
 	}
 	if request.planJSON {
 		document := map[string]any{"argv": launch.Arguments, "startup_commands": launch.StartupCommands, "bot_name_settings": launch.BotNameSettings}
 		encoder := json.NewEncoder(stdout)
 		encoder.SetEscapeHTML(false)
 		encoder.Encode(document)
-		return output.ExitSuccess, nil
+		return output.ExitSuccess
 	}
 	selection := choice.game.Label
 	if choice.mode != nil {
@@ -92,45 +76,7 @@ func playMain(args []string, stdout, stderr io.Writer, propagateExit bool) (int,
 	if code == output.ExitSuccess {
 		con.success(choice.runtime.Label + " aberto com " + selection + ".")
 	}
-	return code, nil
-}
-
-// choosePlay runs every precondition and picker up to the launch; a nil
-// choice with a nil error means --configure-ruleset finished.
-func choosePlay(con console, target string, request *playRequest, games []play.Game) (*playChoice, error) {
-	if info, err := os.Lstat(target); err != nil || !info.IsDir() {
-		return nil, fmt.Errorf("diretório de destino não existe: %s", target)
-	}
-	ui := interactiveUI(request.noColor)
-	if request.configureRuleset {
-		saved, err := readRuleset(target)
-		if err != nil {
-			return nil, err
-		}
-		selected, back, err := chooseRuleset(ui, saved)
-		if err != nil {
-			return nil, err
-		}
-		if back {
-			con.info("Experiência inalterada; nenhuma preferência foi gravada.")
-			return nil, nil
-		}
-		if err := saveRuleset(target, selected); err != nil {
-			return nil, err
-		}
-		con.success("Experiência padrão alterada para " + play.RulesetLabels[selected] + ".")
-		return nil, nil
-	}
-	con.section("Jogo local")
-	installGames, err := install.LoadGames()
-	if err != nil {
-		return nil, err
-	}
-	flow := &playFlow{ui: ui, con: con, target: target, games: games, available: install.AvailableGames(target, installGames)}
-	ktxOrUnset := request.game == "" || request.game == "ktx"
-	configure := request.menu || (request.mode == "" && ktxOrUnset)
-	chooseRuleset := request.ruleset == "" && (request.menu || ktxOrUnset)
-	return flow.run(request, configure, chooseRuleset)
+	return code
 }
 
 func launchPlay(target, executable, binarySHA string, launch *play.Launch, stdout, stderr io.Writer) int {

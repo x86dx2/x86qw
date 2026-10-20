@@ -11,7 +11,7 @@ import (
 // RecipeFlags are the flags Recipe writes; their presence makes `x86qw
 // setup` install without asking.
 var RecipeFlags = []string{"intent", "nick", "content", "keys", "sensitivity", "invert-mouse", "experience", "video", "volume",
-	"server-name", "hostname", "servers", "base-port", "qtv", "qwfwd", "integrate"}
+	"server-name", "hostname", "servers", "base-port", "qtv", "qwfwd", "local", "slots", "no-record", "integrate"}
 
 // AddRecipeFlags declares the recipe flags on flags and returns how to
 // read them into options once parsed. target is the installation folder.
@@ -32,6 +32,9 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 	qtv := flags.String("qtv", "", "porta TCP do QTV ou off")
 	qwfwd := flags.String("qwfwd", "", "porta UDP do QWFWD ou off")
 	integrate := flags.String("integrate", "", "shortcuts,path,qw-links,demos ou none")
+	local := flags.Bool("local", false, "o servidor só aceita jogadores desta máquina")
+	slots := flags.Int("slots", 0, "vagas por instância, de 2 a 32")
+	noRecord := flags.Bool("no-record", false, "não grava demos MVD")
 	return func(target string) (Options, error) {
 		o := Defaults(Intent(*intent), target)
 		given := map[string]bool{}
@@ -89,6 +92,10 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 		}
 		if given["base-port"] {
 			o.Server.BasePort = *basePort
+		}
+		o.Server.Local, o.Server.NoRecord = *local, *noRecord
+		if given["slots"] {
+			o.Server.Slots = *slots
 		}
 		for _, port := range []struct {
 			name, value string
