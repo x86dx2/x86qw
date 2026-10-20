@@ -60,7 +60,8 @@ type Model struct {
 	preDone bool
 	preCh   <-chan setup.Check
 
-	focus int // focused row on the current screen
+	focus     int  // focused row on the current screen
+	fromPanel bool // the review was opened from the management panel
 
 	modal *modal
 
@@ -403,12 +404,12 @@ func (m *Model) key(key string) tea.Cmd {
 		}
 	case scPreflight:
 		switch key {
-		case "enter", "right":
+		case "enter", "right", "space":
 			if m.preDone {
 				m.screen, m.focus = scReview, len(m.reviewRows())-1
 			}
 		case "esc", "left", "backspace":
-			m.screen = scIntent
+			m.screen, m.focus = scIntent, 0
 		}
 	case scReview:
 		rows := m.reviewRows()
@@ -417,18 +418,22 @@ func (m *Model) key(key string) tea.Cmd {
 			m.focus = (m.focus + len(rows) - 1) % len(rows)
 		case "down", "j", "tab":
 			m.focus = (m.focus + 1) % len(rows)
-		case "enter", "right", " ":
+		case "enter", "right", "space", " ":
 			return m.activateReview(rows[m.focus].id)
 		case "i":
 			return m.startInstall()
 		case "c":
 			return m.copyRecipe()
 		case "esc", "left", "backspace":
-			m.screen = scIntent
+			if m.fromPanel {
+				m.screen, m.focus = scPanel, 1
+			} else {
+				m.screen = scPreflight
+			}
 		}
 	case scInstall:
 		switch key {
-		case "p", " ":
+		case "p", "space", " ":
 			if !m.progress.Finished {
 				select {
 				case m.control <- !m.progress.Paused:
@@ -445,7 +450,7 @@ func (m *Model) key(key string) tea.Cmd {
 			m.focus = (m.focus + len(rows) - 1) % len(rows)
 		case "down", "j", "tab":
 			m.focus = (m.focus + 1) % len(rows)
-		case "enter", " ":
+		case "enter", "space", " ":
 			return m.activateDone(rows[m.focus].id)
 		case "esc", "q":
 			return tea.Quit
@@ -497,6 +502,8 @@ func (m *Model) click(id string) tea.Cmd {
 		}
 	case id == "close":
 		m.closeModal()
+	case id == "lang":
+		return m.keyPress(tea.KeyPressMsg(keyFor("ctrl+l")))
 	case strings.HasPrefix(id, "row:"):
 		return m.clickRow(strings.TrimPrefix(id, "row:"))
 	}
@@ -505,7 +512,7 @@ func (m *Model) click(id string) tea.Cmd {
 
 // hintKey turns a clicked footer hint into its key.
 func (m *Model) hintKey(label string) tea.Cmd {
-	keys := map[string]string{"↑↓": "down", "enter": "enter", "esc": "esc", "←": "left", "tab": "tab", "space": " ", "p": "p", "l": "l", "c": "c", "i": "i", "ctrl+c": "ctrl+c", "ctrl+l": "ctrl+l", "ctrl+t": "ctrl+t", "r": "r"}
+	keys := map[string]string{"↑↓": "down", "enter": "enter", "esc": "esc", "←": "left", "tab": "tab", "space": " ", "p": "p", "l": "l", "c": "c", "i": "i", "ctrl+c": "ctrl+c", "ctrl+l": "ctrl+l", "ctrl+t": "ctrl+t", "r": "r", "←→": "right"}
 	key, ok := keys[label]
 	if !ok {
 		return nil
@@ -587,11 +594,23 @@ func (m *Model) View() tea.View {
 
 	// Top bar: brand on the left, mode on the right.
 	brand := t.Style(t.Text).Bold(true).Render("x86") + t.Style(t.Brand).Bold(true).Render("QW") + t.Style(t.Gray).Render("  "+m.t("subtitle"))
-	right := ""
 	if m.cfg.Demo {
-		right = t.Style(t.Dim).Render(m.t("demo"))
+		brand += t.Style(t.Dim).Render("  ·  " + m.t("demo"))
 	}
+	langHint := t.Style(t.Dim).Render("ctrl+l ")
+	pt, en := t.Style(t.Gray), t.Style(t.Gray)
+	if m.lang == PT {
+		pt = t.Style(t.Text).Bold(true)
+	} else {
+		en = t.Style(t.Text).Bold(true)
+	}
+	if m.hover == "lang" {
+		langHint = t.Style(t.Gray).Render("ctrl+l ")
+	}
+	right := langHint + pt.Render("PT") + t.Style(t.Dim).Render(" │ ") + en.Render("EN")
 	place(spread(brand, right, m.w-4, t.Base), 2, 0)
+	langX := m.w - 2 - lipgloss.Width(right)
+	m.hits = append(m.hits, hit{y: 0, x0: langX, x1: m.w - 2, id: "lang"})
 
 	// Body: in the upper third of the free space, centred.
 	room := m.h - 4
@@ -684,21 +703,23 @@ func (m *Model) footerHints() [][2]string {
 			return [][2]string{{"enter", m.t("remove.again")}}
 		}
 	}
-	lang := [2]string{"ctrl+l", m.t("k.lang")}
 	if m.modal != nil {
 		items := [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.toggle")}}
 		if len(m.modalTabs()) > 1 {
 			items = append(items, [2]string{"tab", m.t("k.tab")})
 		}
+		if rows := focusables(m.modalRows()); m.modal.focus < len(rows) && rows[m.modal.focus].step != nil {
+			items = append(items, [2]string{"←→", m.t("k.change")})
+		}
 		return append(items, [2]string{"esc", m.t("k.close")})
 	}
 	switch m.screen {
 	case scIntent:
-		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"ctrl+c", m.t("k.quit")}, lang}
+		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"ctrl+c", m.t("k.quit")}}
 	case scPreflight:
-		return [][2]string{{"enter", m.t("k.next")}, {"←", m.t("k.back")}, {"ctrl+c", m.t("k.quit")}}
+		return [][2]string{{"enter", m.t("k.next")}, {"esc", m.t("k.back")}, {"ctrl+c", m.t("k.quit")}}
 	case scReview:
-		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.edit")}, {"i", m.t("k.install")}, {"c", m.t("k.copy")}, {"←", m.t("k.back")}}
+		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.edit")}, {"i", m.t("k.install")}, {"c", m.t("k.copy")}, {"esc", m.t("k.back")}}
 	case scInstall:
 		pause := m.t("k.pause")
 		if m.progress.Paused {
@@ -708,7 +729,7 @@ func (m *Model) footerHints() [][2]string {
 	case scDone:
 		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"esc", m.t("k.quit")}}
 	}
-	return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"esc", m.t("k.back")}, {"ctrl+c", m.t("k.quit")}, lang}
+	return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"esc", m.t("k.back")}, {"ctrl+c", m.t("k.quit")}}
 }
 
 // DefaultTarget is where x86QW installs unless told otherwise.

@@ -17,7 +17,7 @@ var texts = map[string][2]string{
 	"k.edit": {"editar", "edit"}, "k.install": {"instalar", "install"}, "k.copy": {"copiar receita", "copy recipe"},
 	"k.recipe": {"receita", "recipe"}, "k.close": {"fechar", "close"}, "k.tab": {"aba", "tab"}, "k.toggle": {"marcar", "toggle"},
 	"k.pause": {"pausar", "pause"}, "k.resume": {"retomar", "resume"}, "k.cancel": {"cancelar", "cancel"}, "k.log": {"log", "log"},
-	"k.lang": {"english", "português"}, "k.theme": {"tema", "theme"},
+	"k.lang": {"english", "português"}, "k.change": {"mudar", "change"}, "k.theme": {"tema", "theme"},
 	"quit.again":   {"pressione de novo para sair", "press again to quit"},
 	"cancel.again": {"pressione de novo para cancelar a instalação", "press again to cancel the install"},
 	"small":        {"Aumente o terminal para pelo menos 60×18.", "Make the terminal at least 60×18."},

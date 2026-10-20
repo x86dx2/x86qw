@@ -68,7 +68,7 @@ func (m *Model) logo(p *page) {
 	}
 	var art string
 	switch {
-	case m.h >= 30:
+	case m.h >= 31:
 		art = logoFull
 	case m.h >= 24:
 		art = logoCompact
@@ -491,7 +491,7 @@ func bigNumber(value int, glyphs Glyphs) []string {
 			if index < len(art) {
 				line = art[index]
 			}
-			rows[index] += line + strings.Repeat(" ", width-len([]rune(line)))
+			rows[index] += line + strings.Repeat(" ", width-len([]rune(line))+1)
 		}
 	}
 	return rows
@@ -666,7 +666,7 @@ func (m *Model) panelKey(key string) tea.Cmd {
 		m.focus = (m.focus + len(rows) - 1) % len(rows)
 	case "down", "j", "tab":
 		m.focus = (m.focus + 1) % len(rows)
-	case "enter", " ", "right":
+	case "enter", "space", " ", "right":
 		return m.activatePanel(rows[m.focus].id)
 	case "esc", "left", "backspace":
 		if m.panelView != "" {
@@ -685,7 +685,7 @@ func (m *Model) activatePanel(id string) tea.Cmd {
 	}
 	switch id {
 	case "change":
-		m.screen, m.focus = scReview, 0
+		m.screen, m.focus, m.fromPanel = scReview, 0, true
 	case "apply":
 		return m.startInstall()
 	case "verify":

@@ -137,15 +137,18 @@ func (m *Model) modalNav(key string) tea.Cmd {
 		m.modal.focus = (m.modal.focus + len(rows) - 1) % len(rows)
 	case "down", "j":
 		m.modal.focus = (m.modal.focus + 1) % len(rows)
-	case "left", "h":
-		if row.step != nil {
-			row.step(-1)
+	case "left", "h", "right", "l":
+		delta := 1
+		if key == "left" || key == "h" {
+			delta = -1
 		}
-	case "right", "l":
-		if row.step != nil {
-			row.step(+1)
+		switch tabs := m.modalTabs(); {
+		case row.step != nil:
+			row.step(delta)
+		case len(tabs) > 1:
+			m.modal.tab, m.modal.focus = (m.modal.tab+delta+len(tabs))%len(tabs), 0
 		}
-	case "enter", " ":
+	case "enter", "space", " ":
 		switch {
 		case row.activate != nil:
 			row.activate()
