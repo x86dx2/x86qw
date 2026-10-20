@@ -346,11 +346,20 @@ func (m *Model) confirmPage(p *page) {
 		left := p.st(t.Base).Render("  ") + mark.Render(glyph) + p.st(t.Base).Render("  ") + p.st(t.Text).Render(check.Title)
 		p.add(spread(left, value+p.st(t.Base).Render("  "), p.width, t.Base))
 		if check.State == setup.CheckWarning || check.State == setup.CheckFailed {
+			wrap := func(text string, style lipgloss.Style, lead string) {
+				for index, line := range strings.Split(lipgloss.Wrap(text, p.width-9, " "), "\n") {
+					prefix := "       "
+					if index == 0 {
+						prefix = "     " + lead
+					}
+					p.add(style.Render(prefix + line))
+				}
+			}
 			if check.Detail != "" {
-				p.add(p.st(t.Gray).Render("     " + check.Detail))
+				wrap(check.Detail, p.st(t.Gray), "  ")
 			}
 			if check.Fix != "" {
-				p.add(p.st(t.Warning).Render("     " + m.glyphs.Chevron + " " + check.Fix))
+				wrap(check.Fix, p.st(t.Warning), m.glyphs.Chevron+" ")
 			}
 		}
 	}
