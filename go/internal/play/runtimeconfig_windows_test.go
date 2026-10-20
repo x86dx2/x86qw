@@ -12,6 +12,7 @@ import (
 func TestRuntimeConfigLifecycleWindows(t *testing.T) {
 	target := t.TempDir()
 	os.MkdirAll(filepath.Join(target, "qw"), 0o755)
+	os.MkdirAll(filepath.Join(target, ".x86qw"), 0o700)
 	payload, err := Payload(nil, []string{"echo hi"})
 	if err != nil {
 		t.Fatal(err)
