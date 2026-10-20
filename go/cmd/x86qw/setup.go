@@ -15,6 +15,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/lock"
+	"github.com/x86dx2/x86qw/go/internal/menu"
 	"github.com/x86dx2/x86qw/go/internal/output"
 )
 
@@ -91,10 +92,13 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 	if err := flags.Parse(args); err != nil {
 		return output.ExitUsage
 	}
+	given := map[string]bool{}
+	flags.Visit(func(f *flag.Flag) { given[f.Name] = true })
 	if *target == "" && len(flags.Args()) == 1 {
 		*target = flags.Args()[0]
 	}
-	if *target == "" {
+	targetGiven := *target != ""
+	if !targetGiven {
 		home, _ := os.UserHomeDir()
 		*target = filepath.Join(home, "Games", "x86qw")
 	}
@@ -118,18 +122,57 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "✓ Instalação existente em %s agora usa a CLI nativa x86QW %s.\n", root, buildinfo.Version)
 		return output.ExitSuccess
 	}
+	request := &installRequest{target: root, platform: *platform, channel: *channel, profile: *profile}
 	if *profile == "" {
-		fmt.Fprintln(stderr, "uso: x86qw setup --profile essential|recommended|complete [--target DESTINO]")
-		return output.ExitUsage
+		// A new installation without --profile asks like the install wizard:
+		// destination (when not given), channel, release, content and the
+		// plan confirmation. Without a terminal there is nobody to ask.
+		if !stdinIsTerminal() {
+			fmt.Fprintln(stderr, "uso: x86qw setup --profile essential|recommended|complete [--target DESTINO]")
+			return output.ExitUsage
+		}
+		if !targetGiven {
+			request.target = ""
+		}
+		con := newConsole(stdout, stderr, false, false)
+		stop := trapInterrupt(stderr, "Operação cancelada. Nenhuma seleção pendente foi aplicada.")
+		proceed, err := runInstallWizard(con, request, *catalogFile, false, given["platform"], given["channel"])
+		stop()
+		switch {
+		case err == nil && !proceed:
+			return output.ExitSuccess
+		case err == nil:
+		case errors.Is(err, menu.ErrInterrupt):
+			con.failure("Operação cancelada. Nenhuma seleção pendente foi aplicada.")
+			return exitInterrupted
+		case errors.Is(err, menu.ErrExit):
+			con.info("Menu encerrado; nenhuma seleção pendente foi aplicada.")
+			return output.ExitSuccess
+		case errors.Is(err, menu.ErrCancelled):
+			con.info("Operação cancelada; nenhuma seleção pendente foi aplicada.")
+			return exitInterrupted
+		default:
+			return con.failed(err)
+		}
+		root, _ = filepath.Abs(request.target)
+		if hasInstallation(root) {
+			fmt.Fprintf(stderr, "✗ Já existe uma instalação em %s; execute: x86qw setup --target %s\n", root, root)
+			return output.ExitFailure
+		}
 	}
 	parsed, err := loadCatalog(*catalogFile)
 	if err == nil {
 		var inventory *catalog.Inventory
 		if inventory, err = catalog.LoadInventory(); err == nil {
 			var result *install.Result
-			result, err = install.Install(context.Background(), root, parsed, inventory,
-				install.InstallOptions{Platform: *platform, Channel: *channel, Profile: *profile})
+			result, err = install.Install(context.Background(), root, parsed, inventory, install.InstallOptions{
+				Platform: request.platform, Channel: request.channel, Release: request.release,
+				Profile: request.profile, Requested: request.requested,
+			})
 			if err == nil {
+				for _, warning := range result.Warnings {
+					fmt.Fprintf(stderr, "! %s\n", warning)
+				}
 				fmt.Fprintf(stdout, "✓ ezQuake + %d componentes instalados em %s\n", len(result.Installed), root)
 			}
 		}
