@@ -8,10 +8,13 @@ S="${ORACLE_WORK:-$(mktemp -d)}"
 GO_BIN="${GO_BIN:-$S/x86qw}"
 SOURCE="${ORACLE_SOURCE:-$HOME/Games/x86qw}"
 scenario=$1; command=$2
+# Never let either side reset the user's real ezQuake preferences.
+export X86QW_NO_MACOS_PREFERENCES=1
 if [ "$scenario" = fresh ]; then
   profile=$command
   : "${PYTHON_BUNDLE:?set PYTHON_BUNDLE to an extracted installer bundle}"
   rm -rf "$S/fresh-py" "$S/fresh-go" "$S/home"; mkdir -p "$S/home"
+  echo "aviso: o instalador Python apaga basedir/version/NSOSPLastRootDirectory de com.ezquake.ezQuake" >&2
   (cd "$S" && HOME="$S/home" python3 -I "$PYTHON_BUNDLE/x86qw.pyz" --online-only install --non-interactive \
     --platform macos --channel stable --release latest --profile "$profile" "$S/fresh-py" < /dev/null > "$S/fresh-py.log" 2>&1)
   echo "python exit=$?"

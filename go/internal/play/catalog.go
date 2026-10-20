@@ -37,6 +37,7 @@ type Game struct {
 	ClientCompatibilityArguments []string    `json:"client_compatibility_arguments"`
 	ModeCatalog                  string      `json:"mode_catalog"`
 	BotNamesPersonalConfig       string      `json:"bot_names_personal_config"`
+	Description                  string      `json:"description"`
 }
 
 // UsesModeCatalog reports whether the game is played through KTX modes.
@@ -67,6 +68,7 @@ type Mode struct {
 	Aliases            []string
 	Label              string
 	RecommendedPlayers string
+	Description        string
 	Usermode           string
 	DefaultMap         string
 	SuggestedMaps      []string
@@ -95,6 +97,7 @@ func LoadModes() ([]Mode, error) {
 			Aliases            []string    `json:"aliases"`
 			Label              string      `json:"label"`
 			RecommendedPlayers string      `json:"recommended_players"`
+			Description        string      `json:"description"`
 			Usermode           string      `json:"usermode"`
 			DefaultMap         string      `json:"default_map"`
 			SuggestedMaps      []string    `json:"suggested_maps"`
@@ -119,7 +122,7 @@ func LoadModes() ([]Mode, error) {
 	var modes []Mode
 	for _, raw := range document.Modes {
 		mode := Mode{
-			Key: raw.ID, Aliases: raw.Aliases, Label: raw.Label, RecommendedPlayers: raw.RecommendedPlayers,
+			Key: raw.ID, Aliases: raw.Aliases, Label: raw.Label, RecommendedPlayers: raw.RecommendedPlayers, Description: raw.Description,
 			Usermode: raw.Usermode, DefaultMap: raw.DefaultMap, SuggestedMaps: raw.SuggestedMaps,
 			LaunchSettings: raw.LaunchSettings, Bots: raw.Bots == nil || *raw.Bots, BotTeams: raw.BotTeams,
 		}

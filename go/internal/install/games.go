@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/archive"
@@ -35,6 +36,8 @@ type Game struct {
 	PersonalConfig      string   `json:"personal_config"`
 	LegacyMarker        string   `json:"legacy_marker"`
 	LegacyComponents    []string `json:"legacy_components"`
+	Description         string   `json:"description"`
+	Version             string   `json:"version"`
 }
 
 // LoadGames parses the embedded games catalog.
@@ -78,6 +81,39 @@ func AvailableGames(root string, games []Game) []Game {
 		}
 	}
 	return available
+}
+
+// InstalledComponent mirrors installed_component_for_game: the game's
+// component, else a recorded legacy component, else "".
+func InstalledComponent(root string, game Game) string {
+	if hasRecord(root, game.Component) {
+		return game.Component
+	}
+	for _, legacy := range game.LegacyComponents {
+		if hasRecord(root, legacy) {
+			return legacy
+		}
+	}
+	return ""
+}
+
+var numericVersion = regexp.MustCompile(`^\d+(?:\.\d+)+`)
+
+// InstalledVersion mirrors installed_game_version: the numeric prefix of
+// the component receipt's selection, else the catalog version.
+func InstalledVersion(root string, game Game) string {
+	component := InstalledComponent(root, game)
+	if component == "" {
+		return game.Version
+	}
+	record, err := receipt.Load(filepath.Join(root, receipt.ComponentsDir, component))
+	if err != nil {
+		return game.Version
+	}
+	if match := numericVersion.FindString(record.Receipt.Get("selection")); match != "" {
+		return match
+	}
+	return game.Version
 }
 
 // ExpectedPlaySupport returns the derived gamecode files: each game's

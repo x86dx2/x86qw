@@ -59,7 +59,12 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
+	if len(args) == 0 {
+		// Like `x86qw.sh` without arguments: the task-oriented main menu,
+		// which prints the usage lines and exits 0 when stdin is not a TTY.
+		return runMenuCommand(nil, stdout, stderr)
+	}
+	if args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
 		fmt.Fprint(stdout, usageText())
 		return output.ExitSuccess
 	}
