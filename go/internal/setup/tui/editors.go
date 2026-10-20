@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -14,7 +15,7 @@ import (
 )
 
 func (m *Model) openModal(kind string) {
-	m.modal = &modal{kind: kind, field: map[string]*Field{}}
+	m.modal = &modal{kind: kind, field: map[string]*Field{}, before: cloneOptions(m.opts), dns: m.dns, dnsPending: m.dnsPending}
 	add := func(name, value string, limit int) {
 		field := NewField(value, limit)
 		m.modal.field[name] = &field
@@ -28,22 +29,31 @@ func (m *Model) openModal(kind string) {
 	}
 }
 
-// closeModal keeps what was typed; on the confirmation screen the checks
-// run again against the corrected choices.
-func (m *Model) closeModal() tea.Cmd {
-	var cmd tea.Cmd
-	if m.modal != nil {
-		cmd = m.fieldChanged()
+// closeModal keeps the changes (enter) or puts the choices back as they
+// were (esc). With the preflight open, kept changes are checked again.
+func (m *Model) closeModal(keep bool) tea.Cmd {
+	if m.modal == nil {
+		return nil
 	}
-	kind := ""
-	if m.modal != nil {
-		kind = m.modal.kind
+	if !keep {
+		m.opts, m.dns, m.dnsPending = m.modal.before, m.modal.dns, m.modal.dnsPending
+		m.modal = nil
+		return nil
 	}
+	cmd := m.fieldChanged()
+	changed := !reflect.DeepEqual(m.opts, m.modal.before)
 	m.modal = nil
-	if m.screen == scConfigure && m.preOn && kind != "recipe" {
+	if changed && m.screen == scConfigure && m.preOn {
 		return tea.Batch(cmd, m.startPreflight())
 	}
 	return cmd
+}
+
+// cloneOptions copies o without sharing its lists.
+func cloneOptions(o setup.Options) setup.Options {
+	o.Components = append([]string(nil), o.Components...)
+	o.Server.Instances = append([]setup.Instance(nil), o.Server.Instances...)
+	return o
 }
 
 // fieldChanged copies the dialog fields into the options; a new hostname
@@ -108,7 +118,7 @@ func (m *Model) modalKey(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	switch key {
 	case "esc":
-		return m.closeModal()
+		return m.closeModal(false)
 	case "tab", "shift+tab":
 		if tabs := m.modalTabs(); len(tabs) > 1 {
 			delta := 1
@@ -136,7 +146,7 @@ func (m *Model) modalNav(key string) tea.Cmd {
 	rows := focusables(m.modalRows())
 	if len(rows) == 0 {
 		if key == "enter" {
-			return m.closeModal()
+			return m.closeModal(true)
 		}
 		return nil
 	}
@@ -158,15 +168,26 @@ func (m *Model) modalNav(key string) tea.Cmd {
 		case len(tabs) > 1:
 			m.modal.tab, m.modal.focus = (m.modal.tab+delta+len(tabs))%len(tabs), 0
 		}
-	case "enter", "space", " ":
+	case "space", " ":
+		// Space changes the row in focus.
 		switch {
+		case row.kind == rowText:
 		case row.activate != nil:
 			row.activate()
 		case row.step != nil:
 			row.step(+1)
-		case row.kind == rowText && key == "enter":
-			m.modal.focus = (m.modal.focus + 1) % len(rows)
 		}
+	case "enter":
+		// Enter presses a button; anywhere else it keeps the changes and
+		// closes, picking the option in focus on the way.
+		if row.kind == rowAction && row.activate != nil {
+			row.activate()
+			return m.takePending()
+		}
+		if row.kind == rowRadio && row.activate != nil {
+			row.activate()
+		}
+		return tea.Batch(m.takePending(), m.closeModal(true))
 	}
 	return m.takePending()
 }
@@ -266,11 +287,11 @@ func (m *Model) modalRows() []formRow {
 			}
 			dpis := []int{400, 800, 1000, 1200, 1600, 2400, 3200}
 			return []formRow{
-				{id: "sens", kind: rowStepper, label: m.t("sens"), value: fmt.Sprintf("%.1f", o.Mouse.Sensitivity), step: func(d int) {
+				{id: "sens", kind: rowStepper, label: m.t("sens"), value: m.num(o.Mouse.Sensitivity), step: func(d int) {
 					o.Mouse.Sensitivity = clampF(o.Mouse.Sensitivity+float64(d)*0.1, 0.5, 10)
 				}},
 				{id: "dpi", kind: rowStepper, label: m.t("dpi"), value: fmt.Sprint(o.Mouse.DPI), step: func(d int) { o.Mouse.DPI = cycleInt(dpis, o.Mouse.DPI, d) }},
-				{id: "cm", kind: rowInfo, label: m.t("cm360"), value: fmt.Sprintf("%.1f cm", o.Mouse.CentimetersPer360()), tone: "dim"},
+				{id: "cm", kind: rowInfo, label: m.t("cm360"), value: m.num(o.Mouse.CentimetersPer360()) + " cm", tone: "dim"},
 				{id: "invert", kind: rowToggle, label: m.t("invert"), on: o.Mouse.Invert, desc: map[bool]string{false: "m_pitch 0.022", true: "m_pitch -0.022"}[o.Mouse.Invert], activate: func() { o.Mouse.Invert = !o.Mouse.Invert }},
 			}
 		case 2:
@@ -705,6 +726,20 @@ func (m *Model) modalView() ([]string, []hit, *[2]int) {
 	start := len(p.lines)
 	p.renderRows(rows, m.modal.focus, m.hover)
 	p.gap(1)
+	// Every tab gets the height of the tallest, and the dialog never
+	// shrinks while open: switching tabs or options leaves it in place.
+	if m.modal.height == 0 {
+		tab := m.modal.tab
+		for index := range m.modalTabs() {
+			m.modal.tab = index
+			probe := newPage(t, m.glyphs, inner)
+			probe.renderRows(m.modalRows(), -1, "")
+			m.modal.height = max(m.modal.height, start+len(probe.lines)+1)
+		}
+		m.modal.tab = tab
+	}
+	m.modal.height = max(m.modal.height, len(p.lines))
+	p.gap(m.modal.height - len(p.lines))
 
 	// Scroll so the focused row stays visible.
 	room := m.h - 6
@@ -737,7 +772,23 @@ func (m *Model) modalView() ([]string, []hit, *[2]int) {
 		out = append(out, edge.Render("│ ")+fill(line, inner, t.Base)+edge.Render(" │"))
 		_ = index
 	}
-	out = append(out, edge.Render("╰"+strings.Repeat("─", width-2)+"╯"))
+	// The bottom edge carries the two ways out, for the mouse.
+	okStyle, cancelStyle := t.Style(t.Gray), t.Style(t.Gray)
+	if m.hover == "confirm-modal" {
+		okStyle = t.Style(t.Text).Bold(true)
+	}
+	if m.hover == "close" {
+		cancelStyle = t.Style(t.Text).Bold(true)
+	}
+	ok := okStyle.Render(" ↵ " + m.t("k.ok") + " ")
+	cancel := cancelStyle.Render(" esc " + m.t("k.cancel") + " ")
+	tail := edge.Render("─") + ok + edge.Render("─") + cancel + edge.Render("─╯")
+	out = append(out, edge.Render("╰"+strings.Repeat("─", max(0, width-1-lipgloss.Width(tail))))+tail)
+	bottom := len(out) - 1
+	cancelX := width - 2 - lipgloss.Width(cancel)
+	okX := cancelX - 1 - lipgloss.Width(ok)
+	outHits = append(outHits, hit{y: bottom, x0: okX, x1: okX + lipgloss.Width(ok), id: "confirm-modal"},
+		hit{y: bottom, x0: cancelX, x1: cancelX + lipgloss.Width(cancel), id: "close"})
 	for _, h := range hits {
 		y := h.y - offset
 		if y >= 0 && y < len(lines) {

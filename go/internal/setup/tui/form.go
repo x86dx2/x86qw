@@ -75,7 +75,8 @@ func (p *page) renderRows(rows []formRow, focus int, hover string) {
 			if row.tone == "" {
 				tone = p.st(t.Text2)
 			}
-			p.add(spread(p.st(t.Gray).Render("  "+padRight(row.label, 12)), tone.Render(row.value), p.width, t.Base))
+			// Info lines up with the labels of the rows around it.
+			p.add(spread(p.st(t.Gray).Render("     "+padRight(row.label, 12)), tone.Render(row.value)+p.st(t.Base).Render("  "), p.width, t.Base))
 			if row.desc != "" {
 				for _, line := range strings.Split(lipgloss.Wrap(row.desc, p.width-16, " "), "\n") {
 					p.add(p.st(t.Gray).Render(strings.Repeat(" ", 16) + line))

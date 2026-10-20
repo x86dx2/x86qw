@@ -105,6 +105,12 @@ type modal struct {
 	capture string // movement action waiting for a key
 	field   map[string]*Field
 	json    bool
+	height  int // the tallest the dialog has been, so it never jumps
+	// before is what the choices were when the dialog opened; esc puts
+	// them back.
+	before     setup.Options
+	dns        *setup.DNSCheck
+	dnsPending string
 }
 
 // New builds the installer model.
@@ -512,7 +518,9 @@ func (m *Model) click(id string) tea.Cmd {
 			m.modal.tab, m.modal.focus = index, 0
 		}
 	case id == "close":
-		return m.closeModal()
+		return m.closeModal(false)
+	case id == "confirm-modal":
+		return m.closeModal(true)
 	case id == "lang":
 		return m.keyPress(tea.KeyPressMsg(keyFor("ctrl+l")))
 	case strings.HasPrefix(id, "row:"):
@@ -764,14 +772,21 @@ func (m *Model) footerHints() [][2]string {
 		}
 	}
 	if m.modal != nil {
-		items := [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.toggle")}}
+		items := [][2]string{{"↑↓", m.t("k.choose")}}
+		if rows := focusables(m.modalRows()); m.modal.focus < len(rows) {
+			switch row := rows[m.modal.focus]; {
+			case row.step != nil:
+				items = append(items, [2]string{"←→", m.t("k.change")})
+			case row.kind == rowAction:
+				items = append(items, [2]string{"space", m.t("k.run")})
+			case row.kind != rowText:
+				items = append(items, [2]string{"space", m.t("k.change")})
+			}
+		}
 		if len(m.modalTabs()) > 1 {
 			items = append(items, [2]string{"tab", m.t("k.tab")})
 		}
-		if rows := focusables(m.modalRows()); m.modal.focus < len(rows) && rows[m.modal.focus].step != nil {
-			items = append(items, [2]string{"←→", m.t("k.change")})
-		}
-		return append(items, [2]string{"esc", m.t("k.close")})
+		return append(items, [2]string{"enter", m.t("k.ok")}, [2]string{"esc", m.t("k.cancel")})
 	}
 	switch m.screen {
 	case scIntent:

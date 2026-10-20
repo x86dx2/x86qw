@@ -125,7 +125,7 @@ func TestPreflightWarningWaitsAndCorrects(t *testing.T) {
 			m.focus = index
 		}
 	}
-	drive(m, key("enter"), key("down"), key("right"), key("esc"))
+	drive(m, key("enter"), key("down"), key("right"), key("enter"))
 	if m.opts.Server.BasePort != 27501 {
 		t.Fatalf("porta inicial: %d", m.opts.Server.BasePort)
 	}
@@ -164,3 +164,39 @@ func TestPercentFitsItsColumn(t *testing.T) {
 		}
 	}
 }
+
+func TestDialogEnterKeepsEscCancels(t *testing.T) {
+	m := started(t, false)
+	drive(m, typeText("x86dx2")...)
+	drive(m, key("enter"))
+	m.focus = 0
+	drive(m, key("enter")) // Components
+	content := m.opts.Content
+	drive(m, key("down"), key("down"), space())
+	if m.modal == nil || m.opts.Content == content {
+		t.Fatal("espaço deveria mudar o pacote e manter o diálogo aberto")
+	}
+	drive(m, key("esc"))
+	if m.modal != nil || m.opts.Content != content {
+		t.Fatalf("esc deveria cancelar: %q", m.opts.Content)
+	}
+	drive(m, key("enter"), key("down"), key("down"), key("down"), key("enter"))
+	if m.modal != nil || m.opts.Content == content {
+		t.Fatalf("enter deveria escolher o pacote em foco e fechar: %q", m.opts.Content)
+	}
+
+	// The setup dialog keeps one size across its tabs.
+	m.focus = 1
+	drive(m, key("enter"))
+	m.View()
+	height := len(must(m.modalView()))
+	for range 4 {
+		drive(m, key("tab"))
+		m.View()
+		if got := len(must(m.modalView())); got != height {
+			t.Fatalf("o diálogo mudou de tamanho: %d → %d", height, got)
+		}
+	}
+}
+
+func must(lines []string, _ []hit, _ *[2]int) []string { return lines }

@@ -450,38 +450,34 @@ func (m *Model) dock(width int) *page {
 	if !m.preOn {
 		p.add(faint.Render(strings.Repeat("─", width)))
 	} else {
-		// The rule names the bar; the line under it is one chip per check.
-		label := faint.Render("──") + p.st(t.Gray).Render(" "+m.t("rule.pre")+" ")
-		p.add(label + faint.Render(strings.Repeat("─", max(0, width-lipgloss.Width(label)))))
-		chips := ""
-		for _, check := range m.checks {
-			glyph, color := m.spinner(), t.Brand
-			switch check.State {
-			case setup.CheckOK:
-				glyph, color = m.glyphs.Ok, t.Success
-			case setup.CheckWarning:
-				glyph, color = m.glyphs.Warn, t.Warning
-			case setup.CheckFailed:
-				glyph, color = m.glyphs.Fail, t.Error
-			}
-			if chips != "" {
-				chips += p.st(t.Base).Render("  ")
-			}
-			chips += p.st(color).Bold(true).Render(glyph) + p.st(t.Text2).Render(" "+m.checkName(check))
-		}
-		verdict := p.st(t.Dim).Render(m.t("pre.running"))
+		// The rule names the bar and carries the verdict; a line per check
+		// follows, with what was found.
+		verdict := p.st(t.Dim).Render(" " + m.t("pre.running") + " ")
 		if m.preDone {
 			switch m.preflightOutcome() {
 			case setup.CheckFailed:
-				verdict = p.st(t.Error).Bold(true).Render(m.t("pre.fail"))
+				verdict = p.st(t.Error).Bold(true).Render(" " + m.t("pre.fail") + " ")
 			case setup.CheckWarning:
-				verdict = p.st(t.Warning).Bold(true).Render(m.t("pre.warn"))
+				verdict = p.st(t.Warning).Bold(true).Render(" " + m.t("pre.warn") + " ")
 			default:
-				verdict = p.st(t.Success).Bold(true).Render(m.t("pre.ok"))
+				verdict = p.st(t.Success).Bold(true).Render(" " + m.t("pre.ok") + " ")
 			}
 		}
-		pad := p.st(t.Base).Render("  ")
-		p.add(spread(pad+chips, verdict+pad, width, t.Base))
+		label := faint.Render("──") + p.st(t.Gray).Render(" "+m.t("rule.pre")+" ")
+		p.add(label + faint.Render(strings.Repeat("─", max(0, width-lipgloss.Width(label)-lipgloss.Width(verdict)-2))) + verdict + faint.Render("──"))
+		for _, check := range m.checks {
+			glyph, style, value := m.spinner(), p.st(t.Brand), p.st(t.Dim).Render(m.t("net.detecting"))
+			switch check.State {
+			case setup.CheckOK:
+				glyph, style, value = m.glyphs.Ok, p.st(t.Success), p.st(t.Gray).Render(shortPath(check.Value))
+			case setup.CheckWarning:
+				glyph, style, value = m.glyphs.Warn, p.st(t.Warning), p.st(t.Warning).Render(check.Value)
+			case setup.CheckFailed:
+				glyph, style, value = m.glyphs.Fail, p.st(t.Error), p.st(t.Error).Render(check.Value)
+			}
+			left := p.st(t.Base).Render("  ") + style.Bold(true).Render(glyph) + p.st(t.Text2).Render("  "+check.Title)
+			p.add(spread(left, value+p.st(t.Base).Render("  "), width, t.Base))
+		}
 		for _, check := range m.checks {
 			color := t.Warning
 			switch check.State {
@@ -492,13 +488,11 @@ func (m *Model) dock(width int) *page {
 				continue
 			}
 			text := strings.TrimSpace(check.Detail + " " + check.Fix)
-			for n, line := range strings.Split(lipgloss.Wrap(text, width-6, " "), "\n") {
-				lead := "    "
+			for n, line := range strings.Split(lipgloss.Wrap(text, width-9, " "), "\n") {
+				// Notes hang under the check's title.
+				lead := "       "
 				if n == 0 {
-					lead = "  " + m.glyphs.Warn + " "
-					if check.State == setup.CheckFailed {
-						lead = "  " + m.glyphs.Fail + " "
-					}
+					lead = "     " + m.glyphs.Chevron + " "
 				}
 				p.add(p.st(color).Render(lead + line))
 			}
@@ -513,14 +507,6 @@ func (m *Model) dock(width int) *page {
 	}
 	m.primary(p, rows[len(rows)-1], m.focus == len(rows)-1, enabled, right)
 	return p
-}
-
-// checkName is a check's one-word name for the dock.
-func (m *Model) checkName(check setup.Check) string {
-	if name := m.t("chk." + check.ID); name != "chk."+check.ID {
-		return name
-	}
-	return strings.ToLower(check.Title)
 }
 
 func (m *Model) activateConfirm(id string) tea.Cmd {

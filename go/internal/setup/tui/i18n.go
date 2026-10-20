@@ -151,8 +151,7 @@ var texts = map[string][2]string{
 	"k.edit.hint":     {"enter editar", "enter edit"},
 	"pre.running":     {"conferindo…", "checking…"},
 	"d.itemsN":        {"itens", "items"}, "d.instancesN": {"instâncias", "instances"}, "d.integN": {"%d de 4 ativas", "%d of 4 on"},
-	"chk.folder": {"pasta", "folder"}, "chk.disk": {"disco", "disk"}, "chk.net": {"rede", "network"},
-	"chk.catalog": {"catálogo", "catalog"}, "chk.screen": {"tela", "screen"}, "chk.ports": {"portas", "ports"},
+	"k.ok": {"confirmar", "confirm"}, "k.run": {"executar", "run"},
 }
 
 // T returns the text for key in lang.
