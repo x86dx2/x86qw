@@ -304,3 +304,18 @@ func ListToCommandLine(arguments []string) string {
 	}
 	return result.String()
 }
+
+// ResolveMap is the non-interactive half of choose_local_map: the
+// compatible installed map matching requested, case-insensitively.
+func ResolveMap(root string, game Game, requested string, requirements []Requirement, assets map[string]bool, label string) (string, error) {
+	maps, err := CompatibleMaps(root, game, requirements, assets, label)
+	if err != nil {
+		return "", err
+	}
+	for _, name := range maps {
+		if strings.EqualFold(name, requested) {
+			return name, nil
+		}
+	}
+	return "", errorf("O mapa %s não está disponível ou não é compatível com %s.", requested, label)
+}

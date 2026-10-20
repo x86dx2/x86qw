@@ -1,35 +1,82 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/install"
+	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/output"
+	"github.com/x86dx2/x86qw/go/internal/services"
 )
 
 func runStatus(args []string, stdout, stderr io.Writer) int {
-	target, asJSON, ok := targetFlags("status", args, stderr)
+	for _, argument := range args {
+		if argument == "--json" {
+			return runStatusJSON(args, stdout, stderr)
+		}
+	}
+	options, err := services.ParseStatus(args)
+	if err != nil {
+		return serviceUsage("status", err, stderr)
+	}
+	console := serviceConsole(&options.Common, stdout, stderr)
+	target, _ := filepath.Abs(options.Target)
+	target = lock.Resolve(target)
+	active, err := services.ShowStatus(console, target)
+	if err != nil {
+		console.Error(err.Error())
+		return output.ExitFailure
+	}
+	if !options.Stop {
+		return output.ExitSuccess
+	}
+	if !active {
+		console.Error("Nenhuma stack de serviços x86QW está ativa.")
+		return output.ExitFailure
+	}
+	if !options.Yes && !confirmStop(stdout) {
+		console.Info("Encerramento cancelado; a stack continua ativa.")
+		return output.ExitSuccess
+	}
+	if err := services.RequestStop(target, 15*time.Second); err != nil {
+		console.Error(err.Error())
+		return output.ExitFailure
+	}
+	console.Success("Stack de serviços encerrada coordenadamente.")
+	return output.ExitSuccess
+}
+
+// confirmStop asks on a terminal; without one it declines (use --yes).
+func confirmStop(stdout io.Writer) bool {
+	if !isTerminal(os.Stdin) {
+		return false
+	}
+	fmt.Fprint(stdout, "Encerrar a stack ativa? [s/N] ")
+	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(answer)) {
+	case "s", "sim", "y", "yes":
+		return true
+	}
+	return false
+}
+
+func runStatusJSON(args []string, stdout, stderr io.Writer) int {
+	target, _, ok := targetFlags("status", args, stderr)
 	if !ok {
 		return output.ExitUsage
 	}
-	status := install.ReadStatus(target)
-	if asJSON {
-		if err := output.Success("status", status).Write(stdout); err != nil {
-			return output.ExitFailure
-		}
-		return output.ExitSuccess
-	}
-	fmt.Fprintf(stdout, "Instalação: %s (%s)\nEstado: %s\n", target, status.Installation, status.State)
-	if len(status.Sessions) == 0 {
-		fmt.Fprintln(stdout, "Nenhum serviço registrado.")
-	}
-	for _, session := range status.Sessions {
-		fmt.Fprintf(stdout, "  %s  %-10s %s\n", session.SessionID, session.Status, session.Command)
+	if err := output.Success("status", install.ReadStatus(target)).Write(stdout); err != nil {
+		return output.ExitFailure
 	}
 	return output.ExitSuccess
 }
 
 func init() {
-	register("status", 20, "status               mostra instalação, estado e serviços registrados", noName(runStatus))
+	register("status", 20, "status               mostra os serviços ativos (--json: instalação e sessões; --stop encerra a stack)", noName(runStatus))
 }
