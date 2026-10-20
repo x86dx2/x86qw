@@ -89,6 +89,7 @@ type Model struct {
 
 	pending tea.Cmd
 	scroll  map[screen]int
+	tops    map[screen]int // where each screen's body starts; it only moves up
 	speeds  []float64
 
 	hits     []hit
@@ -111,7 +112,7 @@ func New(cfg Config) *Model {
 	if cfg.Lang == "" {
 		cfg.Lang = PT
 	}
-	m := &Model{cfg: cfg, glyphs: DetectGlyphs(), lang: cfg.Lang, keepPersonal: true, started: time.Now(), scroll: map[screen]int{}}
+	m := &Model{cfg: cfg, glyphs: DetectGlyphs(), lang: cfg.Lang, keepPersonal: true, started: time.Now(), scroll: map[screen]int{}, tops: map[screen]int{}}
 	switch cfg.Theme {
 	case "light":
 		m.theme, m.themed = Day(), true
@@ -194,6 +195,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
+		clear(m.tops)
 	case tea.BackgroundColorMsg:
 		if !m.themed {
 			if msg.IsDark() {
@@ -628,10 +630,16 @@ func (m *Model) View() tea.View {
 		room -= len(dock.lines) + 1
 	}
 	// Body: in the upper third of the free space, centred.
+	// A body that changes height (a field showing up, a section opening)
+	// keeps its place: the top only ever moves up, until the next resize.
 	top := 2 + max(0, (room-len(body.lines))/3)
 	if dock != nil {
-		top = 3 // the accordion grows and shrinks; its title stays put
+		top = 3
 	}
+	if last, ok := m.tops[m.screen]; ok {
+		top = min(top, last)
+	}
+	m.tops[m.screen] = top
 	left := (m.w - width) / 2
 	offset := 0
 	if total := len(body.lines); total > room {

@@ -567,7 +567,7 @@ func (m *Model) installPage(p *page) {
 		digitStyle = p.st(t.Success)
 	}
 	for index := range 4 {
-		left := p.st(t.Base).Render("  ") + digitStyle.Render(padRight(digits[index], 24))
+		left := p.st(t.Base).Render("  ") + digitStyle.Render(padRight(digits[index], 26))
 		p.add(left + p.st(t.Base).Render("  ") + stats[index])
 	}
 	p.gap(1)

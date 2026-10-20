@@ -138,3 +138,29 @@ func TestPreflightWarningWaitsAndCorrects(t *testing.T) {
 	}
 	m.cancel()
 }
+
+func TestBodyKeepsItsPlace(t *testing.T) {
+	m := started(t, false)
+	drive(m, typeText("x86dx2")...)
+	top := func() int {
+		m.View()
+		return m.tops[m.screen]
+	}
+	first := top()
+	for _, k := range []string{"down", "down", "up", "up", "down"} {
+		drive(m, key(k))
+		if got := top(); got != first {
+			t.Fatalf("o corpo mudou de lugar com %s: %d → %d", k, first, got)
+		}
+	}
+}
+
+func TestPercentFitsItsColumn(t *testing.T) {
+	for _, value := range []int{0, 7, 26, 100} {
+		for _, row := range bigNumber(value, unicodeGlyphs) {
+			if w := len([]rune(row)); w > 26 {
+				t.Fatalf("%d%% tem %d colunas", value, w)
+			}
+		}
+	}
+}
