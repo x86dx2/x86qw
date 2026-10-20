@@ -3,56 +3,56 @@
     "binaries": [
       {
         "architecture": "arm64",
-        "filename": "x86qw-2.0.0-darwin-arm64",
+        "filename": "x86qw-2.0.1-darwin-arm64",
         "platform": "macos",
-        "sha256": "a2cc84e4011596406906adc905ad44fef9f8542a99d089e6387745a769ef9fe5",
+        "sha256": "6db9ce715da28f9b70b4fe0e902be1334dd2274e933f69b5ce3fd37c27291443",
         "size": 12481554,
         "urls": [
-          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.0/x86qw-2.0.0-darwin-arm64"
+          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.1/x86qw-2.0.1-darwin-arm64"
         ]
       },
       {
         "architecture": "x86_64",
-        "filename": "x86qw-2.0.0-darwin-amd64",
+        "filename": "x86qw-2.0.1-darwin-amd64",
         "platform": "macos",
-        "sha256": "8073288d175ba709108505af4b3b716ea612b50f72a453dfa7560dfc4e99e094",
+        "sha256": "494c60e5de5bad3c21283839eda1b5fc4cc89e22df0a2a307cb7b7871b15d5bc",
         "size": 13372320,
         "urls": [
-          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.0/x86qw-2.0.0-darwin-amd64"
+          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.1/x86qw-2.0.1-darwin-amd64"
         ]
       },
       {
         "architecture": "x86_64",
-        "filename": "x86qw-2.0.0-linux-amd64",
+        "filename": "x86qw-2.0.1-linux-amd64",
         "platform": "linux",
-        "sha256": "1c0d8084bf1839888f925f29d1121e03774e84312ef697978e50cd01e690893a",
+        "sha256": "9fa79bbbe470a3f448e987cefd0d7941f9d6ce0d7ee8fa9d916564db0454b8ca",
         "size": 13090976,
         "urls": [
-          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.0/x86qw-2.0.0-linux-amd64"
+          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.1/x86qw-2.0.1-linux-amd64"
         ]
       },
       {
         "architecture": "arm64",
-        "filename": "x86qw-2.0.0-linux-arm64",
+        "filename": "x86qw-2.0.1-linux-arm64",
         "platform": "linux",
-        "sha256": "726e696ad14001c7c09580e24aae96a7e62e44f59ce58795e6702c5c6364cb18",
+        "sha256": "b37100972f5bb3e944860ae117ba808c0f6af038281014d854ad81c0b9128534",
         "size": 12189856,
         "urls": [
-          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.0/x86qw-2.0.0-linux-arm64"
+          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.1/x86qw-2.0.1-linux-arm64"
         ]
       },
       {
         "architecture": "x64",
-        "filename": "x86qw-2.0.0-windows-amd64.exe",
+        "filename": "x86qw-2.0.1-windows-amd64.exe",
         "platform": "windows",
-        "sha256": "d49da69816a6a9d6d97043ed60d45a2ff7a559bcf63c1268e2f327b9f26acff3",
-        "size": 13570560,
+        "sha256": "fe515749f0195db2208e138e884b68d056a9430b9a47c0c647ece72e444ea594",
+        "size": 13577216,
         "urls": [
-          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.0/x86qw-2.0.0-windows-amd64.exe"
+          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.0.1/x86qw-2.0.1-windows-amd64.exe"
         ]
       }
     ],
-    "version": "2.0.0"
+    "version": "2.0.1"
   },
   "commands": [
     "play",
@@ -416,5 +416,5 @@
       ]
     }
   ],
-  "version": "2.0.0"
+  "version": "2.0.1"
 }
