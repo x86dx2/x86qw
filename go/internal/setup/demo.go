@@ -44,16 +44,16 @@ var demoComponents = []Component{
 }
 
 var demoModes = []Mode{
-	{"duel", "Duel", "dm6", []string{"dm6", "dm2", "dm4", "aerowalk", "ztndm3"}},
-	{"2on2", "2on2", "dm6", []string{"dm6", "dm4", "aerowalk", "ztndm3"}},
-	{"4on4", "4on4", "dm3", []string{"dm3", "dm2", "e1m2", "schloss"}},
-	{"ffa", "Free For All", "dm6", []string{"dm6", "dm3", "dm4", "e1m1"}},
-	{"clan-arena", "Clan Arena", "dm6", []string{"dm6", "dm3", "aerowalk"}},
-	{"ctf", "Capture The Flag", "e2m2", []string{"e2m2", "e1m5", "e1m3", "e2m5"}},
-	{"midair", "Midair", "dm4", []string{"dm4", "dm6"}},
-	{"instagib", "Instagib", "dm4", []string{"dm4", "dm3", "dm6"}},
-	{"race", "Race", "dm6", []string{"dm6", "dm4"}},
-	{"practice", "Practice", "dm6", []string{"dm6", "dm2", "dm4", "dm3"}},
+	{"duel", "Duel", "dm6", []string{"dm6", "dm2", "dm4", "aerowalk", "ztndm3"}, true},
+	{"2on2", "2on2", "dm6", []string{"dm6", "dm4", "aerowalk", "ztndm3"}, true},
+	{"4on4", "4on4", "dm3", []string{"dm3", "dm2", "e1m2", "schloss"}, true},
+	{"ffa", "Free For All", "dm6", []string{"dm6", "dm3", "dm4", "e1m1"}, true},
+	{"clan-arena", "Clan Arena", "dm6", []string{"dm6", "dm3", "aerowalk"}, true},
+	{"ctf", "Capture The Flag", "e2m2", []string{"e2m2", "e1m5", "e1m3", "e2m5"}, false},
+	{"midair", "Midair", "dm4", []string{"dm4", "dm6"}, true},
+	{"instagib", "Instagib", "dm4", []string{"dm4", "dm3", "dm6"}, true},
+	{"race", "Race", "dm6", []string{"dm6", "dm4"}, false},
+	{"practice", "Practice", "dm6", []string{"dm6", "dm2", "dm4", "dm3"}, true},
 }
 
 // Catalog returns the real x86QW content.
@@ -80,7 +80,8 @@ func (d *Demo) Existing(_ context.Context, target string) (*Existing, error) {
 	}
 	options := Defaults(Play, target)
 	options.Nick = "x86dx2"
-	return &Existing{Target: target, CLIVersion: "2.0.3", Components: 12, Options: options, Updates: []Update{
+	catalog, _ := d.Catalog(context.Background())
+	return &Existing{Target: target, CLIVersion: "2.0.3", Components: 12, Installed: catalog.Profiles["recommended"], Options: options, Updates: []Update{
 		{"x86qw-client-bootstrap", "Base do cliente x86QW", "e4cb23d40aa2+x86qw.4", "dfb2ac9299f7+x86qw.4", "nQuake"},
 		{"ktx", "KTX x86QW", "1.47+x86qw.19", "1.47+x86qw.20", ""},
 		{"x86qw-core-id1", "Dados do Quake", "0.1.0", "0.1.1", ""},
@@ -199,7 +200,7 @@ func (d *Demo) Install(ctx context.Context, options Options, control <-chan bool
 				out <- progress
 				return
 			case paused := <-control:
-				progress.Paused = paused
+				progress.Paused, progress.Holding = paused, paused
 			case <-ticker.C:
 			}
 			if progress.Paused {
@@ -268,47 +269,24 @@ func snapshot(progress Progress) Progress {
 	return progress
 }
 
-// Selected resolves the components an installation includes, with their
-// dependencies, in catalog order.
-func Selected(catalog *Catalog, options Options) []string {
-	chosen := map[string]bool{}
-	if options.Intent.WantsClient() {
-		ids := catalog.Profiles[options.Content]
-		if options.Content == "custom" {
-			ids = options.Components
-		}
-		for _, id := range ids {
-			chosen[id] = true
-		}
+// Repair pretends to verify every file.
+func (d *Demo) Repair(ctx context.Context, target string) (Report, error) {
+	select {
+	case <-ctx.Done():
+		return Report{}, ctx.Err()
+	case <-time.After(time.Duration(1200/max(d.Speed, 0.1)) * time.Millisecond):
 	}
-	if options.Intent.WantsServer() {
-		chosen["mvdsv"], chosen["ktx"] = true, true
-		if options.Server.QTVPort != 0 {
-			chosen["qtv"] = true
-		}
-		if options.Server.QWFWDPort != 0 {
-			chosen["qwfwd"] = true
-		}
-	}
-	requires := map[string][]string{}
-	for _, component := range catalog.Components {
-		requires[component.ID] = component.Requires
-	}
-	for grew := true; grew; {
-		grew = false
-		for id := range chosen {
-			for _, dependency := range requires[id] {
-				if !chosen[dependency] && options.Intent.WantsClient() {
-					chosen[dependency], grew = true, true
-				}
-			}
-		}
-	}
-	var ids []string
-	for _, component := range catalog.Components {
-		if chosen[component.ID] {
-			ids = append(ids, component.ID)
-		}
-	}
-	return ids
+	return Report{Files: 2216, Components: 12}, nil
 }
+
+// Uninstall pretends to remove the installation.
+func (d *Demo) Uninstall(ctx context.Context, target string, keepPersonal bool) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(600 * time.Millisecond):
+	}
+	return nil
+}
+
+var _ Backend = (*Demo)(nil)

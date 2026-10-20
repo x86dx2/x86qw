@@ -296,6 +296,9 @@ func Repair(ctx context.Context, in plan.Input) (*Result, error) {
 	}
 	defer held.Release()
 	tx, err := NewTransaction(in.Root, ".x86qw-repair.")
+	if tx != nil {
+		tx.observe = observing(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}

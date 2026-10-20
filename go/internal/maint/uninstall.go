@@ -52,16 +52,21 @@ func lexists(path string) bool {
 	return err == nil
 }
 
-// removeShellIntegration drops ~/.local/bin/x86qw (or, on Windows, the
-// Start Menu and Desktop shortcuts) when it points at this installation.
+// removeShellIntegration drops ~/.local/bin/x86qw and the Linux desktop
+// entry (or, on Windows, the shortcuts and the PATH entry) when they point
+// at this installation.
 func removeShellIntegration(target string) {
 	if runtime.GOOS == "windows" {
 		cli.RemoveShortcuts(target)
+		cli.RemoveUserPath(target)
 		return
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return
+	}
+	if runtime.GOOS == "linux" {
+		cli.RemoveDesktopEntry(target, home)
 	}
 	command := filepath.Join(home, ".local", "bin", "x86qw")
 	info, err := os.Lstat(command)

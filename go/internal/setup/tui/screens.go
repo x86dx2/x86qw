@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	_ "embed"
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
@@ -193,13 +194,17 @@ func (m *Model) sectionRows() []reviewRow {
 		}
 		rows = append(rows, reviewRow{"server", m.t("sec.server"), fmt.Sprintf("%d %s · %s", len(ports), m.t("d.instancesN"), where)})
 	}
-	on := 0
-	for _, enabled := range []bool{o.Integration.Shortcuts, o.Integration.Path, o.Integration.QWLinks, o.Integration.Demos} {
-		if enabled {
-			on++
+	on, offered := 0, 0
+	can := setup.SupportedIntegration()
+	for _, item := range [][2]bool{{can.Shortcuts, o.Integration.Shortcuts}, {can.Path, o.Integration.Path}, {can.QWLinks, o.Integration.QWLinks}, {can.Demos, o.Integration.Demos}} {
+		if item[0] {
+			offered++
+			if item[1] {
+				on++
+			}
 		}
 	}
-	rows = append(rows, reviewRow{"integ", m.t("sec.integ"), fmt.Sprintf(m.t("d.integN"), on)})
+	rows = append(rows, reviewRow{"integ", m.t("sec.integ"), fmt.Sprintf(m.t("d.integN"), on, offered)})
 	return append(rows, reviewRow{"folder", m.t("sec.folder"), shortPath(o.Target)})
 }
 
@@ -225,10 +230,8 @@ func (m *Model) confirmLabel() string {
 }
 
 func (m *Model) totalBytes() int64 {
-	total := m.catalog.CoreSize
-	if m.opts.Intent.WantsClient() {
-		total += m.catalog.ClientSize[platform()]
-	}
+	// ezQuake comes with every installation, a server's too.
+	total := m.catalog.CoreSize + m.catalog.ClientSize[platform()]
 	for _, id := range setup.Selected(m.catalog, m.opts) {
 		for _, component := range m.catalog.Components {
 			if component.ID == id {
@@ -305,10 +308,7 @@ func (m *Model) details(id string) [][2]string {
 		if o.Video.Width > 0 {
 			resolution = fmt.Sprintf("%d×%d", o.Video.Width, o.Video.Height)
 		}
-		experience := m.t("exp.ruleset")
-		if o.Experience == "competitive" {
-			experience = m.t("exp.comp")
-		}
+		experience := m.t("rs." + o.Experience)
 		return [][2]string{
 			{m.t("nick"), o.Nick},
 			{m.t("tab.keys"), keys},
@@ -350,10 +350,25 @@ func (m *Model) details(id string) [][2]string {
 			}
 			return m.glyphs.Fail + " " + m.t(key)
 		}
-		return [][2]string{
-			{"", padRight(mark(in.Shortcuts, "i.short"), 30) + mark(in.Path, "i.path")},
-			{"", padRight(mark(in.QWLinks, "i.qw"), 30) + mark(in.Demos, "i.demo")},
+		can := setup.SupportedIntegration()
+		var marks []string
+		for _, item := range []struct {
+			offered, on bool
+			key         string
+		}{{can.Shortcuts, in.Shortcuts, "i.short"}, {can.Path, in.Path, "i.path"}, {can.QWLinks, in.QWLinks, "i.qw"}, {can.Demos, in.Demos, "i.demo"}} {
+			if item.offered {
+				marks = append(marks, mark(item.on, item.key))
+			}
 		}
+		var rows [][2]string
+		for index := 0; index < len(marks); index += 2 {
+			line := marks[index]
+			if index+1 < len(marks) {
+				line = padRight(line, 30) + marks[index+1]
+			}
+			rows = append(rows, [2]string{"", line})
+		}
+		return rows
 	case "folder":
 		return [][2]string{{"", shortPath(o.Target)}}
 	}
@@ -476,6 +491,9 @@ func (m *Model) dock(width int) *page {
 				glyph, style, value = m.glyphs.Fail, p.st(t.Error), p.st(t.Error).Render(check.Value)
 			}
 			left := p.st(t.Base).Render("  ") + style.Bold(true).Render(glyph) + p.st(t.Text2).Render("  "+check.Title)
+			if room := width - lipgloss.Width(left) - 6; lipgloss.Width(value) > room {
+				value = ansi.Truncate(value, room, m.glyphs.Ellipsis)
+			}
 			p.add(spread(left, value+p.st(t.Base).Render("  "), width, t.Base))
 		}
 		for _, check := range m.checks {
@@ -537,16 +555,23 @@ func (m *Model) installPage(p *page) {
 	if pr.Total > 0 {
 		fraction = float64(pr.Done) / float64(pr.Total)
 	}
+	if !pr.Finished {
+		// The bytes arrive before the files are placed and verified.
+		fraction = min(fraction, 0.99)
+	}
 	// Big percentage on the left, figures on the right.
 	digits := bigNumber(int(fraction*100+0.0001), m.glyphs)
 	stats := []string{
 		p.st(t.Text).Bold(true).Render(size(pr.Done)) + p.st(t.Gray).Render(" "+m.t("inst.of")+" "+size(pr.Total)),
 		p.st(t.Text).Render(duration(pr.ETA)) + p.st(t.Gray).Render(" "+m.t("inst.left")),
-		p.st(t.Text).Render(fmt.Sprint(filesDone(pr))) + p.st(t.Gray).Render(fmt.Sprintf(" %s %d %s", m.t("inst.of"), filesTotal(pr), m.t("inst.files"))),
+		m.filesLine(p, pr),
 		sparkline(m, pr) + p.st(t.Text2).Render(fmt.Sprintf("  %.1f MB/s", pr.Speed/1048576)),
 	}
-	if pr.Paused {
+	switch {
+	case pr.Paused && pr.Holding:
 		stats[1] = p.st(t.Warning).Bold(true).Render(m.t("inst.paused"))
+	case pr.Paused:
+		stats[1] = p.st(t.Warning).Render(m.spinner() + " " + m.t("inst.pausing"))
 	}
 	digitStyle := p.st(Blend(t.Text, t.Brand, 0.15))
 	if pr.Finished {
@@ -563,8 +588,15 @@ func (m *Model) installPage(p *page) {
 	} else if pr.Paused {
 		color = t.Warning
 	}
+	if pr.Err != nil {
+		color = t.Error
+	}
 	p.add(p.st(t.Base).Render("  ") + bar(t, m.glyphs, p.width-4, fraction, color))
 	p.gap(1)
+	if pr.Err != nil {
+		m.installFailure(p, pr.Err)
+		return
+	}
 	room := max(3, m.h-8-len(p.lines))
 	if m.showLog {
 		log := pr.Log
@@ -584,7 +616,7 @@ func (m *Model) installPage(p *page) {
 	lanes := append([]setup.Lane(nil), pr.Lanes...)
 	shown, finished := 0, 0
 	for _, lane := range lanes {
-		done := lane.Size > 0 && lane.Done >= lane.Size
+		done := laneDone(pr, lane)
 		if shown >= room {
 			if done {
 				finished++
@@ -619,6 +651,37 @@ func (m *Model) installPage(p *page) {
 	if hidden := len(lanes) - shown; hidden > 0 {
 		p.add(p.st(t.Dim).Render(fmt.Sprintf("     + %d", hidden)))
 	}
+}
+
+// laneDone is a component whose files are all in place.
+func laneDone(pr setup.Progress, lane setup.Lane) bool {
+	return pr.Finished || (lane.FileCount > 0 && lane.Files >= lane.FileCount)
+}
+
+// filesLine counts the files placed, against the total once every
+// component has said how many it has.
+func (m *Model) filesLine(p *page, pr setup.Progress) string {
+	t := m.theme
+	known := true
+	for _, lane := range pr.Lanes {
+		known = known && lane.FileCount > 0
+	}
+	done := p.st(t.Text).Render(fmt.Sprint(filesDone(pr)))
+	if !known && !pr.Finished {
+		return done + p.st(t.Gray).Render(" "+m.t("inst.files"))
+	}
+	return done + p.st(t.Gray).Render(fmt.Sprintf(" %s %d %s", m.t("inst.of"), filesTotal(pr), m.t("inst.files")))
+}
+
+// installFailure explains a failed installation: it was rolled back.
+func (m *Model) installFailure(p *page, err error) {
+	t := m.theme
+	p.add(p.st(t.Error).Bold(true).Render("  " + m.glyphs.Fail + "  " + m.t("inst.failed")))
+	for _, line := range strings.Split(lipgloss.Wrap(err.Error(), p.width-7, " "), "\n") {
+		p.add(p.st(t.Text2).Render("     " + line))
+	}
+	p.gap(1)
+	p.lead(m.t("inst.rolled"))
 }
 
 func filesDone(pr setup.Progress) int {
@@ -774,6 +837,22 @@ func (m *Model) donePage(p *page) {
 		}
 		p.add(spread(p.st(t.Text2).Render("  rcon"), p.st(t.Text).Render(m.opts.Server.Rcon)+p.st(t.Base).Render("       "), p.width, t.Base))
 		p.add(p.st(t.Gray).Render("  " + m.t("ports.open")))
+		if len(m.opts.Server.Instances) > 1 {
+			p.lead("  " + fmt.Sprintf(m.t("srv.one"), setup.PresetName(1)))
+		}
+	}
+	if warnings := m.progress.Warnings; len(warnings) > 0 {
+		p.gap(1)
+		p.rule(m.t("done.notes"))
+		for _, warning := range warnings {
+			for n, line := range strings.Split(lipgloss.Wrap(warning, p.width-6, " "), "\n") {
+				lead := "    "
+				if n == 0 {
+					lead = "  " + m.glyphs.Warn + " "
+				}
+				p.add(p.st(t.Warning).Render(lead + line))
+			}
+		}
 	}
 }
 
@@ -788,14 +867,22 @@ func (m *Model) connectHost() string {
 }
 
 func (m *Model) activateDone(id string) tea.Cmd {
-	switch id {
-	case "play":
-		m.say(m.t("would.play"))
-	case "server":
-		m.say(m.t("would.srv"))
-	case "find":
+	target := m.opts.Target
+	switch {
+	case id == "quit":
+		return tea.Quit
+	case m.cfg.Demo && id == "find":
 		m.openModal("servers")
-	case "quit":
+	case m.cfg.Demo:
+		m.say(m.t("would." + id))
+	case id == "play":
+		m.next = []string{"play", "--target", target}
+	case id == "server":
+		m.next = setup.HostCommand(target, m.opts, 0)
+	case id == "find":
+		m.next = []string{"hub", "--target", target}
+	}
+	if m.next != nil {
 		return tea.Quit
 	}
 	return nil
@@ -814,7 +901,7 @@ func (m *Model) panelRows() []reviewRow {
 		if m.keepPersonal {
 			keep = m.glyphs.Check
 		}
-		return []reviewRow{{"keep", keep + "  " + m.t("keep.personal"), "~/Games/x86qw-personal"}, {"remove", m.t("m.remove"), ""}}
+		return []reviewRow{{"keep", keep + "  " + m.t("keep.personal"), m.t("keep.where")}, {"remove", m.t("m.remove"), ""}}
 	}
 	return []reviewRow{
 		{"update", m.t("m.update"), fmt.Sprintf("%d %s", len(m.existing.Updates), m.t("m.update.d"))},
@@ -846,15 +933,11 @@ func (m *Model) panelPage(p *page) {
 			p.add(spread(left, right, p.width, t.Base))
 		}
 		p.gap(1)
-	case "repair":
-		color := t.Brand
-		label := m.t("m.repair.d")
-		if m.verify >= 100 {
-			color, label = t.Success, "544 "+m.t("verify.ok")
-		}
-		p.add(p.st(t.Base).Render("  ") + bar(t, m.glyphs, p.width-4, m.verify/100, color))
-		p.add(p.st(t.Gray).Render("  " + label))
-		p.gap(1)
+	case "repair", "remove":
+		m.panelResult(p)
+	}
+	if m.removed {
+		return
 	}
 	for index, row := range m.panelRows() {
 		focused, hovered := index == m.focus, m.hover == "row:"+row.id
@@ -875,7 +958,11 @@ func (m *Model) panelPage(p *page) {
 		left := base.Render("  ") + base.Foreground(t.Dim).Render(m.glyphs.Chevron) + base.Render(" ") + label.Render(row.label) + count
 		right := base.Foreground(t.Gray).Render(row.summary) + base.Render("  ")
 		if row.id == "update" {
-			right = base.Foreground(t.Gray).Render(m.t("m.update.d")) + base.Render("  ")
+			note := m.t("m.update.d")
+			if len(e.Updates) == 0 {
+				note = m.t("m.uptodate")
+			}
+			right = base.Foreground(t.Gray).Render(note) + base.Render("  ")
 		}
 		p.band(spread(left, right, p.width, bg), bg, "row:"+row.id)
 	}
@@ -891,8 +978,11 @@ func (m *Model) panelKey(key string) tea.Cmd {
 	case "enter", "space", " ", "right":
 		return m.activatePanel(rows[m.focus].id)
 	case "esc", "left", "backspace":
+		if m.removed {
+			return tea.Quit
+		}
 		if m.panelView != "" {
-			m.panelView, m.focus, m.verify = "", 0, 0
+			m.panelView, m.focus, m.report, m.panelErr = "", 0, nil, nil
 		} else if m.armedFor("quit") {
 			return tea.Quit
 		}
@@ -900,9 +990,51 @@ func (m *Model) panelKey(key string) tea.Cmd {
 	return nil
 }
 
+// runPanel verifies and repairs the installation, or uninstalls it.
+func (m *Model) runPanel(remove bool) tea.Cmd {
+	m.busy, m.report, m.panelErr = true, nil, nil
+	backend, target, keep := m.cfg.Backend, m.existing.Target, m.keepPersonal
+	return tea.Batch(m.tick(), func() tea.Msg {
+		if remove {
+			return panelMsg{removed: true, err: backend.Uninstall(context.Background(), target, keep)}
+		}
+		report, err := backend.Repair(context.Background(), target)
+		return panelMsg{report: &report, err: err}
+	})
+}
+
+// panelResult shows a repair or uninstall running, then how it ended.
+func (m *Model) panelResult(p *page) {
+	t := m.theme
+	switch {
+	case m.busy && m.panelView == "repair":
+		p.add(p.st(t.Brand).Render("  "+m.spinner()) + p.st(t.Text2).Render("  "+m.t("verify.running")))
+	case m.busy:
+		p.add(p.st(t.Brand).Render("  "+m.spinner()) + p.st(t.Text2).Render("  "+m.t("remove.running")))
+	case m.panelErr != nil:
+		p.add(p.st(t.Error).Bold(true).Render("  " + m.glyphs.Fail + "  " + m.panelErr.Error()))
+	case m.removed:
+		p.add(p.st(t.Success).Bold(true).Render("  " + m.glyphs.Ok + "  " + fmt.Sprintf(m.t("removed"), shortPath(m.existing.Target))))
+		p.gap(1)
+		p.lead(m.t("removed.d"))
+	case m.report != nil && m.report.Repaired:
+		p.add(p.st(t.Warning).Render("  " + m.glyphs.Warn + "  " + m.report.Problem))
+		p.add(p.st(t.Success).Bold(true).Render("  " + m.glyphs.Ok + "  " + fmt.Sprintf(m.t("verify.fixed"), m.report.Files)))
+	case m.report != nil:
+		p.add(p.st(t.Success).Bold(true).Render("  " + m.glyphs.Ok + "  " + fmt.Sprintf(m.t("verify.ok"), m.report.Files, m.report.Components)))
+	default:
+		return
+	}
+	p.gap(1)
+}
+
 func (m *Model) activatePanel(id string) tea.Cmd {
+	if m.panelView == "" && id == "update" && len(m.existing.Updates) == 0 {
+		m.say(m.t("m.uptodate"))
+		return nil
+	}
 	if m.panelView == "" && (id == "update" || id == "repair" || id == "remove") {
-		m.panelView, m.focus, m.verify = id, 0, 0
+		m.panelView, m.focus, m.report, m.panelErr = id, 0, nil, nil
 		return nil
 	}
 	switch id {
@@ -911,14 +1043,14 @@ func (m *Model) activatePanel(id string) tea.Cmd {
 	case "apply":
 		return m.startPreflight()
 	case "verify":
-		if m.verify == 0 || m.verify >= 100 {
-			m.verify = 0.5
+		if !m.busy {
+			return m.runPanel(false)
 		}
 	case "keep":
 		m.keepPersonal = !m.keepPersonal
 	case "remove":
-		if m.armedFor("remove") {
-			m.say(m.t("removed"))
+		if !m.busy && m.armedFor("remove") {
+			return m.runPanel(true)
 		}
 	}
 	return nil

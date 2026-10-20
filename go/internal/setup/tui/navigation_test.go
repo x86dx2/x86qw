@@ -2,6 +2,9 @@ package tui
 
 import (
 	"context"
+	"errors"
+	"slices"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -218,5 +221,59 @@ func TestFinishedInstallCountsEveryFile(t *testing.T) {
 	}
 	if !last.Finished || filesDone(last) != filesTotal(last) {
 		t.Fatalf("terminou com %d de %d arquivos", filesDone(last), filesTotal(last))
+	}
+}
+
+// failing installs nothing: its installation fails at once.
+type failing struct{ *setup.Demo }
+
+func (failing) Install(context.Context, setup.Options, <-chan bool) <-chan setup.Progress {
+	out := make(chan setup.Progress, 1)
+	out <- setup.Progress{Err: errors.New("download de ktx falhou: todos os mirrors falharam")}
+	close(out)
+	return out
+}
+
+func TestFailedInstallExplainsAndGoesBack(t *testing.T) {
+	m := New(Config{Backend: failing{&setup.Demo{}}, Target: t.TempDir(), Lang: PT})
+	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
+	drive(m, run(m.Init())...)
+	drive(m, typeText("x86dx2")...)
+	drive(m, key("enter"), key("i"))
+	drive(m, key("i"))
+	if m.screen != scInstall || m.progress.Err == nil {
+		t.Fatalf("o erro deveria ficar no cockpit: tela %d, %v", m.screen, m.progress.Err)
+	}
+	if view := m.View().Content; !strings.Contains(view, "mirrors falharam") {
+		t.Fatal("o cockpit deveria mostrar o erro")
+	}
+	drive(m, key("enter"))
+	if m.screen != scConfigure || m.preOn {
+		t.Fatalf("enter deveria voltar à configuração: tela %d", m.screen)
+	}
+}
+
+func TestDoneHandsTheNextCommandToTheCLI(t *testing.T) {
+	m := New(Config{Backend: &setup.Demo{}, Target: "/x", Lang: PT})
+	m.opts = setup.Defaults(setup.Both, "/x")
+	m.screen = scDone
+	if cmd := m.activateDone("play"); cmd == nil || strings.Join(m.next, " ") != "play --target /x" {
+		t.Fatalf("jogar: %v", m.next)
+	}
+	m.activateDone("server")
+	if m.next[0] != "host" || !slices.Contains(m.next, "x86qw-1") {
+		t.Fatalf("servidor: %v", m.next)
+	}
+}
+
+func TestPanelRepairsForReal(t *testing.T) {
+	m := started(t, true)
+	drive(m, key("down"), key("down"), key("enter"))
+	if m.panelView != "repair" {
+		t.Fatalf("painel: %q", m.panelView)
+	}
+	drive(m, key("enter"))
+	if m.busy || m.report == nil || m.report.Files == 0 {
+		t.Fatalf("reparo: ocupado %v, %+v", m.busy, m.report)
 	}
 }

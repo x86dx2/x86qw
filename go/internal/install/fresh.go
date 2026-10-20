@@ -92,6 +92,7 @@ func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory
 		return nil, err
 	}
 	defer tx.Close()
+	tx.observe = observing(ctx)
 	fail := func(err error) (*Result, error) {
 		if undoErr := tx.Rollback(); undoErr != nil {
 			return nil, fmt.Errorf("%w; rollback incompleto: %v", err, undoErr)
@@ -104,6 +105,8 @@ func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory
 	if _, err := tx.InstallClientRelease(ctx, cat, *spec, options.Channel, options.Release); err != nil {
 		return fail(err)
 	}
+	tx.observer().files("client", 1)
+	tx.observer().file("client", spec.Runtime(options.Channel), 0, false)
 	if resetMacPreferences {
 		for _, key := range []string{"basedir", "version", "NSOSPLastRootDirectory"} {
 			exec.Command("defaults", "delete", "com.ezquake.ezQuake", key).Run()
@@ -148,7 +151,10 @@ func (t *Transaction) provisionPaks(ctx context.Context, cat *catalog.Catalog) e
 	if err != nil {
 		return err
 	}
-	artifact, err := fetchPackage(ctx, t, pkg)
+	if err := t.observer().begin(ctx, corePackage, pkg.Size); err != nil {
+		return err
+	}
+	artifact, err := fetchPackage(ctx, t, corePackage, pkg)
 	if err != nil {
 		return err
 	}
@@ -164,6 +170,7 @@ func (t *Transaction) provisionPaks(ctx context.Context, cat *catalog.Catalog) e
 		return errors.New("o pacote de dados base contém arquivos inesperados")
 	}
 	var created []string
+	t.observer().files(corePackage, 2)
 	for _, name := range []string{"pak0.pak", "pak1.pak"} {
 		source := filepath.Join(prepared.Managed, "id1", name)
 		if err := checkPak(source, required[name]); err != nil {
@@ -177,6 +184,9 @@ func (t *Transaction) provisionPaks(ctx context.Context, cat *catalog.Catalog) e
 			return err
 		}
 		created = append(created, destination)
+		if info, err := os.Stat(destination); err == nil {
+			t.observer().file(corePackage, "id1/"+name, info.Size(), false)
+		}
 	}
 	t.undo = append(t.undo, func() error {
 		var errs []error

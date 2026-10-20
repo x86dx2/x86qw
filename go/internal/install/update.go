@@ -99,6 +99,9 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 		}
 	}
 	tx, err := NewTransaction(in.Root, ".x86qw-components-"+command+".")
+	if tx != nil {
+		tx.observe = observing(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +154,7 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 	}
 	if cliPackage != nil {
 		// Last: the content is already committed and verified.
-		artifact, err := fetchPackage(ctx, tx, *cliPackage)
+		artifact, err := fetchPackage(ctx, tx, "cli", *cliPackage)
 		if err != nil {
 			return nil, fmt.Errorf("conteúdo atualizado, mas a CLI não pôde ser baixada: %w", err)
 		}
@@ -173,7 +176,10 @@ func installBatch(ctx context.Context, tx *Transaction, in plan.Input, batch []s
 		if err != nil {
 			return 0, err
 		}
-		artifact, err := fetchPackage(ctx, tx, pkg)
+		if err := tx.observer().begin(ctx, id, pkg.Size); err != nil {
+			return 0, err
+		}
+		artifact, err := fetchPackage(ctx, tx, id, pkg)
 		if err != nil {
 			return 0, err
 		}
@@ -225,7 +231,7 @@ func installBatch(ctx context.Context, tx *Transaction, in plan.Input, batch []s
 
 // fetchPackage returns the cached artifact, downloading it into the shared
 // installer cache when absent.
-func fetchPackage(ctx context.Context, tx *Transaction, pkg catalog.Package) (string, error) {
+func fetchPackage(ctx context.Context, tx *Transaction, id string, pkg catalog.Package) (string, error) {
 	pin := download.Artifact{URLs: pkg.URLs, Size: pkg.Size, SHA256: pkg.SHA256}
 	root, err := download.CacheDir()
 	if err != nil {
@@ -239,10 +245,13 @@ func fetchPackage(ctx context.Context, tx *Transaction, pkg catalog.Package) (st
 		if !download.Cached(cached, pin) {
 			return "", fmt.Errorf("o pacote %s em cache é inválido; execute cleanup e tente novamente", pkg.Package)
 		}
+		if report := tx.observer().bytes(id); report != nil {
+			report(pkg.Size)
+		}
 		return cached, nil
 	}
 	temporary := filepath.Join(tx.Stage, pkg.Package+".download")
-	if err := download.Fetch(ctx, pin, temporary, download.Options{Deadline: 30 * time.Minute}); err != nil {
+	if err := download.Fetch(ctx, pin, temporary, download.Options{Deadline: 30 * time.Minute, Progress: tx.observer().bytes(id)}); err != nil {
 		return "", fmt.Errorf("download de %s falhou: %w", pkg.Package, err)
 	}
 	if err := os.MkdirAll(filepath.Dir(cached), 0o755); err != nil {

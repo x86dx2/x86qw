@@ -25,6 +25,7 @@ type Catalog struct {
 type Mode struct {
 	ID, Label, DefaultMap string
 	Maps                  []string
+	Bots                  bool // the mode can fill a server with bots
 }
 
 // CheckState is where one preflight check stands.
@@ -59,7 +60,11 @@ type Progress struct {
 	ETA              time.Duration
 	Log              []LogLine
 	Finished, Paused bool
-	Err              error
+	// Holding is true once a paused installation has stopped: it pauses
+	// between packages, so Paused can come before Holding.
+	Holding  bool
+	Warnings []string // what the installation preserved or could not do
+	Err      error
 }
 
 // LogLine is one finished file.
@@ -74,6 +79,7 @@ type LogLine struct {
 type Existing struct {
 	Target, CLIVersion string
 	Components         int
+	Installed          []string // component IDs; the setup adds, never removes
 	Updates            []Update
 	Options            Options
 }
@@ -91,5 +97,19 @@ type Backend interface {
 	Network(ctx context.Context) Network
 	CheckHostname(ctx context.Context, hostname string, network Network) DNSCheck
 	Preflight(ctx context.Context, options Options) <-chan Check
+	// Install installs options, or applies them to the installation
+	// already at the target; sending on control pauses (true) or resumes.
 	Install(ctx context.Context, options Options, control <-chan bool) <-chan Progress
+	// Repair verifies an installation and repairs what it can.
+	Repair(ctx context.Context, target string) (Report, error)
+	// Uninstall removes the installation; keepPersonal keeps configs,
+	// demos and screenshots.
+	Uninstall(ctx context.Context, target string, keepPersonal bool) error
+}
+
+// Report is what a repair found and did.
+type Report struct {
+	Files, Components int
+	Problem           string // what verification found; empty when sound
+	Repaired          bool
 }
