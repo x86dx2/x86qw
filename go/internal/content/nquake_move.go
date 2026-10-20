@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
@@ -38,9 +37,9 @@ func changedReferenceFiles(owner string, upstream *NQuakeUpstream, assets []Asse
 	pinned := map[string]string{}
 	files, _ := manifest.Value("files").(*Object)
 	for _, relative := range files.Keys() {
-		parts, ok := nquakeSnapshotParts(relative)
+		upstream, ok := nquakePath(relative)
 		if ok && pyjson.Eq(pyjson.Get(files, relative, "package"), owner) {
-			pinned[strings.Join(parts[3:], "/")] = pyjson.Repr(pyjson.Get(files, relative, "sha256"))
+			pinned[upstream] = pyjson.Repr(pyjson.Get(files, relative, "sha256"))
 		}
 	}
 	discovered := map[string]bool{}
@@ -49,7 +48,7 @@ func changedReferenceFiles(owner string, upstream *NQuakeUpstream, assets []Asse
 		if asset.Component != "nquake" || asset.Subcomponent != owner {
 			continue
 		}
-		path := strings.Join(purePosix(asset.Path).parts[3:], "/")
+		path, _ := nquakePath(asset.Path)
 		discovered[path] = true
 		if pinned[path] != upstream.Files[path].SHA256 {
 			changed = append(changed, path)

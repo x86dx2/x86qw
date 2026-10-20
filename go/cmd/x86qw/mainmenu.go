@@ -16,16 +16,8 @@ import (
 
 const (
 	unixBootstrap       = "curl -fsS https://qw.x86.com.br/install.sh | bash"
-	powershellBootstrap = "& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); " +
-		"$h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); " +
-		"$c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; " +
-		"$r = $null; try { $r = $c.GetAsync('https://qw.x86.com.br/install.ps1')." +
-		"GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw \"x86QW: HTTP " +
-		"$([int]$r.StatusCode).\" }; if ($r.Content.Headers.ContentLength -gt 262144) { " +
-		"throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync()." +
-		"GetAwaiter().GetResult(); & ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) " +
-		"{ $r.Dispose() }; $c.Dispose(); $h.Dispose() } }"
-	commandList = "Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, doctor, ui, profile, library, changes, migrate, repair, cleanup, uninstall e version."
+	powershellBootstrap = `powershell -c "irm https://qw.x86.com.br/install.ps1 | iex"`
+	commandList         = "Comandos: play, host, proxy, qtv, status, hub, update, upgrade, verify, doctor, ui, profile, library, changes, migrate, repair, cleanup, uninstall e version."
 )
 
 var mainMenuOptions = []menu.Option{

@@ -90,10 +90,10 @@ x86qw-content update mvdsv
 Os 17 componentes que consomem arquivos do nQuake (os 13 do snapshot, os
 overlays Final Arena e Team Fortress, o `ktx.pk3` do KTX e os arquivos do
 Pro-X) fixam cada um sua própria revisão em `reference_revision`
-(`component-releases.json`), e seus arquivos ficam em
-`dist/distributions/nquake/<revisão>/`. Várias revisões coexistem; cada
-arquivo consumido existe em exatamente uma delas, a do seu dono, e uma
-revisão que nenhum componente fixa mais é removida.
+(`component-releases.json`). Os arquivos consumidos ficam todos numa única
+árvore, `dist/distributions/nquake/`, com o mesmo layout do repositório
+nQuake; a revisão de cada arquivo é a do seu dono e aparece na URL registrada
+em `dist/manifest.json` (`verify` exige essa correspondência).
 
 O nQuake é a base da distribuição. `maintenance/inventory/nquake.json`
 registra todos os arquivos da última revisão revisada (caminho, tamanho,

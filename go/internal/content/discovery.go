@@ -533,7 +533,7 @@ func (p *Project) discoverNQuake() ([]Asset, error) {
 		}
 		assets = append(assets, Asset{
 			Component: "nquake", URL: "https://raw.githubusercontent.com/" + nquakeRepository + "/" + commit + "/" + quotePath(item.Path),
-			Path: "distributions/nquake/" + commit + "/" + item.Path, ExpectedSize: item.Size, Subcomponent: owner,
+			Path: nquakeDir + "/" + item.Path, ExpectedSize: item.Size, Subcomponent: owner,
 			ExpectedSHA256: upstream.Files[item.Path].SHA256, ExpectedGitSHA1: item.SHA1,
 		})
 	}

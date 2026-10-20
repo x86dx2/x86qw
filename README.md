@@ -52,10 +52,12 @@ O instalador publica o comando `x86qw` em `~/.local/bin`. Se esse diretório
 ainda não estiver no `PATH`, a etapa final mostra o caminho exato que deve ser
 adicionado ao shell.
 
-### Windows PowerShell
+### Windows
+
+No PowerShell ou no Prompt de Comando:
 
 ```powershell
-& { Add-Type -AssemblyName System.Net.Http; $h = [System.Net.Http.HttpClientHandler]::new(); $h.AllowAutoRedirect = $false; $c = [System.Net.Http.HttpClient]::new($h); $c.Timeout = [TimeSpan]::FromSeconds(60); $c.MaxResponseContentBufferSize = 262144; $r = $null; try { $r = $c.GetAsync('https://qw.x86.com.br/install.ps1').GetAwaiter().GetResult(); if (-not $r.IsSuccessStatusCode) { throw "x86QW: HTTP $([int]$r.StatusCode)." }; if ($r.Content.Headers.ContentLength -gt 262144) { throw 'x86QW: bootstrap excedeu 262144 bytes.' }; $s = $r.Content.ReadAsStringAsync().GetAwaiter().GetResult(); & ([scriptblock]::Create($s)) @args } finally { if ($null -ne $r) { $r.Dispose() }; $c.Dispose(); $h.Dispose() } }
+powershell -c "irm https://qw.x86.com.br/install.ps1 | iex"
 ```
 
 No Windows, a instalação cria atalhos do x86QW no Menu Iniciar e na Área de

@@ -30,15 +30,12 @@ type Payload struct {
 
 // SourceContext mirrors ComponentSourceContext.
 type SourceContext struct {
-	Distribution string
-	Catalog      *Object
-	Releases     *Object
-	Components   map[string]*Object
-	ComponentIDs []string
-	// Snapshots maps each nQuake revision to its source tree; Located maps
-	// each consumed upstream path to the revision holding it.
-	Snapshots     map[string]string
-	Located       map[string]string
+	Distribution  string
+	Catalog       *Object
+	Releases      *Object
+	Components    map[string]*Object
+	ComponentIDs  []string
+	Snapshot      string
 	Partition     map[string][]string
 	ManifestFiles *Object
 }
@@ -50,72 +47,42 @@ func sha256Hex(payload []byte) string {
 
 func meta(pairs ...any) *Object { return object(pairs...) }
 
-// LoadSourceContext mirrors load_source_context. Every consumed upstream path
-// lives in exactly one nQuake source tree: the revision its owner pins.
+// LoadSourceContext mirrors load_source_context. The consumed nQuake files
+// live in one tree laid out like the nQuake repository; each one must come
+// from the revision its owner pins (the revision in its manifest URL).
 func LoadSourceContext(distribution string, catalog, releases *Object) (*SourceContext, error) {
 	distribution = resolve(distribution)
-	snapshots, err := DiscoverSnapshots(distribution)
+	snapshot := filepath.Join(distribution, filepath.FromSlash(nquakeDir))
+	if !isDir(snapshot) || isSymlink(snapshot) {
+		return nil, fmt.Errorf("canonical nQuake source tree is missing: %s", snapshot)
+	}
+	var paths []string
+	err := filepath.WalkDir(snapshot, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || path == snapshot {
+			return err
+		}
+		if !isFile(path) {
+			return nil
+		}
+		if isSymlink(path) {
+			return fmt.Errorf("canonical component source must not be a symlink: %s", path)
+		}
+		relative, _ := filepath.Rel(snapshot, path)
+		paths = append(paths, filepath.ToSlash(relative))
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-	located := map[string]string{}
-	var paths []string
-	for _, revision := range sortedKeys(snapshots) {
-		snapshot := snapshots[revision]
-		err = filepath.WalkDir(snapshot, func(path string, entry os.DirEntry, err error) error {
-			if err != nil || path == snapshot {
-				return err
-			}
-			if !isFile(path) {
-				return nil
-			}
-			if isSymlink(path) {
-				return fmt.Errorf("canonical component source must not be a symlink: %s", path)
-			}
-			relative, _ := filepath.Rel(snapshot, path)
-			relative = filepath.ToSlash(relative)
-			if other, seen := located[relative]; seen {
-				return fmt.Errorf("nQuake source is present in two revisions (%s, %s): %s", other[:12], revision[:12], relative)
-			}
-			located[relative] = revision
-			paths = append(paths, relative)
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
 	}
 	sort.Strings(paths)
 	partition, err := ValidateTreePartition(catalog, paths, "reference")
 	if err != nil {
 		return nil, err
 	}
-	pinned := ReferenceRevisions(releases)
-	used := map[string]bool{}
-	for _, identifier := range sortedKeys(partition) {
-		if len(partition[identifier]) == 0 {
-			continue
-		}
-		revision := pinned[identifier]
-		if revision == "" {
-			return nil, fmt.Errorf("component consumes nQuake files but pins no reference revision: %s", identifier)
-		}
-		for _, path := range partition[identifier] {
-			if located[path] != revision {
-				return nil, fmt.Errorf("nQuake source of %s is not under its pinned revision %s: %s", identifier, revision[:12], path)
-			}
-		}
-		used[revision] = true
-	}
-	for revision := range snapshots {
-		if !used[revision] {
-			return nil, fmt.Errorf("nQuake source tree is not pinned by any component: %s", revision)
-		}
-	}
 	context := &SourceContext{
 		Distribution: distribution, Catalog: catalog, Releases: releases,
 		Components: ComponentsByID(catalog), ComponentIDs: ComponentIDs(catalog),
-		Snapshots: snapshots, Located: located, Partition: partition,
+		Snapshot: snapshot, Partition: partition,
 	}
 	manifestPath := filepath.Join(distribution, "manifest.json")
 	if isFile(manifestPath) && !isSymlink(manifestPath) {
@@ -129,6 +96,25 @@ func LoadSourceContext(distribution string, catalog, releases *Object) (*SourceC
 			return nil, fmt.Errorf("invalid distribution manifest: %s", manifestPath)
 		}
 		context.ManifestFiles = files
+	}
+	pinned := ReferenceRevisions(releases)
+	for _, identifier := range sortedKeys(partition) {
+		if len(partition[identifier]) == 0 {
+			continue
+		}
+		revision := pinned[identifier]
+		if revision == "" {
+			return nil, fmt.Errorf("component consumes nQuake files but pins no reference revision: %s", identifier)
+		}
+		if context.ManifestFiles == nil {
+			continue
+		}
+		for _, path := range partition[identifier] {
+			url, _ := pyjson.Get(context.ManifestFiles, nquakeDir+"/"+path, "url").(string)
+			if nquakeURLRevision(url) != revision {
+				return nil, fmt.Errorf("nQuake source of %s is not from its pinned revision %s: %s", identifier, revision[:12], path)
+			}
+		}
 	}
 	return context, nil
 }
@@ -147,15 +133,20 @@ func (c *SourceContext) RevisionOf(identifier string) string {
 	return ReferenceRevisionOf(c.Releases, identifier)
 }
 
-// Revisions are the nQuake revisions present in the distribution, sorted.
-func (c *SourceContext) Revisions() []string { return sortedKeys(c.Snapshots) }
+// Revisions are the nQuake revisions the components consuming files pin,
+// sorted.
+func (c *SourceContext) Revisions() []string {
+	revisions := map[string]bool{}
+	for identifier, paths := range c.Partition {
+		if revision := c.RevisionOf(identifier); len(paths) > 0 && revision != "" {
+			revisions[revision] = true
+		}
+	}
+	return sortedKeys(revisions)
+}
 
 func (c *SourceContext) verifiedReferencePayload(upstreamPath string) ([]byte, error) {
-	revision, ok := c.Located[upstreamPath]
-	if !ok {
-		return nil, fmt.Errorf("canonical nQuake source is missing: %s", upstreamPath)
-	}
-	path := joinPosix(c.Snapshots[revision], upstreamPath)
+	path := joinPosix(c.Snapshot, upstreamPath)
 	payload, err := readRegular(path, "canonical nQuake source")
 	if err != nil {
 		return nil, err

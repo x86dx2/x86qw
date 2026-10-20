@@ -364,7 +364,7 @@ func (p *Project) downloadAsset(root string, asset Asset, known *Object, reuse s
 	staging := target + ".x86qw-download"
 	defer os.Remove(staging)
 	reused := false
-	if reuse != "" && reuse != target && isFile(reuse) && !isSymlink(reuse) {
+	if reuse != "" && isFile(reuse) && !isSymlink(reuse) {
 		if os.Link(reuse, staging) != nil {
 			copyFile(reuse, staging)
 		}

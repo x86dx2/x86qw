@@ -88,35 +88,6 @@ func validateManifestSizes(value any) error {
 	return nil
 }
 
-// DiscoverSnapshots maps every commit-addressed nQuake source tree in the
-// distribution to its directory. Several revisions coexist: each component
-// keeps its files under the revision it pins.
-func DiscoverSnapshots(distribution string) (map[string]string, error) {
-	root := filepath.Join(distribution, "distributions", "nquake")
-	if !isDir(root) || isSymlink(root) {
-		return nil, fmt.Errorf("canonical nQuake source tree is missing: %s", root)
-	}
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return nil, err
-	}
-	snapshots := map[string]string{}
-	for _, entry := range entries {
-		path := filepath.Join(root, entry.Name())
-		if !isDir(path) || isSymlink(path) {
-			continue
-		}
-		if !hex40Strict.MatchString(entry.Name()) {
-			return nil, fmt.Errorf("nQuake source tree is not commit-addressed: %s", path)
-		}
-		snapshots[entry.Name()] = path
-	}
-	if len(snapshots) == 0 {
-		return nil, fmt.Errorf("distribution has no commit-addressed nQuake source tree")
-	}
-	return snapshots, nil
-}
-
 // IsGitLFSPointer mirrors is_git_lfs_pointer.
 func IsGitLFSPointer(path string) bool {
 	file, err := os.Open(path)
@@ -141,15 +112,15 @@ func (p *Project) ConsumedComponent(path string) (string, error) {
 	}
 	upstream := SourceOwner(registry, path)
 	if component == "nquake" {
-		parts := purePosix(path).parts
-		if len(parts) < 4 || parts[0] != "distributions" || parts[1] != "nquake" || len([]rune(parts[2])) != 40 {
+		upstreamPath, ok := nquakePath(path)
+		if !ok {
 			return "", nil
 		}
 		catalog, err := p.Components()
 		if err != nil {
 			return "", err
 		}
-		owner, err := ComponentForSource(catalog, strings.Join(parts[3:], "/"), "reference")
+		owner, err := ComponentForSource(catalog, upstreamPath, "reference")
 		if err != nil || owner == "" {
 			return "", err
 		}
