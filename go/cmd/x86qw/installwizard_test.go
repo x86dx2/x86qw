@@ -60,3 +60,12 @@ func TestInstallWizard(t *testing.T) {
 		t.Fatalf("exit %d\n%s%s", code, stdout.String(), stderr.String())
 	}
 }
+
+func TestSetupWithoutProfileNeedsATerminal(t *testing.T) {
+	stdinIsTerminal = func() bool { return false }
+	t.Cleanup(func() { stdinIsTerminal = func() bool { return isTerminalFile(os.Stdin) } })
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"setup", "--target", t.TempDir()}, &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "--profile") {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+}
