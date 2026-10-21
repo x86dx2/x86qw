@@ -81,9 +81,22 @@ func ValidateURL(raw string) (*url.URL, error) {
 	return parsed, nil
 }
 
-func client(options Options) *http.Client {
+type clientKey struct{}
+
+// WithClient makes every Fetch under ctx that sets no Options.Client use
+// client. Callers deep in an install pass only ctx along, so this is how
+// tests point them at an httptest.NewTLSServer; the HTTPS policy still
+// applies to every URL.
+func WithClient(ctx context.Context, client *http.Client) context.Context {
+	return context.WithValue(ctx, clientKey{}, client)
+}
+
+func client(ctx context.Context, options Options) *http.Client {
 	if options.Client != nil {
 		return options.Client
+	}
+	if injected, ok := ctx.Value(clientKey{}).(*http.Client); ok && injected != nil {
+		return injected
 	}
 	return &http.Client{
 		CheckRedirect: func(request *http.Request, via []*http.Request) error {
@@ -118,7 +131,7 @@ func Fetch(ctx context.Context, artifact Artifact, destination string, options O
 	}
 	ctx, cancel := context.WithTimeout(ctx, options.Deadline)
 	defer cancel()
-	httpClient := client(options)
+	httpClient := client(ctx, options)
 	var last error
 	for _, raw := range artifact.URLs {
 		err := fetchMirror(ctx, httpClient, raw, artifact, destination, options.Attempts, options.Progress)
@@ -140,7 +153,7 @@ func fetchMirror(ctx context.Context, httpClient *http.Client, raw string, artif
 	var err error
 	for attempt := 1; attempt <= attempts; attempt++ {
 		var wait time.Duration
-		err, wait = fetchOnce(ctx, httpClient, raw, artifact, destination, progress)
+		wait, err = fetchOnce(ctx, httpClient, raw, artifact, destination, progress)
 		var transient *transientError
 		var status *HTTPError
 		retryable := errors.As(err, &transient) || (errors.As(err, &status) && transientStatus(status.Status))
@@ -167,36 +180,36 @@ func fetchMirror(ctx context.Context, httpClient *http.Client, raw string, artif
 	return err
 }
 
-func fetchOnce(ctx context.Context, httpClient *http.Client, raw string, artifact Artifact, destination string, progress func(int64)) (error, time.Duration) {
+func fetchOnce(ctx context.Context, httpClient *http.Client, raw string, artifact Artifact, destination string, progress func(int64)) (time.Duration, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
 	if err != nil {
-		return err, 0
+		return 0, err
 	}
 	request.Header.Set("User-Agent", "x86qw-downloader/1")
 	request.Header.Set("Accept-Encoding", "identity")
 	response, err := httpClient.Do(request)
 	if err != nil {
 		if ctx.Err() != nil {
-			return ctx.Err(), 0
+			return 0, ctx.Err()
 		}
-		return &transientError{err}, 0
+		return 0, &transientError{err}
 	}
 	defer response.Body.Close()
 	if _, err := ValidateURL(response.Request.URL.String()); err != nil {
-		return err, 0
+		return 0, err
 	}
 	if response.StatusCode != http.StatusOK {
-		return &HTTPError{Status: response.StatusCode, URL: raw}, retryAfter(response.Header.Get("Retry-After"))
+		return retryAfter(response.Header.Get("Retry-After")), &HTTPError{Status: response.StatusCode, URL: raw}
 	}
 	if response.ContentLength >= 0 && response.ContentLength != artifact.Size {
-		return &IntegrityError{fmt.Sprintf("tamanho anunciado %d difere de %d: %s", response.ContentLength, artifact.Size, raw)}, 0
+		return 0, &IntegrityError{fmt.Sprintf("tamanho anunciado %d difere de %d: %s", response.ContentLength, artifact.Size, raw)}
 	}
 	if err := os.MkdirAll(filepath.Dir(destination), 0o700); err != nil {
-		return err, 0
+		return 0, err
 	}
 	temporary, err := os.CreateTemp(filepath.Dir(destination), "."+filepath.Base(destination)+".*.download")
 	if err != nil {
-		return err, 0
+		return 0, err
 	}
 	defer os.Remove(temporary.Name())
 	hash := sha256.New()
@@ -210,23 +223,23 @@ func fetchOnce(ctx context.Context, httpClient *http.Client, raw string, artifac
 	closeErr := temporary.Close()
 	switch {
 	case copyErr != nil:
-		return &transientError{copyErr}, 0
+		return 0, &transientError{copyErr}
 	case written < artifact.Size:
-		return &transientError{fmt.Errorf("corpo truncado (%d de %d bytes): %s", written, artifact.Size, raw)}, 0
+		return 0, &transientError{fmt.Errorf("corpo truncado (%d de %d bytes): %s", written, artifact.Size, raw)}
 	case written > artifact.Size:
-		return &IntegrityError{fmt.Sprintf("corpo excede %d bytes: %s", artifact.Size, raw)}, 0
+		return 0, &IntegrityError{fmt.Sprintf("corpo excede %d bytes: %s", artifact.Size, raw)}
 	case syncErr != nil:
-		return syncErr, 0
+		return 0, syncErr
 	case closeErr != nil:
-		return closeErr, 0
+		return 0, closeErr
 	}
 	if hex.EncodeToString(hash.Sum(nil)) != artifact.SHA256 {
-		return &IntegrityError{fmt.Sprintf("SHA-256 divergente: %s", raw)}, 0
+		return 0, &IntegrityError{fmt.Sprintf("SHA-256 divergente: %s", raw)}
 	}
 	if err := os.Chmod(temporary.Name(), 0o644); err != nil {
-		return err, 0
+		return 0, err
 	}
-	return os.Rename(temporary.Name(), destination), 0
+	return 0, os.Rename(temporary.Name(), destination)
 }
 
 func retryAfter(value string) time.Duration {

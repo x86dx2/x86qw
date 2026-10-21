@@ -22,7 +22,9 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/state"
 )
 
-const (
+// The registered Quake PAKs. They are variables only so the offline tests
+// can install small fixture PAKs instead of the real 18 MB ones.
+var (
 	pak0SHA256 = "eec9a020b6d8b6df73a5b911e19985f6e2539c1c6857b4a9f400553b9599677d"
 	pak1SHA256 = "94e355836ec42bc464e4cbe794cfb7b5163c6efa1bcc575622bb36475bf1cf30"
 )

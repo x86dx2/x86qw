@@ -23,6 +23,8 @@ const (
 	CatalogTarget = "catalog/catalog.json"
 	// DefaultBaseURL is the public TUF repository (metadata/ and targets/).
 	DefaultBaseURL = "https://qw.x86.com.br/api/v1/trust/"
+	// UserAgent is how the client identifies itself to the repository.
+	UserAgent = "x86qw-go"
 
 	catalogMaxBytes = 2 * 1024 * 1024
 )
@@ -38,6 +40,10 @@ type Options struct {
 	Root []byte
 	// Fetcher overrides the HTTP fetcher (tests only).
 	Fetcher fetcher.Fetcher
+	// RefTime replaces the clock that expiry is checked against. Only
+	// x86qw-content verify sets it, so a checked-out chain does not fail
+	// CI just because a week passed; the monitor watches the live expiry.
+	RefTime time.Time
 }
 
 // RoleState is the verified version and expiry of a top-level role.
@@ -97,7 +103,7 @@ func LoadCatalog(opts Options) (*Catalog, error) {
 	base := opts.Fetcher
 	if base == nil {
 		df := fetcher.NewDefaultFetcher()
-		df.SetHTTPUserAgent("x86qw-go")
+		df.SetHTTPUserAgent(UserAgent)
 		base = df
 	}
 	observer := &observingFetcher{base: base}
@@ -106,6 +112,9 @@ func LoadCatalog(opts Options) (*Catalog, error) {
 	up, err := updater.New(cfg)
 	if err != nil {
 		return nil, errorf("falha de trust ao autenticar catálogo: %v", err)
+	}
+	if !opts.RefTime.IsZero() {
+		up.UnsafeSetRefTime(opts.RefTime)
 	}
 	if err := up.Refresh(); err != nil {
 		return nil, errorf("falha de trust ao autenticar catálogo: %v", err)

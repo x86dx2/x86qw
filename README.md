@@ -95,7 +95,7 @@ autoridade declarada de release, upstream, pacote ou referência nQuake antes do
 download persistente. URLs armazenadas em catálogo, manifesto e inventários
 passam pela mesma política HTTPS e não aceitam credenciais, fragmentos, queries,
 espaços ou controles. Sua autenticação versionada pertence a uma etapa
-posterior. A CLI current é a `2.3.2`, nativa em Go; os instaladores Python
+posterior. A CLI current é a da release `x86qw-cli-2.3.2`, nativa em Go; os instaladores Python
 `0.x` e `1.0.x` permanecem históricos e imutáveis nos mirrors. Nenhum conteúdo
 desta árvore muda os bytes já publicados.
 
@@ -281,7 +281,7 @@ docs/           arquitetura, hosting, decisões e roadmaps
 
 ## Estado do projeto
 
-A CLI current é `2.3.2` owner-only: um usuário, validada no Apple M3. Os
+A CLI current, da release `x86qw-cli-2.3.2`, é owner-only: um usuário, validada no Apple M3. Os
 binários de macOS, Windows e Linux estão no catálogo e na release
 `x86qw-cli-2.3.2`; Windows e Linux seguem em preview até a evidência nativa da
 fase correspondente.

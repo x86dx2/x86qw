@@ -94,7 +94,6 @@ observado no intervalo UTC acima.
 - [PROJECT-STATUS](../PROJECT-STATUS.md) — fonte operacional anterior, a ser
   reconciliada com esta fotografia quando houver conflito;
 - [runbook de release](../runbooks/release.md);
-- [operação TUF](../runbooks/tuf-operation.md);
 - [ADR 0008 — owner-only](../adr/0008-owner-only-release-gates.md);
 - [release truth machine-readable](release-truth.json);
 - [registro de riscos](risk-register.json).

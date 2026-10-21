@@ -1,8 +1,9 @@
 name: Release native CLI
 
 # Builds the static x86qw binaries once and publishes them as the
-# x86qw-cli-<version> GitHub release; the pinned bootstraps are rendered
-# from these exact assets with `go run ./cmd/x86qw-release bootstrap`.
+# x86qw-cli-<version> GitHub prerelease with build provenance. `x86qw-release
+# prepare` puts it into the checkout; the site deploy that ships it marks
+# the release as latest.
 on:
   workflow_dispatch:
     inputs:
@@ -23,9 +24,11 @@ jobs:
     name: Build and publish x86qw-cli-${{ inputs.version }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: release
+    environment: cli-release
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     defaults:
       run:
         working-directory: go
@@ -61,7 +64,11 @@ jobs:
           done
           (cd dist && sha256sum x86qw-* > SHA256SUMS)
           cat dist/SHA256SUMS
-      - name: Publish the release without overwriting
+      - name: Attest the build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: go/dist/x86qw-*
+      - name: Publish the prerelease without overwriting
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
@@ -72,6 +79,6 @@ jobs:
             echo "release $tag já existe; nada foi sobrescrito" >&2
             exit 1
           fi
-          gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+          gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "x86QW CLI ${VERSION}" \
-            --notes "CLI nativa x86QW ${VERSION}. Verifique os binários pelo SHA256SUMS."
+            --notes "CLI nativa x86QW ${VERSION}. Verifique os binários pelo SHA256SUMS ou com \`gh attestation verify ARQUIVO --repo ${GITHUB_REPOSITORY}\`. Fica como prerelease até o site passar a servi-la."

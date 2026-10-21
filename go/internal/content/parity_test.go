@@ -120,6 +120,9 @@ var mutations = []mutation{
 	{"tuf-timestamp-missing", func(t *testing.T, root string) {
 		os.Remove(filepath.Join(root, TrustMetadataDir, "timestamp.json"))
 	}},
+	{"tuf-stale-generation", func(t *testing.T, root string) {
+		os.WriteFile(filepath.Join(root, TrustMetadataDir, "1.snapshot.json"), []byte("{}"), 0o644)
+	}},
 	{"tuf-root-policy", func(t *testing.T, root string) {
 		editJSON(t, filepath.Join(root, TrustRootPath), false, func(d *Object) {
 			d.Value("signed").(*Object).Set("consistent_snapshot", false)
