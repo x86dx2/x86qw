@@ -1,241 +1,245 @@
-# ADR 0001 — Fronteira limitada de bytes remotos
+# ADR 0001 — Bounded boundary for remote bytes
 
-**Status:** proposto; implementação corretiva em revisão e não publicada
+**Status:** proposed; corrective implementation under review and not published
 
-**Data:** 2026-08-03
+**Date:** 2026-08-03
 
 **Issue:** [#45](https://github.com/x86dx2/x86qw/issues/45)
 
-## Contexto
+## Context
 
-O instalador e as ferramentas de manutenção possuíam downloaders independentes.
-Alguns aceitavam corpo parcial, liam metadados sem limite, repetiam respostas
-HTTP permanentes ou promoviam o destino antes da validação integral. Um mirror
-que respondesse HTTP 200 com bytes corrompidos também podia impedir o fallback
-para um mirror íntegro.
+The installer and the maintenance tools had independent downloaders. Some
+accepted a partial body, read metadata without a limit, retried permanent HTTP
+responses or promoted the destination before full validation. A mirror that
+answered HTTP 200 with corrupted bytes could also prevent the fallback to an
+intact mirror.
 
-A decisão precisa limitar recursos, preservar o destino anterior e aplicar uma
-política de transporte única sem acrescentar dependência Python externa. Essa
-proteção não deve ser confundida com autenticação do catálogo ou do upstream.
+The decision must bound resources, preserve the previous destination and apply
+a single transport policy without adding an external Python dependency. This
+protection must not be confused with authentication of the catalog or of the
+upstream.
 
-## Decisão
+## Decision
 
-Downloads HTTP feitos pela aplicação e pelas ferramentas Python passam por
-`maintenance/tools/downloader.py`. A fronteira expõe contratos de dados e duas
-operações: `download()` para uma origem e `download_mirrors()` para origens
-equivalentes sob um único orçamento monotônico.
+HTTP downloads made by the application and by the Python tools go through
+`maintenance/tools/downloader.py`. The boundary exposes data contracts and two
+operations: `download()` for one origin and `download_mirrors()` for equivalent
+origins under a single monotonic budget.
 
-As operações públicas criam um opener HTTPS e um registro de cancelamento
-privados por chamada. Não existe singleton/getter público nem argumento para
-injetar transporte, relógio, espera ou aleatoriedade. O zipapp incorpora apenas
-os entrypoints selados; seams determinísticos permanecem em helpers privados da
-suíte.
+The public operations create a private HTTPS opener and cancellation registry
+per call. There is no public singleton/getter and no argument to inject
+transport, clock, sleep or randomness. The zipapp embeds only the sealed
+entrypoints; deterministic seams stay in private helpers of the suite.
 
-### Contratos da API
+### API contracts
 
-| Contrato | Campos obrigatórios de segurança | Resultado permitido |
+| Contract | Mandatory security fields | Allowed result |
 |---|---|---|
-| `PinnedArtifact` | URL HTTPS, destino, tamanho esperado, SHA-256 esperado, tamanho máximo, deadline total e política de retry | arquivo validado promovido atomicamente |
-| `BoundedMetadata` | URL HTTPS, tamanho máximo, deadline total e política de retry | bytes efêmeros em memória ou headers de `HEAD` |
+| `PinnedArtifact` | HTTPS URL, destination, expected size, expected SHA-256, maximum size, total deadline and retry policy | validated file promoted atomically |
+| `BoundedMetadata` | HTTPS URL, maximum size, total deadline and retry policy | ephemeral bytes in memory or `HEAD` headers |
 
-`PinnedArtifact` é obrigatório para qualquer byte remoto que possa persistir,
-tanto na instalação quanto na árvore de distribuição. `BoundedMetadata` atende
-catálogo, Hub e descoberta, mas não converte metadados dinâmicos em informação
-autenticada nem autoriza seus consumidores a promover a resposta a arquivo
-gerenciado.
+`PinnedArtifact` is mandatory for any remote byte that may persist, both in the
+installation and in the distribution tree. `BoundedMetadata` serves the
+catalog, the Hub and discovery, but it does not turn dynamic metadata into
+authenticated information, nor does it authorize its consumers to promote the
+response to a managed file.
 
-Uma descoberta de stable, nightly ou nQuake não pode usar o SHA-256 calculado
-durante a própria transferência como identidade esperada. O `update` só herda
-uma identidade já revisada quando caminho, URL e tamanho coincidem exatamente
-com `dist/manifest.json`. Um candidato novo permanece em `review_required` e
-precisa entrar por uma definição `add` que declare tamanho e SHA-256 antes de
-qualquer download persistente.
+A stable, nightly or nQuake discovery cannot use the SHA-256 computed during
+the transfer itself as the expected identity. `update` only inherits an
+already reviewed identity when path, URL and size match `dist/manifest.json`
+exactly. A new candidate stays in `review_required` and must come in through
+an `add` definition that declares size and SHA-256 before any persistent
+download.
 
-Para uma revisão nova do nQuake, a definição também precisa declarar uma
-transição `reference` explícita: repositório idêntico ao inventariado, revisão
-anterior igual ao estado corrente e nova revisão em hash Git completo. Essa
-transição stale-safe só altera a projeção em memória usada pelo intake, precisa
-incorporar arquivo sob o novo snapshot e só é promovida se a lista revisada
-reconstruir o snapshot consumido completo; o `update` não recebe autoridade
-para baixar ou promover o candidato por conta própria.
+For a new nQuake revision, the definition must also declare an explicit
+`reference` transition: a repository identical to the inventoried one, a
+previous revision equal to the current state and a new revision as a full Git
+hash. This stale-safe transition only changes the in-memory projection used by
+the intake, must incorporate a file under the new snapshot and is only
+promoted if the reviewed list rebuilds the complete consumed snapshot; `update`
+gets no authority to download or promote the candidate on its own.
 
-O pin da definição não é autossuficiente: URL remota exige `managed: true` e
-correspondência exata com pelo menos uma autoridade canônica — artefato de uma
-release proposta, fonte preservada no registro de upstreams, pacote público
-proposto ou referência nQuake fixada. O namespace de
-`distribution_component`, o consumidor operacional e a identidade lógica de
-`package` também precisam coincidir com essa autoridade. Um caminho já
-registrado não pode receber novos bytes ou metadados no lugar, e bundles do
-instalador são exclusivos do fluxo de release imutável. Para ezQuake, o caminho
-é derivado exatamente de
-`clients/ezquake/<canal>/<versão>/<plataforma>-<arquitetura>/<arquivo>` e precisa
-coincidir com essas coordenadas no pacote. Fontes locais precisam estar
-consumidas pelo BOM proposto e são copiadas por temporário com hash no streaming,
-`fsync` e `replace`, evitando que o staging por hardlink modifique a árvore viva
-antes da transação.
+The definition's pin is not self-sufficient: a remote URL requires
+`managed: true` and an exact match with at least one canonical authority — an
+artifact of a proposed release, a source preserved in the upstream registry, a
+proposed public package or a pinned nQuake reference. The namespace of
+`distribution_component`, the operational consumer and the logical identity of
+`package` must also match that authority. An already registered path cannot
+receive new bytes or metadata in place, and installer bundles belong
+exclusively to the immutable release flow. For ezQuake, the path is derived
+exactly from
+`clients/ezquake/<channel>/<version>/<platform>-<architecture>/<file>` and must
+match those coordinates in the package. Local sources must be consumed by the
+proposed BOM and are copied through a temporary file with hashing while
+streaming, `fsync` and `replace`, so that hardlink staging cannot modify the
+live tree before the transaction.
 
-A política de retry, headers e rótulo são parte de cada contrato. Os contratos
-de mirror são validados integralmente antes da primeira conexão e precisam ter o
-mesmo tipo, deadline e identidade de destino. Mirrors de artefato também precisam
-compartilhar tamanho e SHA-256 esperados.
+The retry policy, headers and label are part of each contract. Mirror
+contracts are fully validated before the first connection and must have the
+same type, deadline and destination identity. Artifact mirrors must also share
+the expected size and SHA-256.
 
-Catálogo, manifesto, inventário de releases, registro de upstreams e intake
-reutilizam o validador HTTPS da fronteira. URLs persistentes rejeitam userinfo,
-fragmentos, queries, espaços e controles antes que uma origem seja registrada.
+Catalog, manifest, release inventory, upstream registry and intake reuse the
+boundary's HTTPS validator. Persistent URLs reject userinfo, fragments,
+queries, spaces and control characters before an origin is registered.
 
-## Deadline, transporte e mirrors
+## Deadline, transport and mirrors
 
-`download()` cria um deadline absoluto para uma origem. Esse mesmo orçamento
-cobre conexão, redirects, headers, leituras, tentativas e pausas de retry. Cada
-leitura recebe no socket apenas o tempo monotônico restante.
+`download()` creates an absolute deadline for one origin. That same budget
+covers connection, redirects, headers, reads, attempts and retry pauses. Each
+read gets on the socket only the remaining monotonic time.
 
-A resolução DNS ocorre em subprocesso Python isolado, com quantidade de
-endereços e saída limitadas. O subprocesso recebe `kill` e uma tentativa de
-coleta se esgotar o orçamento. O filho aguarda um token em `stdin`; o pai só o libera para
-`getaddrinfo` depois de anexar o handle ao controlador. As tentativas TCP usam
-sockets não bloqueantes e o mesmo deadline
-absoluto. Durante TLS e headers, o controlador registra a conexão; ao cancelar,
-encerra o resolver e os sockets pendentes e executa `shutdown` antes do
-fechamento. A mesma limpeza ocorre em interrupção do controlador. O worker
-recalcula o orçamento imediatamente antes de abrir a conexão, portanto atraso
-de agendamento não reutiliza um timeout obsoleto. Orçamentos restantes menores
-que 500 ms são recusados antes de criar worker, resolver ou socket, pois não
-reservam janela suficiente de cancelamento. Operações aceitas reservam de 250 a
-500 ms do próprio deadline para a coleta local. Uma resposta que termine depois do
-controlador é fechada pelo worker e nunca pode promover o destino.
+DNS resolution happens in an isolated Python subprocess, with a bounded number
+of addresses and bounded output. The subprocess is killed, with one attempt to
+reap it, if the budget runs out. The child waits for a token on `stdin`; the
+parent only releases it to `getaddrinfo` after attaching the handle to the
+controller. TCP attempts use non-blocking sockets and the same absolute
+deadline. During TLS and headers, the controller registers the connection; on
+cancel, it ends the resolver and the pending sockets and runs `shutdown` before
+closing. The same cleanup happens when the controller is interrupted. The
+worker recomputes the budget right before opening the connection, so a
+scheduling delay does not reuse a stale timeout. Remaining budgets under
+500 ms are refused before creating a worker, resolver or socket, because they
+do not reserve a large enough cancellation window. Accepted operations reserve
+250 to 500 ms of their own deadline for local reaping. A response that ends
+after the controller is closed by the worker and can never promote the
+destination.
 
-`subprocess.Popen` é uma chamada local sem cancelamento fornecido pela biblioteca
-padrão. Se a própria criação do resolver bloquear além do deadline, o chamador
-retorna no prazo e o filho permanece no gate sem iniciar DNS; assim que a
-criação retorna, o estado cancelado mata o processo sem enviar o token. A thread daemon
-pode aguardar somente esse retorno local. Eliminar até essa espera exigiria um
-supervisor de processo externo e fica fora desta mudança incremental.
+`subprocess.Popen` is a local call without cancellation provided by the
+standard library. If creating the resolver itself blocks past the deadline,
+the caller returns on time and the child stays at the gate without starting
+DNS; as soon as creation returns, the canceled state kills the process without
+sending the token. The daemon thread may wait only for that local return.
+Removing even that wait would require an external process supervisor and is
+out of scope for this incremental change.
 
-Se o sistema operacional demorar além da janela reservada para concluir o reap
-de um filho já morto, a thread daemon pode terminar a coleta depois do retorno.
-O deadline público continua rígido e não há DNS ou socket novo após o
-cancelamento; a janela não é uma garantia absoluta de tempo de reap do SO.
+If the operating system takes longer than the reserved window to finish
+reaping an already dead child, the daemon thread may finish reaping after the
+return. The public deadline stays strict and there is no new DNS or socket
+after cancellation; the window is not an absolute guarantee of the OS reap
+time.
 
-`download_mirrors()` cria um único deadline absoluto antes do primeiro mirror e
-o reutiliza em todas as tentativas e origens. Falhas de transporte ou
-integridade podem avançar ao próximo mirror. Falhas de protocolo, limite,
-armazenamento, política ou deadline são terminais e não são mascaradas por um
-fallback remoto. Quando um `Retry-After` não cabe no orçamento daquele mirror,
-o controlador pode avançar imediatamente para outra origem sem ultrapassar o
-deadline compartilhado.
+`download_mirrors()` creates a single absolute deadline before the first
+mirror and reuses it across all attempts and origins. Transport or integrity
+failures may move on to the next mirror. Protocol, limit, storage, policy or
+deadline failures are terminal and are not masked by a remote fallback. When a
+`Retry-After` does not fit in that mirror's budget, the controller may move
+immediately to another origin without exceeding the shared deadline.
 
-Um chamador que execute várias chamadas independentes a `download()` não obtém
-automaticamente esse orçamento compartilhado. Loops históricos de mirror devem
-ser migrados para `download_mirrors()` e permanecer cobertos por testes de
-integração; a mera existência da API não prova que todos os consumidores a usam.
+A caller that makes several independent calls to `download()` does not
+automatically get that shared budget. Historical mirror loops must be migrated
+to `download_mirrors()` and stay covered by integration tests; the mere
+existence of the API does not prove that every consumer uses it.
 
-## Limites
+## Limits
 
-- artefato persistente: no máximo 512 MiB;
-- catálogo do instalador: no máximo 2 MiB;
-- resposta do Hub: no máximo 1 MiB;
-- descoberta HTTP de manutenção: no máximo 4 MiB;
-- árvore recursiva do GitHub: no máximo 4 MiB e 50.000 entradas sob um deadline
-  compartilhado entre a resolução da referência, do commit e a leitura da árvore.
+- persistent artifact: at most 512 MiB;
+- installer catalog: at most 2 MiB;
+- Hub response: at most 1 MiB;
+- maintenance HTTP discovery: at most 4 MiB;
+- GitHub recursive tree: at most 4 MiB and 50,000 entries under a deadline
+  shared between resolving the reference, the commit and reading the tree.
 
-O catálogo também rejeita previamente pacotes cujo tamanho declarado ultrapasse
-o limite global. Respostas sem `Content-Length` continuam limitadas durante o
+The catalog also rejects up front packages whose declared size exceeds the
+global limit. Responses without `Content-Length` stay bounded while
 streaming.
 
-## Transporte, retry e armazenamento
+## Transport, retry and storage
 
-- URLs inicial, redirecionada e final precisam permanecer em HTTPS;
-- redirects entre origens não podem encaminhar headers privados;
-- corpos intermediários 301/302/303/307/308 são fechados sem leitura e não
-  contornam o limite de bytes;
-- `Content-Length`, quando presente, precisa ser único, decimal e coerente;
-- SHA-256 e tamanho são calculados durante o streaming, sem segunda leitura;
-- o tamanho esperado é ultrapassado por no máximo um byte antes da interrupção;
-- o padrão é de três tentativas, backoff exponencial de 0,5 a 8 segundos e
-  jitter de 20%;
-- apenas rede transitória e HTTP 408, 425, 429, 500, 502, 503 e 504 recebem
-  retry;
-- `Retry-After`, em segundos ou HTTP-date, é aceito somente quando cabe no
-  deadline;
-- temporários usam modo `0600` no POSIX;
-- validação, `flush`, `fsync` e fechamento antecedem `os.replace`;
-- falha de rede, integridade ou armazenamento preserva o destino anterior.
+- the initial, redirected and final URLs must stay on HTTPS;
+- cross-origin redirects cannot forward private headers;
+- intermediate 301/302/303/307/308 bodies are closed without reading and do
+  not get around the byte limit;
+- `Content-Length`, when present, must be single, decimal and consistent;
+- SHA-256 and size are computed while streaming, without a second read;
+- the expected size is exceeded by at most one byte before the interruption;
+- the default is three attempts, exponential backoff from 0.5 to 8 seconds and
+  20% jitter;
+- only transient network errors and HTTP 408, 425, 429, 500, 502, 503 and 504
+  are retried;
+- `Retry-After`, in seconds or as an HTTP-date, is accepted only when it fits
+  in the deadline;
+- temporary files use mode `0600` on POSIX;
+- validation, `flush`, `fsync` and close come before `os.replace`;
+- a network, integrity or storage failure preserves the previous destination.
 
 ## Bootstraps
 
-Antes de o zipapp existir não é possível importar a fronteira comum. Os
-bootstraps mantêm projeções mínimas e isoladas:
+Before the zipapp exists, the common boundary cannot be imported. The
+bootstraps keep minimal, isolated projections:
 
-- Unix usa `curl --disable` como primeiro argumento para ignorar `.curlrc`,
-  seguido de `--proto '=https' --proto-redir '=https'`, timeout de conexão,
-  orçamento único para retries e mirrors, limite durante a recepção e validação
-  de `Content-Length`, tamanho e SHA-256;
-- a fronteira de truncamento do bootstrap Unix é estrutural no script, não no
-  chamador: o corpo vive em `x86qw_install_main` e só corre na última linha
-  `x86qw_install_main "$@"`; um prefixo a 25%, 50%, 75% ou 99% falha na
-  análise e não executa o instalador. O comando público é
+- Unix uses `curl --disable` as the first argument to ignore `.curlrc`,
+  followed by `--proto '=https' --proto-redir '=https'`, a connection timeout,
+  a single budget for retries and mirrors, a limit while receiving and
+  validation of `Content-Length`, size and SHA-256;
+- the truncation boundary of the Unix bootstrap is structural in the script,
+  not in the caller: the body lives in `x86qw_install_main` and only runs on
+  the last line `x86qw_install_main "$@"`; a prefix at 25%, 50%, 75% or 99%
+  fails to parse and does not run the installer. The public command is
   `curl -fsS https://qw.x86.com.br/install.sh | bash`;
-- PowerShell incorpora um downloader Python com HTTPS, limite, deadline,
-  `Retry-After`, temporário privado no POSIX e promoção atômica;
-- no PowerShell, timeouts de conexão e tentativa usam o orçamento completo
-  quando o deadline total ainda oferece a margem posterior de coleta; somente a
-  parte faltante dessa margem é reservada antes do limitante;
-- as cópias canônica e pública são obrigadas a permanecer idênticas por teste.
+- PowerShell embeds a Python downloader with HTTPS, a limit, a deadline,
+  `Retry-After`, a private temporary file on POSIX and atomic promotion;
+- in PowerShell, connection and attempt timeouts use the full budget when the
+  total deadline still leaves the later reaping margin; only the missing part
+  of that margin is reserved before the limiter;
+- a test requires the canonical and public copies to stay identical.
 
-No código corretivo da PR 4, o bootstrap Windows cria seu diretório de trabalho
-com DACL protegida para usuário atual e `LOCAL SYSTEM` antes da primeira
-escrita. A decisão e o comportamento de falha conservadora estão no
-[ADR 0003](0003-dacl-privada-windows.md). O contrato foi validado nos jobs
-Windows com Python 3.10 e 3.13; o smoke de runtime sob conta padrão permanece
-separado, e essa mudança ainda não foi publicada.
+In PR 4's corrective code, the Windows bootstrap creates its working directory
+with a DACL protected for the current user and `LOCAL SYSTEM` before the first
+write. The decision and the conservative failure behavior are in
+[ADR 0003](0003-dacl-privada-windows.md). The contract was validated in the
+Windows jobs with Python 3.10 and 3.13; the runtime smoke under a standard
+account stays separate, and this change has not been published yet.
 
-Essas projeções existem somente para obter o zipapp fixado; não autorizam um
-novo downloader para clientes, componentes ou metadados do produto.
+These projections exist only to obtain the pinned zipapp; they do not
+authorize a new downloader for clients, components or product metadata.
 
-## Fronteiras externas e riscos aceitos neste ADR
+## External boundaries and risks accepted in this ADR
 
-- `BoundedMetadata` limita transporte e memória, mas catálogos ainda não têm
-  expiração, proteção contra rollback/freeze, rotação de chaves ou raiz de
-  confiança fixada. Esse contrato pertence ao PR 9 e à
+- `BoundedMetadata` bounds transport and memory, but catalogs still have no
+  expiration, rollback/freeze protection, key rotation or pinned root of
+  trust. That contract belongs to PR 9 and
   [issue #48](https://github.com/x86dx2/x86qw/issues/48).
-- referências, commits, árvores e leituras de releases do GitHub passam por
-  `BoundedMetadata`. Árvores recursivas truncadas e entradas com schema, tipo,
-  modo, SHA-1, tamanho ou caminho inválido são rejeitadas antes do consumo. Os
-  comandos `gh` restantes e o `curl` de upload GitLab são operações de
-  publicação de saída, não rotas alternativas de ingestão. Esse `curl` usa
-  `--disable` como primeiro argumento, além de HTTPS obrigatório e redirects
-  desativados, mas a promoção imutável ainda precisa ser redesenhada no PR 10;
-- o `curl` do bootstrap é a projeção limitada descrita acima;
-- a privacidade por DACL no Windows foi incorporada ao código corretivo da PR 4
-  pelo [ADR 0003](0003-dacl-privada-windows.md) e validada pelos checks nativos
-  Windows da [issue #47](https://github.com/x86dx2/x86qw/issues/47); a execução
-  dos runtimes sob conta padrão permanece no PR 11;
-- testes portáveis da fronteira não substituem smokes nativos de rede ou dos
-  runtimes.
+- GitHub references, commits, trees and release reads go through
+  `BoundedMetadata`. Truncated recursive trees and entries with an invalid
+  schema, type, mode, SHA-1, size or path are rejected before use. The
+  remaining `gh` commands and the GitLab upload `curl` are outgoing
+  publication operations, not alternative ingestion routes. That `curl` uses
+  `--disable` as the first argument, plus mandatory HTTPS and disabled
+  redirects, but the immutable promotion still needs to be redesigned in
+  PR 10;
+- the bootstrap's `curl` is the bounded projection described above;
+- DACL privacy on Windows was incorporated into PR 4's corrective code by
+  [ADR 0003](0003-dacl-privada-windows.md) and validated by the native Windows
+  checks of [issue #47](https://github.com/x86dx2/x86qw/issues/47); running
+  the runtimes under a standard account stays in PR 11;
+- portable tests of the boundary do not replace native network or runtime
+  smokes.
 
-Essas exceções não são rotas alternativas autorizadas para instalar conteúdo
-sem identidade prévia. Elas precisam ser eliminadas ou formalmente absorvidas pelos PRs que
-tratam trust metadata, automação de release e ACL antes da versão 1.0.0.
+These exceptions are not authorized alternative routes to install content
+without a prior identity. They must be eliminated or formally absorbed by the
+PRs that deal with trust metadata, release automation and ACLs before version
+1.0.0.
 
-A arquitetura proposta para trust metadata, ainda sem implementação ou chaves,
-está no [ADR 0006](0006-tuf-trust-metadata.md).
+The proposed architecture for trust metadata, still without an implementation
+or keys, is in [ADR 0006](0006-tuf-trust-metadata.md).
 
-## Consequências
+## Consequences
 
-Um novo consumidor Python direto de `urlopen` ou `urlretrieve` falha no teste
-estático. URLs da fronteira HTTP exibidas em diagnóstico omitem credenciais,
-caminho, query e fragmento; a descoberta GitHub aceita somente um repositório
-público previamente validado. Erros da fronteira são tipados, o
-destino final anterior é preservado até a promoção e a orquestração de mirrors
-pode distinguir falha remota de falha local. Em troca, todo novo consumidor
-precisa declarar limite, deadline e, para conteúdo persistente, identidade
-criptográfica antes de receber bytes.
+A new direct Python consumer of `urlopen` or `urlretrieve` fails the static
+test. HTTP boundary URLs shown in diagnostics omit credentials, path, query and
+fragment; GitHub discovery accepts only a previously validated public
+repository. Boundary errors are typed, the previous final destination is
+preserved until promotion and mirror orchestration can tell a remote failure
+from a local one. In exchange, every new consumer must declare a limit, a
+deadline and, for persistent content, a cryptographic identity before
+receiving bytes.
 
-O gate percorre `.py`, `.pyw`, `.bat`, variantes shell, scripts sem extensão e
-launchers. O Python embutido em `$DownloaderSource` também é extraído e
-analisado por AST. O scanner resolve concatenação literal, `join`, helpers
-simples de argv e imports dinâmicos básicos; argv não resolvido falha salvo uma
-supressão exata por arquivo, API, função e expressão. Ele não é análise formal
-de fluxo: reflexão geral, `getattr`, `eval`, `exec`, código gerado, extensões
-nativas e bibliotecas ainda não inventariadas exigem review e um novo caso
-adversarial.
+The gate walks `.py`, `.pyw`, `.bat`, shell variants, extensionless scripts and
+launchers. The Python embedded in `$DownloaderSource` is also extracted and
+analyzed through its AST. The scanner resolves literal concatenation, `join`,
+simple argv helpers and basic dynamic imports; unresolved argv fails unless
+there is an exact suppression per file, API, function and expression. It is not
+a formal flow analysis: general reflection, `getattr`, `eval`, `exec`,
+generated code, native extensions and libraries not yet inventoried require a
+review and a new adversarial case.

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="archify 2.11.0">
-  <title>Plataforma x86QW Diagram</title>
+  <title>x86QW Platform Diagram</title>
   <script>
     // Resolve the theme before first paint so light-preference users don't
     // see a dark flash. The toolbar script below re-applies with UI state.
@@ -525,14 +525,14 @@
     <div class="header">
       <div class="header-row">
         <div class="pulse-dot"></div>
-        <h1>Plataforma x86QW</h1>
+        <h1>x86QW Platform</h1>
       </div>
-      <p class="subtitle">Catálogos declarativos, gates de publicação e execução recuperável</p>
+      <p class="subtitle">Declarative catalogs, publication gates and recoverable execution</p>
     </div>
 
     <!-- Main Diagram -->
     <div class="diagram-container">
-      <svg viewBox="0 0 1200 740" role="img" aria-label="Plataforma x86QW — Catálogos declarativos, gates de publicação e execução recuperável (architecture diagram)">
+      <svg viewBox="0 0 1200 740" role="img" aria-label="x86QW Platform — Declarative catalogs, publication gates and recoverable execution (architecture diagram)">
         <!-- Definitions -->
         <defs>
           <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
@@ -557,16 +557,16 @@
 
         <!-- Boundaries (behind everything) -->
         <rect x="160" y="70" width="820" height="114" rx="12" class="c-region" stroke-width="1"/>
-        <text x="168" y="88" class="t-cloud" font-size="9" font-weight="600">Pipeline de distribuição x86QW</text>
+        <text x="168" y="88" class="t-cloud" font-size="9" font-weight="600">x86QW distribution pipeline</text>
 
         <rect x="970" y="70" width="220" height="114" rx="12" class="c-region" stroke-width="1"/>
-        <text x="978" y="88" class="t-cloud" font-size="9" font-weight="600">Entrega pública</text>
+        <text x="978" y="88" class="t-cloud" font-size="9" font-weight="600">Public delivery</text>
 
         <rect x="210" y="360" width="230" height="114" rx="12" class="c-region" stroke-width="1"/>
         <text x="218" y="378" class="t-cloud" font-size="9" font-weight="600">qw.x86.com.br</text>
 
         <rect x="440" y="360" width="720" height="294" rx="8" class="c-security-group" stroke-width="1"/>
-        <text x="448" y="378" class="t-security" font-size="9" font-weight="600">Instalação autocontida do jogador</text>
+        <text x="448" y="378" class="t-security" font-size="9" font-weight="600">Player's self-contained installation</text>
 
         <!-- Connection paths (before components for correct z-order) -->
         <path d="M 160 132 L 190 132" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
@@ -586,79 +586,79 @@
         <!-- Components -->
         <rect x="20" y="100" width="140" height="64" rx="6" class="c-mask"/>
         <rect x="20" y="100" width="140" height="64" rx="6" class="c-external" stroke-width="1.5"/>
-        <text x="90" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Projetos upstream</text>
+        <text x="90" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Upstream projects</text>
         <text x="90" y="146" class="t-muted" font-size="9" text-anchor="middle">releases + snapshots</text>
 
         <rect x="190" y="100" width="150" height="64" rx="6" class="c-mask"/>
         <rect x="190" y="100" width="150" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-        <text x="265" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">dist/ canônico</text>
-        <text x="265" y="146" class="t-muted" font-size="9" text-anchor="middle">fontes + overlays + hashes</text>
-        <text x="265" y="156" class="t-backend" font-size="7" text-anchor="middle">versionado</text>
+        <text x="265" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">canonical dist/</text>
+        <text x="265" y="146" class="t-muted" font-size="9" text-anchor="middle">sources + overlays + hashes</text>
+        <text x="265" y="156" class="t-backend" font-size="7" text-anchor="middle">versioned</text>
 
         <rect x="390" y="100" width="160" height="64" rx="6" class="c-mask"/>
         <rect x="390" y="100" width="160" height="64" rx="6" class="c-database" stroke-width="1.5"/>
-        <text x="470" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Catálogos declarativos</text>
-        <text x="470" y="146" class="t-muted" font-size="9" text-anchor="middle">runtimes + jogos + capacidades</text>
-        <text x="470" y="156" class="t-database" font-size="7" text-anchor="middle">fonte única</text>
+        <text x="470" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Declarative catalogs</text>
+        <text x="470" y="146" class="t-muted" font-size="9" text-anchor="middle">runtimes + games + capabilities</text>
+        <text x="470" y="156" class="t-database" font-size="7" text-anchor="middle">single source</text>
 
         <rect x="600" y="100" width="150" height="64" rx="6" class="c-mask"/>
         <rect x="600" y="100" width="150" height="64" rx="6" class="c-security" stroke-width="1.5"/>
         <text x="675" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">CI + gates</text>
-        <text x="675" y="146" class="t-muted" font-size="9" text-anchor="middle">Linux · Windows · e2e noturno</text>
-        <text x="675" y="156" class="t-security" font-size="7" text-anchor="middle">bloqueante</text>
+        <text x="675" y="146" class="t-muted" font-size="9" text-anchor="middle">Linux · Windows · nightly e2e</text>
+        <text x="675" y="156" class="t-security" font-size="7" text-anchor="middle">blocking</text>
 
         <rect x="800" y="100" width="150" height="64" rx="6" class="c-mask"/>
         <rect x="800" y="100" width="150" height="64" rx="6" class="c-messagebus" stroke-width="1.5"/>
-        <text x="875" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Pacotes reproduzíveis</text>
-        <text x="875" y="146" class="t-muted" font-size="9" text-anchor="middle">ZIPs de componentes + CLI</text>
+        <text x="875" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Reproducible packages</text>
+        <text x="875" y="146" class="t-muted" font-size="9" text-anchor="middle">component ZIPs + CLI</text>
         <text x="875" y="156" class="t-messagebus" font-size="7" text-anchor="middle">SHA-256</text>
 
         <rect x="1000" y="100" width="160" height="64" rx="6" class="c-mask"/>
         <rect x="1000" y="100" width="160" height="64" rx="6" class="c-cloud" stroke-width="1.5"/>
-        <text x="1080" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Mirrors de entrega</text>
+        <text x="1080" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Delivery mirrors</text>
         <text x="1080" y="146" class="t-muted" font-size="9" text-anchor="middle">GitHub Releases + GitLab</text>
-        <text x="1080" y="156" class="t-cloud" font-size="7" text-anchor="middle">imutáveis</text>
+        <text x="1080" y="156" class="t-cloud" font-size="7" text-anchor="middle">immutable</text>
 
         <rect x="30" y="390" width="160" height="64" rx="6" class="c-mask"/>
         <rect x="30" y="390" width="160" height="64" rx="6" class="c-external" stroke-width="1.5"/>
-        <text x="110" y="420" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Jogadores e admins</text>
+        <text x="110" y="420" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Players and admins</text>
         <text x="110" y="436" class="t-muted" font-size="9" text-anchor="middle">macOS · Linux · Windows</text>
 
         <rect x="240" y="390" width="170" height="64" rx="6" class="c-mask"/>
         <rect x="240" y="390" width="170" height="64" rx="6" class="c-cloud" stroke-width="1.5"/>
         <text x="325" y="420" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Cloudflare edge</text>
-        <text x="325" y="436" class="t-muted" font-size="9" text-anchor="middle">site + bootstraps + catálogo</text>
+        <text x="325" y="436" class="t-muted" font-size="9" text-anchor="middle">site + bootstraps + catalog</text>
         <text x="325" y="446" class="t-cloud" font-size="7" text-anchor="middle">Static Assets</text>
 
         <rect x="470" y="390" width="170" height="64" rx="6" class="c-mask"/>
         <rect x="470" y="390" width="170" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
-        <text x="555" y="420" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Instalador + CLI</text>
-        <text x="555" y="436" class="t-muted" font-size="9" text-anchor="middle">CLI x86qw em Go</text>
-        <text x="555" y="446" class="t-frontend" font-size="7" text-anchor="middle">versionada</text>
+        <text x="555" y="420" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Installer + CLI</text>
+        <text x="555" y="436" class="t-muted" font-size="9" text-anchor="middle">x86qw CLI in Go</text>
+        <text x="555" y="446" class="t-frontend" font-size="7" text-anchor="middle">versioned</text>
 
         <rect x="710" y="390" width="170" height="64" rx="6" class="c-mask"/>
         <rect x="710" y="390" width="170" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
-        <text x="795" y="420" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Gameplay local</text>
+        <text x="795" y="420" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Local gameplay</text>
         <text x="795" y="436" class="t-muted" font-size="9" text-anchor="middle">ezQuake stable/nightly</text>
         <text x="795" y="446" class="t-frontend" font-size="7" text-anchor="middle">play · hub</text>
 
         <rect x="470" y="570" width="170" height="64" rx="6" class="c-mask"/>
         <rect x="470" y="570" width="170" height="64" rx="6" class="c-database" stroke-width="1.5"/>
-        <text x="555" y="600" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Estado + journal</text>
-        <text x="555" y="616" class="t-muted" font-size="9" text-anchor="middle">perfil v2 · recibos · sessões</text>
-        <text x="555" y="626" class="t-database" font-size="7" text-anchor="middle">recuperável</text>
+        <text x="555" y="600" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">State + journal</text>
+        <text x="555" y="616" class="t-muted" font-size="9" text-anchor="middle">profile v2 · receipts · sessions</text>
+        <text x="555" y="626" class="t-database" font-size="7" text-anchor="middle">recoverable</text>
 
         <rect x="710" y="570" width="170" height="64" rx="6" class="c-mask"/>
         <rect x="710" y="570" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-        <text x="795" y="600" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">MVDSV dedicado</text>
-        <text x="795" y="616" class="t-muted" font-size="9" text-anchor="middle">cinco jogos instalados</text>
+        <text x="795" y="600" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Dedicated MVDSV</text>
+        <text x="795" y="616" class="t-muted" font-size="9" text-anchor="middle">five installed games</text>
         <text x="795" y="626" class="t-backend" font-size="7" text-anchor="middle">host</text>
 
         <rect x="960" y="570" width="170" height="64" rx="6" class="c-mask"/>
         <rect x="960" y="570" width="170" height="64" rx="6" class="c-messagebus" stroke-width="1.5"/>
         <text x="1045" y="600" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">QTV + QWFWD</text>
-        <text x="1045" y="616" class="t-muted" font-size="9" text-anchor="middle">stream HTTP + proxy UDP</text>
-        <text x="1045" y="626" class="t-messagebus" font-size="7" text-anchor="middle">opcionais</text>
+        <text x="1045" y="616" class="t-muted" font-size="9" text-anchor="middle">HTTP stream + UDP proxy</text>
+        <text x="1045" y="626" class="t-messagebus" font-size="7" text-anchor="middle">optional</text>
 
         <!-- Connection labels -->
 
@@ -666,24 +666,24 @@
         <rect x="555.6" y="112" width="38.8" height="14" rx="3" class="c-mask"/>
         <text x="575" y="122" class="t-security" font-size="8" text-anchor="middle">verify</text>
         <rect x="741.2" y="168" width="67.6" height="14" rx="3" class="c-mask"/>
-        <text x="775" y="178" class="t-backend" font-size="8" text-anchor="middle">gates verdes</text>
+        <text x="775" y="178" class="t-backend" font-size="8" text-anchor="middle">green gates</text>
 
         <rect x="347" y="225" width="106" height="14" rx="3" class="c-mask"/>
-        <text x="400" y="235" class="t-messagebus" font-size="8" text-anchor="middle">projeta product.json</text>
+        <text x="400" y="235" class="t-messagebus" font-size="8" text-anchor="middle">projects product.json</text>
         <rect x="198" y="402" width="34" height="14" rx="3" class="c-mask"/>
         <text x="215" y="412" class="t-muted" font-size="8" text-anchor="middle">HTTPS</text>
         <rect x="387" y="458" width="106" height="14" rx="3" class="c-mask"/>
-        <text x="440" y="468" class="t-backend" font-size="8" text-anchor="middle">bootstrap + catálogo</text>
+        <text x="440" y="468" class="t-backend" font-size="8" text-anchor="middle">bootstrap + catalog</text>
         <rect x="717.2" y="265" width="115.6" height="14" rx="3" class="c-mask"/>
-        <text x="775" y="275" class="t-backend" font-size="8" text-anchor="middle">pacotes por plataforma</text>
+        <text x="775" y="275" class="t-backend" font-size="8" text-anchor="middle">per-platform packages</text>
         <rect x="646" y="402" width="58" height="14" rx="3" class="c-mask"/>
         <text x="675" y="412" class="t-backend" font-size="8" text-anchor="middle">play · hub</text>
         <rect x="570.8" y="502" width="48.4" height="14" rx="3" class="c-mask"/>
-        <text x="595" y="512" class="t-security" font-size="8" text-anchor="middle">registra</text>
+        <text x="595" y="512" class="t-security" font-size="8" text-anchor="middle">records</text>
         <rect x="660" y="492" width="30" height="14" rx="3" class="c-mask"/>
         <text x="675" y="502" class="t-backend" font-size="8" text-anchor="middle">host</text>
         <rect x="867" y="546" width="106" height="14" rx="3" class="c-mask"/>
-        <text x="920" y="556" class="t-messagebus" font-size="8" text-anchor="middle">MVD + encaminhamento</text>
+        <text x="920" y="556" class="t-messagebus" font-size="8" text-anchor="middle">MVD + forwarding</text>
 
         <!-- Legend -->
         <text x="40" y="711" class="t-primary" font-size="9" font-weight="600">Legend</text>
@@ -709,44 +709,44 @@
       <div class="card">
         <div class="card-header">
           <div class="card-dot cyan"></div>
-          <h3>Fonte única</h3>
+          <h3>Single source</h3>
         </div>
         <ul>
-          <li>&bull; dist/ preserva os bytes; inventários declaram runtimes, jogos, plataformas e capacidades</li>
-          <li>&bull; product.json projeta versão, contagens e suporte sem números duplicados</li>
+          <li>&bull; dist/ keeps the bytes; inventories declare runtimes, games, platforms and capabilities</li>
+          <li>&bull; product.json projects the version, counts and support without duplicated numbers</li>
         </ul>
       </div>
 
       <div class="card">
         <div class="card-header">
           <div class="card-dot emerald"></div>
-          <h3>Publicação bloqueada</h3>
+          <h3>Gated publication</h3>
         </div>
         <ul>
-          <li>&bull; Pull requests rodam testes Go em Linux e Windows e validam LFS, catálogo, TUF e site</li>
-          <li>&bull; A CLI sai por workflow aprovado; o site entra no ar a cada merge</li>
+          <li>&bull; Pull requests run the Go tests on Linux and Windows and validate LFS, catalog, TUF and site</li>
+          <li>&bull; The CLI ships through an approved workflow; the site goes live on every merge</li>
         </ul>
       </div>
 
       <div class="card">
         <div class="card-header">
           <div class="card-dot rose"></div>
-          <h3>Instalação recuperável</h3>
+          <h3>Recoverable installation</h3>
         </div>
         <ul>
-          <li>&bull; Perfis e seleções custom migram para state.json v2 sem perder componentes</li>
-          <li>&bull; Journal privado reconcilia crash e preserva todo arquivo pessoal ou modificado</li>
+          <li>&bull; Profiles and custom selections migrate to state.json v2 without losing components</li>
+          <li>&bull; A private journal reconciles crashes and keeps every personal or modified file</li>
         </ul>
       </div>
 
       <div class="card">
         <div class="card-header">
           <div class="card-dot amber"></div>
-          <h3>Execução imutável</h3>
+          <h3>Immutable execution</h3>
         </div>
         <ul>
-          <li>&bull; play e host validam conteúdo; instalação, update, upgrade ou repair preparam payload</li>
-          <li>&bull; MVDSV inicia antes de QTV e QWFWD; falha parcial encerra todos os filhos</li>
+          <li>&bull; play and host validate content; install, update, upgrade or repair prepare the payload</li>
+          <li>&bull; MVDSV starts before QTV and QWFWD; a partial failure stops every child</li>
         </ul>
       </div>
     </div>

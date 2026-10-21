@@ -1,181 +1,181 @@
-# ADR 0006 — Trust metadata para catálogo e release
+# ADR 0006 — Trust metadata for the catalog and releases
 
-- **Estado:** implementado localmente; não publicado
-- **Data:** 2026-08-04
+- **Status:** implemented locally; not published
+- **Date:** 2026-08-04
 - **Issue:** #48
-- **Escopo:** autenticar o catálogo e os metadados públicos sem alterar os
-  catálogos/release existentes da série 0.7.x
+- **Scope:** authenticate the catalog and the public metadata without changing
+  the existing catalogs/releases of the 0.7.x series
 
-## Contexto
+## Context
 
-Os campos `sha256` que aparecem dentro de `site/public/api/v1/catalog.json`
-descrevem os artefatos, mas são dados fornecidos pelo próprio catálogo. Um
-mirror que consiga trocar o catálogo também consegue trocar esses hashes. Eles
-não são uma autenticação. O cliente precisa de uma raiz fixada, versões
-monotônicas, expiração e uma cadeia assinada que seja independente do mirror.
+The `sha256` fields that appear inside `site/public/api/v1/catalog.json`
+describe the artifacts, but they are data provided by the catalog itself. A
+mirror able to swap the catalog can also swap those hashes. They are not
+authentication. The client needs a pinned root, monotonic versions, expiration
+and a signed chain that is independent of the mirror.
 
-O runtime instalado precisa continuar sendo biblioteca-padrão. Python 3.10 não
-oferece Ed25519, RSA-PSS ou outra verificação assimétrica no módulo `hashlib`.
-Adicionar uma dependência criptográfica neste recorte mudaria o empacotamento e
-exigiria uma decisão separada. A implementação local, portanto, contém somente
-um verificador mínimo de RSA-PSS-SHA256 (RFC 8017), sem operação de chave
-privada. Ele requer revisão criptográfica independente e vetores cruzados com
-OpenSSL antes de ser considerado adequado para uma chave de produção.
+The installed runtime must stay standard-library only. Python 3.10 offers no
+Ed25519, RSA-PSS or other asymmetric verification in the `hashlib` module.
+Adding a cryptographic dependency in this slice would change the packaging and
+would require a separate decision. The local implementation therefore contains
+only a minimal RSA-PSS-SHA256 verifier (RFC 8017), with no private key
+operation. It requires an independent cryptographic review and cross vectors
+with OpenSSL before it can be considered fit for a production key.
 
-## Decisão
+## Decision
 
-`x86qw_runtime/trust.py` é a fronteira canônica. Ela recebe bytes já limitados,
-o relógio UTC e os `TrustedVersions` persistidos pelo chamador. Não faz rede,
-filesystem, atualização de estado, import de `maintenance` nem gravação. O
-chamador deve persistir o resultado somente depois da validação completa.
+`x86qw_runtime/trust.py` is the canonical boundary. It receives already bounded
+bytes, the UTC clock and the `TrustedVersions` persisted by the caller. It does
+no networking, filesystem access, state updates, `maintenance` imports or
+writes. The caller must persist the result only after full validation.
 
-O formato é TUF-like, com envelope exato:
+The format is TUF-like, with an exact envelope:
 
 ```json
-{"signatures":[{"keyid":"…","sig":"base64url sem padding"}],"signed":{}}
+{"signatures":[{"keyid":"…","sig":"base64url without padding"}],"signed":{}}
 ```
 
-Somente o objeto `signed` é assinado em JSON canônico UTF-8
-(`sort_keys=True`, separadores compactos, NFC, sem floats, chaves duplicadas ou
-valores não finitos). `keyid` é SHA-256 do objeto público canônico. A chave RSA
-usa `keyval.public.n` em hexadecimal e `keyval.public.e` como inteiro; o
-modulus precisa ter pelo menos 3072 bits. O PSS usa SHA-256, MGF1-SHA256 e salt
-fixo de 32 bytes, comparando o digest com `hmac.compare_digest`.
+Only the `signed` object is signed, in canonical UTF-8 JSON (`sort_keys=True`,
+compact separators, NFC, no floats, duplicate keys or non-finite values).
+`keyid` is the SHA-256 of the canonical public object. The RSA key uses
+`keyval.public.n` in hexadecimal and `keyval.public.e` as an integer; the
+modulus must be at least 3072 bits. PSS uses SHA-256, MGF1-SHA256 and a fixed
+32-byte salt, comparing the digest with `hmac.compare_digest`.
 
-`release-evidence.json` usa o mesmo princípio: a forma canônica remove o campo
-`signatures` antes da verificação e aceita uma lista fechada de signatários
-distintos. Uma evidência antiga com o campo singular `signature` só é aceita
-quando o papel `evidence` tem threshold `1`; ela não reduz um threshold maior.
-O root inicial precisa conter e também apresentar uma assinatura válida da
-`ROOT_KEY_ID` fixada — declarar essa chave no papel sem sua assinatura não é
-âncora suficiente.
+`release-evidence.json` follows the same principle: the canonical form removes
+the `signatures` field before verification and accepts a closed list of
+distinct signers. Old evidence with the singular `signature` field is accepted
+only when the `evidence` role has threshold `1`; it does not lower a higher
+threshold. The initial root must contain, and also present a valid signature
+from, the pinned `ROOT_KEY_ID` — declaring that key in the role without its
+signature is not a sufficient anchor.
 
-Os papéis são separados:
+The roles are separate:
 
-| Papel | Conteúdo | Proteção principal |
+| Role | Content | Main protection |
 | --- | --- | --- |
-| `root` | chaves e thresholds | raiz offline, rotação contígua e dupla assinatura |
-| `current` | ponteiro curto para um snapshot | anti-freeze e versão monotônica |
-| `snapshot` | digest/tamanho/versão do catálogo | anti-rollback e binding do catálogo |
-| `evidence` | reservado para `release-evidence.json` | nunca reutilizar a chave de `current` |
+| `root` | keys and thresholds | offline root, contiguous rotation and double signature |
+| `current` | short pointer to a snapshot | anti-freeze and monotonic version |
+| `snapshot` | digest/size/version of the catalog | anti-rollback and catalog binding |
+| `evidence` | reserved for `release-evidence.json` | never reuse the `current` key |
 
-O root inicial é `maintenance/inventory/trust/root.json`; a chave pública
-correspondente fica fixada em `ROOT_PUBLIC_KEY`/`ROOT_KEY_ID` na CLI/runtime.
-Os artefatos canônicos são:
+The initial root is `maintenance/inventory/trust/root.json`; the matching public
+key is pinned in `ROOT_PUBLIC_KEY`/`ROOT_KEY_ID` in the CLI/runtime. The
+canonical artifacts are:
 
 - `maintenance/inventory/trust/current.json`;
 - `maintenance/inventory/trust/snapshot.json`;
-- `site/public/api/v1/catalog.json` (somente referenciado, sem alteração).
+- `site/public/api/v1/catalog.json` (only referenced, unchanged).
 
-`current` expira em no máximo sete dias e aponta exatamente para o tamanho,
-digest e versão de `snapshot.json`. `snapshot` aponta exatamente para o
-tamanho, digest e versão do catálogo público. URLs, caminhos absolutos,
-backtracking, barras invertidas e campos extras são rejeitados. Assim, os
-hashes continuam importantes para binding e detecção de corrupção, mas só são
-aceitos depois da assinatura do papel que os contém.
+`current` expires in at most seven days and points exactly to the size, digest
+and version of `snapshot.json`. `snapshot` points exactly to the size, digest
+and version of the public catalog. URLs, absolute paths, backtracking,
+backslashes and extra fields are rejected. So the hashes stay important for
+binding and corruption detection, but are accepted only after the signature of
+the role that contains them.
 
-### Integração no cliente instalado
+### Integration in the installed client
 
-O cliente instalado mantém a compatibilidade com releases antigos: sem
-metadados locais, sem URLs de trust configuradas e sem estado persistido, o
-fluxo legado do catálogo continua disponível. Quando o pacote local contém o
-conjunto completo `maintenance/inventory/trust/{root,current,snapshot}.json`,
-ele é verificado antes de o catálogo ser usado. Para catálogo remoto, a mesma
-proteção é ativada por `X86_QW_TRUST_METADATA_URL` (base que contém os três
-arquivos) ou pelas URLs explícitas `X86_QW_TRUST_{ROOT,CURRENT,SNAPSHOT}_URL`.
+The installed client keeps compatibility with old releases: with no local
+metadata, no configured trust URLs and no persisted state, the legacy catalog
+flow stays available. When the local package contains the complete set
+`maintenance/inventory/trust/{root,current,snapshot}.json`, it is verified
+before the catalog is used. For a remote catalog, the same protection is turned
+on by `X86_QW_TRUST_METADATA_URL` (a base holding the three files) or by the
+explicit URLs `X86_QW_TRUST_{ROOT,CURRENT,SNAPSHOT}_URL`.
 
-`X86_QW_TRUST_METADATA_REQUIRED=1` (também aceito como
-`X86_QW_REQUIRE_TRUST_METADATA=1`) transforma a ausência de uma fonte de
-metadados em erro; falha de assinatura, expiração, rollback, rotação ou digest
-sempre falha fechado quando uma fonte é encontrada. Root/current/snapshot
-remotos são baixados e validados antes do pedido do catálogo, e o catálogo só é
-aceito depois da verificação final do digest e tamanho assinados.
+`X86_QW_TRUST_METADATA_REQUIRED=1` (also accepted as
+`X86_QW_REQUIRE_TRUST_METADATA=1`) turns the absence of a metadata source into
+an error; a signature, expiration, rollback, rotation or digest failure always
+fails closed when a source is found. Remote root/current/snapshot are
+downloaded and validated before the catalog request, and the catalog is
+accepted only after the final check of the signed digest and size.
 
-Depois de uma verificação bem-sucedida, o cliente grava atomicamente
-`.x86qw/trust/versions.json` com modo privado. O formato `2` contém as versões,
-digests, o envelope público do root anterior e, quando houver evidência
-promovida, o par `evidence_version`/`evidence_digest`. Nenhuma chave privada ou
-segredo é persistido. O leitor importa explicitamente o formato legado `1`
-(sem estado de evidence) e sempre emite o formato `2`; campos extras ou uma
-mistura implícita dos dois contratos falham fechado. Se esse estado já existe,
-a ausência de metadados atualizados não permite voltar silenciosamente ao
-fluxo sem autenticação.
+After a successful verification, the client atomically writes
+`.x86qw/trust/versions.json` with a private mode. Format `2` holds the
+versions, the digests, the previous root's public envelope and, when there is
+promoted evidence, the `evidence_version`/`evidence_digest` pair. No private
+key or secret is persisted. The reader explicitly imports legacy format `1`
+(without evidence state) and always emits format `2`; extra fields or an
+implicit mix of the two contracts fail closed. If that state already exists,
+the absence of updated metadata does not allow silently going back to the
+unauthenticated flow.
 
-Antes de apontar essas URLs para produção, a equipe de release precisa decidir
-humanamente o endpoint/mirror oficial, revisar a implementação RSA-PSS e
-aprovar a chave offline. Esta integração local não altera
-`site/public/api/v1/catalog.json`, os bootstraps públicos ou
-`dist/installer/VERSION`, e não constitui autorização de publicação.
+Before pointing these URLs at production, the release team must decide, as
+humans, the official endpoint/mirror, review the RSA-PSS implementation and
+approve the offline key. This local integration does not change
+`site/public/api/v1/catalog.json`, the public bootstraps or
+`dist/installer/VERSION`, and is not an authorization to publish.
 
-### Gate de confiança oficial
+### Official trust gate
 
-O endpoint oficial, o conjunto de mirrors e a chave pública de produção ainda
-não existem neste checkout de estabilização. `ROOT_PUBLIC_KEY` e os arquivos em
-`maintenance/inventory/trust/` são fixtures públicas para vetores locais; não
-devem ser promovidos, trocados por uma chave inventada ou tratados como a
-âncora operacional da próxima release. O verificador recebe bytes já obtidos e
-não faz descoberta de endpoint, rotação automática, publicação ou custódia de
-chave privada.
+The official endpoint, the set of mirrors and the production public key do not
+exist yet in this stabilization checkout. `ROOT_PUBLIC_KEY` and the files in
+`maintenance/inventory/trust/` are public fixtures for local vectors; they must
+not be promoted, swapped for an invented key or treated as the operational
+anchor of the next release. The verifier receives bytes already obtained and
+does no endpoint discovery, automatic rotation, publication or private key
+custody.
 
-Habilitar confiança oficial é um gate externo: a autoridade de release precisa
-escolher um endpoint HTTPS imutável, custodiar a chave offline, definir os
-signatários/thresholds de `root`, `current`, `snapshot` e `evidence`, executar a
-revisão criptográfica independente e registrar a cerimônia. Só depois dessa
-aprovação o chamador instalado poderá apontar as URLs de trust para produção e
-substituir a âncora fixture em uma mudança explícita. Até lá, a compatibilidade
-legada permanece limitada aos bundles públicos 0.7.3 sem um conjunto local
-completo de metadados; se qualquer parte do conjunto estiver presente, o fluxo
-local falha fechado, e um estado persistido impede voltar silenciosamente ao
-catálogo sem autenticação.
+Enabling official trust is an external gate: the release authority must choose
+an immutable HTTPS endpoint, hold the offline key, define the signers/thresholds
+of `root`, `current`, `snapshot` and `evidence`, run the independent
+cryptographic review and record the ceremony. Only after that approval may the
+installed caller point the trust URLs at production and replace the fixture
+anchor in an explicit change. Until then, legacy compatibility stays limited to
+the public 0.7.3 bundles without a complete local set of metadata; if any part
+of the set is present, the local flow fails closed, and persisted state
+prevents silently going back to the unauthenticated catalog.
 
-Uma versão menor que a persistida é rollback. A mesma versão sem o mesmo digest
-é equivocation e também falha. A rotação de root `N -> N+1` exige a threshold
-da raiz antiga e a threshold da nova; saltar uma versão, remover uma chave sem
-essa transição ou usar um papel revogado falha fechado. A evidência aplica a
-mesma regra à precedência SemVer: uma versão menor é rollback e a mesma versão
-com digest canônico diferente é equivocation. Sua identidade esperada é
-obrigatória e deve casar com `version`/`commit` do topo, `candidate.version`,
-`candidate.commit` e o SHA-256 do manifest. O estado de versões e o root
-confiável anterior pertencem ao chamador e devem ser gravados atomicamente.
-`verify_release_evidence` devolve o documento como um mapping compatível e,
-junto, o `TrustedVersions` já atualizado com o root (versão, digest e envelope
-público) e com `evidence_version`/`evidence_digest`; isso mantém a cadeia de
-rotação mesmo quando o estado persistido começou como evidence-only. O chamador
-deve persistir esse checkpoint, não reconstruí-lo a partir da versão anterior.
+A version lower than the persisted one is a rollback. The same version without
+the same digest is equivocation and also fails. Rotating root `N -> N+1`
+requires the old root's threshold and the new one's; skipping a version,
+removing a key without that transition or using a revoked role fails closed.
+The evidence applies the same rule to SemVer precedence: a lower version is a
+rollback and the same version with a different canonical digest is
+equivocation. Its expected identity is mandatory and must match the top-level
+`version`/`commit`, `candidate.version`, `candidate.commit` and the manifest's
+SHA-256. The version state and the previous trusted root belong to the caller
+and must be written atomically. `verify_release_evidence` returns the document
+as a compatible mapping and, with it, the `TrustedVersions` already updated
+with the root (version, digest and public envelope) and with
+`evidence_version`/`evidence_digest`; that keeps the rotation chain even when
+the persisted state started as evidence-only. The caller must persist that
+checkpoint, not rebuild it from the previous version.
 
-## Runbook de comprometimento/rotação
+## Compromise/rotation runbook
 
-1. Interromper promoção e publicação; não substituir catálogo, snapshot ou
-   ponteiro existentes.
-2. Preservar os bytes recebidos, logs e digests como evidência. Não registrar a
-   chave privada, senha ou material de seed em argv, journal ou ticket.
-3. Revogar o papel comprometido no novo `root` (`N+1`), gerar uma chave fora do
-   workspace e obter as thresholds da raiz antiga e nova. Se a raiz antiga
-   estiver indisponível, tratar como recuperação manual de confiança e não
-   como update automático.
-4. Publicar primeiro os novos assets imutáveis; depois `snapshot`; por último
-   `current`. Nunca publicar um ponteiro que anteceda os assets.
-5. Invalidar caches/mirrors que contenham a versão comprometida e conferir
-   tamanho e digest em cada mirror.
-6. Rodar a validação da cadeia em ambiente limpo e registrar a revisão
-   criptográfica independente, os vetores OpenSSL e a aprovação humana antes
-   de reabrir a promoção.
+1. Stop promotion and publication; do not replace the existing catalog,
+   snapshot or pointer.
+2. Keep the received bytes, logs and digests as evidence. Do not record the
+   private key, password or seed material in argv, a journal or a ticket.
+3. Revoke the compromised role in the new `root` (`N+1`), generate a key
+   outside the workspace and get the old and new root thresholds. If the old
+   root is unavailable, treat it as a manual trust recovery and not as an
+   automatic update.
+4. Publish the new immutable assets first; then `snapshot`; `current` last.
+   Never publish a pointer that comes before the assets.
+5. Invalidate caches/mirrors holding the compromised version and check size and
+   digest on every mirror.
+6. Run the chain validation in a clean environment and record the independent
+   cryptographic review, the OpenSSL vectors and the human approval before
+   reopening promotion.
 
-As chaves privadas de produção permanecem offline e não são fornecidas pelo
-runtime. Os arquivos locais e os fixtures desta PR usam uma chave de teste
-offline para permitir verificação reproduzível; isso não é evidência de uma
-chave de publicação de produção.
+Production private keys stay offline and are not provided by the runtime. The
+local files and fixtures of this PR use an offline test key to allow
+reproducible verification; that is not evidence of a production publishing
+key.
 
-## Consequências e limites
+## Consequences and limits
 
-- A cadeia autentica conteúdo e metadados sem confiar em hashes fornecidos pelo
-  próprio catálogo.
-- O relógio local ainda é uma dependência para expiração/anti-freeze; um host
-  com relógio comprometido precisa de uma política externa de tempo.
-- A implementação RSA-PSS é uma superfície criptográfica própria. Antes da
-  versão 1.0, deve haver revisão independente e cross-vector. Se o gate não for
-  aprovado, substituir a fronteira por uma biblioteca mantida (por exemplo,
-  Python-TUF/cryptography) em uma mudança de dependência explícita.
-- Persistência de `TrustedVersions`, downloader, publicação de assets e
-  `release-evidence.json` pertencem às PRs/owners correspondentes; este ADR não
-  simula esses caminhos nem autoriza publicação.
+- The chain authenticates content and metadata without trusting hashes
+  provided by the catalog itself.
+- The local clock is still a dependency for expiration/anti-freeze; a host with
+  a compromised clock needs an external time policy.
+- The RSA-PSS implementation is a cryptographic surface of its own. Before
+  version 1.0, there must be an independent review and cross vectors. If the
+  gate is not approved, replace the boundary with a maintained library (for
+  example, Python-TUF/cryptography) in an explicit dependency change.
+- Persistence of `TrustedVersions`, the downloader, asset publication and
+  `release-evidence.json` belong to the corresponding PRs/owners; this ADR does
+  not simulate those paths nor authorize publication.

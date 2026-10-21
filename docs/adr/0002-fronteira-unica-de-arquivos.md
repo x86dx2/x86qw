@@ -1,237 +1,242 @@
-# ADR 0002 — Fronteira única de arquivos ZIP, PK3 e PYZ
+# ADR 0002 — Single boundary for ZIP, PK3 and PYZ archives
 
-**Status:** aceito no código corretivo da PR 3; matriz CI concluída e sem
-publicação
+**Status:** accepted in PR 3's corrective code; CI matrix complete and not
+published
 
-**Data:** 2026-08-03
+**Date:** 2026-08-03
 
 **Issue:** [#49](https://github.com/x86dx2/x86qw/issues/49)
 
-## Contexto
+## Context
 
-O instalador, os serviços, o gameplay e as ferramentas de manutenção liam ou
-extraíam ZIP/PK3 por caminhos independentes. As garantias divergiam: alguns
-consumidores validavam somente o membro selecionado, outros escreviam enquanto
-a validação ainda ocorria, e os bootstraps delegavam a extração a `unzip` ou
+The installer, the services, gameplay and the maintenance tools read or
+extracted ZIP/PK3 through independent paths. The guarantees diverged: some
+consumers validated only the selected member, others wrote while validation was
+still running, and the bootstraps delegated extraction to `unzip` or
 `Expand-Archive`.
 
-Essa fragmentação permitia que o mesmo arquivo fosse aceito por um consumidor e
-recusado por outro. Também deixava falhas tardias — colisões de nomes, membro
-especial, ZIP bomb ou CRC divergente no final — acontecerem depois do primeiro
-write. A issue #49 exige um preflight integral e uma única interpretação
-portável para todos os arquivos ZIP, PK3 e PYZ.
+This fragmentation let the same archive be accepted by one consumer and refused
+by another. It also let late failures — name collisions, a special member, a
+ZIP bomb or a mismatched CRC at the end — happen after the first write. Issue
+#49 requires a full preflight and a single portable interpretation for every
+ZIP, PK3 and PYZ archive.
 
-## Decisão
+## Decision
 
-`x86qw_runtime/io/archive.py` é a fonte canônica stdlib-only. Ela expõe:
+`x86qw_runtime/io/archive.py` is the canonical stdlib-only source. It exposes:
 
-- `ArchiveLimits`, com os limites fechados do produto;
-- `scan_archive()`, que lê integralmente o arquivo e só então produz um
-  `ArchivePlan` imutável;
-- `read_archive_member()` e `read_archive_members()`, que revalidam o plano
-  antes da leitura;
-- `extract_archive()`, que extrai para staging privado, sincroniza e promove o
-  diretório completo sem substituir destino existente;
-- `validate_installer_bundle()`, que valida também a identidade e o layout
-  exatos do bundle público do instalador.
+- `ArchiveLimits`, with the product's closed limits;
+- `scan_archive()`, which reads the whole archive and only then produces an
+  immutable `ArchivePlan`;
+- `read_archive_member()` and `read_archive_members()`, which revalidate the
+  plan before reading;
+- `extract_archive()`, which extracts into private staging, syncs and promotes
+  the complete directory without replacing an existing destination;
+- `validate_installer_bundle()`, which also validates the exact identity and
+  layout of the installer's public bundle.
 
-O módulo não importa `manager.py`, `services.py` nem `maintenance`. Os
-consumidores convertem `ArchiveError` para o erro de sua própria camada. Writers
-determinísticos podem continuar usando `zipfile` explicitamente em modo de
-escrita, mas o artefato produzido volta pela fronteira canônica antes de ser
-aceito.
+The module does not import `manager.py`, `services.py` or `maintenance`.
+Consumers convert `ArchiveError` into their own layer's error. Deterministic
+writers may keep using `zipfile` explicitly in write mode, but the artifact
+they produce goes back through the canonical boundary before it is accepted.
 
-### Preflight e vínculo do plano
+### Preflight and plan binding
 
-`scan_archive()` acontece antes do primeiro write de extração ou payload
-visível e percorre todos os membros, mesmo quando o consumidor deseja ler
-somente um deles. O snapshot privado e limitado faz parte do preflight. O plano
-registra SHA-256 da fonte e de cada membro, tamanho, CRC, método de compressão,
-tipo e modo canônico. Uma fonte em disco também fica vinculada à identidade
-obtida de `lstat`/descritor; precisa ser arquivo regular e não symlink.
+`scan_archive()` happens before the first visible extraction or payload write
+and walks every member, even when the consumer wants to read only one of them.
+The private, bounded snapshot is part of the preflight. The plan records the
+SHA-256 of the source and of each member, the size, CRC, compression method,
+type and canonical mode. A source on disk is also bound to the identity
+obtained from `lstat`/the descriptor; it must be a regular file and not a
+symlink.
 
-Cada operação copia a fonte, com limite estrito de uma unidade além do teto,
-para um snapshot temporário privado em disco. A fonte é revalidada antes e
-depois do consumo, enquanto o pre-scan, `ZipFile` e o streaming dos membros
-observam exatamente os mesmos bytes imutáveis. Leitura e extração reabrem a
-fonte sem seguir symlink e conferem novamente identidade, SHA-256, envelope,
-metadados, tamanho real, CRC e SHA-256 do membro. Troca, crescimento contínuo ou
-mutação da fonte entre scan e consumo invalida o plano sem leitura ilimitada. O
-envelope ZIP precisa ocupar o arquivo inteiro: prefixo executável, sufixo após
-o EOCD, multi-volume e diretório central fora da região declarada são recusados.
+Each operation copies the source, with a strict limit of one unit past the
+ceiling, into a private temporary snapshot on disk. The source is revalidated
+before and after use, while the pre-scan, `ZipFile` and member streaming see
+exactly the same immutable bytes. Reading and extraction reopen the source
+without following symlinks and check again the identity, SHA-256, envelope,
+metadata, real size, CRC and SHA-256 of the member. Swapping, continuous growth
+or mutation of the source between scan and use invalidates the plan without an
+unbounded read. The ZIP envelope must take up the whole file: an executable
+prefix, a suffix after the EOCD, multi-volume archives and a central directory
+outside the declared region are refused.
 
-### Semântica de nomes e tipos
+### Name and type semantics
 
-Nomes internos usam `ZipInfo.orig_filename` e semântica POSIX explícita. São
-recusados:
+Internal names use `ZipInfo.orig_filename` and explicit POSIX semantics. These
+are refused:
 
-- nome vazio, caminho absoluto, UNC, drive, dois-pontos ou barra invertida;
-- componente vazio, `.` ou `..`;
-- caracteres das categorias Unicode C, incluindo controles e surrogates, e
-  caminhos não canônicos;
-- componente terminado em ponto ou espaço;
-- nomes reservados Windows, inclusive com extensão e variação de caixa:
-  `CON`, `PRN`, `AUX`, `NUL`, `CLOCK$`, `CONIN$`, `CONOUT$`, `COM1`–`COM9` e
+- an empty name, an absolute path, UNC, a drive, a colon or a backslash;
+- an empty component, `.` or `..`;
+- characters in the Unicode C categories, including controls and surrogates,
+  and non-canonical paths;
+- a component ending in a dot or a space;
+- reserved Windows names, including with an extension and in any case:
+  `CON`, `PRN`, `AUX`, `NUL`, `CLOCK$`, `CONIN$`, `CONOUT$`, `COM1`–`COM9` and
   `LPT1`–`LPT9`;
-- caracteres proibidos em nomes Win32: `<`, `>`, `"`, `|`, `?` e `*`;
-- duplicata exata, colisão após NFC + `casefold`, colisão de prefixo e arquivo
-  usado como diretório ancestral;
-- symlink, tipo especial, tipo incompatível com o nome e extra field Unix capaz
-  de representar link;
-- atributo DOS de device ou reparse point e atributo de diretório incompatível
-  com o nome do membro;
-- membro criptografado ou método fora de Stored/Deflate.
+- characters forbidden in Win32 names: `<`, `>`, `"`, `|`, `?` and `*`;
+- an exact duplicate, a collision after NFC + `casefold`, a prefix collision
+  and a file used as an ancestor directory;
+- a symlink, a special type, a type incompatible with the name and a Unix extra
+  field able to represent a link;
+- a DOS device or reparse point attribute and a directory attribute
+  incompatible with the member's name;
+- an encrypted member or a method other than Stored/Deflate.
 
-Esse contrato usa a semântica mais restritiva comum aos sistemas suportados.
-Um arquivo válido no filesystem de origem, mas ambíguo no Windows ou no macOS,
-não é um pacote x86QW válido.
+This contract uses the most restrictive semantics common to the supported
+systems. An archive valid on the source filesystem but ambiguous on Windows or
+macOS is not a valid x86QW package.
 
-### Limites canônicos
+### Canonical limits
 
-| Recurso | Limite |
+| Resource | Limit |
 |---|---:|
-| Membros | 4.096 |
-| Arquivo-fonte compactado | 512 MiB |
-| Metadados do diretório central | 32 MiB |
-| Membro descompactado | 128 MiB |
-| Total descompactado | 512 MiB |
-| Profundidade | 16 componentes |
-| Caminho | 240 unidades UTF-16 |
-| Razão de compressão | 500:1 por membro |
-| Métodos | Stored e Deflate |
+| Members | 4,096 |
+| Compressed source archive | 512 MiB |
+| Central directory metadata | 32 MiB |
+| Uncompressed member | 128 MiB |
+| Total uncompressed | 512 MiB |
+| Depth | 16 components |
+| Path | 240 UTF-16 units |
+| Compression ratio | 500:1 per member |
+| Methods | Stored and Deflate |
 
-O inventário inicial da issue #49 encontrou 59 ZIP/PK3/PYZ em `dist/`. Os
-máximos observados foram 102.995.518 bytes na fonte, 216.156 bytes no diretório
-central, 2.830 membros, 22.784.504 bytes por membro, 103.139.351 bytes totais,
-profundidade 5, caminho 54 e razão 83,81: todos ficam dentro dos limites com
-folga. Antes de criar objetos `ZipInfo`, um pre-scan estrutural percorre no
-snapshot os registros do diretório central dentro do envelope declarado,
-limita seus bytes e conta os registros reais. Assim, uma contagem subestimada no
-EOCD ou uma troca concorrente da fonte não amplia o orçamento de memória. Os
-demais limites continuam sendo aplicados tanto aos metadados declarados quanto
-ao streaming real.
+Issue #49's initial inventory found 59 ZIP/PK3/PYZ files in `dist/`. The
+observed maximums were 102,995,518 bytes in the source, 216,156 bytes in the
+central directory, 2,830 members, 22,784,504 bytes per member, 103,139,351
+bytes in total, depth 5, path 54 and ratio 83.81: all well within the limits.
+Before creating `ZipInfo` objects, a structural pre-scan walks the central
+directory records inside the declared envelope in the snapshot, bounds their
+bytes and counts the real records. That way, an underestimated count in the
+EOCD or a concurrent swap of the source does not widen the memory budget. The
+other limits keep being applied to both the declared metadata and the actual
+streaming.
 
-### Modos, staging e promoção
+### Modes, staging and promotion
 
-Permissões armazenadas em `external_attr` não são restauradas. O produto aplica
-somente:
+Permissions stored in `external_attr` are not restored. The product applies
+only:
 
-- `0644` a arquivos comuns;
-- `0755` a diretórios;
-- `0755` a arquivos que o consumidor declarou nominalmente como executáveis.
+- `0644` to regular files;
+- `0755` to directories;
+- `0755` to files the consumer declared by name as executables.
 
-Setuid, setgid, sticky e outros bits do arquivo de origem nunca são propagados.
+Setuid, setgid, sticky and other bits of the source archive are never
+propagated.
 
-`extract_archive()` exige destino inexistente. A extração ocorre em diretório
-irmão privado `0700`, com criação exclusiva e sem seguir symlinks. Cada arquivo
-é escrito com `0600`, revalidado, recebe seu modo canônico e passa por `fsync`.
-Diretórios também são sincronizados. Somente depois do sucesso integral o
-staging é promovido por rename exclusivo e o diretório pai é sincronizado.
+`extract_archive()` requires a destination that does not exist. Extraction
+happens in a private `0700` sibling directory, created exclusively and without
+following symlinks. Each file is written with `0600`, revalidated, given its
+canonical mode and passed through `fsync`. Directories are synced too. Only
+after full success is the staging promoted by an exclusive rename and the
+parent directory synced.
 
-Toda revalidação da fonte termina antes da promoção. Falha anterior ao rename
-remove somente o staging cuja identidade ainda possa ser comprovada. A
-confirmação de que o destino possui a identidade exata do staging é o ponto de
-commit irreversível: falha posterior de durabilidade ou estabilidade do caminho
-preserva o destino completo e qualquer conteúdo pessoal criado nele. Uma
-promoção de resultado inconclusivo também nunca percorre o nome público durante
-rollback. O destino anterior nunca é sobrescrito.
+Every revalidation of the source ends before promotion. A failure before the
+rename removes only the staging whose identity can still be proven. Confirming
+that the destination has the exact identity of the staging is the irreversible
+commit point: a later durability or path stability failure preserves the
+complete destination and any personal content created in it. A promotion with
+an inconclusive result also never walks the public name during rollback. The
+previous destination is never overwritten.
 
-Os serviços preservam uma etapa adicional: o PK3 é extraído integralmente para
-staging privado e só depois seus arquivos válidos são materializados de forma
-conflict-safe e journalizada no contexto do MVDSV. Arquivo pessoal diferente
-continua preservado.
+The services keep one extra step: the PK3 is extracted in full into private
+staging and only then are its valid files materialized in a conflict-safe,
+journaled way in the MVDSV context. A different personal file stays
+preserved.
 
-No Windows, essa materialização não depende de hardlink nem de uma sequência
-`stat` + remoção por caminho. Cada ancestral permanece aberto sem
-`FILE_SHARE_DELETE`, reparse points são recusados e a identidade persistida usa
-`VolumeSerialNumber` + `FILE_ID_128`. O arquivo passa por staging exclusivo,
-`MoveFileExW` sem substituição e verificação por handle. A limpeza marca para
-remoção o mesmo handle cuja identidade e hash foram confirmados; uma identidade
-divergente é preservada.
+On Windows, this materialization does not rely on hardlinks or on a `stat` +
+remove-by-path sequence. Each ancestor stays open without
+`FILE_SHARE_DELETE`, reparse points are refused and the persisted identity uses
+`VolumeSerialNumber` + `FILE_ID_128`. The file goes through exclusive staging,
+`MoveFileExW` without replacement and a check through the handle. Cleanup
+marks for deletion the same handle whose identity and hash were confirmed; a
+diverging identity is preserved.
 
-No POSIX, a limpeza não executa mais `hash` seguido de `unlink` diretamente no
-nome público. Ela move o nome para uma quarentena por rename exclusivo e
-atômico (`renameat2(RENAME_NOREPLACE)` no Linux e
-`renameatx_np(RENAME_EXCL)` no macOS), confirma a identidade, calcula novamente
-o hash pelo descritor ainda aberto e só então remove o nome privado. Se
-conteúdo, tamanho, identidade ou número de links divergir, o nome original é
-restaurado por outro rename sem substituição. Sistemas POSIX sem essa primitiva
-falham fechados e preservam o arquivo. O journal registra também o tamanho
-exato; registros legados sem esse campo são preservados em vez de provocar uma
-leitura até EOF.
+On POSIX, cleanup no longer runs `hash` followed by `unlink` directly on the
+public name. It moves the name into a quarantine through an exclusive, atomic
+rename (`renameat2(RENAME_NOREPLACE)` on Linux and `renameatx_np(RENAME_EXCL)`
+on macOS), confirms the identity, computes the hash again through the
+still-open descriptor and only then removes the private name. If content,
+size, identity or link count diverge, the original name is restored by another
+rename without replacement. POSIX systems without that primitive fail closed
+and preserve the file. The journal also records the exact size; legacy records
+without that field are preserved instead of causing a read up to EOF.
 
-Essa proteção assume integridade dos processos do mesmo usuário. POSIX não
-oferece, de forma portátil, exclusão mandatória contra um processo do mesmo UID
-que já retenha um descritor gravável ou um `mmap` antes da quarentena. Esse ator
-possui a mesma autoridade da instalação e poderia alterá-la ou apagá-la
-diretamente. Os filhos controlados pelo x86QW são encerrados antes da limpeza;
-interferência por nome, troca de inode e alteração detectável entre as duas
-leituras continuam cobertas e preservadas.
+This protection assumes the integrity of the same user's processes. POSIX does
+not offer, portably, mandatory exclusion against a process of the same UID that
+already holds a writable descriptor or an `mmap` before the quarantine. That
+actor has the same authority as the installation and could change or delete it
+directly. The children controlled by x86QW are stopped before cleanup;
+interference by name, inode swaps and detectable changes between the two reads
+stay covered and preserved.
 
-### Bootstrap antes do zipapp
+### Bootstrap before the zipapp
 
-O bootstrap precisa extrair o bundle antes de poder importar o runtime contido
-em `x86qw.pyz`. Para não manter um segundo extrator, os scripts Unix e
-PowerShell do candidato incorporam uma projeção Base64 byte a byte da fonte
-canônica. Eles materializam o helper em temporário privado pelo Python já
-validado e invocam sua CLI com versão, membros obrigatórios e executáveis
-declarados.
+The bootstrap must extract the bundle before it can import the runtime
+contained in `x86qw.pyz`. To avoid keeping a second extractor, the candidate's
+Unix and PowerShell scripts embed a byte-for-byte Base64 projection of the
+canonical source. They materialize the helper into a private temporary file
+through the already validated Python and invoke its CLI with the version, the
+required members and the declared executables.
 
-O builder regenera e valida essa projeção; testes exigem igualdade exata entre
-os quatro bootstraps e `x86qw_runtime/io/archive.py`. `unzip` e
-`Expand-Archive` deixam de participar do fluxo. A projeção existe apenas para
-romper o ciclo de bootstrap e não é uma segunda API autorizada.
+The builder regenerates and validates that projection; tests require exact
+equality between the four bootstraps and `x86qw_runtime/io/archive.py`.
+`unzip` and `Expand-Archive` are no longer part of the flow. The projection
+exists only to break the bootstrap cycle and is not a second authorized API.
 
-O bundle continua com o layout público exato de sete membros. VERSION, os dois
-documentos `installer.json` e a identidade dentro de `x86qw.pyz` precisam
-concordar com a versão solicitada antes da execução da CLI extraída.
+The bundle keeps the exact public layout of seven members. VERSION, the two
+`installer.json` documents and the identity inside `x86qw.pyz` must agree with
+the requested version before the extracted CLI runs.
 
-## Contratos preservados
+## Preserved contracts
 
-- bytes, hashes e estrutura instalada dos arquivos válidos atuais;
-- comandos públicos, gameplay, cinco jogos, KTX e Frogbots;
-- conteúdo e estratégia dos PAKs;
-- arquivos pessoais e destinos já existentes;
-- bundles, tags, checksums e ponteiros já publicados, inclusive `0.7.1`;
-- os dois layouts históricos imutáveis do instalador: seis membros até
-  `0.1.19` e sete membros a partir de `0.1.20`;
-- writers determinísticos, desde que o resultado seja produzido em staging,
-  validado pela fronteira e publicado sem substituir nome existente.
+- bytes, hashes and installed structure of current valid archives;
+- public commands, gameplay, five games, KTX and Frogbots;
+- content and strategy of the PAKs;
+- personal files and existing destinations;
+- bundles, tags, checksums and pointers already published, including `0.7.1`;
+- the two immutable historical installer layouts: six members up to `0.1.19`
+  and seven members from `0.1.20` on;
+- deterministic writers, as long as the result is produced in staging,
+  validated by the boundary and published without replacing an existing name.
 
-## Contratos alterados
+## Changed contracts
 
-- um membro inválido em qualquer posição invalida o arquivo inteiro, ainda que
-  o consumidor não pretendesse lê-lo;
-- arquivos com ambiguidade portável, tipo especial, envelope adicional,
-  compressão não permitida ou limite excedido falham antes de mutação;
-- executabilidade deixa de vir do ZIP e passa a ser declarada pelo produto;
-- extração canônica exige destino inexistente e promoção do diretório completo;
-- bootstraps deixam de depender de extratores externos;
-- builders recusam pais symlink/reparse, alvos concorrentes e promoção
-  automática de um ponteiro `latest` divergente.
+- an invalid member in any position invalidates the whole archive, even if the
+  consumer did not mean to read it;
+- archives with portable ambiguity, a special type, an extra envelope, a
+  disallowed compression or an exceeded limit fail before any mutation;
+- executability no longer comes from the ZIP and is declared by the product;
+- canonical extraction requires a destination that does not exist and the
+  promotion of the complete directory;
+- bootstraps no longer depend on external extractors;
+- builders refuse symlink/reparse parents, concurrent targets and the automatic
+  promotion of a diverging `latest` pointer.
 
-## Consequências e riscos residuais
+## Consequences and residual risks
 
-A superfície de review para leitura e extração passa a ser um módulo único, e
-um gate estático impede a reintrodução de `extract`, `extractall`, `testzip`,
-`is_zipfile`, `unzip`, `Expand-Archive` ou leitura por `ZipFile` fora da
-fronteira. A exceção é escrita explícita em modo `w`, seguida de scan.
+The review surface for reading and extraction becomes a single module, and a
+static gate prevents reintroducing `extract`, `extractall`, `testzip`,
+`is_zipfile`, `unzip`, `Expand-Archive` or reading through `ZipFile` outside
+the boundary. The exception is explicit writing in `w` mode, followed by a
+scan.
 
-Permanecem fora desta decisão:
+These stay outside this decision:
 
-- a política de DACL privada do staging e dos temporários Windows, definida
-  separadamente no [ADR 0003](0003-dacl-privada-windows.md) e validada
-  nativamente na [issue #47](https://github.com/x86dx2/x86qw/issues/47);
-- autenticação, expiração, rollback e freeze de metadados, tratadas no PR 9 e
-  na [issue #48](https://github.com/x86dx2/x86qw/issues/48);
-- evidência e smokes nativos dos runtimes, que não são substituídos por testes
-  portáveis de arquivo;
-- promoção transacional do candidato, incluindo troca deliberada de `latest`,
-  tratada no PR 10 e na
+- the private DACL policy of staging and Windows temporary files, defined
+  separately in [ADR 0003](0003-dacl-privada-windows.md) and validated natively
+  in [issue #47](https://github.com/x86dx2/x86qw/issues/47);
+- authentication, expiration, rollback and freeze of metadata, handled in PR 9
+  and [issue #48](https://github.com/x86dx2/x86qw/issues/48);
+- native runtime evidence and smokes, which portable archive tests do not
+  replace;
+- transactional promotion of the candidate, including a deliberate swap of
+  `latest`, handled in PR 10 and
   [issue #51](https://github.com/x86dx2/x86qw/issues/51);
-- TAR: não existe extração TAR para o filesystem nos fluxos abrangidos por esta
-  PR. Se um consumidor futuro precisar disso, deve entrar por contrato próprio
-  antes do primeiro uso, e não por exceção à fronteira ZIP/PK3/PYZ.
+- TAR: there is no TAR extraction to the filesystem in the flows this PR
+  covers. If a future consumer needs it, it must come in through its own
+  contract before first use, not as an exception to the ZIP/PK3/PYZ boundary.
 
-A versão pública `0.7.1` não contém esta decisão. Promover o candidato exige PR,
-matriz verde e etapa de release separada; este ADR não autoriza publicação.
+Public version `0.7.1` does not contain this decision. Promoting the candidate
+requires a PR, a green matrix and a separate release step; this ADR does not
+authorize publication.
