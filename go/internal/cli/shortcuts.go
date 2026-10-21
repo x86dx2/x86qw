@@ -86,14 +86,18 @@ func runShortcutScript(mode, launcher, iconPath string, shortcuts [2]string) err
 	if err := os.WriteFile(script, []byte(payload), 0o600); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// A cold PowerShell behind an antivirus can take half a minute to start.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	command := exec.CommandContext(ctx, powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script,
 		"-Mode", mode, "-Launcher", launcher, "-Icon", iconPath, "-StartMenuShortcut", shortcuts[0], "-DesktopShortcut", shortcuts[1])
 	output, err := command.CombinedOutput()
 	if err != nil {
 		detail := strings.TrimSpace(string(output))
-		if detail == "" {
+		switch {
+		case ctx.Err() != nil:
+			detail = "o PowerShell não respondeu em 2 minutos"
+		case detail == "":
 			detail = err.Error()
 		}
 		return fmt.Errorf("Não foi possível configurar os atalhos do Windows: %s", detail)
