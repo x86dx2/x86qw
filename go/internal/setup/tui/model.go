@@ -933,6 +933,49 @@ func (m *Model) subtitle() string {
 }
 
 // View draws the frame.
+// topBar is the brand and the screen on the left and the language switch
+// on the right, which it registers as a click target on row 0.
+func (m *Model) topBar() string {
+	t := m.theme
+	brand := t.Style(t.Text).Bold(true).Render("x86") + t.Style(t.Brand).Bold(true).Render("QW") + t.Style(t.Gray).Render("  "+m.t(m.subtitle()))
+	if m.cfg.Demo {
+		brand += t.Style(t.Dim).Render("  ·  " + m.t("demo"))
+	}
+	langHint := t.Style(t.Dim).Render("ctrl+l ")
+	pt, en := t.Style(t.Gray), t.Style(t.Gray)
+	if m.lang == PT {
+		pt = t.Style(t.Text).Bold(true)
+	} else {
+		en = t.Style(t.Text).Bold(true)
+	}
+	if m.hover == "lang" {
+		langHint = t.Style(t.Gray).Render("ctrl+l ")
+	}
+	right := langHint + pt.Render("PT") + t.Style(t.Dim).Render(" │ ") + en.Render("EN")
+	langX := m.w - 2 - lipgloss.Width(right)
+	m.hits = append(m.hits, hit{y: 0, x0: langX, x1: m.w - 2, id: "lang"})
+	return spread(brand, right, m.w-4, t.Base)
+}
+
+// scrollbar is a column of room rows with the thumb where offset puts a
+// window of room rows over total.
+func scrollbar(t Theme, room, total, offset int) string {
+	thumb := max(1, room*room/total)
+	at := offset * (room - thumb) / max(1, total-room)
+	var bar strings.Builder
+	for y := range room {
+		glyph, color := "│", t.Faint()
+		if y >= at && y < at+thumb {
+			glyph, color = "┃", t.Gray
+		}
+		if y > 0 {
+			bar.WriteString("\n")
+		}
+		bar.WriteString(t.Style(color).Render(glyph))
+	}
+	return bar.String()
+}
+
 func (m *Model) View() tea.View {
 	view := tea.View{AltScreen: true, MouseMode: tea.MouseModeAllMotion, WindowTitle: "x86QW", BackgroundColor: m.theme.Base}
 	if m.w == 0 {
@@ -955,25 +998,7 @@ func (m *Model) View() tea.View {
 	body := m.body(width)
 	footer, footerHits := hints(t, m.footerHints(), m.w-4, m.hover)
 
-	// Top bar: brand on the left, mode on the right.
-	brand := t.Style(t.Text).Bold(true).Render("x86") + t.Style(t.Brand).Bold(true).Render("QW") + t.Style(t.Gray).Render("  "+m.t(m.subtitle()))
-	if m.cfg.Demo {
-		brand += t.Style(t.Dim).Render("  ·  " + m.t("demo"))
-	}
-	langHint := t.Style(t.Dim).Render("ctrl+l ")
-	pt, en := t.Style(t.Gray), t.Style(t.Gray)
-	if m.lang == PT {
-		pt = t.Style(t.Text).Bold(true)
-	} else {
-		en = t.Style(t.Text).Bold(true)
-	}
-	if m.hover == "lang" {
-		langHint = t.Style(t.Gray).Render("ctrl+l ")
-	}
-	right := langHint + pt.Render("PT") + t.Style(t.Dim).Render(" │ ") + en.Render("EN")
-	place(spread(brand, right, m.w-4, t.Base), 2, 0)
-	langX := m.w - 2 - lipgloss.Width(right)
-	m.hits = append(m.hits, hit{y: 0, x0: langX, x1: m.w - 2, id: "lang"})
+	place(m.topBar(), 2, 0)
 
 	// The dock sits on the footer and takes its rows from the body.
 	room := m.h - 4
@@ -1007,20 +1032,7 @@ func (m *Model) View() tea.View {
 		offset = max(0, min(offset, total-room))
 		m.scroll[m.screen] = offset
 		body.lines = body.lines[offset : offset+room]
-		thumb := max(1, room*room/total)
-		at := offset * (room - thumb) / max(1, total-room)
-		var bar strings.Builder
-		for y := range room {
-			glyph, color := "│", t.Faint()
-			if y >= at && y < at+thumb {
-				glyph, color = "┃", t.Gray
-			}
-			if y > 0 {
-				bar.WriteString("\n")
-			}
-			bar.WriteString(t.Style(color).Render(glyph))
-		}
-		place(bar.String(), left+width+2, top)
+		place(scrollbar(t, room, total, offset), left+width+2, top)
 	}
 	place(strings.Join(body.lines, "\n"), left, top)
 	for _, h := range body.hits {
