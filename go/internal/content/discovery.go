@@ -634,4 +634,3 @@ func UnpinnedAssetPaths(assets []Asset) []string {
 	sort.Strings(paths)
 	return paths
 }
-
