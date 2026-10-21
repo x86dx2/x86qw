@@ -103,10 +103,12 @@ func runApp(backend *setup.Real, root, start string, stdout, stderr io.Writer) i
 			}
 		}
 	}
-	notice := ""
+	// The language and theme chosen in the app survive the trips through
+	// the command line.
+	lang, theme := interfaceLanguage(), ""
 	for {
 		appOpen = true
-		result, err := tui.Run(tui.Config{Backend: backend, Target: root, Lang: interfaceLanguage(), Start: start, Notice: notice})
+		result, err := tui.Run(tui.Config{Backend: backend, Target: root, Lang: lang, Theme: theme, Start: start})
 		appOpen = false
 		if err != nil {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
@@ -119,15 +121,15 @@ func runApp(backend *setup.Real, root, start string, stdout, stderr io.Writer) i
 		if !result.Back {
 			return code
 		}
-		back := "Enter volta ao x86QW…"
-		if interfaceLanguage() == tui.EN {
-			back = "Enter returns to x86QW…"
+		if result.Lang != "" {
+			lang = result.Lang
 		}
-		fmt.Fprint(stdout, "\n"+back)
+		theme = result.Theme
+		fmt.Fprint(stdout, "\n"+tui.T(lang, "back.enter"))
 		if _, err := bufio.NewReader(stdin).ReadString('\n'); err != nil {
 			return code
 		}
-		start, notice = "", ""
+		start = ""
 	}
 }
 

@@ -10,13 +10,13 @@ import (
 
 func TestOpenAcceptsOnlyCleanAddresses(t *testing.T) {
 	target := t.TempDir()
-	for _, good := range []string{"qw://qw.x86.com.br:27500", "qw://10.0.0.5", "QW://Server-1.example.org:28000/observe", "qw://host/qtvplay"} {
+	for _, good := range []string{"qw://qw.x86.com.br:27500", "qw://10.0.0.5", "QW://Server-1.example.org:28000/observe", "qw://host/qtvplay", "qw://2@qtv.example.org:28000/qtvplay"} {
 		args, err := OpenArguments(target, good)
 		if err != nil || args[0] != "+qwurl" || !strings.HasPrefix(args[1], "qw://") {
 			t.Fatalf("%s: %v %v", good, args, err)
 		}
 	}
-	for _, bad := range []string{"qw://host;quit", `qw://host"`, "qw://host:27500 +exec x", "qw://$rcon_password", "qw://host/../x", "qw://", "http://host", "qw://host:123456"} {
+	for _, bad := range []string{"qw://host;quit", `qw://host"`, "qw://host:27500 +exec x", "qw://$rcon_password", "qw://host/../x", "qw://", "http://host", "qw://host:123456", "qw://2@host:27500", "qw://x@host/qtvplay"} {
 		if _, err := OpenArguments(target, bad); err == nil {
 			t.Fatalf("%q deveria ser recusado", bad)
 		}

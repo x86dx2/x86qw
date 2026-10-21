@@ -15,8 +15,9 @@ import (
 )
 
 // A qw:// address reaches the ezQuake console, so only a host, a port and
-// one of the paths ezQuake's qwurl knows get through.
-var qwURL = regexp.MustCompile(`^qw://[A-Za-z0-9.-]{1,253}(:[0-9]{1,5})?(/(join|observe|spectate|qtvplay)?)?$`)
+// one of the paths ezQuake's qwurl knows get through; a QTV stream number
+// (N@) only with /qtvplay.
+var qwURL = regexp.MustCompile(`^qw://([0-9]{1,6}@)?[A-Za-z0-9.-]{1,253}(:[0-9]{1,5})?(/(join|observe|spectate|qtvplay)?)?$`)
 
 // DemoExtensions are the demos x86qw open plays.
 var DemoExtensions = []string{".mvd", ".qwd"}
@@ -31,7 +32,7 @@ const openDemoAge = 7 * 24 * time.Hour
 func OpenArguments(target, item string) ([]string, error) {
 	if strings.HasPrefix(strings.ToLower(item), "qw://") {
 		address := "qw://" + item[len("qw://"):]
-		if !qwURL.MatchString(address) {
+		if !qwURL.MatchString(address) || strings.Contains(address, "@") && !strings.HasSuffix(address, "/qtvplay") {
 			return nil, cliargs.Usagef("endereço QuakeWorld inválido: %q", item)
 		}
 		if _, port, found := strings.Cut(strings.SplitN(address[len("qw://"):], "/", 2)[0], ":"); found && len(port) > 0 {

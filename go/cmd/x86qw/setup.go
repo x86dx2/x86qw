@@ -67,7 +67,7 @@ func parseSetup(name string, args []string, stdout, stderr io.Writer) (*setupArg
 func (a *setupArgs) recipeGiven() bool {
 	given := false
 	if a.recipe != nil {
-		a.recipe.Visit(func(f *flag.Flag) { given = given || f.Name == "intent" })
+		a.recipe.Visit(func(f *flag.Flag) { given = given || f.Name == "intent" || f.Name == "recipe" })
 	}
 	return given
 }
