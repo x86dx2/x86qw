@@ -12,11 +12,11 @@ import (
 )
 
 func main() {
-	existing := flag.Bool("existing", false, "simular uma instalação existente (painel de gestão)")
-	lang := flag.String("lang", "pt", "pt ou en")
-	theme := flag.String("theme", "", "dark, light ou vazio para seguir o terminal")
-	speed := flag.Float64("speed", 1, "velocidade da instalação simulada")
-	start := flag.String("start", "", "abrir direto em match, servers ou host (com --existing)")
+	existing := flag.Bool("existing", false, "simulate an existing installation (management panel)")
+	lang := flag.String("lang", "en", "en or pt")
+	theme := flag.String("theme", "", "dark, light or empty to follow the terminal")
+	speed := flag.Float64("speed", 1, "speed of the simulated install")
+	start := flag.String("start", "", "open straight on match, servers or host (with --existing)")
 	flag.Parse()
 	_, err := tui.Run(tui.Config{
 		Backend: &setup.Demo{ExistingInstall: *existing, Speed: *speed},

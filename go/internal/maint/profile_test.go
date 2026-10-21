@@ -147,7 +147,7 @@ func TestInsideUsesTheOSSeparator(t *testing.T) {
 		root:                                       true,
 		filepath.Join(root, "qw", "a.cfg"):         true,
 		filepath.Join(root, "..", "fora.zip"):      false,
-		filepath.Join(root+"-sibling", "a.zip"):      false,
+		filepath.Join(root+"-sibling", "a.zip"):    false,
 		filepath.Join(filepath.Dir(root), "a.zip"): false,
 	} {
 		if inside(name, root) != want {
