@@ -376,7 +376,7 @@ func VerifyPlaySupport(root string, games []Game) error {
 		return err
 	}
 	if len(issues) > 0 {
-		return fmt.Errorf("Incomplete run support (%s). Run update, upgrade or repair before you play or host.", strings.Join(issues, "; "))
+		return fmt.Errorf("Incomplete runtime support (%s). Run update, upgrade or repair before you play or host.", strings.Join(issues, "; "))
 	}
 	return nil
 }

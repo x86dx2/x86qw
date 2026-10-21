@@ -15,7 +15,7 @@ func TestTextsSpeakBothLanguages(t *testing.T) {
 		t.Fatalf("%q · %q", pt, en)
 	}
 	// English is the default: logs, the command line, no language given.
-	if text.String() != text.In(LangEN) || text.In("") != text.In(LangEN) || Localize("", "component", "cli", "CLI x86QW") != "x86QW CLI" {
+	if text.String() != text.In(LangEN) || text.In("") != text.In(LangEN) || Localize("", "component", "cli", "x86QW CLI") != "x86QW CLI" || Localize(LangPT, "component", "cli", "x86QW CLI") != "CLI x86QW" {
 		t.Fatalf("the default is not English: %q · %q", text.String(), text.In(""))
 	}
 	if got := Say("warn.of", Say("warn.choices"), Raw("disk full")).In(LangEN); got != "choices: disk full" {

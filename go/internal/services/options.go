@@ -293,7 +293,7 @@ func ParseHost(args []string, games []play.Game) (*HostOptions, error) {
 	// A dedicated server takes no --bot-team, pacemaker or hidden runners.
 	if o.ModeGiven {
 		if o.Game != "" && o.Game != "ktx" {
-			return nil, usagef("--mode can only be used with the KTX game")
+			return nil, usagef("--mode only works with the KTX game")
 		}
 		o.Game = "ktx"
 	}
@@ -306,7 +306,7 @@ func ParseHost(args []string, games []play.Game) (*HostOptions, error) {
 		k.CTFHook != nil || k.CTFRunes != nil || k.CTFBasedSpawn || k.RaceStyle != nil || k.RaceScoring != nil
 	if ktxSpecific {
 		if o.Game != "" && o.Game != "ktx" {
-			return nil, usagef("bot, CTF and Race options can only be used with the KTX game")
+			return nil, usagef("bot, CTF and Race options only work with the KTX game")
 		}
 		o.Game = "ktx"
 	}

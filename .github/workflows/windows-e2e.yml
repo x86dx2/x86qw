@@ -135,7 +135,7 @@ jobs:
           if (Get-Process mvdsv -ErrorAction SilentlyContinue) { throw "mvdsv survived the stop" }
           $out = .\x86qw.cmd status | Out-String
           Write-Host $out
-          if ($out -notmatch "Nenhum servi") { throw "the stack is still running" }
+          if ($out -notmatch "No x86QW service") { throw "the stack is still running" }
       - name: Uninstall removes the shortcuts and the CLI
         run: |
           $ErrorActionPreference = "Stop"

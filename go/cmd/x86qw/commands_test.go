@@ -152,7 +152,7 @@ func TestCleanupMigrateAndStatusLeaveTheInstallation(t *testing.T) {
 	if out := runOK(t, 0, "migrate", root, "--dry-run"); !strings.Contains(out, "Installation migration") || strings.Contains(out, "Migration done") {
 		t.Fatalf("migrate: %s", out)
 	}
-	if out := runOK(t, 0, "status", root); !strings.Contains(out, "Nenhum serviço x86QW está ativo") {
+	if out := runOK(t, 0, "status", root); !strings.Contains(out, "No x86QW service is running") {
 		t.Fatalf("status: %s", out)
 	}
 	var envelope map[string]any

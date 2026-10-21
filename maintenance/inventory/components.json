@@ -115,9 +115,9 @@
   "components": [
     {
       "id": "x86qw-client-bootstrap",
-      "label": "Base e inicialização do cliente x86QW",
+      "label": "x86QW client base and startup",
       "kind": "core",
-      "description": "Compõe a base nQuake com a inicialização, os defaults e as camadas globais do cliente x86QW.",
+      "description": "Builds on the nQuake base with the x86QW client's startup, defaults and global layers.",
       "requires": [],
       "sources": [
         {"path": "gpl/ezquake/configs", "destination": "ezquake/configs", "mode": "overlay", "exclude": ["gpl/ezquake/configs/config.cfg", "gpl/ezquake/configs/samples"]},
@@ -138,9 +138,9 @@
     },
     {
       "id": "nquake-visual-core",
-      "label": "Interface e recursos visuais nQuake",
+      "label": "nQuake interface and visuals",
       "kind": "core",
-      "description": "Pacotes principais do ezQuake e da identidade visual nQuake.",
+      "description": "ezQuake's main packages and the nQuake look.",
       "requires": ["x86qw-client-bootstrap"],
       "sources": [
         {"path": "gpl/ezquake/ezquake.pk3", "destination": "ezquake/ezquake.pk3", "mode": "overlay"},
@@ -151,7 +151,7 @@
       "id": "ktx",
       "label": "KTX x86QW",
       "kind": "gameplay",
-      "description": "KTX 1.47 executado pelo servidor local integrado do ezQuake, com diversão assistida por padrão e regras competitivas opcionais.",
+      "description": "KTX 1.47 run by ezQuake's built-in local server, with assisted fun by default and optional competitive rules.",
       "requires": ["x86qw-client-bootstrap"],
       "sources": [
         {"path": "gpl/qw/ktx.pk3", "destination": "qw/ktx.pk3", "mode": "archive-base"},
@@ -199,9 +199,9 @@
     },
     {
       "id": "nquake-player-skins",
-      "label": "Skins de jogadores",
+      "label": "Player skins",
       "kind": "content",
-      "description": "Skins GPL e comunitárias para jogadores e equipes.",
+      "description": "GPL and community skins for players and teams.",
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "non-gpl/qw/skins", "destination": "qw/skins", "mode": "overlay"}
@@ -209,9 +209,9 @@
     },
     {
       "id": "nquake-crosshairs",
-      "label": "Miras",
+      "label": "Crosshairs",
       "kind": "content",
-      "description": "Coleção de miras incluída pelo nQuake.",
+      "description": "The crosshair collection nQuake ships.",
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "non-gpl/qw/crosshairs", "destination": "qw/crosshairs", "mode": "overlay"}
@@ -221,7 +221,7 @@
       "id": "nquake-skyboxes",
       "label": "Skyboxes",
       "kind": "content",
-      "description": "Céus de alta resolução e documentação correspondente.",
+      "description": "High resolution skies and their notes.",
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "non-gpl/qw/env", "destination": "qw/env", "mode": "overlay"}
@@ -229,9 +229,9 @@
     },
     {
       "id": "nquake-models",
-      "label": "Modelos",
+      "label": "Models",
       "kind": "content",
-      "description": "Modelos atualizados empacotados pelo nQuake.",
+      "description": "Updated models packaged by nQuake.",
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "non-gpl/qw/models.pk3", "destination": "qw/models.pk3", "mode": "overlay"}
@@ -239,9 +239,9 @@
     },
     {
       "id": "nquake-scoreboard-flags",
-      "label": "Bandeiras do placar",
+      "label": "Scoreboard flags",
       "kind": "content",
-      "description": "Bandeiras de países usadas no placar.",
+      "description": "Country flags for the scoreboard.",
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "non-gpl/qw/scoreboard_flags.pk3", "destination": "qw/scoreboard_flags.pk3", "mode": "overlay"}
@@ -249,9 +249,9 @@
     },
     {
       "id": "nquake-external-textures",
-      "label": "Texturas externas",
+      "label": "External textures",
       "kind": "content",
-      "description": "Texturas individuais mantidas pelo nQuake.",
+      "description": "Single textures kept by nQuake.",
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "non-gpl/qw/textures", "destination": "qw/textures", "mode": "overlay"}
@@ -259,9 +259,9 @@
     },
     {
       "id": "nquake-base-textures",
-      "label": "Texturas base",
+      "label": "Base textures",
       "kind": "content",
-      "description": "Pacote de texturas base selecionado pelo nQuake.",
+      "description": "The base texture pack nQuake selects.",
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "textures/qw/textures.pk3", "destination": "qw/textures.pk3", "mode": "overlay"}
@@ -269,9 +269,9 @@
     },
     {
       "id": "nquake-maps",
-      "label": "Mapas selecionados nQuake",
+      "label": "nQuake map selection",
       "kind": "content",
-      "description": "Somente os mapas, ENT e textos que fazem parte da distribuição nQuake.",
+      "description": "Only the maps, ENT files and texts of the nQuake distribution.",
       "requires": ["x86qw-client-bootstrap"],
       "sources": [
         {"path": "non-gpl/qw/maps", "destination": "qw/maps", "mode": "overlay"}
@@ -279,9 +279,9 @@
     },
     {
       "id": "nquake-matchinfo",
-      "label": "Informações de partidas",
+      "label": "Match information",
       "kind": "content",
-      "description": "Demos históricas e de treinamento mantidas pelo nQuake; conteúdo opcional, não necessário para jogar.",
+      "description": "Historical and training demos kept by nQuake; optional, not needed to play.",
       "requires": ["x86qw-client-bootstrap"],
       "sources": [
         {"path": "non-gpl/qw/matchinfo", "destination": "qw/matchinfo", "mode": "overlay"}
@@ -289,9 +289,9 @@
     },
     {
       "id": "nquake-documentation",
-      "label": "Documentação e licenças",
+      "label": "Documentation and licenses",
       "kind": "documentation",
-      "description": "Licenças upstream e documentação atual da distribuição x86QW.",
+      "description": "Upstream licenses and the current x86QW documentation.",
       "requires": [],
       "sources": [
         {"path": "gpl/LICENSE", "destination": "LICENSE", "mode": "overlay"},
@@ -307,9 +307,9 @@
     },
     {
       "id": "qrp-hires",
-      "label": "QRP alta resolução",
+      "label": "QRP high resolution",
       "kind": "addon",
-      "description": "Texturas e brush models em alta resolução do Quake Retexturing Project.",
+      "description": "High resolution textures and brush models from the Quake Retexturing Project.",
       "requires": ["nquake-visual-core"],
       "sources": [
         {"path": "addon-textures/qw", "destination": "qw", "mode": "overlay", "exclude": ["addon-textures/qw/readme-textures.txt"]},
@@ -323,7 +323,7 @@
       "id": "final-arena",
       "label": "Final Arena",
       "kind": "addon",
-      "description": "Final Arena 1.20, com duelos individuais em fila e perfil próprio x86QW.",
+      "description": "Final Arena 1.20: queued one-on-one duels, with its own x86QW profile.",
       "requires": ["x86qw-client-bootstrap"],
       "sources": [
         {"path": "addon-clanarena/arena", "destination": "arena", "mode": "overlay"}
@@ -342,7 +342,7 @@
       "id": "pro-x",
       "label": "Pro-X",
       "kind": "addon",
-      "description": "Pro-X QW 1.1, com rounds, equipes, votações e perfil próprio x86QW.",
+      "description": "Pro-X QW 1.1: rounds, teams and votes, with its own x86QW profile.",
       "requires": ["x86qw-client-bootstrap"],
       "sources": [
         {
@@ -373,7 +373,7 @@
       "id": "team-fortress",
       "label": "Team Fortress",
       "kind": "addon",
-      "description": "Team Fortress 2.9 com assets e mapas nQuake harmonizados pelo x86QW.",
+      "description": "Team Fortress 2.9 with nQuake assets and maps fitted by x86QW.",
       "requires": ["x86qw-client-bootstrap"],
       "sources": [
         {"path": "addon-fortress/fortress", "destination": "fortress", "mode": "overlay"},
@@ -398,7 +398,7 @@
       "id": "total-destruction-2",
       "label": "Total Destruction 2",
       "kind": "addon",
-      "description": "TD2QW 2.22 com armas, magias, runas, modelos, sons e gamecode; fontes e manuais permanecem preservados no dist.",
+      "description": "TD2QW 2.22: weapons, spells, runes, models, sounds and game code.",
       "requires": ["x86qw-client-bootstrap"],
       "project_overrides": [
         {"path": "dist/mods/td2/2.22/x86qw/runtime/qwprogs.dat", "target": "td2/qwprogs.dat"}
@@ -437,9 +437,9 @@
     },
     {
       "id": "mvdsv",
-      "label": "MVDSV dedicado",
+      "label": "Dedicated MVDSV",
       "kind": "runtime",
-      "description": "Servidor QuakeWorld MVDSV 1.11 para os gamecodes declarados, MVD e transmissão QTV.",
+      "description": "The MVDSV 1.11 QuakeWorld server for the declared game codes, MVD and QTV.",
       "requires": [],
       "sources": [
         {"path": "LICENSE.md", "destination": "docs/licenses/mvdsv.md", "mode": "overlay", "origin": "release"}
@@ -459,7 +459,7 @@
       "id": "qwfwd",
       "label": "QWFWD proxy",
       "kind": "service",
-      "description": "Proxy QuakeWorld QWFWD 1.30, local por padrão e exposição externa opcional.",
+      "description": "The QWFWD 1.30 QuakeWorld proxy, local by default, open on request.",
       "requires": [],
       "sources": [
         {"path": "qwfwd-1.30/LICENSE.md", "destination": "docs/licenses/qwfwd.md", "mode": "overlay", "origin": "release"}
@@ -478,7 +478,7 @@
       "id": "qtv",
       "label": "QTV broadcast",
       "kind": "service",
-      "description": "QTV HTTP fixado por commit para streams locais ou upstream remoto e demos MVD.",
+      "description": "QTV pinned by commit, for local streams, a remote upstream and MVD demos.",
       "requires": [],
       "sources": [
         {"path": "qtv-025ca949aca06cad6777de0075148ac06a15f4f0/LICENSE", "destination": "docs/licenses/qtv.txt", "mode": "overlay", "origin": "release"},
