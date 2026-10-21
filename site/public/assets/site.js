@@ -9,10 +9,10 @@ copyInstallButtons.forEach((button) => {
     try {
       await navigator.clipboard.writeText(command);
       button.dataset.copyState = 'copied';
-      if (status) status.textContent = 'Copiado';
+      if (status) status.textContent = 'Copied';
     } catch {
       button.dataset.copyState = 'error';
-      if (status) status.textContent = 'Selecione o comando';
+      if (status) status.textContent = 'Select the command';
     }
     window.setTimeout(() => {
       button.dataset.copyState = 'idle';
@@ -42,9 +42,9 @@ const applyCatalog = (state, label, value, detail) => {
 if (catalogLive.length) {
   applyCatalog(
     'loading',
-    'Verificando catálogo',
-    'Aguardando resposta',
-    'Lendo o contrato público em tempo real.',
+    'Checking the catalog',
+    'Waiting for an answer',
+    'Reading the public contract live.',
   );
   fetch('/api/v1/product.json', { cache: 'no-store' })
     .then((response) => {
@@ -58,7 +58,7 @@ if (catalogLive.length) {
         || product.package_count < 0
         || !Array.isArray(product.games)
       ) {
-        throw new Error('produto incompatível');
+        throw new Error('incompatible product');
       }
 
       const count = product.package_count;
@@ -66,19 +66,19 @@ if (catalogLive.length) {
       const ktxVersion = ktx && ktx.version;
       applyCatalog(
         count ? 'ready' : 'pending',
-        count ? 'Catálogo publicado' : 'Distribuição em preparação',
-        `${count} ${count === 1 ? 'pacote auditado' : 'pacotes auditados'}`,
+        count ? 'Catalog published' : 'Distribution in preparation',
+        `${count} ${count === 1 ? 'audited package' : 'audited packages'}`,
         count
-          ? `Cada entrada possui origem, versão, hash e mirrors revisados.${ktxVersion ? ` KTX atual: ${ktxVersion}.` : ''}`
-          : 'Nenhum binário será publicado antes da revisão de licença e proveniência.',
+          ? `Every entry has a reviewed origin, version, hash and mirrors.${ktxVersion ? ` Current KTX: ${ktxVersion}.` : ''}`
+          : 'No binary is published before its license and provenance are reviewed.',
       );
     })
     .catch(() => {
       applyCatalog(
         'error',
-        'Catálogo indisponível',
-        'Não foi possível confirmar o estado',
-        'Tente abrir o JSON diretamente ou volte em alguns minutos.',
+        'Catalog unavailable',
+        'Could not confirm the status',
+        'Try opening the JSON directly or come back in a few minutes.',
       );
     });
 }

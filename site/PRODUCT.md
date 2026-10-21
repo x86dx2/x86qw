@@ -6,63 +6,63 @@ brand
 
 ## Users
 
-Pessoas descobrindo QuakeWorld e jogadores veteranos que querem uma forma atual,
-confiável e multiplataforma de instalar, atualizar e preservar o jogo. Quem está
-chegando precisa entender rapidamente o que é o projeto e como começar; quem já
-joga precisa reconhecer transparência técnica, controle e respeito ao ecossistema.
+People discovering QuakeWorld and veteran players who want a current,
+reliable, cross-platform way to install, update and preserve the game. Newcomers
+need to understand quickly what the project is and how to start; those who already
+play need to recognize technical transparency, control and respect for the ecosystem.
 
 ## Product Purpose
 
-Divulgar o QuakeWorld e apresentar o x86QW como uma distribuição moderna,
-reproduzível e auditável. O site deve transformar curiosidade em confiança:
-mostrar os jogos primeiro, tornar o estado real da distribuição visível e
-conduzir o visitante à instalação sem esconder proveniência, suporte efetivo
-ou limitações.
+Spread QuakeWorld and present x86QW as a modern, reproducible and auditable
+distribution. The site should turn curiosity into trust:
+show the games first, make the real state of the distribution visible and
+lead the visitor to the install without hiding provenance, actual support
+or limits.
 
 ## Brand Personality
 
-Direta, precisa e confiável. A voz é objetiva, com a energia de uma ferramenta
-bem mantida e a clareza de um inventário que se pode conferir. O resultado deve
-parecer contemporâneo sem apagar a história do QuakeWorld.
+Direct, precise and trustworthy. The voice is objective, with the energy of a
+well-kept tool and the clarity of an inventory you can check. The result should
+feel contemporary without erasing QuakeWorld's history.
 
 ## Anti-references
 
-Não parecer nostalgia pixelada excessiva, estética gamer neon/cyberpunk ou uma
-landing page SaaS genérica. Evitar também futurismo ornamental, jargão promocional,
-interfaces cheias de cartões iguais, metáfora de arena/largada e qualquer tentativa
-de esconder limitações de plataforma ou validação.
+Do not look like heavy pixel nostalgia, neon/cyberpunk gamer aesthetics or a
+generic SaaS landing page. Also avoid ornamental futurism, promotional jargon,
+interfaces full of identical cards, arena/starting-grid metaphors and any attempt
+to hide platform or validation limits.
 
-## Fatos públicos
+## Public facts
 
-Versão, contagens, comandos, jogos, runtimes e plataformas vêm da projeção
-gerada `public/api/v1/product.json`. A fonte é o conjunto canônico em
-`maintenance/inventory/` e o catálogo de pacotes, inclusive os binários da CLI
-`x86qw`.
-Textos do site não podem manter números divergentes: um teste Go compara as
-contagens e a versão da CLI citadas na página com essa projeção e com o catálogo,
-e a validação integral rejeita um JSON desatualizado.
+Version, counts, commands, games, runtimes and platforms come from the generated
+projection `public/api/v1/product.json`. Its source is the canonical set in
+`maintenance/inventory/` and the package catalog, including the `x86qw`
+CLI binaries.
+The site's text must not keep diverging numbers: a Go test compares the
+counts and the CLI version quoted on the page with that projection and the catalog,
+and the full validation rejects an outdated JSON.
 
-O produto atual oferece cinco jogos, KTX com modos e Frogbots, hospedagem por
-MVDSV, relay QTV e proxy QWFWD. O cliente macOS é universal; os três serviços
-no macOS são arm64. Linux amd64 e Windows x64 possuem cliente e serviços.
+The current product offers five games, KTX with modes and Frogbots, hosting with
+MVDSV, the QTV relay and the QWFWD proxy. The macOS client is universal; the three services
+on macOS are arm64. Linux amd64 and Windows x64 have the client and the services.
 
 ## Design Principles
 
-- Começar pelo jogo: a primeira dobra nomeia os títulos, o app e o comando.
-  Infraestrutura vem depois da evidência de que isto joga.
-- Destacar vantagens concretas: cinco jogos numa árvore, `play` / `host` / `hub`,
-  catálogo com SHA-256 e TUF, stable e nightly lado a lado, PAKs que continuam
-  sendo do dono.
-- Provar confiança: versões, hashes, licenças e estado do catálogo são evidência
-  legível, não slogan.
-- Ser honesto sobre o estágio: distinguir claramente o que já funciona, o que
-  está em preview ou auditoria, e o que é owner-only.
-- Modernizar sem descaracterizar: linguagem visual atual sem imitar interfaces
-  retrô, tendências gamer ou cartazes de competição.
+- Start with the game: the first screen names the titles, the app and the command.
+  Infrastructure comes after the evidence that this plays.
+- Highlight concrete advantages: five games in one tree, `play` / `host` / `hub`,
+  a catalog with SHA-256 and TUF, stable and nightly side by side, PAKs that still
+  belong to their owner.
+- Prove trust: versions, hashes, licenses and catalog status are readable
+  evidence, not a slogan.
+- Be honest about the stage: clearly tell apart what already works, what
+  is in preview or audit, and what is owner-only.
+- Modernize without changing character: a current visual language that does not imitate
+  retro interfaces, gamer trends or tournament posters.
 
 ## Accessibility & Inclusion
 
-Atender WCAG 2.2 AA. Garantir navegação completa por teclado, foco visível,
-contraste mínimo de 4.5:1 para texto comum, estrutura semântica, textos alternativos
-e informação nunca transmitida apenas por cor. Respeitar `prefers-reduced-motion`
-e manter o conteúdo integral quando animações forem desativadas.
+Meet WCAG 2.2 AA. Guarantee full keyboard navigation, visible focus,
+a minimum contrast of 4.5:1 for regular text, semantic structure, alternative text
+and information never conveyed by color alone. Respect `prefers-reduced-motion`
+and keep all the content when animations are turned off.

@@ -1,10 +1,10 @@
-# Publicação na Cloudflare
+# Publishing on Cloudflare
 
-O `site/wrangler.jsonc` publica `site/public` como Workers Static Assets e registra
-`qw.x86.com.br` como o único Custom Domain. Nenhum Worker JavaScript executa no caminho normal:
-HTML, CSS e o catálogo são arquivos estáticos idênticos no edge.
+`site/wrangler.jsonc` publishes `site/public` as Workers Static Assets and registers
+`qw.x86.com.br` as the only Custom Domain. No JavaScript Worker runs on the normal path:
+HTML, CSS and the catalog are identical static files at the edge.
 
-## Validar sem publicar
+## Validate without publishing
 
 ```sh
 cd site
@@ -14,31 +14,31 @@ cd ..
 go -C go run ./cmd/x86qw-content verify
 ```
 
-O Wrangler vem fixado em `site/package.json`; uma atualização dele repete o
-dry-run antes do deploy. A CI também monta o site como o deploy faz
-(`x86qw-release site`) e roda o dry-run sobre essa montagem.
+Wrangler is pinned in `site/package.json`; an update of it repeats the
+dry run before the deploy. CI also assembles the site as the deploy does
+(`x86qw-release site`) and runs the dry run on that assembly.
 
-## Publicar
+## Publish
 
-1. Confirme que `x86.com.br` é uma zona ativa na conta Cloudflare correta.
-2. Confirme que `qw.x86.com.br` não possui um CNAME conflitante.
-3. Autentique o Wrangler com um token restrito à conta e à zona.
-4. O deploy normal é o workflow `site-deploy.yml`, que roda a cada merge que
-   muda `site/public` (e por `workflow_dispatch`): monta o site com
-   `x86qw-release site`, recusa voltar o timestamp TUF e publica com
-   `wrangler deploy --assets`. A renovação semanal do timestamp publica pelo
-   mesmo caminho. O token `CLOUDFLARE_API_TOKEN` fica no ambiente `release` do
-   GitHub.
-5. Valide `/`, `/api/v1/catalog.json` e uma URL inexistente.
+1. Confirm that `x86.com.br` is an active zone in the right Cloudflare account.
+2. Confirm that `qw.x86.com.br` has no conflicting CNAME.
+3. Authenticate Wrangler with a token restricted to the account and the zone.
+4. The normal deploy is the `site-deploy.yml` workflow, which runs on every merge that
+   changes `site/public` (and on `workflow_dispatch`): it assembles the site with
+   `x86qw-release site`, refuses to roll the TUF timestamp back and publishes with
+   `wrangler deploy --assets`. The weekly timestamp renewal publishes through the
+   same path. The `CLOUDFLARE_API_TOKEN` token lives in the GitHub `release`
+   environment.
+5. Check `/`, `/api/v1/catalog.json` and a URL that does not exist.
 
-O deploy cria o Custom Domain e seu registro DNS/certificado. O `account_id`
-versionado no `wrangler.jsonc` identifica a conta de roteamento e não é uma
-credencial. Tokens de API, chaves e demais credenciais nunca entram no
-repositório.
+The deploy creates the Custom Domain and its DNS record and certificate. The `account_id`
+versioned in `wrangler.jsonc` identifies the routing account and is not a
+credential. API tokens, keys and other credentials never enter the
+repository.
 
-## Atalho no portal x86.com.br
+## Shortcut on the x86.com.br portal
 
-Crie uma Single Redirect Rule na zona `x86.com.br`:
+Create a Single Redirect Rule in the `x86.com.br` zone:
 
 ```text
 Request URL:          https://x86.com.br/x86qw*
@@ -47,19 +47,19 @@ Status:               308
 Preserve query string: enabled
 ```
 
-O curinga preserva caminhos: `/x86qw/docs` passa a `/docs`. Essa regra pertence
-ao portal geral do domínio e não ao Worker do x86QW.
+The wildcard keeps paths: `/x86qw/docs` becomes `/docs`. That rule belongs
+to the domain's general portal, not to the x86QW Worker.
 
-O alias legado não deve ser redirecionado nem removido enquanto houver versões
-publicadas que o utilizem para catálogo e metadados TUF.
+The legacy alias must not be redirected or removed while published versions
+still use it for the catalog and TUF metadata.
 
-O Browser Integrity Check da zona injeta um bootstrap inline antes de
-`/cdn-cgi/challenge-platform/`. Por isso a CSP permite script inline, mas mantém
-scripts externos restritos à própria origem e bloqueia objetos, frames, forms e
-bases externas. Remover `unsafe-inline` exige primeiro desativar essa injeção na
-configuração da zona.
+The zone's Browser Integrity Check injects an inline bootstrap before
+`/cdn-cgi/challenge-platform/`. That is why the CSP allows inline script, while keeping
+external scripts restricted to the site's own origin and blocking external objects, frames, forms and
+bases. Removing `unsafe-inline` first requires turning that injection off in the
+zone configuration.
 
-## Referências oficiais
+## Official references
 
 - [Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/)
 - [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)

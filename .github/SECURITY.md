@@ -1,34 +1,34 @@
-# Política de segurança
+# Security policy
 
-## Versões cobertas
+## Supported versions
 
-A versão marcada como **Latest** em [GitHub Releases](https://github.com/x86dx2/x86qw/releases/latest) recebe correções de segurança. Versões históricas e snapshots nightly podem ser úteis para reprodução, mas não recebem garantia de correção retroativa.
+The version marked **Latest** in [GitHub Releases](https://github.com/x86dx2/x86qw/releases/latest) receives security fixes. Historical versions and nightly snapshots can be useful for reproduction, but come with no guarantee of a backported fix.
 
-## Reportando uma vulnerabilidade
+## Reporting a vulnerability
 
-Use o botão **Report a vulnerability** na aba [Security](https://github.com/x86dx2/x86qw/security) para abrir um advisory privado. Não publique uma issue, discussão, pull request ou prova de conceito antes da coordenação da correção.
+Use the **Report a vulnerability** button on the [Security](https://github.com/x86dx2/x86qw/security) tab to open a private advisory. Do not publish an issue, discussion, pull request or proof of concept before the fix is coordinated.
 
-Inclua, quando possível:
+Include, when possible:
 
-- componente e versão afetados;
-- sistema operacional e arquitetura;
-- pré-condições e impacto observado;
-- passos mínimos para reproduzir;
-- logs sanitizados e uma sugestão de mitigação;
-- informação sobre divulgação ou prazo já combinado com terceiros.
+- the affected component and version;
+- the operating system and architecture;
+- preconditions and the impact observed;
+- minimal steps to reproduce;
+- sanitized logs and a suggested mitigation;
+- any disclosure plan or deadline already agreed with third parties.
 
-## Escopo prioritário
+## Priority scope
 
-- validação de pacotes, hashes e catálogos;
-- travessia de caminho, links e escrita fora do destino;
-- execução de comandos ou argumentos não confiáveis;
-- vazamento de senhas, tokens ou configuração privada;
-- locks, journals e recuperação que possam atingir processos ou arquivos alheios;
-- exposição de MVDSV, QTV ou QWFWD além do `--bind` solicitado;
-- workflows, publicação e cadeia de suprimentos.
+- validation of packages, hashes and catalogs;
+- path traversal, links and writes outside the target;
+- execution of untrusted commands or arguments;
+- leaks of passwords, tokens or private configuration;
+- locks, journals and recovery that could reach other processes or files;
+- exposure of MVDSV, QTV or QWFWD beyond the requested `--bind`;
+- workflows, publishing and the supply chain.
 
-Falhas exclusivamente no upstream também podem afetar o x86QW. Envie o relato aqui se a distribuição, configuração ou empacotamento ampliar o impacto; a coordenação com o upstream será feita sem expor o pesquisador.
+Flaws only in upstream software can also affect x86QW. Send the report here if the distribution, configuration or packaging widens the impact; coordination with upstream will happen without exposing the researcher.
 
-## Processo esperado
+## Expected process
 
-O projeto acusará recebimento pelo advisory, validará o escopo, preparará a correção e combinará a divulgação. Não há recompensa financeira prometida. Relatos de boa-fé, que evitem indisponibilidade, acesso a dados de terceiros e exposição prematura, são bem-vindos.
+The project will acknowledge the advisory, validate the scope, prepare the fix and agree on disclosure. No financial reward is promised. Good-faith reports that avoid downtime, access to third-party data and premature exposure are welcome.
