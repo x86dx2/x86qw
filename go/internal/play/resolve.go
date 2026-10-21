@@ -34,26 +34,13 @@ type Choice struct {
 }
 
 // Installed lists the games whose component is installed under root, in
-// catalog order, with the install-side record of each.
-func Installed(root string) ([]Game, []install.Game, error) {
+// catalog order.
+func Installed(root string) ([]Game, error) {
 	games, err := LoadGames()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	installGames, err := install.LoadGames()
-	if err != nil {
-		return nil, nil, err
-	}
-	available := install.AvailableGames(root, installGames)
-	var out []Game
-	for _, game := range games {
-		for _, candidate := range available {
-			if candidate.ID == game.ID {
-				out = append(out, game)
-			}
-		}
-	}
-	return out, available, nil
+	return install.AvailableGames(root, games), nil
 }
 
 // ClientRuleset is the ruleset ezQuake starts with at root: the saved one,
@@ -164,7 +151,7 @@ func Resolve(root string, r Request) (*Choice, error) {
 	if err := install.CheckPaks(root); err != nil {
 		return nil, err
 	}
-	games, available, err := Installed(root)
+	games, err := Installed(root)
 	if err != nil {
 		return nil, err
 	}
@@ -198,13 +185,7 @@ func Resolve(root string, r Request) (*Choice, error) {
 		return nil, fmt.Errorf("Jogo local desconhecido: %s. Disponíveis: %s.", r.Game, strings.Join(keys, ", "))
 	}
 	choice := &Choice{Game: *game, Options: r.Options}
-	var installGame install.Game
-	for _, candidate := range available {
-		if candidate.ID == game.ID {
-			installGame = candidate
-		}
-	}
-	if choice.Component = install.InstalledComponent(root, installGame); choice.Component == "" {
+	if choice.Component = install.InstalledComponent(root, *game); choice.Component == "" {
 		return nil, fmt.Errorf("O componente de %s não está mais instalado.", game.Label)
 	}
 	if choice.Files, choice.Selection, err = install.VerifyComponent(root, choice.Component); err != nil {
@@ -270,7 +251,7 @@ func Resolve(root string, r Request) (*Choice, error) {
 		}
 		return nil, errors.New("Nenhum ezQuake instalado; execute x86qw setup.")
 	}
-	if err := install.VerifyPlaySupport(root, available); err != nil {
+	if err := install.VerifyPlaySupport(root, games); err != nil {
 		return nil, err
 	}
 	return choice, nil

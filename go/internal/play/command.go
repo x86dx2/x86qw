@@ -82,7 +82,11 @@ func Build(game Game, mode *Mode, mapName string, assets map[string]bool, o Opti
 			return nil, err
 		}
 		launch.BotNameSettings = settings
-		keyAliases := append([]string{"tempalias ktx_mode echo x86QW KTX preset: " + mode.Label + " [" + mode.Key + "]"}, KeyAliasCommands(*mode, o)...)
+		aliases, err := KeyAliasCommands(*mode, o)
+		if err != nil {
+			return nil, err
+		}
+		keyAliases := append([]string{"tempalias ktx_mode echo x86QW KTX preset: " + mode.Label + " [" + mode.Key + "]"}, aliases...)
 		postMap, err := LaunchCommands(*mode, mapName, assets, o)
 		if err != nil {
 			return nil, err
@@ -129,7 +133,11 @@ func Build(game Game, mode *Mode, mapName string, assets map[string]bool, o Opti
 				if mode.EntryConfig == "" {
 					eventBody = "exec x86qw-ktx.cfg;" + invocation
 				} else {
-					compatibility = []string{"tempalias x86qw_ktx_launch_setup " + mustQuote(invocation)}
+					quoted, err := QuoteConsoleCommand(invocation)
+					if err != nil {
+						return nil, err
+					}
+					compatibility = []string{"tempalias x86qw_ktx_launch_setup " + quoted}
 				}
 				quoted, err := QuoteConsoleCommand(eventBody)
 				if err != nil {
@@ -145,7 +153,9 @@ func Build(game Game, mode *Mode, mapName string, assets map[string]bool, o Opti
 			}
 			eventArgument := eventBody
 			if mode.EntryConfig == "" {
-				eventArgument = mustQuote(eventBody)
+				if eventArgument, err = QuoteConsoleCommand(eventBody); err != nil {
+					return nil, err
+				}
 			}
 			args = append(args, "+tempalias", "x86qw_ktx_launch_setup", quotedSetup, "+tempalias", event, eventArgument)
 		}

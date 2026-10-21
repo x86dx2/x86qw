@@ -10,6 +10,7 @@ import (
 	"unicode"
 
 	"github.com/x86dx2/x86qw/go/internal/lock"
+	"github.com/x86dx2/x86qw/go/internal/pyjson"
 )
 
 // Human `status` and `status --stop`, ported from services.py.
@@ -260,10 +261,13 @@ func RequestStop(target string, timeout time.Duration) error {
 		return errorf("Lock e journal não identificam o mesmo controlador; nada foi encerrado.")
 	}
 	request := filepath.Join(filepath.Dir(paths[0]), "stop.request")
-	payload := pyDumps(map[string]any{
+	payload, err := pyjson.Dumps(map[string]any{
 		"format": 1, "project": "x86qw", "session_id": owner.SessionID, "requested_at": isoNow(),
-	}, false) + "\n"
-	identity, err := publishStopRequest(request, []byte(payload))
+	}, -1)
+	if err != nil {
+		return err
+	}
+	identity, err := publishStopRequest(request, []byte(payload+"\n"))
 	if err != nil {
 		return err
 	}

@@ -88,7 +88,7 @@ func TestRecipeFileCarriesNoSecretAndComesBack(t *testing.T) {
 	}
 	path := filepath.Join(t.TempDir(), "receita.json")
 	os.WriteFile(path, payload, 0o644)
-	got, err := ParseRecipe([]string{"--recipe", path, "--nick", "outro", "--target", "/aqui"})
+	got, err := parseRecipe([]string{"--recipe", path, "--nick", "outro", "--target", "/aqui"})
 	if err != nil {
 		t.Fatal(err)
 	}

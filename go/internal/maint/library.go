@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/x86dx2/x86qw/go/internal/atomicfile"
 	"github.com/x86dx2/x86qw/go/internal/pyjson"
 )
 
@@ -44,25 +45,18 @@ type Library struct {
 // NormalizeAddress lowercases the host and validates the port.
 func NormalizeAddress(value string) (string, error) {
 	if !addressPattern.MatchString(value) {
-		return "", fmt.Errorf("endereço de servidor inválido: %s", pyRepr(value))
+		return "", fmt.Errorf("endereço de servidor inválido: %q", value)
 	}
 	cut := strings.LastIndex(value, ":")
 	host, portText := value[:cut], value[cut+1:]
 	port, _ := strconv.Atoi(portText)
 	if port < 1 || port > 65535 {
-		return "", fmt.Errorf("porta de servidor inválida: %s", pyRepr(value))
+		return "", fmt.Errorf("porta de servidor inválida: %q", value)
 	}
 	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
 		return fmt.Sprintf("%s:%d", host, port), nil
 	}
 	return fmt.Sprintf("%s:%d", strings.ToLower(host), port), nil
-}
-
-func pyRepr(value string) string {
-	if strings.Contains(value, "'") && !strings.Contains(value, `"`) {
-		return `"` + value + `"`
-	}
-	return "'" + strings.ReplaceAll(strings.ReplaceAll(value, `\`, `\\`), "'", `\'`) + "'"
 }
 
 func cleanTitle(value, fallback string) string {
@@ -84,7 +78,7 @@ func cleanTitle(value, fallback string) string {
 
 func newEntry(address, title, origin string, now time.Time) (LibraryEntry, error) {
 	if !origins[origin] {
-		return LibraryEntry{}, fmt.Errorf("origem inválida na biblioteca: %s", pyRepr(origin))
+		return LibraryEntry{}, fmt.Errorf("origem inválida na biblioteca: %q", origin)
 	}
 	normalized, err := NormalizeAddress(address)
 	if err != nil {
@@ -191,12 +185,7 @@ func writeLibrary(target string, library *Library) error {
 	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 		return err
 	}
-	staging := destination + ".tmp"
-	defer os.Remove(staging)
-	if err := os.WriteFile(staging, []byte(encoded+"\n"), 0o644); err != nil {
-		return err
-	}
-	return os.Rename(staging, destination)
+	return atomicfile.Write(destination, []byte(encoded+"\n"), 0o644)
 }
 
 // AddFavorite pins a server (newest first, at most 20).

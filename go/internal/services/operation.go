@@ -14,6 +14,7 @@ import (
 
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/play"
+	"github.com/x86dx2/x86qw/go/internal/pyjson"
 )
 
 // Operation drives one `host`, `proxy` or `qtv` invocation like services.main.
@@ -76,9 +77,14 @@ func (op *Operation) resolvePasswords() error {
 			}
 			*field.value = value
 		} else if *field.prompt && *field.value == "" {
-			fmt.Fprintf(os.Stderr, "%s: ", strings.ToUpper(field.label[:1])+field.label[1:])
-			raw, err := term.ReadPassword(int(os.Stdin.Fd()))
-			fmt.Fprintln(os.Stderr)
+			// Without echo only a terminal can answer.
+			input, ok := op.Stdin.(*os.File)
+			if !ok || !term.IsTerminal(int(input.Fd())) {
+				return errorf("A %s precisa de um terminal; use o arquivo de senha.", field.label)
+			}
+			fmt.Fprintf(op.Console.Err, "%s: ", strings.ToUpper(field.label[:1])+field.label[1:])
+			raw, err := term.ReadPassword(int(input.Fd()))
+			fmt.Fprintln(op.Console.Err)
 			if err != nil {
 				return errorf("Não foi possível ler a %s sem eco.", field.label)
 			}
@@ -528,7 +534,12 @@ func (op *Operation) launchBackground(hosted *Hosted) int {
 	logRelative := ".x86qw/logs/service-" + tokenHex(8) + ".log"
 	arguments := op.backgroundArguments(hosted, logRelative)
 	secrets := op.secrets()
-	request := pyDumps(map[string]any{"format": 1, "project": "x86qw", "secrets": secrets}, false) + "\n"
+	request, err := pyjson.Dumps(map[string]any{"format": 1, "project": "x86qw", "secrets": secrets}, -1)
+	if err != nil {
+		c.Error("Não foi possível preparar o controlador em segundo plano: " + err.Error())
+		return 1
+	}
+	request += "\n"
 	executable, err := os.Executable()
 	if err != nil {
 		c.Error("Não foi possível criar o controlador em segundo plano: " + err.Error())
@@ -650,10 +661,3 @@ func ktxCLIArguments(o play.Options) []string {
 	return arguments
 }
 
-func toAny(values []string) []any {
-	result := make([]any, len(values))
-	for index, value := range values {
-		result[index] = value
-	}
-	return result
-}

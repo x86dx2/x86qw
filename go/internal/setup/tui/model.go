@@ -543,7 +543,7 @@ func (m *Model) startPreflight(focusConfirm bool) tea.Cmd {
 		m.focus = len(m.confirmRows()) - 1
 	}
 	var ctx context.Context
-	ctx, m.preCancel = context.WithCancel(setup.AnnounceChecks(context.Background()))
+	ctx, m.preCancel = context.WithCancel(context.Background())
 	m.preCh = m.cfg.Backend.Preflight(ctx, m.opts)
 	return m.nextCheck()
 }

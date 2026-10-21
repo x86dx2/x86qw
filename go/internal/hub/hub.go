@@ -9,22 +9,21 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/x86dx2/x86qw/go/internal/maint"
 )
 
 const (
-	// API is the Hub endpoint the Python CLI queries.
-	API         = "https://hubapi.quakeworld.nu/v2/servers/mvdsv?empty=exclude&limit=20"
-	maxBytes    = 1 << 20
-	maxServers  = 20
-	libraryPath = "qw/x86qw-library.json"
+	// API is the QuakeWorld Hub endpoint for MVDSV servers with players.
+	API        = "https://hubapi.quakeworld.nu/v2/servers/mvdsv?empty=exclude&limit=20"
+	maxBytes   = 1 << 20
+	maxServers = 20
 )
 
 var (
@@ -86,35 +85,23 @@ func validAddress(address string) bool {
 
 // Library returns local favorites then recents as Hub-like rows.
 func Library(root string) ([]any, error) {
-	payload, err := os.ReadFile(filepath.Join(root, libraryPath))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
+	library, err := maint.LoadLibrary(root)
 	if err != nil {
 		return nil, err
 	}
-	var document struct {
-		Format    int                 `json:"format"`
-		Kind      string              `json:"kind"`
-		Favorites []map[string]string `json:"favorites"`
-		Recents   []map[string]string `json:"recents"`
-	}
-	if err := json.Unmarshal(payload, &document); err != nil || document.Format != 1 || document.Kind != "library" {
-		return nil, errors.New("biblioteca local inválida")
-	}
 	seen := map[string]bool{}
 	var rows []any
-	for _, entry := range append(document.Favorites, document.Recents...) {
-		address := entry["address"]
+	for _, entry := range append(library.Favorites, library.Recents...) {
+		address := entry.Address
 		if seen[address] || !validAddress(address) {
 			continue
 		}
 		seen[address] = true
 		rows = append(rows, map[string]any{
 			"address":  address,
-			"title":    entry["title"],
+			"title":    entry.Title,
 			"mode":     "-",
-			"settings": map[string]any{"hostname": entry["title"], "mode": "-", "map": "-"},
+			"settings": map[string]any{"hostname": entry.Title, "mode": "-", "map": "-"},
 			"players":  []any{},
 		})
 	}

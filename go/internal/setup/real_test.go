@@ -171,19 +171,26 @@ func TestPreflightSaysEachCheckStarts(t *testing.T) {
 	options := Defaults(Play, filepath.Join(t.TempDir(), "x86qw"))
 	var states []CheckState
 	var ids []string
-	for check := range r.Preflight(AnnounceChecks(context.Background()), options) {
+	for check := range r.Preflight(context.Background(), options) {
 		states, ids = append(states, check.State), append(ids, check.ID)
 	}
 	if len(states) != 8 || states[0] != CheckRunning || states[1] == CheckRunning || ids[0] != ids[1] {
 		t.Fatalf("%v %v", ids, states)
 	}
-	// A printed list, the command line's, gets each check once.
-	count := 0
-	for range r.Preflight(context.Background(), options) {
-		count++
+}
+
+// TestRunRecipeReportsEachCheckOnce: the command line prints how each
+// check ended, never the announcement, and a failed one stops the install.
+func TestRunRecipeReportsEachCheckOnce(t *testing.T) {
+	r := &Real{CatalogFile: filepath.Join(t.TempDir(), "sem-catalogo.json")}
+	options := Defaults(Play, filepath.Join(t.TempDir(), "x86qw"))
+	var seen []CheckState
+	_, err := RunRecipe(context.Background(), r, options, RecipeReport{Check: func(check Check) { seen = append(seen, check.State) }})
+	if len(seen) != 4 || slices.Contains(seen, CheckRunning) {
+		t.Fatalf("checks: %v", seen)
 	}
-	if count != 4 {
-		t.Fatalf("%d linhas sem anúncio", count)
+	if !errors.Is(err, ErrBlocked) {
+		t.Fatalf("sem catálogo o pré-voo deveria bloquear: %v", err)
 	}
 }
 

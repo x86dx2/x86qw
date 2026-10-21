@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/x86dx2/x86qw/go/internal/atomicfile"
 )
 
-// SavePersonalFile mirrors personal_file_step for a create-or-replace:
+// SavePersonalFile creates or replaces a personal file:
 // missing parents are created 0755 under root, symlinks anywhere on the
 // path are refused and the file is published atomically with mode 0644.
 func SavePersonalFile(root, relative string, payload []byte) error {
@@ -34,7 +36,7 @@ func SavePersonalFile(root, relative string, payload []byte) error {
 	if info, err := os.Lstat(destination); err == nil && !info.Mode().IsRegular() {
 		return fmt.Errorf("Caminho pessoal inseguro: %s", destination)
 	}
-	if err := atomicWrite(destination, payload, 0o644); err != nil {
+	if err := atomicfile.Write(destination, payload, 0o644); err != nil {
 		return fmt.Errorf("Falha ao publicar configuração pessoal: %s", destination)
 	}
 	return nil

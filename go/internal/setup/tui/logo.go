@@ -31,9 +31,6 @@ func newLogo(art string) Logo {
 	return logo
 }
 
-// Height is the number of rows the logo takes.
-func (l Logo) Height() int { return len(l.rows) }
-
 // Width is the number of columns the logo takes.
 func (l Logo) Width() int { return l.width }
 

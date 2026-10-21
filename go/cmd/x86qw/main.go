@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/x86dx2/x86qw/go/internal/buildinfo"
+	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/output"
 )
@@ -60,17 +62,6 @@ func listed(group string) []*command {
 	}
 	sort.Slice(entries, func(a, b int) bool { return entries[a].order < entries[b].order })
 	return entries
-}
-
-// publicCommandNames lists the commands `x86qw help` shows.
-func publicCommandNames() []string {
-	var names []string
-	for _, group := range groups {
-		for _, cmd := range listed(group) {
-			names = append(names, cmd.name)
-		}
-	}
-	return names
 }
 
 func usageText() string {
@@ -133,6 +124,9 @@ func usageFailure(name string, err error, stderr io.Writer) int {
 }
 
 func main() {
+	if runtime.GOOS == "windows" {
+		cli.TidyAside()
+	}
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 

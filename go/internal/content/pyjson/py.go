@@ -3,7 +3,6 @@ package pyjson
 import (
 	"math/big"
 	"strconv"
-	"strings"
 )
 
 // Helpers mirroring the Python predicates the validators rely on.
@@ -279,12 +278,3 @@ func Get(value any, keys ...string) any {
 	}
 	return value
 }
-
-// Str returns value when it is a string, else "".
-func Str(value any) string {
-	text, _ := value.(string)
-	return text
-}
-
-// TrimSpace mirrors str.strip() for the "non-empty text" checks.
-func TrimSpace(value string) string { return strings.TrimSpace(value) }

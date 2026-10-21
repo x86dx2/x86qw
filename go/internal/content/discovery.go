@@ -1,7 +1,6 @@
 package content
 
 import (
-	"encoding/json"
 	"fmt"
 	"html"
 	"net/http"
@@ -636,10 +635,3 @@ func UnpinnedAssetPaths(assets []Asset) []string {
 	return paths
 }
 
-// marshalStable renders values for --json like json.dumps(indent=2).
-func marshalStable(value any) string {
-	payload, _ := json.Marshal(value)
-	decoded, _ := pyjson.Decode(payload, pyjson.LastWins)
-	encoded, _ := pyjson.Encode(decoded, false)
-	return string(encoded)
-}

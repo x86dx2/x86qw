@@ -5,13 +5,13 @@ package content
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 
+	"github.com/x86dx2/x86qw/go/internal/atomicfile"
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
@@ -146,25 +146,12 @@ func WriteJSON(path string, value any) error {
 	return writeAtomic(path, payload, 0o644)
 }
 
+// writeAtomic creates path's folders and replaces it with payload.
 func writeAtomic(path string, payload []byte, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	stem := pathStem(filepath.Base(path))
-	file, err := os.CreateTemp(filepath.Dir(path), "."+stem+"-*.json")
-	if err != nil {
-		return err
-	}
-	temporary := file.Name()
-	defer os.Remove(temporary)
-	_, writeErr := file.Write(payload)
-	if err := errors.Join(writeErr, file.Close()); err != nil {
-		return err
-	}
-	if err := os.Chmod(temporary, mode); err != nil {
-		return err
-	}
-	return os.Rename(temporary, path)
+	return atomicfile.Write(path, payload, mode)
 }
 
 // Policy mirrors load_component_policy: name → declaration, in file order.
