@@ -1,32 +1,33 @@
-# Runbook — comprometimento de chave TUF
+# Runbook — TUF key compromise
 
-Complementa o [ADR 0006](../adr/0006-tuf-trust-metadata.md) e o
-[runbook de chaves](key-management.md). Nada aqui roda automaticamente.
+Complements [ADR 0006](../adr/0006-tuf-trust-metadata.md) and the
+[key runbook](key-management.md). Nothing here runs automatically.
 
-## Chave online do timestamp (`TUF_TIMESTAMP_KEY_B64`)
+## Online timestamp key (`TUF_TIMESTAMP_KEY_B64`)
 
-Quem tem essa chave consegue prolongar a validade da geração publicada, mas não
-mudar o catálogo nem os pacotes.
+Whoever holds this key can extend the validity of the published generation,
+but cannot change the catalog or the packages.
 
-1. Desative o workflow `tuf-timestamp-auto-renewal.yml` e apague o segredo.
-2. Prepare uma root nova que troque a chave da role timestamp (ver abaixo).
-3. Com as chaves offline, assine uma geração nova (`x86qw-release sign`) e
-   publique pelo fluxo normal de PR e deploy.
-4. Grave a nova chave online no segredo e reative o workflow.
+1. Disable the `tuf-timestamp-auto-renewal.yml` workflow and delete the
+   secret.
+2. Prepare a new root that replaces the timestamp role's key (see below).
+3. With the offline keys, sign a new generation (`x86qw-release sign`) and
+   publish it through the normal PR and deploy flow.
+4. Store the new online key in the secret and re-enable the workflow.
 
-## Chaves offline (targets, snapshot ou root)
+## Offline keys (targets, snapshot or root)
 
-1. Pare publicações: nenhum merge que mexa em `site/public` até o fim.
-2. Gere as chaves novas fora do checkout, numa máquina confiável.
-3. Prepare a root `N+1` sem as chaves comprometidas. Ela precisa da assinatura
-   da root atual (threshold 2 de 3) e da nova; se a root atual não alcançar o
-   threshold, pare: não há recuperação sem reinstalar a CLI com uma root nova
-   embutida.
-4. Publique a root nova em `site/public/api/v1/trust/metadata/N+1.root.json` e
-   em `maintenance/trust/root.json`, assine uma geração nova com as chaves
-   novas e confira com `x86qw-release monitor --checkout` depois do deploy.
-5. Registre o que aconteceu numa issue, sem segredos.
+1. Stop publishing: no merge that touches `site/public` until the end.
+2. Generate the new keys outside the checkout, on a trusted machine.
+3. Prepare root `N+1` without the compromised keys. It needs the signature of
+   the current root (threshold 2 of 3) and of the new one; if the current root
+   cannot reach the threshold, stop: there is no recovery without reinstalling
+   the CLI with a new embedded root.
+4. Publish the new root in `site/public/api/v1/trust/metadata/N+1.root.json`
+   and in `maintenance/trust/root.json`, sign a new generation with the new
+   keys and check with `x86qw-release monitor --checkout` after the deploy.
+5. Record what happened in an issue, without secrets.
 
-`x86qw-release` ainda não tem um comando para gerar uma root nova; esse passo
-é manual com a biblioteca go-tuf. As chaves privadas nunca entram em shell,
-argv, journal, ticket ou log.
+`x86qw-release` has no command yet to generate a new root; that step is
+manual with the go-tuf library. Private keys never go into a shell, argv,
+journal, ticket or log.

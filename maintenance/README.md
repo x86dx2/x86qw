@@ -1,46 +1,47 @@
-# Manutencao da distribuicao
+# Distribution maintenance
 
-Este diretorio e o plano de controle do `dist/`. Ele nao e uma segunda copia do
-produto: inventarios e receitas explicam como montar a arvore canonica, os
-o binario `x86qw-content` (codigo em `go/cmd/x86qw-content`) executa o processo e `build/` recebe somente derivados
-temporarios.
+This folder is the control plane of `dist/`. It is not a second copy of the
+product: inventories and recipes explain how to assemble the canonical tree,
+the `x86qw-content` binary (code in `go/cmd/x86qw-content`) runs the process
+and `build/` receives only temporary derived files.
 
-## Fonte unica de operacao
+## Single source of operation
 
-Use apenas o `x86qw-content` (`go -C go run ./cmd/x86qw-content ...` ou o
-binario compilado), que encontra o checkout a partir do diretorio atual:
+Use only `x86qw-content` (`go -C go run ./cmd/x86qw-content ...` or the
+compiled binary), which finds the checkout from the current folder:
 
 ```sh
 x86qw-content check
 x86qw-content update
-x86qw-content add caminho/change.json
+x86qw-content add path/change.json
 x86qw-content verify
 x86qw-content build
 x86qw-content publish
 x86qw-content commit --push
 ```
 
-- `check [COMPONENTE...]`: consulta os upstreams declarados sem escrever no
-  projeto, componente por componente; retorna 2 quando encontra novidade, 1
-  quando nada mudou mas algum upstream nao pôde ser consultado e 0 quando
-  tudo está atual;
-- `update [COMPONENTE...]`: sincroniza somente bytes stable/nightly e nQuake
-  cuja identidade já foi revisada, exige Git limpo antes da mutação, usa
-  staging, reconcilia arquivos antigos, atualiza os metadados dependentes,
-  valida e troca a árvore de forma transacional;
-- `add`: incorpora um novo pacote, add-on ou configuracao a partir de uma
-  definicao local revisada;
-- `verify`: valida catalogo, receitas, componentes, hashes, estrutura, TUF e Git LFS;
-- `build`: valida os binarios stable e gera 21 ZIPs de componentes mais o
-  pacote obrigatório `x86qw-core-id1` em `maintenance/build/packages/`;
-- `publish`: publica/verifica GitHub Releases e GitLab Generic Packages nos
-  repositórios `x86qw`, que são os únicos destinos da distribuição.
-  Pacotes de conteúdo nunca recebem o selo Latest, que pertence à release da
-  CLI;
-- `commit`: adiciona ao Git somente `dist/`, inventarios, receitas e o catalogo.
+- `check [COMPONENT...]`: queries the declared upstreams without writing to
+  the project, component by component; returns 2 when it finds something new,
+  1 when nothing changed but some upstream could not be queried and 0 when
+  everything is current;
+- `update [COMPONENT...]`: syncs only stable/nightly and nQuake bytes whose
+  identity was already reviewed, requires a clean Git tree before mutating,
+  uses staging, reconciles old files, updates the dependent metadata,
+  validates and swaps the tree transactionally;
+- `add`: brings in a new package, add-on or configuration from a reviewed
+  local definition;
+- `verify`: validates catalog, recipes, components, hashes, structure, TUF and
+  Git LFS;
+- `build`: validates the stable binaries and generates 21 component ZIPs plus
+  the required `x86qw-core-id1` package in `maintenance/build/packages/`;
+- `publish`: publishes/verifies GitHub Releases and GitLab Generic Packages in
+  the `x86qw` repositories, which are the distribution's only destinations.
+  Content packages never get the Latest badge, which belongs to the CLI
+  release;
+- `commit`: adds to Git only `dist/`, inventories, recipes and the catalog.
 
-`update --commit --push` existe para automacao, mas a rotina recomendada e
-separar revisao e publicacao:
+`update --commit --push` exists for automation, but the recommended routine
+is to keep review and publication apart:
 
 ```sh
 x86qw-content check
@@ -49,126 +50,127 @@ x86qw-content update
 x86qw-content verify
 git diff --stat
 x86qw-content commit --push
-# após revisão, checks verdes e aprovação separada:
+# after review, green checks and separate approval:
 x86qw-content publish
 ```
 
-O catálogo que `update`, `add` ou `build --register` mudou só vale depois de
-assinado: rode `go -C go run ./cmd/x86qw-release sign` e `x86qw-content verify`
-antes do PR. O merge publica o site; o passo a passo está no
-[runbook de release](../docs/runbooks/release.md#publicar-conteúdo).
+The catalog that `update`, `add` or `build --register` changed only counts
+once signed: run `go -C go run ./cmd/x86qw-release sign` and
+`x86qw-content verify` before the PR. The merge publishes the site; the step
+by step is in the
+[release runbook](../docs/runbooks/release.md#publish-content).
 
-As comparacoes com upstreams publicos usam a API HTTPS oficial do GitHub e URLs
-publicas de releases e downloads. `check` e `update` nao exigem conta, token ou
-autenticacao no GitHub. Credenciais sao necessarias apenas no comando
-`publish`, porque ele grava os artefatos nos mirrors do projeto.
+Comparisons with public upstreams use GitHub's official HTTPS API and public
+release and download URLs. `check` and `update` need no GitHub account, token
+or authentication. Credentials are needed only by the `publish` command,
+because it writes the artifacts to the project's mirrors.
 
-## Fronteira de bytes remotos
+## Remote byte boundary
 
-`go/internal/download` é a única fronteira de manutenção e da CLI para receber
-bytes HTTP persistentes. Um artefato exige HTTPS, destino, tamanho, SHA-256,
-deadline e retry; metadados dinâmicos usam leitura limitada e nunca gravam
-payload gerenciado. Não existe contrato para promover conteúdo não fixado: o
-SHA-256 observado na própria transferência não pode se tornar a referência que
-valida esses mesmos bytes.
+`go/internal/download` is the only boundary, for maintenance and the CLI, that
+receives persistent HTTP bytes. An artifact requires HTTPS, a destination,
+size, SHA-256, a deadline and retry; dynamic metadata uses a bounded read and
+never writes a managed payload. There is no contract to promote unpinned
+content: the SHA-256 observed in the transfer itself cannot become the
+reference that validates those same bytes.
 
-## Atualizacoes independentes
+## Independent updates
 
-Cada componente da distribuição (`ezquake`, `ktx`, `mvdsv`, `nquake-maps`...)
-é consultado e atualizado por conta própria:
+Each component of the distribution (`ezquake`, `ktx`, `mvdsv`,
+`nquake-maps`...) is queried and updated on its own:
 
 ```sh
-x86qw-content check                 # todos
-x86qw-content check mvdsv ktx       # só esses
+x86qw-content check                 # all
+x86qw-content check mvdsv ktx       # only these
 x86qw-content update --dry-run mvdsv
 x86qw-content update mvdsv
 ```
 
-- um upstream fora do ar (HTTP 429, timeout) aparece como
-  `[INDISPONIVEL] componente: motivo` e não impede a consulta dos demais;
-- sem seleção, `update` pula (`[PULADO]`) o que estiver indisponível ou exigir
-  definição revisada e atualiza o resto; com seleção explícita, o componente
-  pedido que não puder ser atualizado faz o comando falhar;
-- componente fora da seleção ou pulado mantém exatamente os arquivos que o
-  manifesto registra, sem mudar nem sumir.
+- an upstream that is down (HTTP 429, timeout) shows as
+  `[UNAVAILABLE] component: reason` and does not stop the others from being
+  queried;
+- without a selection, `update` skips (`[SKIPPED]`) whatever is unavailable
+  or needs a reviewed definition and updates the rest; with an explicit
+  selection, a requested component that cannot be updated makes the command
+  fail;
+- a component outside the selection or skipped keeps exactly the files the
+  manifest records, without changing or disappearing.
 
-Os 17 componentes que consomem arquivos do nQuake (os 13 do snapshot, os
-overlays Final Arena e Team Fortress, o `ktx.pk3` do KTX e os arquivos do
-Pro-X) fixam cada um sua própria revisão em `reference_revision`
-(`component-releases.json`). Os arquivos consumidos ficam todos numa única
-árvore, `dist/distributions/nquake/`, com o mesmo layout do repositório
-nQuake; a revisão de cada arquivo é a do seu dono e aparece na URL registrada
-em `dist/manifest.json` (`verify` exige essa correspondência).
+The 17 components that consume nQuake files (the 13 of the snapshot, the
+Final Arena and Team Fortress overlays, KTX's `ktx.pk3` and the Pro-X files)
+each pin their own revision in `reference_revision`
+(`component-releases.json`). The consumed files all live in a single tree,
+`dist/distributions/nquake/`, with the same layout as the nQuake repository;
+each file's revision is its owner's and shows in the URL recorded in
+`dist/manifest.json` (`verify` requires that match).
 
-O nQuake é a base da distribuição. `maintenance/inventory/nquake.json`
-registra todos os arquivos da última revisão revisada (caminho, tamanho,
-SHA-256 e hash Git) e, em `unused`, o motivo de cada parte que a distribuição
-não usa. Todo arquivo do nQuake é consumido por um componente (fonte
-`reference` em `components.json`) ou declarado não usado; `verify` exige essa
-classificação completa e sem sobreposição.
+nQuake is the base of the distribution. `maintenance/inventory/nquake.json`
+records every file of the last reviewed revision (path, size, SHA-256 and Git
+hash) and, in `unused`, the reason for each part the distribution does not
+use. Every nQuake file is consumed by a component (a `reference` source in
+`components.json`) or declared unused; `verify` requires that classification
+to be complete and without overlap.
 
-Quando o nQuake anda:
+When nQuake moves:
 
-- `check` lê a árvore Git e o `manifest.json` que o nQuake publica (SHA-256 de
-  cada arquivo, conferido contra a árvore) e marca para atualização somente os
-  componentes cujos arquivos consumidos mudaram; os demais continuam na
-  revisão que já fixam. Mudanças em partes não usadas aparecem como
-  `[NQUAKE] nao usado pela distro, <parte>: N novo(s)...` e um arquivo que
-  ninguém classificou aparece como `[CLASSIFICAR]`;
-- `update` leva cada componente afetado à revisão nova sozinho: baixa só os
-  arquivos que mudaram (os iguais são reaproveitados do `dist`), confere
-  SHA-256 e hash Git, troca a revisão na versão (ou incrementa `+x86qw.N`
-  quando a versão não carrega a revisão) e refixa as customizações x86QW
-  (`text_replacements`, `archive_text_replacements`) cujo texto ainda se
-  aplica ao arquivo novo. Uma customização que não se aplica mais, ou a camada
-  de composição do `ktx.pk3`, para apenas aquele componente
-  (`[PULADO]`/`[REVISAR]`) para revisão;
-- sem seleção, `update` também avança `nquake.json` para a revisão nova, desde
-  que todo arquivo esteja classificado.
+- `check` reads the Git tree and the `manifest.json` nQuake publishes (the
+  SHA-256 of each file, checked against the tree) and marks for update only
+  the components whose consumed files changed; the others stay on the revision
+  they already pin. Changes in unused parts show as
+  `[NQUAKE] unused by the distribution, <part>: N new, N changed, N removed`
+  and a file nobody classified shows as `[CLASSIFY]`;
+- `update` moves each affected component to the new revision on its own: it
+  downloads only the files that changed (identical ones are reused from
+  `dist`), checks SHA-256 and Git hash, swaps the revision in the version (or
+  increments `+x86qw.N` when the version does not carry the revision) and
+  re-pins the x86QW customizations (`text_replacements`,
+  `archive_text_replacements`) whose text still applies to the new file. A
+  customization that no longer applies, or the composition layer of
+  `ktx.pk3`, stops only that component (`[SKIPPED]`/`[REVIEW]`) for review;
+- without a selection, `update` also moves `nquake.json` to the new revision,
+  as long as every file is classified.
 
-Para adotar uma parte hoje não usada, crie o componente com `add` e remova a
-regra correspondente de `unused`.
+To adopt a part that is unused today, create the component with `add` and
+remove the matching rule from `unused`.
 
-O snapshot nQuake já registrado pode ser reparado mecanicamente porque caminho,
-URL, tamanho e SHA-256 estão fixados no manifesto. Uma revisão nQuake nova, um
-novo stable/nightly ou uma release nova de KTX, TD2 ou outro mod precisa de
-intake revisado: membros, identidade, compatibilidade, versão e customizações
-não podem ser inferidos da própria transferência. O gerenciador detecta a
-novidade, marca `review_required` e interrompe `update` antes de confirmação,
-staging ou download, orientando o uso de `add`; ele nunca sobrescreve uma versão
-publicada.
+The nQuake snapshot already recorded can be repaired mechanically because
+path, URL, size and SHA-256 are pinned in the manifest. A new nQuake revision,
+a new stable/nightly or a new release of KTX, TD2 or another mod needs a
+reviewed intake: members, identity, compatibility, version and customizations
+cannot be inferred from the transfer itself. The manager detects what is new,
+marks `review_required` and stops `update` before confirmation, staging or
+download, pointing to `add`; it never overwrites a published version.
 
-O KTX e montado em tres camadas: `gpl/qw/ktx.pk3` do snapshot nQuake, recursos
-e QVM da release oficial e, por ultimo, ajustes x86QW. A politica em
-`dist/mods/ktx/<versao>/x86qw/policy/merge-policy.json` preserva arquivos exclusivos e
-registra cada conflito compartilhado com os hashes das duas origens. Qualquer
-conflito novo ou alterado interrompe o build para revisao humana.
+KTX is assembled in three layers: `gpl/qw/ktx.pk3` from the nQuake snapshot,
+the official release's resources and QVM and, last, the x86QW adjustments.
+The policy in `dist/mods/ktx/<version>/x86qw/policy/merge-policy.json` keeps
+exclusive files and records each shared conflict with the hashes of both
+origins. Any new or changed conflict stops the build for human review.
 
-A convenção de `source/`, `upstream/` e `x86qw/`, incluindo a assimetria
-intencional entre os runtimes de QTV e QWFWD, está documentada em
-[`docs/components.md`](docs/components.md#layout-dos-serviços-versionados).
+The convention for `source/`, `upstream/` and `x86qw/`, including the
+intentional asymmetry between the QTV and QWFWD runtimes, is documented in
+[`docs/components.md`](docs/components.md#layout-of-the-versioned-services).
 
-## Definicao de inclusao
+## Inclusion definition
 
-`add` aceita um JSON temporario com identidade `distribution-change`. O arquivo
-nao precisa ser versionado: o resultado permanente e registrado em `dist/`, no
-BOM, no inventario de releases e no catalogo.
+`add` takes a temporary JSON with the `distribution-change` identity. The
+file does not need to be versioned: the permanent result is recorded in
+`dist/`, in the BOM, in the release inventory and in the catalog.
 
-`add --dry-run` valida a mesma identidade de entrada antes de qualquer rede ou
-mutacao: destinos, fontes locais, HTTPS, tamanho positivo e SHA-256 previamente
-revisado, metadados gerenciados, componente, perfil e pacote. A simulacao nunca
-imprime a definicao bruta; URLs aparecem somente com origem redigida, sem
-credenciais, caminho, query ou fragmento.
+`add --dry-run` validates the same input identity before any network or
+mutation: destinations, local sources, HTTPS, a positive size and a
+previously reviewed SHA-256, managed metadata, component, profile and package.
+The dry run never prints the raw definition; URLs show only with a redacted
+origin, without credentials, path, query or fragment.
 
-Um remoto novo precisa corresponder exatamente a pelo menos uma autoridade:
-artefato de uma release proposta, fonte preservada no registro de upstreams,
-pacote público proposto ou referência nQuake fixada. Namespace de
-`distribution_component`, consumidor operacional e identidade lógica de
-`package` precisam concordar com essa autoridade. Para ezQuake, o caminho é
-derivado de
-`clients/ezquake/<canal>/<versão>/<plataforma>-<arquitetura>/<arquivo>` e deve
-coincidir com componente, canal, versão, plataforma, arquitetura e nome do
-pacote proposto.
+A new remote must match exactly at least one authority: an artifact of a
+proposed release, a source kept in the upstream registry, a proposed public
+package or a pinned nQuake reference. The `distribution_component` namespace,
+the operational consumer and the logical identity of `package` must agree with
+that authority. For ezQuake, the path is derived from
+`clients/ezquake/<channel>/<version>/<platform>-<architecture>/<file>` and
+must match the proposed package's component, channel, version, platform,
+architecture and name.
 
 ```json
 {
@@ -190,18 +192,18 @@ pacote proposto.
 }
 ```
 
-O exemplo usa uma identidade canônica já inventariada para tornar o contrato
-executável, e não apenas ilustrativo. Um arquivo usa `source` relativo à
-definição ou `url` HTTPS, nunca ambos. Toda URL persistente exige `managed:
-true`, não aceita credenciais, fragmento ou query e precisa corresponder
-exatamente a uma das autoridades descritas acima. Um
-caminho remoto que já existe no manifesto é imutável: URL, tamanho, SHA-256,
-owner, consumer e package não podem mudar no lugar. A CLI entra apenas pela
-release `x86qw-cli`, nunca por `add`.
+The example uses a canonical identity that is already in the inventory, so
+the contract is executable and not just illustrative. A file uses `source`
+relative to the definition or an HTTPS `url`, never both. Every persistent URL
+requires `managed: true`, accepts no credentials, fragment or query and must
+match exactly one of the authorities described above. A remote path that
+already exists in the manifest is immutable: URL, size, SHA-256, owner,
+consumer and package cannot change in place. The CLI comes in only through the
+`x86qw-cli` release, never through `add`.
 
-Levar componentes a uma revisão nova do nQuake usa uma transição explícita e
-resistente a plano obsoleto na mesma definição, que nomeia cada componente
-movido e a revisão que ele deixa:
+Moving components to a new nQuake revision uses an explicit transition,
+resistant to stale plans, in the same definition, which names each moved
+component and the revision it leaves:
 
 ```json
 {
@@ -215,55 +217,55 @@ movido e a revisão que ele deixa:
 }
 ```
 
-A revisão anterior de cada componente precisa ser exatamente a inventariada no
-momento da aplicação, o repositório não pode mudar e cada URL é derivada da
-origem GitHub canônica, da nova revisão e do caminho declarado. A lista
-`files` precisa trazer todos os arquivos consumidos pelos componentes movidos
-na revisão nova (com `package` igual ao componente); a versão de cada um
-passa a carregar a revisão nova. Os arquivos que eles deixam só são removidos
-no workspace transacional, depois da validação do plano, e os demais
-componentes não mudam de revisão nem de bytes.
+The previous revision of each component must be exactly the one in the
+inventory at the time it is applied, the repository cannot change and each
+URL is derived from the canonical GitHub origin, the new revision and the
+declared path. The `files` list must bring every file the moved components
+consume at the new revision (with `package` equal to the component); each
+one's version then carries the new revision. The files they leave are only
+removed in the transactional workspace, after the plan is validated, and the
+other components change neither revision nor bytes.
 
-Fontes locais precisam estar declaradas exatamente em `project_sources`,
-`project_inputs`, `project_overrides` ou `project_archive_overrides` do BOM
-proposto. A cópia usa temporário exclusivo, modo `0600` no POSIX, hash durante
-streaming, `fsync` e `replace` atômico; assim, o staging por hardlink não altera
-o `dist/` vivo e uma mudança da fonte depois do plano é rejeitada. No Windows,
-esse temporário herda a ACL da pasta do checkout. Destinos usam nomes
-portáveis e colisões por caixa ou normalização Unicode e symlinks intermediários
-são rejeitados.
-O contrato comum usa `/` somente como separador, rejeita caracteres inválidos e
-nomes de dispositivo Win32 (inclusive `CONIN$`, `CONOUT$`, `COM¹` e `LPT¹`),
-componentes terminados em ponto/espaço e limita o caminho relativo completo a
-240 unidades UTF-16. Essa margem acomoda o prefixo usual do checkout do runner
-Windows sob o limite Win32 clássico; checkouts locais ainda devem usar uma raiz
-curta.
+Local sources must be declared exactly in the proposed BOM's
+`project_sources`, `project_inputs`, `project_overrides` or
+`project_archive_overrides`. The copy uses an exclusive temporary file, mode
+`0600` on POSIX, hashing while streaming, `fsync` and an atomic `replace`;
+that way staging by hardlink does not change the live `dist/` and a change of
+the source after the plan is rejected. On Windows, that temporary file
+inherits the ACL of the checkout's folder. Destinations use portable names,
+and collisions by case or Unicode normalization and intermediate symlinks are
+rejected.
+The common contract uses `/` only as a separator, rejects invalid characters
+and Win32 device names (including `CONIN$`, `CONOUT$`, `COM¹` and `LPT¹`),
+components ending in a period/space and limits the full relative path to 240
+UTF-16 units. That margin fits the usual checkout prefix of the Windows runner
+under the classic Win32 limit; local checkouts should still use a short root.
 
-Para criar ou substituir um componente, a mesma definição também precisa trazer
-os objetos completos `component` e `release`, `replace: true` quando aplicável e
-a lista `profiles`. O `--dry-run` monta e valida esses inventários em memória
-antes de qualquer rede. Ao alterar um perfil, `add` preserva automaticamente sua
-assinatura anterior e registra a nova em `inventory/components.json`. Esse
-histórico permite que `x86qw upgrade` reconheça instalações que pularam
-releases intermediárias.
+To create or replace a component, the same definition must also bring the
+complete `component` and `release` objects, `replace: true` when applicable
+and the `profiles` list. `--dry-run` assembles and validates those
+inventories in memory before any network. When a profile changes, `add`
+automatically keeps its previous signature and records the new one in
+`inventory/components.json`. That history lets `x86qw upgrade` recognize
+installations that skipped intermediate releases.
 
-Para atualizar um componente existente, envie o objeto completo com
-`"replace": true` e uma nova release imutavel. Configuracoes x86QW devem ficar
-em um subdiretorio `x86qw/` do componente e ser declaradas como
-`project_sources`; a copia original do upstream permanece intacta.
+To update an existing component, send the complete object with
+`"replace": true` and a new immutable release. x86QW configurations must live
+in an `x86qw/` subfolder of the component and be declared as
+`project_sources`; the original upstream copy stays intact.
 
-## Conteudo dos subdiretorios
+## Contents of the subfolders
 
 ```text
-inventory/component-policy.json    namespaces aceitos no dist
-inventory/components.json          BOM, perfis, dependencias e destinos
-inventory/component-releases.json  versoes, estrategias, artefatos e hashes
-inventory/upstreams.json           versoes, fontes preservadas e receitas de build
-recipes/                            receitas dos clientes stable preservados
-recipes/sources/                    instrucoes de compilacao por upstream
-build/                              artefatos derivados ignorados pelo Git
-docs/                               componentes e proveniencia
+inventory/component-policy.json    namespaces accepted in dist
+inventory/components.json          BOM, profiles, dependencies and destinations
+inventory/component-releases.json  versions, strategies, artifacts and hashes
+inventory/upstreams.json           versions, kept sources and build recipes
+recipes/                            recipes of the kept stable clients
+recipes/sources/                    build instructions per upstream
+build/                              derived artifacts ignored by Git
+docs/                               components and provenance
 ```
 
-Nao existe mais um inventario-resumo paralelo: `dist/manifest.json` e a unica
-fonte de verdade para os bytes upstream efetivamente preservados.
+There is no longer a parallel summary inventory: `dist/manifest.json` is the
+single source of truth for the upstream bytes actually kept.

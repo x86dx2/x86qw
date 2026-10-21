@@ -1,17 +1,17 @@
-# Nomes dos Frogbots
+# Frogbot names
 
-O x86QW oferece quatro perfis de identidade para os Frogbots do KTX. O perfil é
-escolhido na tela Jogar do app ou com `--bot-names`; nomes são dados declarativos e
-não alteram regras, atributos ou inteligência dos bots.
+x86QW offers four identity profiles for the KTX Frogbots. The profile is
+chosen on the app's Play screen or with `--bot-names`; names are declarative
+data and do not change the bots' rules, attributes or intelligence.
 
-| Perfil | Comportamento |
+| Profile | Behavior |
 |---|---|
-| `default` — KTX Default | Não define identidade; o KTX conserva nomes e cores originais. |
-| `x86qw` — x86QW aleatório | Embaralha uma vez por lançamento mapas e modos da distribuição. |
-| `one-piece` — One Piece (opcional) | Embaralha uma vez por lançamento os nomes de personagens One Piece. |
-| `personal` | Usa, na ordem declarada, os nomes da lista pessoal da instalação. |
+| `default` — KTX Default | Sets no identity; KTX keeps its original names and colors. |
+| `x86qw` — random x86QW | Shuffles the distribution's maps and modes once per launch. |
+| `one-piece` — One Piece (optional) | Shuffles One Piece character names once per launch. |
+| `personal` | Uses the names of the installation's personal list, in the declared order. |
 
-Exemplos:
+Examples:
 
 ```sh
 x86qw play ktx --mode duel --map dm6 --bots 1 --bot-names x86qw
@@ -20,53 +20,53 @@ x86qw play ktx --mode 2on2 --map dm6 --bots 2 --bot-names personal
 x86qw host ktx --mode 2on2 --map dm6 --bots 2 --bot-names x86qw
 ```
 
-O app começa em `KTX padrão`, e `x86QW aleatórios`, `One Piece` e `lista
-pessoal` continuam disponíveis. Na CLI, `default` também é o padrão, portanto
-uma execução que não informe `--bot-names` fica sem customização.
+The app starts on `KTX default`, and `random x86QW`, `One Piece` and
+`personal list` stay available. In the CLI, `default` is also the default, so
+a run that does not give `--bot-names` has no customization.
 
-## Lista x86QW
+## x86QW list
 
-A fonte canônica fica em:
+The canonical source is:
 
 ```text
 dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.json
 ```
 
-Os dez primeiros nomes são mapas clássicos da distribuição: dm6, dm4, dm2, dm3,
-aerowalk, e1m2, schloss, povdmm4, death32c e cmt3. Os nomes seguintes reúnem
-outros mapas embarcados e rótulos dos modos KTX. A seleção é o vocabulário do
-próprio produto, não uma lista de personagens de terceiros.
+The first ten names are classic maps of the distribution: dm6, dm4, dm2, dm3,
+aerowalk, e1m2, schloss, povdmm4, death32c and cmt3. The following names
+gather other shipped maps and KTX mode labels. The selection is the product's
+own vocabulary, not a list of third-party characters.
 
-## Lista One Piece (opcional)
+## One Piece list (optional)
 
-A fonte canônica fica em:
+The canonical source is:
 
 ```text
 dist/mods/ktx/1.47/x86qw/catalog/frogbots/names.one-piece.json
 ```
 
-Os dez primeiros nomes são os integrantes do Bando do Chapéu de Palha:
-Luffy, Zoro, Nami, Usopp, Sanji, Chopper, Robin, Franky, Brook e Jinbe. Essa
-composição segue o [elenco oficial de personagens de One Piece][straw-hats].
+The first ten names are the members of the Straw Hat Pirates: Luffy, Zoro,
+Nami, Usopp, Sanji, Chopper, Robin, Franky, Brook and Jinbe. That line-up
+follows the [official One Piece character cast][straw-hats].
 
-Os nomes seguintes reúnem figuras apresentadas pela obra como lendas, grandes
-potências ou detentores de títulos relevantes. A seleção é editorial — não é
-um ranking oficial de força. Entre as referências usadas estão Gol D. Roger,
-o Rei dos Piratas; Edward Newgate, apresentado como o homem mais forte do
-mundo; Shanks e Marshall D. Teach, Imperadores; e Dracule Mihawk, o espadachim
-mais forte do mundo. Consulte as páginas oficiais de [Roger][roger],
-[Whitebeard][whitebeard], [Shanks][shanks], [Blackbeard][blackbeard] e
+The following names gather figures the work presents as legends, great powers
+or holders of relevant titles. The selection is editorial — it is not an
+official power ranking. Among the references used are Gol D. Roger, the King
+of the Pirates; Edward Newgate, presented as the strongest man in the world;
+Shanks and Marshall D. Teach, Emperors; and Dracule Mihawk, the world's
+strongest swordsman. See the official pages of [Roger][roger],
+[Whitebeard][whitebeard], [Shanks][shanks], [Blackbeard][blackbeard] and
 [Mihawk][mihawk].
 
-## Lista pessoal
+## Personal list
 
-O bootstrap cria, sem sobrescrever edições futuras:
+The bootstrap creates, without overwriting later edits:
 
 ```text
 quake-world/qw/x86qw-frogbot-names.json
 ```
 
-Edite somente a lista `characters`, mantendo o restante do contrato:
+Edit only the `characters` list, keeping the rest of the contract:
 
 ```json
 {
@@ -82,124 +82,124 @@ Edite somente a lista `characters`, mantendo o restante do contrato:
 }
 ```
 
-Cada nome aceita de 1 a 13 caracteres ASCII: letras, números, espaço, ponto,
-apóstrofo e hífen. A comparação ignora maiúsculas e minúsculas, portanto não
-pode haver duplicatas como `Luffy` e `luffy`. A lista precisa conter ao menos
-tantos nomes quanto a quantidade de bots solicitada; `--fill-bots` usa até oito
-nos modos abertos e completa a lotação declarada nos modos fixos. Listas antigas
-formadas apenas por strings em `names` continuam aceitas.
-Cada item aceita somente `name`. Campos de aparência são rejeitados para que
-nenhuma opção pareça surtir efeito quando, por contrato, camisa, calça e cores
-de equipe pertencem às regras e configurações padrão do KTX.
+Each name takes 1 to 13 ASCII characters: letters, digits, space, period,
+apostrophe and hyphen. The comparison ignores case, so there can be no
+duplicates such as `Luffy` and `luffy`. The list must hold at least as many
+names as the number of bots requested; `--fill-bots` uses up to eight in open
+modes and fills the declared roster in fixed modes. Old lists made only of
+strings in `names` are still accepted.
+Each item takes only `name`. Appearance fields are rejected so that no option
+seems to take effect when, by contract, shirt, pants and team colors belong to
+KTX's default rules and settings.
 
-Não escreva `/` nem códigos de cor nos valores. O launcher acrescenta
-automaticamente o prefixo `/` e converte cada caractere para a variante
-colorida clássica do Quake. O formato RGB `&cRGB` não é usado porque o
-[ezQuake não o permite em nomes de jogadores][ezquake-charsets] por
-compatibilidade com clientes QuakeWorld antigos.
+Do not write `/` or color codes in the values. The launcher adds the `/`
+prefix automatically and turns each character into Quake's classic colored
+variant. The RGB `&cRGB` format is not used because
+[ezQuake does not allow it in player names][ezquake-charsets], for
+compatibility with old QuakeWorld clients.
 
-Os nomes genéricos, aliados e inimigos recebem as três famílias de cvars
-`k_fb_name_*`, mas o mesmo índice conserva a mesma identidade em todas elas.
-Assim, a classificação relacional do KTX não troca nem duplica o nome do bot.
-O launcher não envia cvars de aparência e a extensão QVM x86QW não registra
-cvars próprias de camisa ou calça; o KTX conserva integralmente suas regras de
-cores. No perfil
-aleatório, o sorteio é feito uma vez antes da abertura do runtime; reiniciar o
-jogo produz outra ordem. No perfil pessoal, a ordem do JSON é preservada.
+The generic, ally and enemy names get the three families of `k_fb_name_*`
+cvars, but the same index keeps the same identity in all of them. That way
+KTX's relational classification neither swaps nor duplicates the bot's name.
+The launcher sends no appearance cvars and the x86QW QVM extension registers
+no shirt or pants cvars of its own; KTX keeps its color rules entirely. In the
+random profile, the draw happens once before the runtime opens; restarting the
+game produces another order. In the personal profile, the JSON order is kept.
 
-O launcher não altera `teamskin`, `enemyskin`, `teamcolor`, `enemycolor` nem as
-variantes `r_*skincolor`, mesmo quando a seleção contém Frogbots. A renderização
-segue o perfil padrão do KTX e as configurações pessoais do jogador, da mesma
-forma em partidas locais e servidores reais.
+The launcher does not change `teamskin`, `enemyskin`, `teamcolor`,
+`enemycolor` or the `r_*skincolor` variants, even when the selection includes
+Frogbots. Rendering follows KTX's default profile and the player's personal
+settings, the same way in local matches and on real servers.
 
-No jogo local, o launcher grava essas cvars em um CFG de sessão privado
-(`0600` no Unix), manda o ezQuake carregá-lo antes do mapa e remove o arquivo
-logo após a inicialização. O arquivo é único por processo, não altera a lista
-pessoal e evita os limites de tamanho e de aliases do console. No servidor
-dedicado, as mesmas escolhas entram na configuração efêmera já protegida pelo
-journal da sessão.
+In a local game, the launcher writes those cvars into a private session CFG
+(`0600` on Unix), has ezQuake load it before the map and removes the file
+right after startup. The file is unique per process, does not change the
+personal list and avoids the console's size and alias limits. On a dedicated
+server, the same choices go into the ephemeral configuration already protected
+by the session journal.
 
-Nos modos com quantidade fixa de jogadores, o app oferece somente completar
-as vagas restantes depois do jogador humano. Duel adiciona um bot; 2on2 adiciona
-três; 3on3 adiciona cinco; 2on2on2 adiciona cinco; 4on4 adiciona sete. A CLI
-aplica a mesma validação.
-O launcher põe o jogador no primeiro time declarado e deixa o QVM executar a
-distribuição automática nativa. O patch reproduzível usa o índice global do bot
-ao escolher os nomes aliados e inimigos, evitando repetir identidades quando o
-usermode possui três equipes. Uma equipe explícita na CLI continua sendo
-respeitada tanto na abertura quanto nos bots inseridos depois com `INS`.
+In modes with a fixed number of players, the app only offers to fill the
+remaining slots after the human player. Duel adds one bot; 2on2 adds three;
+3on3 adds five; 2on2on2 adds five; 4on4 adds seven. The CLI applies the same
+validation.
+The launcher puts the player on the first declared team and lets the QVM run
+its native automatic team assignment. The reproducible patch uses the bot's
+global index when choosing ally and enemy names, so identities do not repeat
+when the usermode has three teams. An explicit team in the CLI is still
+respected both at startup and for bots added later with `INS`.
 
-`3on3` mantém o significado convencional do KTX: duas equipes com três
-jogadores. `2on2on2` é a formação de três equipes com dois jogadores. Os aliases
-`3v3` e `2v2v2` continuam aceitos pela CLI. `3on3on3` e `4on4on4` mantêm três
-equipes de três e quatro jogadores. A composição fica em `catalog/modes.json`, no campo `bot_teams`, e
-é consumida pelo app, pela partida local e pelo servidor dedicado.
+`3on3` keeps KTX's conventional meaning: two teams of three players.
+`2on2on2` is the line-up of three teams of two players. The CLI still accepts
+the `3v3` and `2v2v2` aliases. `3on3on3` and `4on4on4` keep three teams of
+three and four players. The line-up lives in `catalog/modes.json`, in the
+`bot_teams` field, and is used by the app, the local match and the dedicated
+server.
 
-Modos abertos, como FFA e Practice, conservam as opções de preenchimento e
-quantidade personalizada. A entrada de vários bots é espaçada por frames do servidor.
-Escolha `random` na habilidade, no app, ou use `--bot-skill random`, para sortear uma
-habilidade independente de 1 a 20 a cada bot inserido, inclusive por `fill`.
+Open modes, such as FFA and Practice, keep the fill and custom amount options.
+Several bots join spaced out by server frames.
+Pick `random` for the skill in the app, or use `--bot-skill random`, to draw
+an independent skill from 1 to 20 for each bot added, including by `fill`.
 
-## Mapas e recursos
+## Maps and resources
 
-O app não confunde “mapa instalado” com “mapa utilizável pela configuração
-atual”. A lista exibida é a interseção entre os BSPs presentes e os recursos
-declarados pelo modo:
+The app does not confuse "installed map" with "map usable by the current
+settings". The list shown is the intersection of the BSPs present and the
+resources the mode declares:
 
-- com Frogbots, o mapa precisa de `qw/bots/maps/<mapa>.bot`;
-- CTF precisa de `id1/maps/ctf/<mapa>.ent`;
-- Race precisa de `qw/race/routes/<mapa>.route`;
-- sem bots, um modo comum continua oferecendo mapas que não possuem rota bot.
+- with Frogbots, the map needs `qw/bots/maps/<map>.bot`;
+- CTF needs `id1/maps/ctf/<map>.ent`;
+- Race needs `qw/race/routes/<map>.route`;
+- without bots, a regular mode still offers maps that have no bot route.
 
-O pacote KTX contém 77 rotas Frogbot e 54 arquivos Race. Esses números não são
-tratados como uma lista de BSPs: o launcher também exige que o mapa esteja
-instalado. O CTF oferece exatamente os seis mapas para os quais o componente
-instala ENTs. O ToT oferece `dm4`, `e1m2` e `schloss`, os três mapas com
-configuração específica no upstream; `dm4` é o padrão por estar disponível no
-perfil Essential.
+The KTX package holds 77 Frogbot routes and 54 Race files. Those numbers are
+not treated as a list of BSPs: the launcher also requires the map to be
+installed. CTF offers exactly the six maps for which the component installs
+ENTs. ToT offers `dm4`, `e1m2` and `schloss`, the three maps with specific
+upstream configuration; `dm4` is the default because it is available in the
+Essential profile.
 
-Rotas pessoais regulares podem ser acrescentadas sem reconstruir o componente:
+Regular personal routes can be added without rebuilding the component:
 
 ```text
-quake-world/qw/bots/maps/meumapa.bot
-quake-world/qw/race/routes/meumapa.route
-quake-world/id1/maps/ctf/meumapa.ent
+quake-world/qw/bots/maps/mymap.bot
+quake-world/qw/race/routes/mymap.route
+quake-world/id1/maps/ctf/mymap.ent
 ```
 
-O nome do arquivo deve corresponder ao BSP. Symlinks e nomes inseguros não são
-incorporados ao catálogo de sessão. O validador do projeto inspeciona ainda as
-diretivas e a estrutura das rotas oficiais antes de gerar um pacote.
+The file name must match the BSP. Symlinks and unsafe names are not taken
+into the session catalog. The project's validator also inspects the
+directives and structure of the official routes before building a package.
 
-As opções `--bot-weapon`, `--bot-health` e
-`--[no-]bot-break-on-death` pertencem exclusivamente ao ThunderWalker ToT.
-Quando não são informadas, prevalece a configuração específica do mapa; o app
-permite escolher explicitamente o valor padrão, ativado ou desativado.
+The `--bot-weapon`, `--bot-health` and `--[no-]bot-break-on-death` options
+belong only to ThunderWalker ToT. When they are not given, the map's specific
+configuration prevails; the app lets you pick the default, on or off
+explicitly.
 
-## Teclas da sessão
+## Session keys
 
-Cada modo KTX declara seu próprio plano de teclas. O resumo é impresso
-automaticamente assim que o mapa abre e pode ser reapresentado com `F10`:
+Each KTX mode declares its own key plan. The summary is printed automatically
+as soon as the map opens and can be shown again with `F10`:
 
-- `F5`, `F6` e `F11`: ações principais do modo; no Duel correspondem a
-  ready, break e regras;
-- `H`, `I`, `M`, `X` e `Z`: ações complementares somente quando o modo precisa;
-  Race usa fila, tempos, rota e câmera, enquanto CTF usa estado e descarte de
-  bandeira ou runa;
-- `INS` e `DEL`: adicionar e remover Frogbot quando a sessão começou com bots;
-  `INS` respeita a lotação do modo e `DEL` libera novamente uma vaga;
-- `HOME` e `END`: diminuir ou aumentar cumulativamente, entre 1 e 20, a
-  habilidade dos próximos bots. Em habilidade aleatória, as teclas apenas
-  confirmam que o sorteio individual continua ativo;
-- `F12`: fechar diretamente o QuakeWorld.
+- `F5`, `F6` and `F11`: the mode's main actions; in Duel they are ready,
+  break and rules;
+- `H`, `I`, `M`, `X` and `Z`: extra actions only when the mode needs them;
+  Race uses queue, times, route and camera, while CTF uses status and dropping
+  the flag or rune;
+- `INS` and `DEL`: add and remove a Frogbot when the session started with
+  bots; `INS` respects the mode's roster and `DEL` frees a slot again;
+- `HOME` and `END`: lower or raise cumulatively, between 1 and 20, the skill
+  of the next bots. With random skill, the keys only confirm that the
+  individual draw is still on;
+- `F12`: close QuakeWorld directly.
 
-Os binds gerenciados são carregados antes de `x86qw-ktx-user.cfg`. Assim, uma
-configuração pessoal pode sobrescrevê-los; o launcher muda apenas os aliases
-contextuais e não reescreve o arquivo pessoal.
+The managed binds are loaded before `x86qw-ktx-user.cfg`. That way a personal
+configuration can override them; the launcher only changes the contextual
+aliases and does not rewrite the personal file.
 
-Em hospedagem ligada a um endereço externo, uma sessão com bots força
-`k_fb_admin_only 1` depois da configuração pessoal. Isso impede que jogadores
-remotos alterem o roster Frogbot; hosts apenas em loopback conservam o
-comportamento padrão do KTX.
+When hosting is bound to an external address, a session with bots forces
+`k_fb_admin_only 1` after the personal configuration. That stops remote
+players from changing the Frogbot roster; hosts on loopback only keep KTX's
+default behavior.
 
 [straw-hats]: https://one-piece.com/character/luffy/index.html
 [roger]: https://one-piece.com/character/Gold_Roger/index.html

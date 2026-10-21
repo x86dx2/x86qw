@@ -1,99 +1,99 @@
-# Visão de longo prazo do ecossistema QuakeWorld
+# Long-term view of the QuakeWorld ecosystem
 
-Este documento descreve para onde o ecossistema pode evoluir depois da
-estabilização da distribuição. Ele não é uma segunda autoridade de status: a
-sequência até `1.0.0` está em [ROADMAP.md](ROADMAP.md), o estado presente em
-[PROJECT-STATUS.md](PROJECT-STATUS.md) e os gates executáveis no
-[plano de estabilização](implementation/stabilization-1.0-plan.md).
+This document describes where the ecosystem may evolve after the
+distribution stabilizes. It is not a second authority on status: the sequence
+up to `1.0.0` is in [ROADMAP.md](ROADMAP.md), the present state in
+[PROJECT-STATUS.md](PROJECT-STATUS.md) and the executable gates in the
+[stabilization plan](implementation/stabilization-1.0-plan.md).
 
-## Princípios de evolução
+## Principles of evolution
 
-- preservar bytes upstream e customizações x86QW em camadas identificáveis;
-- tratar catálogo, contrato, artefato, suporte e validação como dimensões
-  diferentes;
-- manter uma instalação verificável, com lifecycle reversível e sem mutação
-  durante execução;
-- exigir origem, licença, hash, ownership, migração e evidência de plataforma
-  para cada expansão;
-- manter o fluxo operacional local **sem gates nativos** quando a tarefa só
-  exigir contratos portáveis; a ausência de smoke nativo deve continuar
-  explícita, nunca implícita.
+- keep upstream bytes and x86QW customizations in identifiable layers;
+- treat catalog, contract, artifact, support and validation as different
+  dimensions;
+- keep an installation verifiable, with a reversible lifecycle and no mutation
+  while running;
+- require origin, license, hash, ownership, migration and platform evidence
+  for each expansion;
+- keep the local operational flow **without native gates** when the task only
+  needs portable contracts; the absence of a native smoke must stay explicit,
+  never implicit.
 
-## Distribuição e runtime
+## Distribution and runtime
 
-A arquitetura desejada é uma fonte canônica de inventários e contratos que
-projeta catálogos, bundles e documentação sem duplicar fatos. O runtime deve
-continuar independente de `maintenance`, `dist` e fachadas de entrada, com
-fronteiras únicas para downloads, arquivos, estado, receipts, migrações,
-transações, UI, plataforma e supervisor.
+The desired architecture is one canonical source of inventories and contracts
+that projects catalogs, bundles and documentation without duplicating facts.
+The runtime must stay independent of `maintenance`, `dist` and entry facades,
+with single boundaries for downloads, files, state, receipts, migrations,
+transactions, UI, platform and supervisor.
 
-As próximas melhorias arquiteturais devem privilegiar:
+The next architectural improvements should favor:
 
-- contratos versionados e envelopes JSON estáveis;
-- migração unilateral de estados publicados, com ownership de arquivos pessoais
-  preservado;
-- candidatos construídos uma vez, com checksums, SBOM, provenance e mirrors
-  convergentes;
-- trust metadata com custódia, rotação e expiração aprovadas;
-- suporte por plataforma declarado somente conforme a evidência do candidato.
+- versioned contracts and stable JSON envelopes;
+- one-way migration of published states, keeping the ownership of personal
+  files;
+- candidates built once, with checksums, SBOM, provenance and converging
+  mirrors;
+- trust metadata with approved custody, rotation and expiry;
+- platform support declared only as far as the candidate's evidence goes.
 
-## Experiência QuakeWorld
+## QuakeWorld experience
 
-O ecossistema deve continuar oferecendo uma instalação coerente para os jogos e
-modos já catalogados, sem transformar um novo modo em motivo para misturar
-conteúdo upstream, runtime ou serviço. A evolução pode explorar:
+The ecosystem should keep offering a coherent installation for the games and
+modes already in the catalog, without turning a new mode into a reason to mix
+upstream content, runtime or service. Evolution may explore:
 
-- seleção declarativa de jogos, modos, mapas e perfis;
-- treinamento e partidas assistidas como contratos explícitos e opt-in;
-- ferramentas de análise de demos e validação formal de MVD/QWD;
-- compatibilidade de clientes, servidores e relays sem confundir catálogo com
-  execução nativa;
-- documentação operacional que mantenha comandos, defaults e reversão
-  compreensíveis.
+- declarative selection of games, modes, maps and profiles;
+- training and assisted matches as explicit, opt-in contracts;
+- demo analysis tools and formal MVD/QWD validation;
+- compatibility of clients, servers and relays without confusing catalog with
+  native execution;
+- operational documentation that keeps commands, defaults and rollback
+  understandable.
 
-Qualquer mudança de gameplay, KTX, Frogbot, host, supervisor ou downloader deve
-ter issue própria. Ela não pode ser extraída incidentalmente do checkpoint nem
-entrar em uma PR de release.
+Any change to gameplay, KTX, Frogbot, host, supervisor or downloader needs its
+own issue. It cannot be pulled incidentally out of the checkpoint nor go into a
+release PR.
 
-## Serviços e rede
+## Services and network
 
-MVDSV, QTV e QWFWD devem permanecer componentes independentes, seguros por
-default e compostos somente quando o operador solicitar. A visão futura inclui:
+MVDSV, QTV and QWFWD must stay independent components, secure by default and
+combined only when the operator asks. The future view includes:
 
-- readiness e preflight formais para cada serviço;
-- testes isolados de protocolo, geração de MVD e encaminhamento UDP;
-- exposição externa sempre explícita, com credenciais fora da linha de comando;
-- recuperação journalizada e ownership claro entre launcher, guardião e filhos;
-- serviços persistentes do sistema somente após uma proposta de lifecycle,
-  instalação, atualização, desinstalação e rollback.
+- formal readiness and preflight for each service;
+- isolated tests of protocol, MVD generation and UDP forwarding;
+- external exposure always explicit, with credentials off the command line;
+- journaled recovery and clear ownership between launcher, guardian and
+  children;
+- persistent system services only after a proposal for lifecycle,
+  installation, update, uninstall and rollback.
 
-## Plataforma e publicação
+## Platform and publication
 
-A compatibilidade de Linux, Windows, macOS Intel e nightly deve continuar
-visível no catálogo sem ser promovida a suporte por inferência. A evolução de
-plataforma exige harness não bloqueante para contratos portáveis e evidência
-nativa do candidato exato quando o estado mudar para `supported` ou
-`conditional`.
+The compatibility of Linux, Windows, Intel macOS and nightly should stay
+visible in the catalog without being promoted to support by inference.
+Platform evolution needs a non-blocking harness for portable contracts and
+native evidence of the exact candidate when the state changes to `supported`
+or `conditional`.
 
-O pipeline de publicação deve manter preparação, trust, evidência, promoção e
-metadata como etapas separadas. Ações, fontes e dependências precisam ser
-fixadas por identidade imutável; nenhum mirror divergente pode ser aceito por
-fallback silencioso.
+The publication pipeline should keep preparation, trust, evidence, promotion
+and metadata as separate steps. Actions, sources and dependencies must be
+pinned by immutable identity; no divergent mirror may be accepted by silent
+fallback.
 
-## Backlog pós-1.0
+## Post-1.0 backlog
 
-Os itens abaixo são intenções de longo prazo, não trabalho corrente:
+The items below are long-term intentions, not current work:
 
-- central de demos, análise de MVD/QWD e treinamento como comando próprio;
-- novos clientes, engines, jogos, mods e mapas externos;
-- perfis operacionais adicionais sobre capacidades instaladas;
-- serviços persistentes do sistema e integração de observabilidade;
-- ferramentas visuais de arquitetura, mapas do ecossistema e documentação
-  navegável;
-- sincronização ou uso do mirror GitLab somente depois de decidir sua função e
-  contrato de autoridade.
+- a demo center, MVD/QWD analysis and training as a command of its own;
+- new clients, engines, games, mods and external maps;
+- additional operational profiles on top of installed capabilities;
+- persistent system services and observability integration;
+- visual architecture tools, ecosystem maps and navigable documentation;
+- syncing or using the GitLab mirror only after deciding its role and
+  authority contract.
 
-Cada item precisa de uma proposta separada com issue, contrato, artefato,
-licença, migração, testes, validação de plataforma, gates de segurança e PR de
-release própria. O ecossistema não deve crescer como efeito colateral de
-`play`, `host`, `update` ou `upgrade`.
+Each item needs a separate proposal with an issue, contract, artifact,
+license, migration, tests, platform validation, security gates and its own
+release PR. The ecosystem should not grow as a side effect of `play`, `host`,
+`update` or `upgrade`.

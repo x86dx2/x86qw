@@ -1,213 +1,221 @@
-# Componentes e atualização
+# Components and updates
 
-O x86QW separa **conteúdo instalável** de **origem versionada**. Nem toda pasta
-do nQuake corresponde a um projeto com releases: skins, miras, skyboxes, mapas e
-outros recursos são coleções curadas. Nesses casos, a versão correta é o commit
-imutável do `nQuake/distfiles`, não um número inventado.
+x86QW separates **installable content** from **versioned origin**. Not every
+nQuake folder matches a project with releases: skins, crosshairs, skyboxes,
+maps and other resources are curated collections. In those cases, the right
+version is the immutable commit of `nQuake/distfiles`, not an invented
+number.
 
-Estado verificado em 31 de julho de 2026:
+State verified on July 31, 2026:
 
-## Layout dos mods versionados
+## Layout of the versioned mods
 
-Cada mod externo usa a mesma estrutura sob `dist/mods/<mod>/<versao>/`:
+Each external mod uses the same structure under `dist/mods/<mod>/<version>/`:
 
-- `upstream/`: pacotes binários oficiais consumidos pelo runtime;
-- `source/`: código-fonte ou distribuição original que contém as fontes;
-- `x86qw/`: configurações, perfis e overlays mantidos pelo x86QW.
+- `upstream/`: official binary packages the runtime consumes;
+- `source/`: source code or the original distribution that holds the sources;
+- `x86qw/`: configurations, profiles and overlays maintained by x86QW.
 
-O KTX possui mais de um tipo de overlay e, por isso, subdivide a autoria x86QW
-sem alterar os caminhos instalados: `catalog/` contém dados declarativos,
-`config/` contém os arquivos projetados para o jogo, `runtime/` contém o QVM e
-seus símbolos, `source/` contém os patches numerados que os reproduzem e
-`policy/` contém o contrato de composição do PK3. O inventário é a ponte
-explícita entre esses contextos e o runtime.
+KTX has more than one kind of overlay and therefore splits x86QW's authorship
+without changing the installed paths: `catalog/` holds declarative data,
+`config/` holds the files projected into the game, `runtime/` holds the QVM
+and its symbols, `source/` holds the numbered patches that reproduce them and
+`policy/` holds the PK3's composition contract. The inventory is the explicit
+bridge between those contexts and the runtime.
 
-As pastas são criadas somente quando há conteúdo correspondente. Por isso o
-Pro-X, cujo código-fonte público não foi localizado, possui `upstream/` e
-`x86qw/`, mas não uma pasta `source/` vazia. `dist/mods/x86qw/` é reservado aos
-componentes autorais da própria distribuição e não representa um upstream.
+Folders are created only when there is matching content. That is why Pro-X,
+whose public source code was not found, has `upstream/` and `x86qw/`, but not
+an empty `source/` folder. `dist/mods/x86qw/` is reserved for the
+distribution's own components and does not represent an upstream.
 
-## Layout dos serviços versionados
+## Layout of the versioned services
 
-Os serviços usam o mesmo contrato de proveniência sob
-`dist/services/<serviço>/<versão>/`. A forma da árvore registra a origem de cada
-artefato, e não precisa ser visualmente idêntica entre componentes:
+Services use the same provenance contract under
+`dist/services/<service>/<version>/`. The shape of the tree records the
+origin of each artifact, and does not need to look identical across
+components:
 
 ```text
-<serviço>/<versão>/
-├── source/                         # fonte upstream preservada
-├── upstream/<plataforma>/          # binário oficial, quando existir
+<service>/<version>/
+├── source/                         # kept upstream source
+├── upstream/<platform>/            # official binary, when there is one
 └── x86qw/
-    ├── runtime/<plataforma>/       # binário compilado pelo x86QW
-    ├── BUILD.json                  # origem, ferramenta e hash de cada runtime
-    └── *.cfg                       # configuração mantida pelo x86QW
+    ├── runtime/<platform>/         # binary built by x86QW
+    ├── BUILD.json                  # origin, tool and hash of each runtime
+    └── *.cfg                       # configuration maintained by x86QW
 ```
 
-- `source/` contém o código-fonte ou arquivo-fonte original fixado por hash;
-- `upstream/` contém somente binários publicados pelo projeto de origem e
-  preservados sem alteração;
-- `x86qw/runtime/` contém somente binários produzidos pelo x86QW a partir da
-  fonte registrada;
-- `x86qw/BUILD.json` declara, por plataforma, se o runtime é oficial ou foi
-  reproduzido pelo projeto, além de registrar ferramenta, comando e checksum
-  quando aplicável;
-- `x86qw/*.cfg` contém a configuração operacional do x86QW e nunca é
-  apresentada como arquivo do upstream.
+- `source/` holds the original source code or source archive, pinned by hash;
+- `upstream/` holds only binaries published by the origin project and kept
+  unchanged;
+- `x86qw/runtime/` holds only binaries x86QW produced from the recorded
+  source;
+- `x86qw/BUILD.json` declares, per platform, whether the runtime is official
+  or was reproduced by the project, and records tool, command and checksum
+  when applicable;
+- `x86qw/*.cfg` holds x86QW's operational configuration and is never
+  presented as an upstream file.
 
-Diretórios vazios não são criados. QTV não possui builds oficiais por
-plataforma na revisão fixada: Linux, Windows e macOS são builds reproduzidos e,
-por isso, ficam todos em `x86qw/runtime/`; não existe `upstream/`. QWFWD 1.30
-fornece binários oficiais para Linux e Windows, preservados em `upstream/`,
-enquanto o runtime macOS arm64 é produzido pelo x86QW e fica em
-`x86qw/runtime/`.
+Empty folders are not created. QTV has no official per-platform builds at the
+pinned revision: Linux, Windows and macOS are reproduced builds and therefore
+all live in `x86qw/runtime/`; there is no `upstream/`. QWFWD 1.30 provides
+official binaries for Linux and Windows, kept in `upstream/`, while the macOS
+arm64 runtime is produced by x86QW and lives in `x86qw/runtime/`.
 
-A pasta de versão também preserva a identidade imutável disponível no projeto
-de origem: QWFWD usa a tag `1.30`; QTV, que não possui release numerada, usa a
-abreviação `025ca949aca0` do commit completo registrado no inventário e no
-`BUILD.json`. Portanto, a diferença observada entre essas duas árvores é
-intencional e auditável, não um segundo padrão de organização.
+The version folder also keeps the immutable identity available in the origin
+project: QWFWD uses the `1.30` tag; QTV, which has no numbered release, uses
+the abbreviation `025ca949aca0` of the full commit recorded in the inventory
+and in `BUILD.json`. So the difference between those two trees is intentional
+and auditable, not a second way of organizing.
 
-| Componente | Versão oferecida | Estratégia | Estado |
+| Component | Offered version | Strategy | State |
 | --- | --- | --- | --- |
-| Configuração base | `dfb2ac9299f7+x86qw.4` | snapshot nQuake com bootstrap x86QW | x86QW Ruleset assistido, aliases temporários sob demanda e textura máxima coerente com OpenGL 4.1 do Apple Silicon, sobre uma base comum a stable e nightly |
-| Interface e recursos visuais | `e4cb23d40aa2` | snapshot nQuake | atual no repositório de referência |
-| KTX | `1.47+x86qw.20` | release oficial sobre recursos nQuake e integração x86QW | 24 modos, mapas filtrados pelos recursos reais, Coach de Quad casual opt-in, 77 rotas Frogbot, 54 rotas Race, opções completas de CTF/Race, plano de teclas contextual, roster gerenciável e QVM reproduzível |
-| Skins de jogadores | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
-| Miras | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
-| Skyboxes | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
-| Modelos | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
-| Bandeiras do placar | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
-| Texturas externas | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
-| Texturas base | `e4cb23d40aa2` | coleção curada nQuake | atual no repositório de referência |
-| Mapas selecionados | `e4cb23d40aa2` | coleção curada nQuake | sem download externo em massa |
-| Informações de partidas | `e4cb23d40aa2` | coleção curada nQuake | opcional; fora do perfil recomendado |
-| Documentação | `e4cb23d40aa2+x86qw.2` | licenças do snapshot e manuais x86QW | atalhos e readmes históricos não entram no runtime |
-| QRP alta resolução | `e4cb23d40aa2+x86qw.2` | snapshot nQuake com manual x86QW UTF-8 | contém mapas 1.00 e itens 0.73; ordem explícita em `pak.lst` |
-| Final Arena | `1.20+nquake.e4cb23d40aa2+x86qw.5` | snapshot nQuake e gameplay x86QW próprio | fila, estatísticas e opções do mod acessíveis; x86QW Ruleset opcional antes da camada pessoal; originais 1.20 e fonte-base preservados |
-| Pro-X | `1.1+x86qw.6` | release pública 1.1 e gameplay x86QW | runtime oficial completo; ENT corrige somente quatro campos obsoletos; x86QW Ruleset opcional e configuração pessoal carregada por último |
-| Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.7` | gamecode 2.9 recompilado sobre assets nQuake | gamecode 2.8 removido do `misc.pak`; mídia nQuake preservada; x86QW Ruleset opcional antes da camada pessoal |
-| Total Destruction 2 | `2.22+x86qw.6` | pacote independente recompilado do upstream | runtime completo com x86QW Ruleset opcional, magia, especial, runas, votação, áudio e configuração pessoal carregada por último |
-| MVDSV | `1.11+x86qw.4` | release oficial e build reproduzido por plataforma | servidor dedicado KTX para macOS arm64, Linux amd64 e Windows x64; patch mínimo corrige passagem de argumentos QVM em 64 bits no Apple Silicon |
-| QTV | `0+025ca949aca0+x86qw.3` | commit upstream imutável e builds reproduzidos | relay HTTP/MVD opcional, loopback e upload desativado por padrão |
-| QWFWD | `1.30+x86qw.4` | release oficial e builds por plataforma | proxy opcional, sem consulta automática a masters no perfil gerenciado |
+| x86QW client base and startup | `dfb2ac9299f7+x86qw.4` | nQuake snapshot with the x86QW bootstrap | assisted x86QW Ruleset, temporary aliases on demand and a maximum texture size consistent with Apple Silicon's OpenGL 4.1, over a base common to stable and nightly |
+| nQuake interface and visuals | `e4cb23d40aa2` | nQuake snapshot | current in the reference repository |
+| KTX x86QW | `1.47+x86qw.20` | official release over nQuake resources and x86QW integration | 24 modes, maps filtered by the actual resources, opt-in casual Quad Coach, 77 Frogbot routes, 54 Race routes, complete CTF/Race options, a contextual key plan, a manageable roster and a reproducible QVM |
+| Player skins | `e4cb23d40aa2` | curated nQuake collection | current in the reference repository |
+| Crosshairs | `e4cb23d40aa2` | curated nQuake collection | current in the reference repository |
+| Skyboxes | `e4cb23d40aa2` | curated nQuake collection | current in the reference repository |
+| Models | `e4cb23d40aa2` | curated nQuake collection | current in the reference repository |
+| Scoreboard flags | `e4cb23d40aa2` | curated nQuake collection | current in the reference repository |
+| External textures | `e4cb23d40aa2` | curated nQuake collection | current in the reference repository |
+| Base textures | `e4cb23d40aa2` | curated nQuake collection | current in the reference repository |
+| nQuake map selection | `e4cb23d40aa2` | curated nQuake collection | no bulk external download |
+| Match information | `e4cb23d40aa2` | curated nQuake collection | optional; outside the recommended profile |
+| Documentation and licenses | `e4cb23d40aa2+x86qw.2` | the snapshot's licenses and x86QW manuals | historical shortcuts and readmes do not go into the runtime |
+| QRP high resolution | `e4cb23d40aa2+x86qw.2` | nQuake snapshot with a UTF-8 x86QW manual | holds maps 1.00 and items 0.73; explicit order in `pak.lst` |
+| Final Arena | `1.20+nquake.e4cb23d40aa2+x86qw.5` | nQuake snapshot and x86QW's own gameplay | queue, statistics and the mod's options accessible; optional x86QW Ruleset before the personal layer; original 1.20 files and base source kept |
+| Pro-X | `1.1+x86qw.6` | public 1.1 release and x86QW gameplay | complete official runtime; the ENT fixes only four obsolete fields; optional x86QW Ruleset and personal configuration loaded last |
+| Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.7` | 2.9 gamecode recompiled over nQuake assets | 2.8 gamecode removed from `misc.pak`; nQuake media kept; optional x86QW Ruleset before the personal layer |
+| Total Destruction 2 | `2.22+x86qw.6` | independent package recompiled from upstream | complete runtime with optional x86QW Ruleset, spells, special, runes, voting, audio and personal configuration loaded last |
+| Dedicated MVDSV | `1.11+x86qw.4` | official release and a reproduced build per platform | KTX dedicated server for macOS arm64, Linux amd64 and Windows x64; a minimal patch fixes QVM argument passing in 64 bits on Apple Silicon |
+| QTV broadcast | `0+025ca949aca0+x86qw.3` | immutable upstream commit and reproduced builds | optional HTTP/MVD relay, loopback and upload off by default |
+| QWFWD proxy | `1.30+x86qw.4` | official release and builds per platform | optional proxy, with no automatic master queries in the managed profile |
 
-## Contrato de atualização
+## Update contract
 
-- `reference-snapshot`: acompanha o payload mais recente aprovado do nQuake;
-- `reference-payload-current`: o conteúdo consumido continua atual mesmo quando
-  o branch observado avançou apenas em arquivos fora da distribuição;
-- `reference-overlay`: preserva assets do nQuake e substitui um runtime por uma
-  release independente comprovada;
-- `upstream-overlay`: um artefato oficial substitui somente membros declarados
-  sobre a base nQuake;
-- `upstream-package`: um componente independente é validado e empacotado sem
-  fingir que pertence ao snapshot do nQuake;
-- `upstream-composed`: uma base curada do nQuake é mesclada membro a membro com
-  uma release oficial completa mediante política de conflitos versionada;
-- todo download possui tamanho e SHA-256 antes de entrar no acervo;
-- o pacote interno registra origem, membros substituídos e hashes resultantes;
-- o catálogo mantém somente a versão atual, enquanto releases antigas continuam
-  imutáveis nos mirrors de entrega;
-- `x86qw-content check` detecta novidades; `update` prepara apenas as
-  atualizações seguras e `publish` permanece uma ação separada.
+- `reference-snapshot`: follows the latest approved nQuake payload;
+- `reference-payload-current`: the consumed content stays current even when
+  the observed branch only moved in files outside the distribution;
+- `reference-overlay`: keeps nQuake assets and replaces a runtime with a
+  proven independent release;
+- `upstream-overlay`: an official artifact replaces only declared members over
+  the nQuake base;
+- `upstream-package`: an independent component is validated and packaged
+  without pretending to belong to the nQuake snapshot;
+- `upstream-composed`: a curated nQuake base is merged member by member with a
+  complete official release under a versioned conflict policy;
+- every download has a size and SHA-256 before it enters the collection;
+- the internal package records origin, replaced members and the resulting
+  hashes;
+- the catalog keeps only the current version, while old releases stay
+  immutable on the delivery mirrors;
+- `x86qw-content check` detects what is new; `update` prepares only the safe
+  updates and `publish` stays a separate action.
 
-O bootstrap preserva o snapshot nQuake original, troca seu padrão
-`gl_max_size` de 32768 para 16384 e instala um `autoexec.cfg` x86QW com aliases
-temporários. A base comum conserva opções reconhecidas por stable e nightly; ao atualizar uma
-instalação, o instalador migra o mesmo valor apenas quando a configuração
-pessoal ainda contém exatamente o padrão antigo. O arquivo global
-`qw/x86qw-user.cfg` é carregado por último e nunca é sobrescrito.
+The bootstrap keeps the original nQuake snapshot, changes its `gl_max_size`
+default from 32768 to 16384 and installs an x86QW `autoexec.cfg` with
+temporary aliases. The common base keeps options recognized by stable and
+nightly; when an installation is updated, the installer migrates the same
+value only when the personal configuration still holds exactly the old
+default. The global file `qw/x86qw-user.cfg` is loaded last and never
+overwritten.
 
-O KTX é um projeto independente e um mod de servidor. O pacote x86QW combina o
-`ktx.pk3` encontrado no snapshot nQuake com o `qwprogs.qvm` e o mapa de símbolos
-`qwprogs.map` recompilados das fontes oficiais 1.47 com extensões x86QW isoladas.
-O artefato oficial sem alterações é preservado em
-`dist/mods/ktx/1.47/upstream/` e as fontes em
-`dist/mods/ktx/1.47/source/`. Ele não é executado nem substitui o cliente
-ezQuake. O servidor dedicado MVDSV é descrito separadamente no ecossistema.
+KTX is an independent project and a server mod. The x86QW package combines
+the `ktx.pk3` found in the nQuake snapshot with the `qwprogs.qvm` and the
+`qwprogs.map` symbol map recompiled from the official 1.47 sources with
+isolated x86QW extensions. The unchanged official artifact is kept in
+`dist/mods/ktx/1.47/upstream/` and the sources in
+`dist/mods/ktx/1.47/source/`. It is neither run by nor a replacement for the
+ezQuake client. The MVDSV dedicated server is described separately in the
+ecosystem.
 
-## Composição característica de cada mod
+## Characteristic composition of each mod
 
-Todos os mods herdam a configuração geral do jogador, mas não fingem possuir a
-mesma proveniência. O pipeline é declarado conforme o conteúdo real:
+All mods inherit the player's general configuration, but do not pretend to
+share the same provenance. The pipeline is declared according to the actual
+content:
 
-| Mod | Referência nQuake | Atualização independente | Harmonização x86QW |
+| Mod | nQuake reference | Independent update | x86QW harmonization |
 | --- | --- | --- | --- |
-| KTX | `ktx.pk3`, incluindo conteúdo exclusivo e sons de Clan Arena | recursos, QVM e símbolos oficiais 1.47 substituem conflitos declarados | compatibilidade do servidor local, gameplay e configuração pessoal |
-| Final Arena | pacote integral Final Arena 1.20 com mapas, mídia e gamecode | não há release mais nova comprovada no acervo | servidor local, binds, fila, estatísticas e ajuda |
-| Pro-X | 0.8b é mantido apenas como referência histórica, sem entrar no runtime | o pacote completo 1.1 substitui a versão do nQuake | `qw_server.cfg`, servidor local, binds e configuração pessoal |
-| Team Fortress | mapas, modelos, sons e 34 LOCs; o gamecode 2.8 é retirado do `misc.pak` montado e o `detpack.wav` idêntico permanece apenas no `pak1.pak` | `qwprogs.dat` oficial 2.9 é extraído e validado diretamente de `tf29qw.zip` | capacidades compatíveis, servidor local, binds e configuração pessoal |
-| Total Destruction 2 | não usa conteúdo do nQuake | distribuição completa 2.22; `saw_down.wav` ausente é recomposto do som idêntico validado | servidor local, armas, magias, runas, votação e configuração pessoal |
+| KTX | `ktx.pk3`, including exclusive content and Clan Arena sounds | the official 1.47 resources, QVM and symbols replace declared conflicts | local server compatibility, gameplay and personal configuration |
+| Final Arena | the complete Final Arena 1.20 package with maps, media and gamecode | no newer release proven in the collection | local server, binds, queue, statistics and help |
+| Pro-X | 0.8b is kept only as a historical reference, without entering the runtime | the complete 1.1 package replaces nQuake's version | `qw_server.cfg`, local server, binds and personal configuration |
+| Team Fortress | maps, models, sounds and 34 LOCs; the 2.8 gamecode is taken out of the assembled `misc.pak` and the identical `detpack.wav` stays only in `pak1.pak` | the official 2.9 `qwprogs.dat` is extracted and validated directly from `tf29qw.zip` | compatible capabilities, local server, binds and personal configuration |
+| Total Destruction 2 | uses no nQuake content | complete 2.22 distribution; the missing `saw_down.wav` is rebuilt from the validated identical sound | local server, weapons, spells, runes, voting and personal configuration |
 
-Arquivos byte-idênticos só são eliminados quando têm também a mesma função e o
-mesmo caminho de runtime. Sons parecidos dentro de `arena.pk3`, `prox/` e
-`ktx.pk3` permanecem quando o gamecode de cada gamedir os procura em namespaces
-distintos. Foi por isso que os WAVs soltos `qw/sound/ca` puderam ser removidos,
-mas a mídia interna de Final Arena e Pro-X não foi descartada.
+Byte-identical files are only removed when they also have the same role and
+the same runtime path. Similar sounds inside `arena.pk3`, `prox/` and
+`ktx.pk3` stay when each gamedir's gamecode looks for them in distinct
+namespaces. That is why the loose `qw/sound/ca` WAVs could be removed, but the
+internal media of Final Arena and Pro-X was not discarded.
 
-## Contrato dos perfis de gameplay
+## Contract of the gameplay profiles
 
-A ordem de configuração é invariável e aplicada separadamente ao mod escolhido:
+The configuration order is fixed and applied separately to the chosen mod:
 
 ```text
-nQuake -> upstream do mod selecionado -> x86QW do mesmo mod -> configuração pessoal do mesmo mod
+nQuake -> upstream of the selected mod -> x86QW of the same mod -> personal configuration of the same mod
 ```
 
-O launcher executa somente o perfil correspondente ao jogo selecionado. O
-perfil KTX não é carregado por Final Arena, Pro-X, Team Fortress ou TD2, assim
-como nenhum perfil desses mods é carregado pelo KTX. A base nQuake fornece a
-configuração geral do cliente; o upstream define a semântica própria do mod; a
-camada x86QW harmoniza somente essa combinação; e o arquivo pessoal daquele mod
-é executado por último e nunca é sobrescrito.
+The launcher runs only the profile matching the selected game. The KTX
+profile is not loaded by Final Arena, Pro-X, Team Fortress or TD2, just as no
+profile of those mods is loaded by KTX. The nQuake base provides the client's
+general configuration; the upstream defines the mod's own semantics; the
+x86QW layer harmonizes only that combination; and that mod's personal file
+runs last and is never overwritten.
 
-A camada x86QW substitui apenas binds que conflitam com a mecânica do mod,
-mantém os recursos coerentes da composição acima e acrescenta acesso às funções
-confirmadas no manual, na configuração original ou no gamecode correspondente.
+The x86QW layer replaces only binds that conflict with the mod's mechanics,
+keeps the coherent resources of the composition above and adds access to the
+functions confirmed in the manual, the original configuration or the matching
+gamecode.
 
-As teclas de movimento, sensibilidade, rede e preferências visuais continuam
-pertencendo ao jogador. Os perfis gerenciados se limitam a armas, ações do mod,
-ajustes de compatibilidade do HUD e ajuda contextual. `F10` repete a ajuda
-automática mostrada ao carregar cada mod.
+Movement keys, sensitivity, network and visual preferences still belong to
+the player. The managed profiles are limited to weapons, mod actions, HUD
+compatibility adjustments and contextual help. `F10` repeats the automatic
+help shown when each mod loads.
 
-O catálogo declara uma única política `common-baseline`: os componentes de
-gameplay
-usam arquivos de configuração comuns comprovados tanto com ezQuake stable 3.6.9
-quanto com a nightly `20260616-101233_a86996a`. Nenhum comando exclusivo da
-nightly é gravado globalmente; futuras otimizações específicas deverão entrar
-como overlay de cliente explícito, nunca como alteração silenciosa da base.
+The catalog declares a single `common-baseline` policy: the gameplay
+components use common configuration files proven both with ezQuake stable
+3.6.9 and with nightly `20260616-101233_a86996a`. No nightly-only command is
+written globally; future specific optimizations must come as an explicit
+client overlay, never as a silent change of the base.
 
-Final Arena usa o subdiretório correspondente do snapshot nQuake. Pro-X usa a
-release pública 1.1; o subdiretório histórico 0.8b é mantido apenas como origem
-de migração. Ambos geram pacotes, versões, inventários e recibos independentes.
+Final Arena uses the matching subfolder of the nQuake snapshot. Pro-X uses
+the public 1.1 release; the historical 0.8b subfolder is kept only as a
+migration origin. Both produce independent packages, versions, inventories
+and receipts.
 
-O TD2 possui duas numerações públicas que não formam uma cronologia simples. A
-página ativa do Arena Camper documenta a linha `2.12`, de 2023, mas o ZIP dessa
-versão não está mais disponível. O pacote incorporado é a distribuição
-QuakeWorld completa `2.22`, de Spinal com patch de Vegetous, ainda disponível
-com `qwprogs.dat`, modelos, sons, documentação e fontes. Ele é opcional, entra
-no perfil `completo` e não baixa mapas fora do acervo já aprovado do x86QW. A
-distribuição original completa permanece preservada em
-`dist/mods/td2/2.22/source/`; o runtime recebe somente gamecode, modelos, sons e os
-perfis x86QW. Binds, HUD e parâmetros do servidor vêm da camada versionada em
-`dist/mods/td2/2.22/x86qw/` e entram no próprio pacote do componente. Somente a
-cópia isolada do gamecode pertence a `.x86qw/components/play-support/`, enquanto
-`td2/x86qw-td2-user.cfg` permanece pessoal e fora do inventário imutável.
-O pacote 2.22 omite `saw_down.wav`, embora o gamecode o pré-carregue. O builder
-restaura esse nome a partir do `saw.wav` byte-idêntico que já existe no próprio
-upstream, validando tamanho e SHA-256 antes de montar o pacote.
+TD2 has two public numberings that do not form a simple chronology. Arena
+Camper's active page documents the `2.12` line, from 2023, but that version's
+ZIP is no longer available. The incorporated package is the complete
+QuakeWorld distribution `2.22`, by Spinal with a patch by Vegetous, still
+available with `qwprogs.dat`, models, sounds, documentation and sources. It is
+optional, belongs to the `complete` profile and downloads no maps outside
+x86QW's already approved collection. The complete original distribution stays
+kept in `dist/mods/td2/2.22/source/`; the runtime receives only gamecode,
+models, sounds and the x86QW profiles. Binds, HUD and server parameters come
+from the versioned layer in `dist/mods/td2/2.22/x86qw/` and go into the
+component's own package. Only the isolated copy of the gamecode belongs to
+`.x86qw/components/play-support/`, while `td2/x86qw-td2-user.cfg` stays
+personal and outside the immutable inventory.
+The 2.22 package omits `saw_down.wav`, although the gamecode preloads it. The
+builder restores that name from the byte-identical `saw.wav` that already
+exists in the upstream itself, validating size and SHA-256 before assembling
+the package.
 
-## Particularidades do catálogo
+## Catalog quirks
 
-- **ezQuake sem `package`.** As entradas do componente `ezquake` têm
-  `"package": null`: o cliente é escolhido por componente, canal (`stable` ou
-  `nightly`), plataforma e arquitetura (`catalog.ClientReleases`), e nada o
-  procura por id de pacote. Os outros componentes e a CLI são procurados pelo
-  `package`.
-- **CLI sem espelho GitLab.** Os binários `x86qw-cli` só têm a URL da release
-  no GitHub, onde também fica o atestado de proveniência
-  (`gh attestation verify`). Os pacotes de conteúdo têm a release do GitHub e o
-  espelho de pacotes do GitLab.
-- **Revisões do nQuake por componente.** Cada consumidor do nQuake fixa a sua
-  `reference_revision` em `component-releases.json`, então componentes podem
-  estar em revisões diferentes. O `update` move só o que mudou; o `verify`
-  mostra as revisões em uso.
+- **ezQuake without `package`.** The entries of the `ezquake` component have
+  `"package": null`: the client is chosen by component, channel (`stable` or
+  `nightly`), platform and architecture (`catalog.ClientReleases`), and
+  nothing looks it up by package id. The other components and the CLI are
+  looked up by `package`.
+- **CLI without a GitLab mirror.** The `x86qw-cli` binaries only have the
+  GitHub release URL, where the provenance attestation also lives
+  (`gh attestation verify`). The content packages have the GitHub release and
+  the GitLab package mirror.
+- **nQuake revisions per component.** Each nQuake consumer pins its own
+  `reference_revision` in `component-releases.json`, so components can be on
+  different revisions. `update` moves only what changed; `verify` shows the
+  revisions in use.

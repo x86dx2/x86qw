@@ -1,40 +1,41 @@
-# Roadmap do x86QW
+# x86QW roadmap
 
-## Onde estamos
+## Where we are
 
-A linha atual é a CLI 2.x em Go, em modo `owner-only`
-([ADR 0008](adr/0008-owner-only-release-gates.md)). O estado de hoje está em
-[PROJECT-STATUS.md](PROJECT-STATUS.md). A jornada até a 1.0 e os planos
-pós-1.0 da linha Python continuam registrados em [releases/](releases/),
-[post-1.0/](post-1.0/) e [implementation/](implementation/), como histórico.
+The current line is the 2.x CLI in Go, in `owner-only` mode
+([ADR 0008](adr/0008-owner-only-release-gates.md)). Today's state is in
+[PROJECT-STATUS.md](PROJECT-STATUS.md). The road to 1.0 and the post-1.0
+plans of the Python line remain recorded in [releases/](releases/),
+[post-1.0/](post-1.0/) and [implementation/](implementation/), as history.
 
-## Próximos passos
+## Next steps
 
-1. **Validação nativa registrada:** um registro versionado de instalação e uso
-   em Linux e Windows, para tirar essas plataformas de preview.
-2. **Root TUF:** um comando no `x86qw-release` para preparar e assinar uma root
-   nova, antes de a v1 vencer em 2027-08-10.
-3. **Custódia das chaves:** separar root e targets em mídia offline própria,
-   com backup, antes de qualquer abertura para terceiros.
-4. **macOS:** decidir entre manter o bundle upstream do ezQuake stable
-   (condicional) ou buscar um bundle assinado e notarizado.
+1. **Recorded native validation:** a versioned record of installation and use
+   on Linux and Windows, to take those platforms out of preview.
+2. **TUF root:** a command in `x86qw-release` to prepare and sign a new root,
+   before v1 expires on 2027-08-10.
+3. **Key custody:** keep root and targets on their own offline media, with a
+   backup, before any opening to third parties.
+4. **macOS:** decide between keeping the ezQuake stable upstream bundle
+   (conditional) or seeking a signed and notarized bundle.
 
-## Abertura para terceiros
+## Opening to third parties
 
-`external-public` só entra com decisão explícita do mantenedor. Antes dela:
+`external-public` only comes with an explicit decision by the maintainer.
+Before it:
 
-- validação nativa registrada nas plataformas anunciadas;
-- custódia das chaves separada da máquina de uso;
-- suporte e política de correção definidos para usuários externos;
-- textos públicos revistos para não prometer mais do que foi validado.
+- native validation recorded on the announced platforms;
+- key custody separated from the everyday machine;
+- support and a fix policy defined for external users;
+- public texts reviewed so they promise no more than what was validated.
 
-## Fora do escopo atual
+## Out of current scope
 
-Central de demos, validação formal de MVD/QWD, treinamento como comando,
-clientes ou engines novos, mods e mapas externos, serviços persistentes do
-sistema e perfis operacionais adicionais exigem propostas próprias, contratos,
-testes e evidência de plataforma. Eles não entram como efeito colateral de
-`play`, `host`, `update` ou `upgrade`.
+A demo center, formal MVD/QWD validation, training as a command, new clients
+or engines, external mods and maps, persistent system services and additional
+operational profiles need their own proposals, contracts, tests and platform
+evidence. They do not come in as a side effect of `play`, `host`, `update` or
+`upgrade`.
 
-Para a visão de longo prazo do ecossistema, consulte
+For the long-term view of the ecosystem, see
 [ROADMAP-QUAKE-ECOSYSTEM.md](ROADMAP-QUAKE-ECOSYSTEM.md).
