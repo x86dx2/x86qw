@@ -525,7 +525,7 @@ func (t *Transaction) ReconcilePlaySupport() error {
 		if err != nil {
 			return err
 		}
-		payload := []byte("// x86QW: local customizations for" + game.Label + "\n")
+		payload := []byte("// x86QW: local customizations for " + game.Label + "\n")
 		file, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 		if err != nil {
 			return err

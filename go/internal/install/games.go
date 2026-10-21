@@ -292,12 +292,12 @@ func PlaySupportIssues(root string, games []Game) ([]string, map[string][]byte, 
 		digest := sha256.Sum256(payload)
 		actual, err := fileSHA256(filepath.Join(root, filepath.FromSlash(relative)))
 		if err != nil || !regular(filepath.Join(root, filepath.FromSlash(relative))) || actual != hex.EncodeToString(digest[:]) {
-			issues = append(issues, "derived gamecode missing or different:"+relative)
+			issues = append(issues, "derived gamecode missing or different: "+relative)
 		}
 	}
 	for _, game := range games {
 		if !regular(filepath.Join(root, filepath.FromSlash(game.PersonalConfig))) {
-			issues = append(issues, "personal settings missing:"+game.PersonalConfig)
+			issues = append(issues, "personal settings missing: "+game.PersonalConfig)
 		}
 	}
 	return issues, expected, nil

@@ -21,7 +21,7 @@ func confirm(env *environment) content.Confirm {
 		fmt.Fprintf(env.stdout, "%s [y/N]: ", message)
 		answer, _ := bufio.NewReader(env.stdin).ReadString('\n')
 		switch strings.ToLower(strings.TrimSpace(answer)) {
-		case "y", "yes":
+		case "y", "yes", "s", "sim":
 			return nil
 		}
 		return errors.New("operation cancelled; no file was changed")

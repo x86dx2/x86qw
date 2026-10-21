@@ -103,7 +103,7 @@ func assessRepair(in plan.Input) (*RepairAssessment, error) {
 			}
 			sort.Strings(missing)
 			if len(missing) > 0 {
-				assessment.diagnostics = append(assessment.diagnostics, "state.json records components without intact metadata:"+strings.Join(missing, ", "))
+				assessment.diagnostics = append(assessment.diagnostics, "state.json records components without intact metadata: "+strings.Join(missing, ", "))
 			} else if len(recorded) != len(installed) {
 				assessment.recoveredState = current
 			}

@@ -88,7 +88,11 @@ func LoadModes() ([]Mode, error) {
 		if !ok {
 			return Requirement{}, fmt.Errorf("unknown KTX map policy: %s", key)
 		}
-		return Requirement{Key: key, Asset: policy.Asset, When: policy.When, Label: policy.Label}, nil
+		label := policy.Label
+		if english, ok := requirementLabels[key]; ok {
+			label = english
+		}
+		return Requirement{Key: key, Asset: policy.Asset, When: policy.When, Label: label}, nil
 	}
 	var modes []Mode
 	for _, raw := range document.Modes {
@@ -144,6 +148,14 @@ func FindMode(modes []Mode, requested string) (Mode, error) {
 }
 
 func errorf(format string, args ...any) error { return fmt.Errorf(format, args...) }
+
+// requirementLabels name the map assets KTX modes need; the signed
+// modes.json names them in Portuguese.
+var requirementLabels = map[string]string{
+	"frogbot-route": "Frogbot route",
+	"ctf-entities":  "CTF flag entities",
+	"race-route":    "Race route",
+}
 
 // MenuGroup is one entry of modes.json menu_groups.
 type MenuGroup struct {
