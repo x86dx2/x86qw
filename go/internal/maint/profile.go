@@ -160,9 +160,7 @@ func ResolveBundleDestination(raw, target string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if resolved, err := filepath.EvalSymlinks(filepath.Dir(destination)); err == nil {
-		destination = filepath.Join(resolved, filepath.Base(destination))
-	}
+	destination = filepath.Join(resolve(filepath.Dir(destination)), filepath.Base(destination))
 	root := resolve(target)
 	if !inside(destination, root) {
 		return destination, nil
@@ -178,17 +176,28 @@ func ResolveBundleDestination(raw, target string) (string, error) {
 	return "", errors.New("o bundle não pode ser gravado dentro da instalação")
 }
 
+// resolve makes name absolute and follows the links in as much of it as
+// exists. A path that does not exist yet must still compare equal to the
+// same place reached through a link (on macOS, /var is /private/var), or
+// a bundle could be written inside the installation.
 func resolve(name string) string {
 	absolute, _ := filepath.Abs(name)
 	if resolved, err := filepath.EvalSymlinks(absolute); err == nil {
 		return resolved
 	}
-	return absolute
+	parent := filepath.Dir(absolute)
+	if parent == absolute {
+		return absolute
+	}
+	return filepath.Join(resolve(parent), filepath.Base(absolute))
 }
 
+// inside reports whether name is root or below it. Rel speaks the OS
+// separator, so on Windows a path outside starts with ..\ (and one on
+// another drive is an error).
 func inside(name, root string) bool {
 	relative, err := filepath.Rel(root, name)
-	return err == nil && relative != ".." && !strings.HasPrefix(relative, "../")
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
 // BackupProfile writes a zip of user-owned profile files.
