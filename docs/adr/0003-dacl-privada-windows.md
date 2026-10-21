@@ -1,157 +1,160 @@
-# ADR 0003 — DACL privada no Windows
+# ADR 0003 — Private DACL on Windows
 
-- **Estado:** aceita no código corretivo da PR 4; casos Win32 nativos aprovados
-  em Windows com Python 3.10 e 3.13; não publicada
-- **Data:** 2026-08-03
+- **Status:** accepted in PR 4's corrective code; native Win32 cases passed on
+  Windows with Python 3.10 and 3.13; not published
+- **Date:** 2026-08-03
 - **Issue:** [#47](https://github.com/x86dx2/x86qw/issues/47)
 
-## Contexto
+## Context
 
-Os modos POSIX `0600` e `0700` não definem uma política de acesso equivalente
-no Windows. Uma criação exclusiva por `mkstemp`, `O_EXCL` ou `CreateFileW`
-impede colisão de nome, mas ainda pode herdar de seu diretório uma DACL que
-concede acesso a `Users`, `Everyone` ou outro principal local.
+The POSIX modes `0600` and `0700` do not define an equivalent access policy on
+Windows. An exclusive creation through `mkstemp`, `O_EXCL` or `CreateFileW`
+prevents a name collision, but it can still inherit from its directory a DACL
+that grants access to `Users`, `Everyone` or another local principal.
 
-Essa diferença afeta o plano de controle `.x86qw/`, locks, journals, logs de
-background, pedidos de parada, configurações temporárias que podem conter
-senhas, temporários de download e os arquivos materializados pelo bootstrap
-antes de o zipapp existir. Um arquivo externo fornecido por `--password-file`
-também precisa ser provado privado antes da leitura.
+This difference affects the `.x86qw/` control plane, locks, journals,
+background logs, stop requests, temporary settings that may hold passwords,
+download temporaries and the files the bootstrap materializes before the
+zipapp exists. An external file given through `--password-file` must also be
+proven private before it is read.
 
-O risco coberto é leitura ou alteração por outro usuário local comum durante a
-criação, uso ou recuperação do objeto. O contrato não tenta proteger dados de
-código já executando como o mesmo usuário nem de um administrador que exerça
-privilégios nativos para tomar posse ou ignorar a DACL.
+The covered risk is reading or changing by another ordinary local user while
+the object is created, used or recovered. The contract does not try to protect
+data from code already running as the same user, nor from an administrator who
+uses native privileges to take ownership or bypass the DACL.
 
-## Decisão
+## Decision
 
-### DACL canônica
+### Canonical DACL
 
-Um objeto privado gerenciado pelo x86QW no Windows usa:
+A private object managed by x86QW on Windows uses:
 
-- proprietário igual ao usuário atual nas criações novas; um objeto gerenciado
-  preexistente pode manter o owner `LOCAL SYSTEM` quando sua identidade é
-  comprovada;
-- DACL protegida, sem herança do diretório pai;
-- exatamente uma ACE `Allow/Full Control` para o SID do usuário atual;
-- exatamente uma ACE `Allow/Full Control` para `LOCAL SYSTEM`
-  (`S-1-5-18`);
-- herança `Object Inherit` e `Container Inherit` somente em diretórios;
-- nenhuma ACE explícita para `Administrators`, `Users`, `Everyone` ou outro
+- an owner equal to the current user on new creations; a pre-existing managed
+  object may keep the `LOCAL SYSTEM` owner when its identity is proven;
+- a protected DACL, without inheritance from the parent directory;
+- exactly one `Allow/Full Control` ACE for the current user's SID;
+- exactly one `Allow/Full Control` ACE for `LOCAL SYSTEM` (`S-1-5-18`);
+- `Object Inherit` and `Container Inherit` inheritance only on directories;
+- no explicit ACE for `Administrators`, `Users`, `Everyone` or any other
   principal.
 
-A implementação não solicita elevação. O usuário atual é o proprietário dos
-objetos novos e `LOCAL SYSTEM` permanece autorizado para compatibilidade com
-operações normais do sistema. A execução end-to-end com token de usuário
-padrão ainda precisa ser comprovada no PR 11.
+The implementation does not ask for elevation. The current user owns the new
+objects and `LOCAL SYSTEM` stays authorized for compatibility with normal
+system operations. End-to-end execution with a standard user token still has
+to be proven in PR 11.
 
-### Criação antes da primeira escrita
+### Creation before the first write
 
-Arquivos e diretórios sensíveis precisam nascer com a DACL canônica. Aplicar a
-proteção apenas depois de criar ou escrever o objeto deixaria uma janela de
-exposição. A fronteira Windows usa `SECURITY_ATTRIBUTES` em `CreateFileW` e
-`CreateDirectoryW`, mantém handles durante validação e rejeita reparse points
-na cadeia de caminho.
+Sensitive files and directories must be born with the canonical DACL. Applying
+the protection only after creating or writing the object would leave an
+exposure window. The Windows boundary uses `SECURITY_ATTRIBUTES` in
+`CreateFileW` and `CreateDirectoryW`, keeps handles open during validation and
+rejects reparse points along the path.
 
-Objetos gerenciados preexistentes podem ser endurecidos quando encontrados,
-desde que a identidade e o proprietário sejam comprovados. A implementação não
-faz uma migração recursiva e inferencial de arquivos arbitrários da instalação.
+Pre-existing managed objects may be hardened when found, as long as identity
+and owner are proven. The implementation does not do a recursive, inferential
+migration of arbitrary files in the installation.
 
-### Escopo gerenciado
+### Managed scope
 
-O contrato se aplica aos objetos privados que o x86QW cria ou controla,
-incluindo:
+The contract applies to the private objects x86QW creates or controls,
+including:
 
-- `.x86qw/`, `.x86qw/sessions/` e diretórios de sessão;
-- lock ativo, lock reclamado, journals e pedidos de parada;
-- logs de processos em background;
-- configurações efêmeras e outros arquivos que contenham segredos;
-- temporários e staging do downloader, do instalador e da fronteira de
-  ZIP/PK3/PYZ;
-- diretório de trabalho do bootstrap PowerShell e seus arquivos antes da
-  promoção.
+- `.x86qw/`, `.x86qw/sessions/` and session directories;
+- the active lock, the reclaimed lock, journals and stop requests;
+- background process logs;
+- ephemeral settings and other files that hold secrets;
+- temporaries and staging of the downloader, the installer and the
+  ZIP/PK3/PYZ boundary;
+- the PowerShell bootstrap's working directory and its files before
+  promotion.
 
-O bootstrap cria o diretório de trabalho privado antes de materializar helper,
-bundle ou conteúdo extraído. A implementação anterior ao zipapp é uma projeção
-mínima do mesmo descritor; ela não cria uma segunda política de acesso.
+The bootstrap creates the private working directory before materializing the
+helper, the bundle or extracted content. The implementation before the zipapp
+is a minimal projection of the same descriptor; it does not create a second
+access policy.
 
-O mutex nomeado que serializa a reclamação de locks usa o namespace global do
-Windows para abranger sessões distintas e recebe ACL equivalente, limitada ao
-usuário atual e a `LOCAL SYSTEM`. Se ele não puder ser criado ou adquirido, a
-operação falha fechada e não tenta um caminho concorrente alternativo.
+The named mutex that serializes lock reclaiming uses the Windows global
+namespace to span different sessions and gets an equivalent ACL, limited to the
+current user and `LOCAL SYSTEM`. If it cannot be created or acquired, the
+operation fails closed and does not try an alternative concurrent path.
 
-### Arquivos externos com segredo
+### External files with secrets
 
-Um arquivo indicado pelo usuário é externo ao ownership do x86QW. A CLI:
+A file pointed to by the user is outside x86QW's ownership. The CLI:
 
-- abre e valida o arquivo sem seguir symlink ou reparse point;
-- exige filesystem com ACLs persistentes, DACL protegida e proprietário igual
-  ao usuário atual ou `LOCAL SYSTEM`;
-- permite ACEs somente para o usuário atual e `LOCAL SYSTEM`, exige que o
-  usuário atual consiga ler e rejeita duplicatas ou flags de herança;
-- limita a leitura e a realiza pelo mesmo handle validado;
-- nunca troca a DACL, move, apaga ou reescreve o arquivo externo.
+- opens and validates the file without following symlinks or reparse points;
+- requires a filesystem with persistent ACLs, a protected DACL and an owner
+  equal to the current user or `LOCAL SYSTEM`;
+- allows ACEs only for the current user and `LOCAL SYSTEM`, requires that the
+  current user can read and rejects duplicates or inheritance flags;
+- bounds the read and does it through the same validated handle;
+- never changes the DACL of, moves, deletes or rewrites the external file.
 
-Falha ou resultado inconclusivo na leitura da DACL interrompe a operação antes
-de o segredo ser consumido. Mensagens e journals não registram seu conteúdo.
+A failure or an inconclusive result while reading the DACL stops the operation
+before the secret is used. Messages and journals do not record its content.
 
-### Falha conservadora
+### Conservative failure
 
-Filesystem sem suporte comprovado a ACL persistente, erro de API, owner
-inesperado, reparse point, ACE desconhecida, herança ativa ou diferença entre a
-DACL esperada e a observada produzem erro. A implementação preserva um resíduo
-privado cuja identidade não possa mais ser provada em vez de apagar por
-pathname e arriscar remover uma substituição concorrente.
+A filesystem without proven persistent ACL support, an API error, an
+unexpected owner, a reparse point, an unknown ACE, active inheritance or a
+difference between the expected and observed DACL produce an error. The
+implementation keeps a private leftover whose identity can no longer be proven
+instead of deleting by pathname and risking the removal of a concurrent
+replacement.
 
-## Contratos preservados
+## Preserved contracts
 
-- contrato de instalação sem privilégios administrativos, ainda sujeito ao
-  smoke de usuário padrão do PR 11;
-- caminhos e nomes públicos do plano de controle `.x86qw/`;
-- compatibilidade de leitura dos locks formatos 1 e 2; lock novo formato 3 com
-  `private_filesystem`; journal formato 1 com extensão aditiva; recibo e estado
-  inalterados;
-- semântica de cleanup e recuperação conservadora;
-- opções de prompt e arquivos de senha;
-- bundles, hashes, tags e ponteiros já publicados, inclusive `0.7.1`.
+- the install contract without administrative privileges, still subject to the
+  standard user smoke in PR 11;
+- public paths and names of the `.x86qw/` control plane;
+- read compatibility of lock formats 1 and 2; new lock format 3 with
+  `private_filesystem`; journal format 1 with an additive extension; receipt
+  and state unchanged;
+- cleanup semantics and conservative recovery;
+- prompt options and password files;
+- bundles, hashes, tags and pointers already published, including `0.7.1`.
 
-## Contratos alterados
+## Changed contracts
 
-- no Windows, um objeto privado gerenciado só pode ser usado depois de a DACL
-  canônica ser criada ou comprovada;
-- arquivos de senha externos precisam satisfazer a política privada antes da
-  leitura;
-- falha ou ambiguidade de ACL passa a ser terminal, ainda que o arquivo fosse
-  aceito por uma verificação POSIX inócua no Windows;
-- o temporário do bootstrap PowerShell nasce privado antes da primeira escrita.
+- on Windows, a managed private object can only be used after the canonical
+  DACL has been created or proven;
+- external password files must satisfy the private policy before they are
+  read;
+- an ACL failure or ambiguity becomes terminal, even if the file would have
+  been accepted by a POSIX check that is a no-op on Windows;
+- the PowerShell bootstrap's temporary directory is born private before the
+  first write.
 
-## Validação
+## Validation
 
-Os testes portáteis cobrem geração do descritor, roteamento pela fronteira
-privada, falha conservadora e ausência de mutação em arquivos externos. Os
-jobs nativos Windows da PR 4, em Python 3.10 e 3.13, provaram:
+The portable tests cover descriptor generation, routing through the private
+boundary, conservative failure and no mutation of external files. PR 4's
+native Windows jobs, on Python 3.10 and 3.13, proved:
 
-- criação sob um pai que concede acesso herdável a `Users` ou `Everyone`;
-- DACL protegida com somente usuário atual e `LOCAL SYSTEM`;
-- ausência de janela de criação com ACL ampla;
-- rejeição de arquivo externo com acesso amplo;
-- bootstrap, temporários, locks, journals, logs e configurações sensíveis;
-- bootstrap sem solicitar elevação administrativa.
+- creation under a parent that grants inheritable access to `Users` or
+  `Everyone`;
+- a protected DACL with only the current user and `LOCAL SYSTEM`;
+- no creation window with a broad ACL;
+- rejection of an external file with broad access;
+- bootstrap, temporaries, locks, journals, logs and sensitive settings;
+- a bootstrap that does not ask for administrative elevation.
 
-A evidência está registrada no run
+The evidence is recorded in run
 [`30866754435`](https://github.com/x86dx2/x86qw/actions/runs/30866754435).
-Isso não prova o smoke dos runtimes sob uma conta padrão sem elevação, que
-permanece obrigatório no PR 11. Este ADR não autoriza publicação.
+This does not prove the runtime smoke under a standard account without
+elevation, which remains mandatory in PR 11. This ADR does not authorize
+publication.
 
-## Consequências e riscos residuais
+## Consequences and residual risks
 
-A política de acesso passa a ser explícita, revisável e única entre runtime,
-manutenção e bootstrap. Em troca, volumes sem ACL persistente e ambientes que
-impedem sua inspeção falham fechados, mesmo quando a operação poderia funcionar
-sem privacidade comprovada.
+The access policy becomes explicit, reviewable and single across runtime,
+maintenance and bootstrap. In exchange, volumes without persistent ACLs and
+environments that prevent inspecting them fail closed, even when the operation
+could work without proven privacy.
 
-Permanecem fora desta decisão a defesa contra o mesmo usuário, contra
-administrador ou kernel comprometido, o apagamento físico seguro de segredos e
-a autenticação/expiração dos metadados remotos. A release pública `0.7.1` não
-contém esta decisão; uma futura `0.7.2` exige PR, checks verdes e promoção
-imutável separados.
+These stay outside this decision: defense against the same user, against an
+administrator or a compromised kernel, secure physical erasure of secrets and
+authentication/expiration of remote metadata. Public release `0.7.1` does not
+contain this decision; a future `0.7.2` requires a separate PR, green checks
+and an immutable promotion.

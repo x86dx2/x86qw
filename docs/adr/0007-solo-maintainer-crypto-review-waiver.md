@@ -1,79 +1,80 @@
-# ADR 0007 — Waiver de revisão criptográfica externa no maintainer único
+# ADR 0007 — External cryptographic review waiver for a solo maintainer
 
-- **Estado:** aprovado pelo proprietário; waiver operacional; não é revisão independente
-- **Data:** 2026-08-07
+- **Status:** approved by the owner; operational waiver; not an independent review
+- **Date:** 2026-08-07
 - **Issue:** #48
-- **Escopo:** permitir a continuidade documentada de E1/E2 quando o repositório tem
-  um único proprietário e não existe um segundo revisor elegível
+- **Scope:** allow the documented continuation of E1/E2 when the repository has
+  a single owner and there is no second eligible reviewer
 
-## Contexto
+## Context
 
-O plano de estabilização exige revisão criptográfica independente para trust e
-aprovação humana explícita para a promoção final. O repositório
-`x86dx2/x86qw` é mantido por um único proprietário, `x86dx2`, que também é o
-autor das PRs. O GitHub não permite que o autor aprove a própria PR, e não há
-outro colaborador, equipe ou `CODEOWNERS` disponível neste momento.
+The stabilization plan requires an independent cryptographic review for trust
+and explicit human approval for the final promotion. The repository
+`x86dx2/x86qw` is maintained by a single owner, `x86dx2`, who is also the
+author of the PRs. GitHub does not let an author approve their own PR, and no
+other collaborator, team or `CODEOWNERS` is available at this time.
 
-A ausência de um segundo revisor é uma limitação operacional real. Ela não deve
-ser convertida em uma review GitHub fictícia, em uma conta auxiliar ou em uma
-alegação de revisão independente.
+The lack of a second reviewer is a real operational limitation. It must not be
+turned into a fictitious GitHub review, an auxiliary account or a claim of
+independent review.
 
-## Decisão
+## Decision
 
-O proprietário aprova explicitamente este waiver e aceita o risco de revisão
-independente ausente para permitir a continuidade do plano. A exceção tem os
-seguintes limites:
+The owner explicitly approves this waiver and accepts the risk of a missing
+independent review to let the plan continue. The exception has the following
+limits:
 
-1. A aprovação do proprietário é registrada em comentários nas PRs e neste ADR.
-   Ela é uma decisão de governança, não uma revisão criptográfica independente.
-2. Nenhuma parte do histórico deve declarar que houve revisão externa,
-   custódia multioperador ou threshold independente.
-3. O waiver não autoriza promover fixtures, chaves de teste, metadata expirada,
-   RSA-PSS própria ou root de checkpoint como trust de produção.
-4. A implementação deve preferir `python-tuf`/securesystemslib` e os vetores
-   oficiais correspondentes; não se adiciona uma nova primitiva criptográfica
-   apenas para compensar a ausência de um revisor.
-5. Thresholds, rotação, expiração, rollback, freeze, equivocation e root não
-   ancorado continuam sendo fail-closed e precisam de testes adversariais.
-6. Uma única pessoa pode custodiar o material somente como exceção declarada.
-   Múltiplas chaves controladas pela mesma pessoa não equivalem a custodians
-   independentes e não elevam a garantia do threshold.
-7. O waiver não substitui cerimônia de chaves, fingerprints, metadata assinada,
-   evidência nativa M3, hashes, mirrors ou os demais gates de release.
+1. The owner's approval is recorded in comments on the PRs and in this ADR. It
+   is a governance decision, not an independent cryptographic review.
+2. No part of the history may state that there was an external review,
+   multi-operator custody or an independent threshold.
+3. The waiver does not authorize promoting fixtures, test keys, expired
+   metadata, in-house RSA-PSS or a checkpoint root as production trust.
+4. The implementation must prefer `python-tuf`/`securesystemslib` and the
+   corresponding official vectors; no new cryptographic primitive is added just
+   to make up for the lack of a reviewer.
+5. Thresholds, rotation, expiration, rollback, freeze, equivocation and an
+   unanchored root keep failing closed and need adversarial tests.
+6. A single person may hold the material only as a declared exception.
+   Multiple keys controlled by the same person are not equivalent to
+   independent custodians and do not raise the threshold's guarantee.
+7. The waiver does not replace the key ceremony, fingerprints, signed metadata,
+   native M3 evidence, hashes, mirrors or the other release gates.
 
-## Evidência obrigatória antes de qualquer trust produtivo
+## Mandatory evidence before any production trust
 
-Mesmo com o waiver, a promoção de trust continua condicionada a:
+Even with the waiver, promoting trust remains conditional on:
 
-- dependências e versões fixadas, com hashes verificados;
-- testes dos vetores oficiais e dos casos de rollback, freeze, expiração,
-  equivocation e rotação;
-- geração de chaves fora do workspace e registro dos fingerprints públicos;
-- metadata assinada com bytes, versões e digests vinculados;
-- `release-evidence.json` autenticado para o candidato exato;
-- evidência M3 real e período de uso do RC;
-- validação independente de cada mirror, sem overwrite ou rebuild;
-- documentação coerente com o estado efetivamente publicado.
+- pinned dependencies and versions, with verified hashes;
+- tests of the official vectors and of the rollback, freeze, expiration,
+  equivocation and rotation cases;
+- key generation outside the workspace and a record of the public
+  fingerprints;
+- signed metadata with bound bytes, versions and digests;
+- an authenticated `release-evidence.json` for the exact candidate;
+- real M3 evidence and an RC usage period;
+- independent validation of each mirror, without overwrite or rebuild;
+- documentation consistent with what is actually published.
 
-Até que esses artefatos existam, o verificador deve continuar falhando fechado e
-nenhuma versão 1.0 deve ser anunciada como trust de produção.
+Until those artifacts exist, the verifier must keep failing closed and no 1.0
+version may be announced as production trust.
 
-## Revisão futura e expiração
+## Future review and expiration
 
-Este waiver deve ser revisitado assim que um colaborador independente com
-permissão de revisão estiver disponível. A revisão futura deve comparar a
-implementação com os vetores oficiais, confirmar a custódia, validar a
-cerimônia e registrar uma aprovação separada.
+This waiver must be revisited as soon as an independent collaborator with
+review permission is available. The future review must compare the
+implementation with the official vectors, confirm the custody, validate the
+ceremony and record a separate approval.
 
-O waiver não transforma a política solo em estado permanente: ele é uma
-exceção de maintainer único para esta execução do plano e deve ser removido ou
-substituído por uma revisão externa antes de uma mudança que aumente o risco
-criptográfico, de custódia ou de publicação.
+The waiver does not make the solo policy a permanent state: it is a
+single-maintainer exception for this run of the plan and must be removed or
+replaced by an external review before any change that raises the
+cryptographic, custody or publication risk.
 
-## Consequências
+## Consequences
 
-O plano pode avançar com uma trilha de auditoria honesta e com a aprovação
-explícita do único proprietário. A garantia de revisão independente permanece
-ausente e é tratada como risco aceito, não como requisito cumprido. Qualquer
-release que não satisfaça as evidências obrigatórias continua bloqueada por
-falha fechada, mesmo que a governança solo tenha sido aprovada.
+The plan can move forward with an honest audit trail and the explicit approval
+of the sole owner. The guarantee of an independent review remains absent and is
+treated as an accepted risk, not as a requirement met. Any release that does
+not satisfy the mandatory evidence stays blocked by failing closed, even though
+the solo governance was approved.
