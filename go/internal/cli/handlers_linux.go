@@ -11,28 +11,10 @@ import (
 
 // On Linux a hidden desktop entry runs `x86qw open` for qw:// links and
 // for the demo type a shared-mime-info package declares, and xdg-mime
-// makes it the default for what is on.
-
-const demoMIME = "application/x-quakeworld-demo"
-
-func handlerEntryPath(home string) string {
-	return filepath.Join(home, ".local", "share", "applications", "x86qw-open.desktop")
-}
+// makes it the default for what is on. The entry itself is in desktop.go.
 
 func demoMIMEPath(home string) string {
 	return filepath.Join(home, ".local", "share", "mime", "packages", "x86qw-demo.xml")
-}
-
-func handlerEntry(root string) string {
-	return fmt.Sprintf(`[Desktop Entry]
-Type=Application
-Name=x86QW
-Comment=Abre servidores qw:// e demos QuakeWorld
-Exec=%s open --target %s %%u
-NoDisplay=true
-Terminal=false
-MimeType=x-scheme-handler/qw;%s;
-`, execArgument(filepath.Join(root, "x86qw.sh")), execArgument(root), demoMIME)
 }
 
 const demoMIMEPackage = `<?xml version="1.0" encoding="UTF-8"?>

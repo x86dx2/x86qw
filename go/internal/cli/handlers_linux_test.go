@@ -33,3 +33,33 @@ func TestLinuxHandlersComeAndGo(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdatesRewriteEntriesFromEarlierVersions(t *testing.T) {
+	home, root, other := t.TempDir(), t.TempDir(), t.TempDir()
+	launcher := filepath.Join(root, "x86qw.sh")
+	legacy := map[string]string{
+		DesktopEntryPath(home): "[Desktop Entry]\nExec=\"" + launcher + "\" play\n",
+		handlerEntryPath(home): "[Desktop Entry]\nExec=\"" + launcher + "\" open --target \"" + root + "\" %u\n",
+	}
+	os.MkdirAll(filepath.Dir(DesktopEntryPath(home)), 0o755)
+	for path, payload := range legacy {
+		os.WriteFile(path, []byte(payload), 0o644)
+	}
+	RefreshEntries(other, home)
+	for path, payload := range legacy {
+		if got, _ := os.ReadFile(path); string(got) != payload {
+			t.Fatalf("outra instalação reescreveu %s", path)
+		}
+	}
+	RefreshEntries(root, home)
+	for path := range legacy {
+		if got, _ := os.ReadFile(path); !strings.Contains(string(got), "Exec="+launcher+" ") {
+			t.Fatalf("%s não foi reescrita:\n%s", path, got)
+		}
+	}
+	empty := t.TempDir()
+	RefreshEntries(root, empty)
+	if _, err := os.Stat(filepath.Dir(DesktopEntryPath(empty))); !os.IsNotExist(err) {
+		t.Fatal("a atualização criou entradas que não existiam")
+	}
+}
