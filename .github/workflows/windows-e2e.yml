@@ -49,6 +49,37 @@ jobs:
           go -C go build -ldflags "-X github.com/x86dx2/x86qw/go/internal/buildinfo.Version=9.9.9-e2e" -o "$env:RUNNER_TEMP\x86qw-branch.exe" ./cmd/x86qw
           & "$env:RUNNER_TEMP\x86qw-branch.exe" setup --target $inst --catalog-file "$PWD\site\public\api\v1\catalog.json"
           if ($LASTEXITCODE -ne 0) { throw "setup da branch: $LASTEXITCODE" }
+      - name: links qw:// e demos pelos handlers do Windows
+        run: |
+          $ErrorActionPreference = "Stop"
+          $inst = Join-Path $env:RUNNER_TEMP "inst"
+          # Uma receita na instalação aplica a integração.
+          & "$inst\x86qw.cmd" setup --target $inst --catalog-file "$PWD\site\public\api\v1\catalog.json" `
+            --intent play --nick tester --content complete --integrate shortcuts,qw-links,demos --yes
+          if ($LASTEXITCODE -ne 0) { throw "receita: $LASTEXITCODE" }
+          # O comando que o registro guarda para qw://, com --dry-run para
+          # não abrir o ezQuake no runner.
+          $link = "qw://2@qtv.example.org:28000/qtvplay"
+          $command = (Get-ItemProperty "HKCU:\Software\Classes\qw\shell\open\command").'(default)'
+          Write-Host "qw:// -> $command"
+          $exe = ($command -split '"')[1]
+          $arguments = $command.Substring($exe.Length + 2).Replace('"%1"', "--dry-run `"$link`"")
+          $out = Join-Path $env:RUNNER_TEMP "link.out"
+          Start-Process -FilePath $exe -ArgumentList $arguments -RedirectStandardOutput $out -NoNewWindow -Wait
+          $printed = Get-Content $out -Raw
+          if ($printed -notmatch [regex]::Escape("+qwurl $link")) { throw "o handler de qw:// não abriu o link: $printed" }
+          # Uma demo aberta pelo shell, como um duplo clique: o handler a copia
+          # para qw\demos antes de abrir o ezQuake.
+          $demo = Join-Path $env:RUNNER_TEMP "final.mvd"
+          Set-Content -Path $demo -Value "demo bytes" -NoNewline
+          Start-Process $demo
+          $deadline = (Get-Date).AddSeconds(30)
+          do {
+            Start-Sleep -Seconds 1
+            $copied = @(Get-ChildItem (Join-Path $inst "qw\demos") -Filter "x86qw-open-*.mvd" -ErrorAction SilentlyContinue)
+          } while ($copied.Count -eq 0 -and (Get-Date) -lt $deadline)
+          if ($copied.Count -eq 0) { throw "a demo não chegou ao handler" }
+          Get-Process ezquake* -ErrorAction SilentlyContinue | Stop-Process -Force
       - name: verify, doctor, atalhos e ACL
         run: |
           $ErrorActionPreference = "Stop"
@@ -95,6 +126,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "uninstall: $LASTEXITCODE" }
           if (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\x86QW.lnk") { throw "atalho do Menu Iniciar ficou" }
           if (Test-Path "$env:USERPROFILE\Desktop\x86QW.lnk") { throw "atalho da Area de Trabalho ficou" }
+          if (Test-Path "HKCU:\Software\Classes\qw") { throw "o handler de qw:// ficou no registro" }
           $deadline = (Get-Date).AddSeconds(30)
           do {
             Start-Sleep -Seconds 1
