@@ -42,7 +42,15 @@ jobs:
           X86QW_REAL_INSTALL: "1"
           X86QW_NO_MACOS_PREFERENCES: "1"
         run: go test -count=1 -timeout 45m ./internal/setup/... ./cmd/x86qw/...
-      - name: The served install.sh installs, and this branch's CLI adopts it
+      - name: The served install.sh installs the essential profile
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/x86qw-served"
+          bash site/public/install.sh --target "$target" --profile essential
+          "$HOME/.local/bin/x86qw" verify --target "$target"
+          "$HOME/.local/bin/x86qw" doctor --target "$target"
+          "$HOME/.local/bin/x86qw" uninstall --yes --target "$target"
+      - name: A 2.4.2 installation moves to this branch's CLI
         run: |
           set -euo pipefail
           target="$RUNNER_TEMP/x86qw"
@@ -52,9 +60,11 @@ jobs:
           else
             integrate=path,qw-links,demos
           fi
-          bash site/public/install.sh --target "$target" --profile essential
-          # The published CLI integrates the installation, so the adoption
-          # below has to move what it made to the CLI at the root.
+          # 2.4.2 is the last layout with x86qw.sh; its bootstrap is frozen
+          # here, pinned like the served one.
+          bash .github/e2e/install-2.4.2.sh --target "$target" --profile essential
+          # That CLI integrates the installation, so the adoption below has
+          # to move what it made to the CLI at the root.
           "$target/x86qw.sh" setup --target "$target" --intent play --nick tester --content essential \
             --integrate "$integrate" --yes
           # A real version: a development build never replaces an installed CLI.

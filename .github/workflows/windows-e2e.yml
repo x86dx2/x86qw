@@ -1,9 +1,9 @@
 name: Windows e2e
 
 # End-to-end check of the Windows path, nightly and on changes to the
-# bootstrap: the served install.ps1, setup, shortcuts, private ACLs,
-# background services and uninstall. It installs the complete profile
-# (about 1 GB).
+# bootstrap: the served install.ps1, the move from 2.4.2, setup, shortcuts,
+# private ACLs, background services and uninstall. It installs the
+# complete profile (about 1 GB).
 on:
   schedule:
     - cron: "47 3 * * *"
@@ -31,11 +31,24 @@ jobs:
       # The site challenges GitHub's Windows runner IPs (Cloudflare "Just a
       # moment..."), so the served install.ps1 runs from the checkout and the
       # catalog comes from the repository instead of the site's TUF chain.
-      - name: Install with the served install.ps1 (repository copy)
+      - name: The served install.ps1 installs the essential profile (repository copy)
+        run: |
+          $ErrorActionPreference = "Stop"
+          $served = Join-Path $env:RUNNER_TEMP "served"
+          # Its shortcuts go to a profile of its own.
+          $env:APPDATA = Join-Path $env:RUNNER_TEMP "served-appdata"
+          $env:USERPROFILE = Join-Path $env:RUNNER_TEMP "served-profile"
+          & .\site\public\install.ps1 --target $served --profile essential --catalog-file "$PWD\site\public\api\v1\catalog.json"
+          if ($LASTEXITCODE -ne 0) { throw "setup failed: $LASTEXITCODE" }
+          $cli = @("$served\x86qw.exe", "$served\x86qw.cmd") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          & $cli verify --target $served; if ($LASTEXITCODE -ne 0) { throw "verify" }
+          & $cli uninstall --yes --target $served; if ($LASTEXITCODE -ne 0) { throw "uninstall" }
+      - name: Install 2.4.2, the last layout with x86qw.cmd
         run: |
           $ErrorActionPreference = "Stop"
           $inst = Join-Path $env:RUNNER_TEMP "inst"
-          & .\site\public\install.ps1 --target $inst --profile complete --catalog-file "$PWD\site\public\api\v1\catalog.json"
+          # Its bootstrap is frozen here, pinned like the served one.
+          & .\.github\e2e\install-2.4.2.ps1 --target $inst --profile complete --catalog-file "$PWD\site\public\api\v1\catalog.json"
           if ($LASTEXITCODE -ne 0) { throw "setup failed: $LASTEXITCODE" }
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -69,6 +82,29 @@ jobs:
             if ($target -ne "$inst\x86qw.exe") { throw "$lnk still points at $target" }
           }
           & "$inst\x86qw.exe" version
+      - name: Running the bootstrap again moves a 2.4.2 installation
+        run: |
+          $ErrorActionPreference = "Stop"
+          $again = Join-Path $env:RUNNER_TEMP "again"
+          # A second installation, with shortcuts in a profile of its own.
+          $env:APPDATA = Join-Path $env:RUNNER_TEMP "again-appdata"
+          $env:USERPROFILE = Join-Path $env:RUNNER_TEMP "again-profile"
+          & .\.github\e2e\install-2.4.2.ps1 --target $again --profile essential --catalog-file "$PWD\site\public\api\v1\catalog.json"
+          if ($LASTEXITCODE -ne 0) { throw "2.4.2 setup: $LASTEXITCODE" }
+          # What a newer bootstrap runs: its CLI, from a temporary folder,
+          # adopting the installation.
+          Copy-Item "$inst\x86qw.exe" "$env:RUNNER_TEMP\x86qw-bootstrap.exe"
+          & "$env:RUNNER_TEMP\x86qw-bootstrap.exe" setup --target $again --catalog-file "$PWD\site\public\api\v1\catalog.json"
+          if ($LASTEXITCODE -ne 0) { throw "adoption: $LASTEXITCODE" }
+          foreach ($gone in @("$again\x86qw.cmd", "$again\.x86qw\cli\x86qw.exe")) {
+            if (Test-Path $gone) { throw "$gone stayed" }
+          }
+          foreach ($lnk in @("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\x86QW.lnk", "$env:USERPROFILE\Desktop\x86QW.lnk")) {
+            $target = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk).TargetPath
+            if ($target -ne "$again\x86qw.exe") { throw "$lnk points at $target" }
+          }
+          & "$again\x86qw.exe" uninstall --yes
+          if ($LASTEXITCODE -ne 0) { throw "uninstall: $LASTEXITCODE" }
       - name: qw:// links and demos through the Windows handlers
         run: |
           $ErrorActionPreference = "Stop"

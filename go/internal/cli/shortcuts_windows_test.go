@@ -141,10 +141,14 @@ func TestLegacyShortcutsAreRepointed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	script := filepath.Join(t.TempDir(), "legacy.ps1")
+	os.WriteFile(script, []byte("param([string]$Path, [string]$Target)\r\n"+
+		"$Shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($Path)\r\n$Shortcut.TargetPath = $Target\r\n$Shortcut.Save()\r\n"), 0o600)
 	for _, path := range shortcuts {
 		os.MkdirAll(filepath.Dir(path), 0o755)
-		script := "$s = (New-Object -ComObject WScript.Shell).CreateShortcut($args[0]); $s.TargetPath = $args[1]; $s.Save()"
-		if output, err := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script, path, filepath.Join(root, "x86qw.cmd")).CombinedOutput(); err != nil {
+		command := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script,
+			"-Path", path, "-Target", filepath.Join(root, "x86qw.cmd"))
+		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("legacy shortcut: %v %s", err, output)
 		}
 	}
