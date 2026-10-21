@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -107,4 +108,17 @@ func TestMapThatNoLongerFitsIsReplaced(t *testing.T) {
 	if m.game.match.Map != "dm6" || m.game.mapNote == "" {
 		t.Fatalf("mapa trocado com aviso: %q · %q", m.game.match.Map, m.game.mapNote)
 	}
+}
+
+// TestMatchDrawsBeforeItsCatalog is the x86qw play path: home's catalog
+// arrives first and the match screen is drawn before its own does.
+func TestMatchDrawsBeforeItsCatalog(t *testing.T) {
+	m := New(Config{Backend: &setup.Demo{ExistingInstall: true}, Target: t.TempDir(), Lang: PT, Start: "match"})
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 34})
+	catalog, _ := (&setup.Demo{}).Catalog(context.Background())
+	existing, _ := (&setup.Demo{ExistingInstall: true}).Existing(context.Background(), t.TempDir())
+	m.Update(catalogMsg{catalog, existing, nil})
+	m.View()
+	m.click("row:play")
+	drive(m, key("enter"), key("p"))
 }

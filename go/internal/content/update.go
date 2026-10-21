@@ -447,6 +447,14 @@ func (p *Project) syncCandidate(out io.Writer, candidate string, assets []Asset,
 		cached   bool
 		err      error
 	}
+	// The workers read what was known before they start; only this loop
+	// writes the manifest, so the two never touch it at the same time.
+	known := map[string]*Object{}
+	for _, asset := range assets {
+		if metadata, ok := files.Value(asset.Path).(*Object); ok {
+			known[asset.Path] = metadata
+		}
+	}
 	jobs := make(chan Asset)
 	results := make(chan outcome)
 	var group sync.WaitGroup
@@ -455,7 +463,7 @@ func (p *Project) syncCandidate(out io.Writer, candidate string, assets []Asset,
 		go func() {
 			defer group.Done()
 			for asset := range jobs {
-				known, _ := files.Value(asset.Path).(*Object)
+				known := known[asset.Path]
 				metadata, cached, err := p.downloadAsset(candidate, asset, known, local[asset.ExpectedSHA256])
 				results <- outcome{asset, metadata, cached, err}
 			}

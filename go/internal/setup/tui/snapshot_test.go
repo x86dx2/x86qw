@@ -20,6 +20,9 @@ func drive(m *Model, msgs ...tea.Msg) {
 		msg := queue[0]
 		queue = queue[1:]
 		_, cmd := m.Update(msg)
+		// Every intermediate screen is drawn, as the program would, so a
+		// state that cannot render fails the test that reaches it.
+		m.View()
 		queue = append(queue, run(cmd)...)
 	}
 }
@@ -109,7 +112,7 @@ func TestSnapshots(t *testing.T) {
 		save(m, theme+"-06b-preflight-server-open")
 		m.focus = focus
 		demo.Speed = 0.2
-		m.update(func() tea.Cmd { return m.startInstall() })
+		m.do(func() tea.Cmd { return m.startInstall() })
 		for i := 0; i < 4000 && (m.progress.Total == 0 || m.progress.Done < m.progress.Total*45/100); i++ {
 			m.progress = <-m.instCh
 		}
@@ -132,4 +135,4 @@ func TestSnapshots(t *testing.T) {
 	save(m, "dark-14-panel-update")
 }
 
-func (m *Model) update(f func() tea.Cmd) { f() }
+func (m *Model) do(f func() tea.Cmd) { f() }

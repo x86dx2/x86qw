@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -289,4 +290,34 @@ func homeRow(m *Model, id string) int {
 		}
 	}
 	return -1
+}
+
+func TestOneTickLoopAtMost(t *testing.T) {
+	m := started(t, true)
+	m.ticking = false
+	if m.tick() == nil || m.tick() != nil {
+		t.Fatal("um segundo tick não deve ser agendado enquanto o primeiro corre")
+	}
+	m.screen, m.panelView, m.toastUntil = scMatch, "", time.Time{}
+	m.game.catalog = &setup.MatchCatalog{}
+	m.game.stackLoaded = true
+	if _, cmd := m.Update(tickMsg(time.Now())); cmd != nil || m.ticking {
+		t.Fatal("com a tela parada, o laço deve parar")
+	}
+}
+
+func TestCtrlCQuitsAfterAFailedInstall(t *testing.T) {
+	m := New(Config{Backend: failing{&setup.Demo{}}, Target: t.TempDir(), Lang: PT})
+	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
+	drive(m, run(m.Init())...)
+	drive(m, typeText("x86dx2")...)
+	drive(m, key("enter"), key("i"))
+	drive(m, key("i"))
+	if m.progress.Err == nil {
+		t.Fatal("a instalação deveria ter falhado")
+	}
+	m.Update(key("ctrl+c"))
+	if _, cmd := m.Update(key("ctrl+c")); cmd == nil || m.cancelling {
+		t.Fatal("ctrl+c duas vezes deve sair, não cancelar o que já acabou")
+	}
 }

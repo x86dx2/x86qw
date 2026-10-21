@@ -37,7 +37,7 @@ func TestInterfaceInstallsForReal(t *testing.T) {
 	}
 	snap(m, "real-01-preflight")
 	m.cfg.Backend.(*setup.Real).Publish = nil
-	m.update(func() tea.Cmd { return m.startInstall() })
+	m.do(func() tea.Cmd { return m.startInstall() })
 	for progress := range m.instCh {
 		if !progress.Finished && progress.Err == nil && progress.Done > progress.Total/2 && m.progress.Done <= m.progress.Total/2 {
 			m.progress = progress

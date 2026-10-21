@@ -1101,7 +1101,7 @@ func (m *Model) panelKey(key string) tea.Cmd {
 func (m *Model) runPanel(remove bool) tea.Cmd {
 	m.busy, m.report, m.panelErr = true, nil, nil
 	backend, target, keep := m.cfg.Backend, m.existing.Target, m.keepPersonal
-	return tea.Batch(m.tick(), func() tea.Msg {
+	return tea.Batch(func() tea.Msg {
 		if remove {
 			return panelMsg{removed: true, err: backend.Uninstall(context.Background(), target, keep)}
 		}

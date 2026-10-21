@@ -28,7 +28,13 @@ func hasInstallation(target string) bool { return setup.Installed(target) }
 
 // publishCLI installs this executable as the installation's CLI and, with
 // link, links ~/.local/bin/x86qw to its launcher (shortcuts on Windows).
+// It never installs a development build nor an older version over a
+// newer one; the same version is reinstalled, which refreshes the
+// launcher and receipt.
 func publishCLI(target string, link bool, stdout, stderr io.Writer) error {
+	if !cli.Replaces(buildinfo.Version, target, true) {
+		return nil
+	}
 	executable, err := os.Executable()
 	if err != nil {
 		return err
@@ -36,16 +42,8 @@ func publishCLI(target string, link bool, stdout, stderr io.Writer) error {
 	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
 		executable = resolved
 	}
-	installed := filepath.Join(target, ".x86qw", "cli", cli.BinaryName())
-	if same, _ := filepath.EvalSymlinks(installed); same == executable {
-		// Already running the installed copy; refresh launcher and receipt only.
-		copied := filepath.Join(os.TempDir(), fmt.Sprintf("x86qw-self-%d", os.Getpid()))
-		if err := copyExecutable(executable, copied); err != nil {
-			return err
-		}
-		defer os.Remove(copied)
-		executable = copied
-	}
+	// cli.Install reads the whole executable before writing, so it can
+	// replace the very file that is running.
 	layer, err := cli.Install(target, executable, buildinfo.Version)
 	if err != nil {
 		return err
@@ -66,14 +64,6 @@ func publishCLI(target string, link bool, stdout, stderr io.Writer) error {
 		fmt.Fprintf(stdout, "Comando x86qw disponível em %s\n", command)
 	}
 	return nil
-}
-
-func copyExecutable(source, destination string) error {
-	data, err := os.ReadFile(source)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(destination, data, 0o755)
 }
 
 func runSetup(args []string, stdout, stderr io.Writer) int {

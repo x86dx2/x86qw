@@ -118,7 +118,7 @@ func (m *Model) target() string {
 // act runs an action off the update loop; the dock shows it running.
 func (m *Model) act(what string, run func(ctx context.Context) error) tea.Cmd {
 	m.game.acting, m.game.actionErr = what, nil
-	return tea.Batch(m.tick(), func() tea.Msg {
+	return tea.Batch(func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		return actionMsg{what, run(ctx)}
@@ -206,6 +206,9 @@ func (m *Model) defaultMatch() {
 }
 
 func (m *Model) gameInfo() setup.Game {
+	if m.game.catalog == nil {
+		return setup.Game{}
+	}
 	for _, game := range m.game.catalog.Games {
 		if game.ID == m.game.match.Game {
 			return game
@@ -435,6 +438,11 @@ func (m *Model) gameDock(width int) *page {
 	right, enabled := "", g.acting == ""
 	switch m.screen {
 	case scMatch:
+		if g.catalog == nil {
+			// The match catalog is still on its way: the button waits.
+			m.primary(p, reviewRow{"play", m.t("m.play"), ""}, true, false, g.err == nil, "")
+			return p
+		}
 		rows = m.matchRows()
 		label := m.t("m.play")
 		if g.acting == "play" {
