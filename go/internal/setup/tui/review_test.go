@@ -18,7 +18,7 @@ type offline struct{ *setup.Demo }
 func (o offline) Catalog(ctx context.Context) (*setup.Catalog, error) {
 	cat, err := o.Demo.Catalog(ctx)
 	if err == nil {
-		cat.Unavailable = errors.New("sem rede")
+		cat.Unavailable = errors.New("no network")
 	}
 	return cat, err
 }
@@ -28,23 +28,23 @@ func TestOfflineInstallationStillOpensAndNewOneRetries(t *testing.T) {
 	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
 	drive(m, run(m.Init())...)
 	if m.err != nil || m.screen != scPanel {
-		t.Fatalf("sem catálogo, a instalação ainda abre: %v, tela %d", m.err, m.screen)
+		t.Fatalf("without a catalog, the installation still opens: %v, screen %d", m.err, m.screen)
 	}
 	m.focus = homeRow(m, "change")
 	drive(m, key("enter"))
 	if m.screen != scPanel {
-		t.Fatal("sem catálogo, nada novo pode ser instalado")
+		t.Fatal("without a catalog, nothing new can be installed")
 	}
 	fresh := New(Config{Backend: offline{&setup.Demo{Speed: 50}}, Target: shortTarget(t), Lang: PT})
 	drive(fresh, tea.WindowSizeMsg{Width: 100, Height: 34})
 	drive(fresh, run(fresh.Init())...)
-	if fresh.err == nil || !strings.Contains(fresh.View().Content, "sem rede") {
-		t.Fatal("sem instalação e sem catálogo, a tela diz por quê")
+	if fresh.err == nil || !strings.Contains(fresh.View().Content, "no network") {
+		t.Fatal("with no installation and no catalog, the screen says why")
 	}
 	fresh.cfg.Backend = &setup.Demo{Speed: 50}
 	drive(fresh, key("r"))
 	if fresh.err != nil || fresh.catalog == nil || fresh.screen != scIntent {
-		t.Fatalf("r tenta de novo: %v", fresh.err)
+		t.Fatalf("r tries again: %v", fresh.err)
 	}
 }
 
@@ -55,19 +55,19 @@ func TestUpdateRunsFromHomeAndBack(t *testing.T) {
 	m.focus = homeRow(m, "update")
 	drive(m, key("enter"), key("enter"))
 	if m.screen != scConfigure || !m.preOn || !m.opts.Upgrade || !m.fromPanel {
-		t.Fatalf("aplicar abre o pré-voo vindo do início: tela %d", m.screen)
+		t.Fatalf("apply opens the preflight from home: screen %d", m.screen)
 	}
 	drive(m, key("esc"), key("esc"))
 	if m.screen != scPanel || m.panelView != "" || m.opts.Upgrade || m.panelRows()[m.focus].id != "update" {
-		t.Fatalf("esc volta ao início, em Atualizar: tela %d %q", m.screen, m.panelView)
+		t.Fatalf("esc goes back home, on Update: screen %d %q", m.screen, m.panelView)
 	}
 	drive(m, key("enter"), key("enter"))
 	drive(m, key("i"))
 	if m.progress.Total == 0 || !m.progress.Finished {
-		t.Fatalf("o apply baixa as atualizações: %d bytes", m.progress.Total)
+		t.Fatalf("apply downloads the updates: %d bytes", m.progress.Total)
 	}
 	if m.screen != scPanel || !strings.Contains(m.toast, m.t("done.applied")) || m.panelRows()[m.focus].id != "update" {
-		t.Fatalf("o fim volta ao início: tela %d", m.screen)
+		t.Fatalf("the end goes back home: screen %d", m.screen)
 	}
 }
 
@@ -75,11 +75,11 @@ func TestNothingToDownloadReadsAsDone(t *testing.T) {
 	m := started(t, true)
 	m.screen, m.progress = scInstall, setup.Progress{Finished: true}
 	if view := m.View().Content; !strings.Contains(view, strings.TrimSpace(bigNumber(100, m.glyphs)[1])) {
-		t.Fatal("terminado sem bytes é 100%")
+		t.Fatal("finished with no bytes is 100%")
 	}
 	m.screen = scDone
 	if view := m.View().Content; !strings.Contains(view, m.t("done.nothing")) {
-		t.Fatal("o fim diz que não havia o que baixar")
+		t.Fatal("the end says there was nothing to download")
 	}
 }
 
@@ -87,10 +87,10 @@ func TestRemovedInstallationOnlyLeaves(t *testing.T) {
 	m := started(t, true)
 	m.panelView, m.removed = "remove", true
 	if cmd := m.key("enter"); cmd != nil || m.busy {
-		t.Fatal("depois de desinstalar, enter não faz nada")
+		t.Fatal("after uninstalling, enter does nothing")
 	}
 	if m.key("esc") != nil || m.key("esc") == nil {
-		t.Fatal("esc duas vezes sai")
+		t.Fatal("esc twice quits")
 	}
 }
 
@@ -98,7 +98,7 @@ func TestRemovedInstallationOnlyLeaves(t *testing.T) {
 type failingOpen struct{ *setup.Demo }
 
 func (failingOpen) Open(context.Context, string, string) error {
-	return errors.New("ezQuake não abriu")
+	return errors.New("ezQuake did not open")
 }
 
 func TestServersShowWhatFailsAndFavoritesFirst(t *testing.T) {
@@ -106,32 +106,32 @@ func TestServersShowWhatFailsAndFavoritesFirst(t *testing.T) {
 	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
 	drive(m, run(m.Init())...)
 	if m.screen != scServers || len(m.game.servers) == 0 {
-		t.Fatalf("servidores: tela %d", m.screen)
+		t.Fatalf("servers: screen %d", m.screen)
 	}
 	m.View()
 	top := m.tops[scServers]
 	if !m.visibleServers()[0].Favorite {
-		t.Fatal("favoritos primeiro")
+		t.Fatal("favorites first")
 	}
 	m.focus = 1
 	drive(m, key("ctrl+f"))
 	if favorites := m.visibleServers(); !favorites[0].Favorite || !favorites[1].Favorite {
-		t.Fatal("ctrl+f guarda o servidor nos favoritos")
+		t.Fatal("ctrl+f saves the server to favorites")
 	}
 	drive(m, key("enter"))
-	if view := m.View().Content; !strings.Contains(view, "ezQuake não abriu") || m.tops[scServers] != top {
-		t.Fatal("o erro ao entrar aparece na doca, sem mover a lista")
+	if view := m.View().Content; !strings.Contains(view, "ezQuake did not open") || m.tops[scServers] != top {
+		t.Fatal("the join error shows in the dock without moving the list")
 	}
 	if strings.Contains(m.toast, "conectando") {
-		t.Fatal("nada de toast antes de conectar")
+		t.Fatal("no toast before connecting")
 	}
 	drive(m, tea.MouseWheelMsg(tea.Mouse{Button: tea.MouseWheelDown}))
 	if m.focus != 2 {
-		t.Fatalf("a roda percorre a lista: %d", m.focus)
+		t.Fatalf("the wheel scrolls the list: %d", m.focus)
 	}
 	m.Update(m.click("hint:ctrl+r"))
 	if !m.game.serversLoading {
-		t.Fatal("clicar em ctrl+r no rodapé atualiza")
+		t.Fatal("clicking ctrl+r in the footer refreshes")
 	}
 }
 
@@ -147,28 +147,28 @@ func TestServerDialogKeepsAProblemWhereItIs(t *testing.T) {
 	drive(m, key("enter"), key("tab"), key("down"), key("down"), key("down"), key("down"))
 	drive(m, typeText(`a"b`)...)
 	if m.opts.Server.Password != "ab" {
-		t.Fatalf("a senha não aceita aspas: %q", m.opts.Server.Password)
+		t.Fatalf("the password takes no quotes: %q", m.opts.Server.Password)
 	}
 	m.modal.tab = 0
 	m.opts.Server.Name, m.modal.field["srv.name"].Value = "", nil
 	m.modal.tab = 3
 	drive(m, key("enter"))
 	if m.modal == nil || m.modal.tab != 0 {
-		t.Fatal("enter com o nome vazio fica no diálogo, na aba Geral")
+		t.Fatal("enter with an empty name stays in the dialog, on the General tab")
 	}
 	view := m.View().Content
 	if !strings.Contains(view, "dê um nome ao servidor") {
-		t.Fatal("o problema aparece na aba que o tem")
+		t.Fatal("the problem shows on the tab that has it")
 	}
 	drive(m, key("esc"))
 	if m.opts.Server.Name == "" {
-		t.Fatal("esc devolve o nome")
+		t.Fatal("esc gives the name back")
 	}
 	// Invalid choices do not run the checks; why stays under the setup.
 	m.opts.Server.Name = ""
 	drive(m, key("i"))
 	if m.preOn || m.confirmErr == nil || !strings.Contains(m.View().Content, "dê um nome ao servidor") {
-		t.Fatal("escolhas inválidas não rodam o pré-voo e dizem por quê")
+		t.Fatal("invalid choices do not run the preflight and say why")
 	}
 }
 
@@ -180,19 +180,19 @@ func TestHostStopsOnASecondPressAndAddRestores(t *testing.T) {
 	drive(m, key("enter"))
 	drive(m, run(m.loadStack())...)
 	if m.game.stack == nil || m.focus != 0 {
-		t.Fatal("o servidor sobe e o foco volta ao começo")
+		t.Fatal("the server starts and the focus goes back to the top")
 	}
 	drive(m, key("enter"))
 	if m.game.acting != "" || m.game.stack == nil {
-		t.Fatal("parar pede uma segunda vez")
+		t.Fatal("stopping asks a second time")
 	}
 	if hints := m.footerHints(); hints[0][1] != m.t("stop.again") {
-		t.Fatalf("o rodapé pede a confirmação: %v", hints)
+		t.Fatalf("the footer asks for confirmation: %v", hints)
 	}
 	drive(m, key("enter"))
 	drive(m, run(m.loadStack())...)
 	if m.game.stack != nil {
-		t.Fatal("a segunda vez para")
+		t.Fatal("the second time stops")
 	}
 
 	// A host without the server programs: add them, then change our mind.
@@ -200,11 +200,11 @@ func TestHostStopsOnASecondPressAndAddRestores(t *testing.T) {
 	m.opts.Intent = setup.Play
 	drive(m, key("enter"))
 	if m.screen != scConfigure || m.opts.Intent != setup.Both {
-		t.Fatal("adicionar o servidor abre a configuração como cliente e servidor")
+		t.Fatal("adding the server opens the setup as client and server")
 	}
 	drive(m, key("esc"))
 	if m.screen != scHost || m.opts.Intent != setup.Play {
-		t.Fatalf("esc devolve as escolhas e volta ao servidor: tela %d %s", m.screen, m.opts.Intent)
+		t.Fatalf("esc gives the choices back and returns to the server: screen %d %s", m.screen, m.opts.Intent)
 	}
 }
 
@@ -214,7 +214,7 @@ func TestBackFromAScreenLandsOnItsRow(t *testing.T) {
 		m.focus = homeRow(m, id)
 		drive(m, key("enter"), key("esc"))
 		if m.screen != scPanel || m.panelRows()[m.focus].id != id {
-			t.Fatalf("de %s volta para %s", id, m.panelRows()[m.focus].id)
+			t.Fatalf("from %s back to %s", id, m.panelRows()[m.focus].id)
 		}
 	}
 }
@@ -223,20 +223,20 @@ func TestOnePollAtATime(t *testing.T) {
 	m := started(t, true)
 	m.game.polling = false
 	if m.pollStack() == nil || m.pollStack() != nil {
-		t.Fatal("um segundo poll não começa enquanto o primeiro espera")
+		t.Fatal("a second poll does not start while the first waits")
 	}
 }
 
 func TestErrorsStayOnTheirScreen(t *testing.T) {
 	m := started(t, true)
-	m.Update(stackMsg{err: errors.New("estado ilegível")})
+	m.Update(stackMsg{err: errors.New("unreadable state")})
 	m.screen = scMatch
 	if m.errorHere() != nil {
-		t.Fatal("o erro do servidor não aparece na partida")
+		t.Fatal("the server error does not show in the match")
 	}
 	m.screen = scHost
 	if m.errorHere() == nil {
-		t.Fatal("o erro do servidor aparece no servidor")
+		t.Fatal("the server error shows on the server")
 	}
 }
 
@@ -244,14 +244,14 @@ func TestLocalServerAndUnknownRuleset(t *testing.T) {
 	m := started(t, true)
 	m.opts.Server.Local = true
 	if m.connectHost() != "127.0.0.1" {
-		t.Fatal("um servidor local é 127.0.0.1")
+		t.Fatal("a local server is 127.0.0.1")
 	}
 	m.screen = scDone
 	if view := m.View().Content; strings.Contains(view, m.t("ports.open")) {
-		t.Fatal("sem dica de roteador para um servidor local")
+		t.Fatal("no router hint for a local server")
 	}
 	if m.ruleset("novo") != "novo" {
-		t.Fatal("um ruleset desconhecido aparece pelo nome")
+		t.Fatal("an unknown ruleset shows by its name")
 	}
 }
 
@@ -262,7 +262,7 @@ func TestPortsStepByTen(t *testing.T) {
 	base := m.opts.Server.BasePort
 	drive(m, key("shift+right"))
 	if m.opts.Server.BasePort != base+10 {
-		t.Fatalf("shift+→ soma dez: %d → %d", base, m.opts.Server.BasePort)
+		t.Fatalf("shift+→ adds ten: %d → %d", base, m.opts.Server.BasePort)
 	}
 }
 
@@ -287,7 +287,7 @@ func TestEnglishShowsNoPortuguese(t *testing.T) {
 	view := m.View().Content
 	for _, word := range []string{"Componente", "Dados do Quake", "Base e inicialização"} {
 		if strings.Contains(view, word) {
-			t.Fatalf("%q em inglês:\n%s", word, view)
+			t.Fatalf("%q in English:\n%s", word, view)
 		}
 	}
 }

@@ -14,12 +14,16 @@ func TestTextsSpeakBothLanguages(t *testing.T) {
 	if pt, en := text.In(LangPT), text.In(LangEN); pt != "A instalação precisa de 1,23 GB." || en != "The installation needs 1.23 GB." {
 		t.Fatalf("%q · %q", pt, en)
 	}
-	if got := Say("warn.of", Say("warn.choices"), Raw("disco cheio")).In(LangEN); got != "choices: disco cheio" {
+	// English is the default: logs, the command line, no language given.
+	if text.String() != text.In(LangEN) || text.In("") != text.In(LangEN) || Localize("", "component", "cli", "CLI x86QW") != "x86QW CLI" {
+		t.Fatalf("the default is not English: %q · %q", text.String(), text.In(""))
+	}
+	if got := Say("warn.of", Say("warn.choices"), Raw("disk full")).In(LangEN); got != "choices: disk full" {
 		t.Fatalf("%q", got)
 	}
 	for key, pair := range messages {
 		if pair[0] == "" || pair[1] == "" {
-			t.Errorf("%s sem tradução", key)
+			t.Errorf("%s has no translation", key)
 		}
 	}
 }
@@ -31,7 +35,7 @@ func TestValidateNamesTheField(t *testing.T) {
 	}{
 		{"nick", func(o *Options) { o.Nick = "" }},
 		{"nick", func(o *Options) { o.Nick = `a"b` }},
-		{"server.name", func(o *Options) { o.Server.Name = "nome; quit" }},
+		{"server.name", func(o *Options) { o.Server.Name = "name; quit" }},
 		{"server.password", func(o *Options) { o.Server.Spectators = `x\y` }},
 		{"server.rcon", func(o *Options) { o.Server.Rcon = "a\nb" }},
 		{"server.slots", func(o *Options) { o.Server.Slots = 40 }},
@@ -61,7 +65,7 @@ func TestClientConfigQuotesForTheConsole(t *testing.T) {
 }
 
 func TestReadRecipeLeavesTheFolderToTheCaller(t *testing.T) {
-	o := Defaults(Host, "/de/outra/maquina")
+	o := Defaults(Host, "/from/another/machine")
 	payload, _ := o.RecipeJSON()
 	got, err := ReadRecipe(strings.NewReader(string(payload)))
 	if err != nil || got.Target != "" || got.Server.Rcon == "" || got.Intent != Host {
@@ -69,30 +73,30 @@ func TestReadRecipeLeavesTheFolderToTheCaller(t *testing.T) {
 	}
 	for _, bad := range []string{"{", `{"format": 2}`, `{"format": 1, "Surprise": true}`} {
 		if _, err := ReadRecipe(strings.NewReader(bad)); err == nil {
-			t.Fatalf("%s deveria ser recusado", bad)
+			t.Fatalf("%s should be refused", bad)
 		}
 	}
 }
 
 func TestRecipeFileCarriesNoSecretAndComesBack(t *testing.T) {
-	o := Defaults(Both, "/de/outra/maquina")
-	o.Nick, o.Server.Password, o.Server.Spectators = "x86dx2", "jogador", "olho"
+	o := Defaults(Both, "/from/another/machine")
+	o.Nick, o.Server.Password, o.Server.Spectators = "x86dx2", "player-pass", "spectator-pass"
 	payload, err := o.RecipeJSON()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, secret := range []string{o.Server.Rcon, "jogador", "olho"} {
+	for _, secret := range []string{o.Server.Rcon, "player-pass", "spectator-pass"} {
 		if strings.Contains(string(payload), secret) {
-			t.Fatalf("a receita carrega %q", secret)
+			t.Fatalf("the recipe carries %q", secret)
 		}
 	}
-	path := filepath.Join(t.TempDir(), "receita.json")
+	path := filepath.Join(t.TempDir(), "recipe.json")
 	os.WriteFile(path, payload, 0o644)
-	got, err := parseRecipe([]string{"--recipe", path, "--nick", "outro", "--target", "/aqui"})
+	got, err := parseRecipe([]string{"--recipe", path, "--nick", "other", "--target", "/here"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Intent != Both || got.Nick != "outro" || got.Target != "/aqui" || got.Server.Rcon == "" || got.Server.Password != "" ||
+	if got.Intent != Both || got.Nick != "other" || got.Target != "/here" || got.Server.Rcon == "" || got.Server.Password != "" ||
 		got.Server.Name != o.Server.Name || len(got.Server.Instances) != 2 {
 		t.Fatalf("%+v", got)
 	}
@@ -125,7 +129,7 @@ func TestStartServerWritesTheRcon(t *testing.T) {
 	}
 	options.Server.Name = ""
 	if err := r.StartService(context.Background(), target, "qtv", options); FieldOf(err) != "server.name" {
-		t.Fatalf("serviço sem nome: %v", err)
+		t.Fatalf("service without a name: %v", err)
 	}
 }
 
@@ -134,13 +138,13 @@ func TestDemoAppliesOnlyWhatIsAdded(t *testing.T) {
 	existing, _ := d.Existing(context.Background(), "/x")
 	options := existing.Options
 	if lanes := d.lanes(options); len(lanes) != 0 {
-		t.Fatalf("nada novo, nada a baixar: %+v", lanes)
+		t.Fatalf("nothing new, nothing to download: %+v", lanes)
 	}
 	options.Content = "complete"
 	added := d.lanes(options)
 	options.Upgrade = true
 	if upgraded := d.lanes(options); len(added) == 0 || len(upgraded) != len(added)+len(existing.Updates) {
-		t.Fatalf("adições %d, com atualizações %d", len(added), len(upgraded))
+		t.Fatalf("additions %d, with updates %d", len(added), len(upgraded))
 	}
 	options.Server.Local, options.Server.QWFWDPort = true, 0
 	if err := d.StartServer(context.Background(), "/x", options); err != nil {
@@ -148,6 +152,6 @@ func TestDemoAppliesOnlyWhatIsAdded(t *testing.T) {
 	}
 	stack, _ := d.Stack(context.Background(), "/x")
 	if len(stack.Processes) != 3 || stack.Processes[0].Address != "127.0.0.1" {
-		t.Fatalf("o servidor da demo segue as escolhas: %+v", stack)
+		t.Fatalf("the demo server follows the choices: %+v", stack)
 	}
 }

@@ -65,7 +65,7 @@ func typeText(s string) []tea.Msg {
 func TestSnapshots(t *testing.T) {
 	dir := os.Getenv("X86QW_SNAPSHOTS")
 	if dir == "" {
-		t.Skip("defina X86QW_SNAPSHOTS=<pasta> para gerar as capturas")
+		t.Skip("set X86QW_SNAPSHOTS=<folder> to write the captures")
 	}
 	os.MkdirAll(dir, 0o755)
 	save := func(m *Model, name string) {

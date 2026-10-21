@@ -53,7 +53,7 @@ func TestClientConfigAppliesOnceAndKeepsUserLines(t *testing.T) {
 	for _, want := range []string{`name                     "x86dx2"`, `cl_fakename              "x86"`, `bind e                   "+forward"`,
 		`m_pitch                  "-0.022"`, `vid_win_borderless       "1"`, `vid_fullscreen           "0"`, `volume                   "0.7"`, `set _x86qw_setup "200"`} {
 		if !strings.Contains(cfg, want) {
-			t.Fatalf("falta %q em:\n%s", want, cfg)
+			t.Fatalf("%q missing from:\n%s", want, cfg)
 		}
 	}
 	ruleset, _ := os.ReadFile(filepath.Join(target, ".x86qw", "launcher", "client-ruleset.json"))

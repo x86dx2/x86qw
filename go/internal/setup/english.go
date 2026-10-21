@@ -85,11 +85,11 @@ var english = map[string]string{
 	"group/training":                       "Training and movement",
 }
 
-// Localize is the English of a data text when lang is English and one is
-// known, else the text as the data has it. kind is component, game, mode or
-// group; id is the ID, with ".d" for a description.
+// Localize is the English of a data text unless lang is Portuguese, when
+// one is known, else the text as the data has it. kind is component, game,
+// mode or group; id is the ID, with ".d" for a description.
 func Localize(lang, kind, id, text string) string {
-	if lang == LangEN {
+	if lang != LangPT {
 		if english, ok := english[kind+"/"+id]; ok && english != "" {
 			return english
 		}

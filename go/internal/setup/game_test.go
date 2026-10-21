@@ -5,7 +5,7 @@ import "testing"
 func TestLastMatchRoundTripsAndExpires(t *testing.T) {
 	target := t.TempDir()
 	if last, err := LoadLastMatch(target); last != nil || err != nil {
-		t.Fatalf("sem partida: %+v %v", last, err)
+		t.Fatalf("no match: %+v %v", last, err)
 	}
 	match := Match{Game: "ktx", Mode: "duel", Map: "dm6", Bots: 1, BotSkill: "8"}
 	if err := SaveLastMatch(target, match); err != nil {
@@ -17,11 +17,11 @@ func TestLastMatchRoundTripsAndExpires(t *testing.T) {
 	}
 	catalog := &MatchCatalog{Games: []Game{{ID: "ktx", Modes: true}}, Modes: []Mode{{ID: "duel"}}}
 	if !catalog.valid(match) {
-		t.Fatal("a partida ainda serve")
+		t.Fatal("the match is still valid")
 	}
 	for _, gone := range []Match{{Game: "pro-x"}, {Game: "ktx", Mode: "removido"}} {
 		if catalog.valid(gone) {
-			t.Fatalf("%+v não serve mais", gone)
+			t.Fatalf("%+v is no longer valid", gone)
 		}
 	}
 }

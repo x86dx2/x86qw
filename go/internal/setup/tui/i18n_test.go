@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"testing"
+
+	"github.com/x86dx2/x86qw/go/internal/setup"
 )
 
 // TestEveryTextIsTranslated catches a key used in the code but missing
@@ -19,8 +21,24 @@ func TestEveryTextIsTranslated(t *testing.T) {
 		}
 		for _, match := range use.FindAllStringSubmatch(string(source), -1) {
 			if _, ok := texts[match[1]]; !ok {
-				t.Errorf("%s: texto sem tradução: %q", file, match[1])
+				t.Errorf("%s: text without a translation: %q", file, match[1])
 			}
 		}
+	}
+}
+
+// TestEnglishIsTheDefault: without a language the interface speaks
+// English; Portuguese is the one ctrl+l switches to.
+func TestEnglishIsTheDefault(t *testing.T) {
+	if T("", "host") != "Host" || T(PT, "host") != "Hospedar" {
+		t.Fatalf("%q · %q", T("", "host"), T(PT, "host"))
+	}
+	m := New(Config{Backend: &setup.Demo{}, Target: t.TempDir()})
+	if m.lang != EN {
+		t.Fatalf("the interface opens in %q", m.lang)
+	}
+	m.Update(key("ctrl+l"))
+	if m.lang != PT {
+		t.Fatalf("ctrl+l switches to %q", m.lang)
 	}
 }

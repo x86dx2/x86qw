@@ -14,7 +14,7 @@ import (
 func TestGameSnapshots(t *testing.T) {
 	dir := os.Getenv("X86QW_SNAPSHOTS")
 	if dir == "" {
-		t.Skip("defina X86QW_SNAPSHOTS=<pasta> para gerar as capturas")
+		t.Skip("set X86QW_SNAPSHOTS=<folder> to write the captures")
 	}
 	save := func(m *Model, name string) {
 		os.WriteFile(filepath.Join(dir, name+".ansi"), []byte(m.View().Content), 0o644)
