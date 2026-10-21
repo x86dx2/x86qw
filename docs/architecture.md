@@ -46,8 +46,9 @@ the one from the `x86qw-cli-*` release, pinned by size and SHA-256, and runs
 `x86qw setup`. In an installation:
 
 ```text
-x86qw.sh / x86qw.cmd     launcher that runs the installed CLI
-.x86qw/cli/x86qw         the CLI and its receipt
+x86qw / x86qw.exe        the CLI; links, shortcuts and handlers run it
+.x86qw/cli/receipt       the CLI's version (before 2.5 the CLI lived here,
+                         launched by x86qw.sh or x86qw.cmd)
 .x86qw/state.json        state: profile, components and versions
 .x86qw/components/       receipt and inventory of each component
 .x86qw/clients/          ezQuake receipts by platform and channel

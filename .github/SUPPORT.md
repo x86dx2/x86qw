@@ -2,8 +2,8 @@
 
 ## Start with the local diagnosis
 
-In any folder, with the `x86qw` command on the `PATH` (or `./x86qw.sh` in the
-installation folder; `x86qw.cmd` on Windows):
+In any folder, with the `x86qw` command on the `PATH` (or `./x86qw` in the
+installation folder; `x86qw.exe` on Windows):
 
 ```sh
 x86qw version
