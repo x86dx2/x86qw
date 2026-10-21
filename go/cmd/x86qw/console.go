@@ -3,13 +3,10 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
-
-	"golang.org/x/term"
 )
 
-// console mirrors the Console reporter of x86qw_runtime/ui/console.py for
-// the interactive flows: ✓/·/!/✗ prefixes, colored only on a terminal.
+// console prints a command's progress: · info, ✓ done, ! warning and
+// ✗ failure, colored only on a terminal.
 type console struct {
 	out, err io.Writer
 	color    bool
@@ -25,12 +22,7 @@ const (
 )
 
 func newConsole(stdout, stderr io.Writer, noColor, verbose bool) console {
-	_, noColorEnv := os.LookupEnv("NO_COLOR")
-	color := false
-	if file, ok := stdout.(*os.File); ok {
-		color = term.IsTerminal(int(file.Fd())) && !noColor && !noColorEnv
-	}
-	return console{out: stdout, err: stderr, color: color, verbose: verbose}
+	return console{out: stdout, err: stderr, color: colorFor(stdout, noColor), verbose: verbose}
 }
 
 func (c console) paint(text, code string) string {
@@ -38,10 +30,6 @@ func (c console) paint(text, code string) string {
 		return text
 	}
 	return "\033[" + code + "m" + text + "\033[0m"
-}
-
-func (c console) section(title string) {
-	fmt.Fprintf(c.out, "\n%s\n", c.paint(title, paletteAccent+"m\033[1"))
 }
 
 func (c console) info(message string) {
@@ -56,22 +44,12 @@ func (c console) warning(message string) {
 	fmt.Fprintf(c.out, "%s %s\n", c.paint("!", paletteWarning), message)
 }
 
-// failure mirrors console.error: "[ERRO]" only when stderr is a terminal too.
 func (c console) failure(message string) {
-	label := "✗"
-	if file, ok := c.err.(*os.File); ok && c.color && term.IsTerminal(int(file.Fd())) {
-		label = c.paint("[ERRO]", paletteError)
-	}
-	fmt.Fprintf(c.err, "%s %s\n", label, message)
+	fmt.Fprintf(c.err, "%s %s\n", c.paint("✗", paletteError), message)
 }
 
-// failed reports an operation error with the --verbose hint and returns 1.
+// failed reports an operation error and returns 1.
 func (c console) failed(err error) int {
 	c.failure(err.Error())
-	if !c.verbose {
-		fmt.Fprintln(c.err, "       Execute novamente com --verbose para obter detalhes técnicos.")
-	}
 	return 1
 }
-
-func isTerminalFile(file *os.File) bool { return term.IsTerminal(int(file.Fd())) }

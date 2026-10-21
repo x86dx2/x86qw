@@ -169,7 +169,7 @@ func Uninstall(target string) (*Report, error) {
 	}
 	var removal []string
 	for _, spec := range catalog.ClientSpecs {
-		for _, channel := range []string{"stable", "nightly"} {
+		for _, channel := range catalog.Channels {
 			receiptPath := filepath.Join(target, filepath.FromSlash(spec.Receipt(channel)))
 			payload, err := os.ReadFile(receiptPath)
 			if errors.Is(err, os.ErrNotExist) {

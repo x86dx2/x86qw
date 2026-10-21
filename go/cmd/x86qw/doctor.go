@@ -5,54 +5,50 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"strings"
 	"time"
 
+	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/doctor"
-	"github.com/x86dx2/x86qw/go/internal/download"
 	"github.com/x86dx2/x86qw/go/internal/output"
 )
 
+type doctorArgs struct {
+	targetArgs
+	bundle string
+}
+
+func (a *doctorArgs) parser() *cliargs.Parser {
+	p := a.targetArgs.parser()
+	p.Optional(&a.bundle, "x86qw-doctor.zip", "ARQUIVO.zip", "grava também um bundle de diagnóstico", "--bundle")
+	return p
+}
+
 func runDoctor(args []string, stdout, stderr io.Writer) int {
-	bundle := ""
-	var rest []string
-	for index := 0; index < len(args); index++ {
-		switch {
-		case args[index] == "--bundle":
-			bundle = "x86qw-doctor.zip"
-			if index+1 < len(args) && !strings.HasPrefix(args[index+1], "-") && strings.HasSuffix(args[index+1], ".zip") {
-				bundle = args[index+1]
-				index++
-			}
-		case strings.HasPrefix(args[index], "--bundle="):
-			bundle = strings.TrimPrefix(args[index], "--bundle=")
-		default:
-			rest = append(rest, args[index])
-		}
+	var a doctorArgs
+	p := a.parser()
+	if code, ok := parse("doctor", p, args, stdout, stderr); !ok {
+		return code
 	}
-	target, asJSON, ok := targetFlags("doctor", rest, stderr)
-	if !ok {
-		return output.ExitUsage
+	target, err := targetOf(p, a.target)
+	if err != nil {
+		return usageFailure("doctor", err, stderr)
 	}
 	var timestamps []string
 	if dir := defaultCacheDir(); dir != "" {
 		timestamps = append(timestamps, filepath.Join(dir, "metadata", "timestamp.json"))
 	}
-	if dir, err := download.CacheDir(); err == nil {
-		timestamps = append(timestamps, filepath.Join(dir, "trust", "metadata", "timestamp.json"))
-	}
-	report := doctor.Diagnose(target, publicCommandNames(), timestamps, time.Now().UTC())
-	if bundle != "" {
+	report := doctor.Diagnose(target, timestamps, time.Now().UTC())
+	if a.bundle != "" {
 		var envelope bytes.Buffer
 		output.Success("doctor", report).Write(&envelope)
-		written, err := doctor.WriteBundle(envelope.Bytes(), bundle, target)
+		written, err := doctor.WriteBundle(envelope.Bytes(), expandHome(a.bundle), target)
 		if err != nil {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
 			return output.ExitFailure
 		}
 		fmt.Fprintf(stderr, "Bundle de diagnóstico gravado em %s\n", written)
 	}
-	if asJSON {
+	if a.json {
 		if err := output.Success("doctor", report).Write(stdout); err != nil {
 			return output.ExitFailure
 		}
@@ -62,17 +58,8 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 	return output.ExitSuccess
 }
 
-// publicCommandNames lists the registered public commands.
-func publicCommandNames() []string {
-	var names []string
-	for name, cmd := range commands {
-		if cmd.order >= 0 {
-			names = append(names, name)
-		}
-	}
-	return names
-}
-
 func init() {
-	register("doctor", 90, "doctor [--bundle]    diagnostica a instalação sem alterar arquivos", noName(runDoctor))
+	register(command{name: "doctor", group: "Diagnóstico", order: 10, synopsis: "[DESTINO]",
+		summary: "diagnostica a instalação sem alterar arquivos",
+		flags:   (&doctorArgs{}).parser, run: noName(runDoctor)})
 }

@@ -1,16 +1,17 @@
-// Package services runs the dedicated MVDSV, QTV and QWFWD stack like
-// dist/installer/bin/services.py: option validation, presets, the private
-// session journal, ephemeral server configs, PK3 materialization for MVDSV,
-// process supervision and status/stop.
+// Package services runs the dedicated MVDSV, QTV and QWFWD stack: option
+// validation, presets, the private session journal, ephemeral server
+// configs, PK3 materialization for MVDSV, process supervision and
+// status/stop.
 package services
 
 import (
-	"errors"
 	"fmt"
 	"net/netip"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/x86dx2/x86qw/go/internal/cliargs"
 )
 
 // Error is a services failure (exit 1).
@@ -20,18 +21,13 @@ func (e *Error) Error() string { return e.msg }
 
 func errorf(format string, args ...any) error { return &Error{msg: fmt.Sprintf(format, args...)} }
 
-// UsageError is an argparse-style failure (exit 2).
-type UsageError struct{ msg string }
+// UsageError is a mistake in the command line (exit 2).
+type UsageError = cliargs.UsageError
 
-func (e *UsageError) Error() string { return e.msg }
-
-func usagef(format string, args ...any) error { return &UsageError{msg: fmt.Sprintf(format, args...)} }
+var usagef = cliargs.Usagef
 
 // IsUsage reports whether err is a usage error.
-func IsUsage(err error) bool {
-	var target *UsageError
-	return errors.As(err, &target)
-}
+func IsUsage(err error) bool { return cliargs.IsUsage(err) }
 
 // BindAddress normalizes an IPv4/IPv6 literal like ipaddress.ip_address.
 func BindAddress(value string) (string, error) {

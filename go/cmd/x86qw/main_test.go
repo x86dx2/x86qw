@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestVersionJSONMatchesPythonEnvelope(t *testing.T) {
+func TestVersionJSONEnvelope(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if code := run([]string{"version", "--json"}, &stdout, &stderr); code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr.String())

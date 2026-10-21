@@ -39,7 +39,7 @@ func TestFavoritesAreNormalizedNewestFirstAndUnique(t *testing.T) {
 		t.Fatal("remover de novo deveria dizer que não existe")
 	}
 	rendered := RenderLibrary(&Library{Favorites: library.Favorites[:1]})
-	if !strings.Contains(rendered, "favorites: 1\n  qw.example.com:27500") || !strings.Contains(rendered, "recents: 0") {
+	if !strings.Contains(rendered, "favoritos: 1\n  qw.example.com:27500") || !strings.Contains(rendered, "recentes: 0") {
 		t.Fatalf("relatório: %s", rendered)
 	}
 }
@@ -52,7 +52,7 @@ func TestFavoritesStopAtTheLimit(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := AddFavorite(root, "mais-um.example:27500", now); err == nil || !strings.Contains(err.Error(), "full") {
+	if err := AddFavorite(root, "mais-um.example:27500", now); err == nil || !strings.Contains(err.Error(), "cheia") {
 		t.Fatalf("o 21º favorito deveria ser recusado: %v", err)
 	}
 	// Re-adding one already there only moves it to the top.

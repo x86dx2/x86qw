@@ -32,7 +32,7 @@ func uiEntries(entries []LibraryEntry) string {
 
 // RenderLocalUI mirrors render_local_ui (doctor without catalog or trust).
 func RenderLocalUI(target string) (string, error) {
-	report := doctor.Diagnose(target, nil, nil, time.Now().UTC())
+	report := doctor.Diagnose(target, nil, time.Now().UTC())
 	library, err := LoadLibrary(target)
 	if err != nil {
 		return "", err
@@ -65,10 +65,10 @@ func WriteLocalUI(target, destination string) (string, error) {
 	}
 	output = resolve(output)
 	if output == target || inside(output, target) {
-		return "", errors.New("local UI output must stay outside the installation")
+		return "", errors.New("o painel não pode ser gravado dentro da instalação")
 	}
 	if _, err := os.Lstat(output); err == nil {
-		return "", errors.New("local UI output already exists")
+		return "", errors.New("já existe um arquivo no destino do painel")
 	}
 	page, err := RenderLocalUI(target)
 	if err != nil {

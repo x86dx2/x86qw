@@ -1,85 +1,36 @@
 package main
 
 import (
-	"context"
-	"flag"
 	"fmt"
 	"io"
-	"path/filepath"
 
-	"github.com/x86dx2/x86qw/go/internal/catalog"
-	"github.com/x86dx2/x86qw/go/internal/install"
+	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/output"
-	"github.com/x86dx2/x86qw/go/internal/setup/tui"
 )
 
 func runInstall(args []string, stdout, stderr io.Writer) int {
-	flags := flag.NewFlagSet("install", flag.ContinueOnError)
-	flags.SetOutput(stderr)
-	platform := flags.String("platform", install.HostPlatform(), "macos, linux ou windows")
-	channel := flags.String("channel", "stable", "canal do ezQuake: stable ou nightly")
-	release := flags.String("release", "", "versão do ezQuake ou latest")
-	profile := flags.String("profile", "", "essential, recommended ou complete")
-	target := flags.String("target", "", "diretório da instalação")
-	catalogFile := flags.String("catalog-file", "", "catálogo local já autenticado (testes)")
-	nonInteractive := flags.Bool("non-interactive", false, "nunca perguntar; exige --profile")
-	flags.Bool("no-color", false, "desativa cores")
-	flags.Bool("verbose", false, "detalhes técnicos")
-	if err := flags.Parse(args); err != nil {
-		return output.ExitUsage
+	a, root, code, ok := parseSetup("install", args, stdout, stderr)
+	if !ok {
+		return code
 	}
-	given := map[string]bool{}
-	flags.Visit(func(f *flag.Flag) { given[f.Name] = true })
-	if len(flags.Args()) == 1 && *target == "" {
-		*target = flags.Args()[0]
-	}
-	// Without --profile (and without --non-interactive) the installer
-	// interface asks what is missing.
-	wizard := *profile == "" && !*nonInteractive
-	if (!wizard && (*target == "" || *profile == "")) || len(flags.Args()) > 1 {
-		fmt.Fprintln(stderr, "uso: x86qw install [--profile essential|recommended|complete] [--platform SO] [--channel stable|nightly] [--release VERSÃO] [DESTINO]")
-		return output.ExitUsage
-	}
-	if wizard {
-		// What is missing is chosen in the installer interface.
-		if !interactive() {
-			fmt.Fprintln(stderr, "x86qw install: sem terminal, informe --profile ou use x86qw setup --intent … --yes")
-			return output.ExitUsage
+	if a.profile == "" {
+		// What is missing is chosen in the installer.
+		if a.nonInteractive || !interactive() {
+			return usageFailure("install", cliargs.Usagef("sem o app, informe --profile"), stderr)
 		}
-		root := *target
-		if root == "" {
-			root = tui.DefaultTarget()
-		}
-		root, _ = filepath.Abs(root)
-		return runApp(realBackend(*catalogFile, *platform), root, "", stdout, stderr)
+		return runApp(realBackend(a.catalogFile, a.platform), root, "", stdout, stderr)
 	}
-	request := struct{ target, platform, channel, release, profile string }{*target, *platform, *channel, *release, *profile}
-	parsed, err := loadCatalog(*catalogFile)
-	if err != nil {
-		fmt.Fprintf(stderr, "✗ %v\n", err)
-		return output.ExitFailure
+	if err := installProfile(root, a, stdout, stderr); err != nil {
+		return failure(root, err, stderr)
 	}
-	inventory, err := catalog.LoadInventory()
-	if err != nil {
-		fmt.Fprintf(stderr, "✗ %v\n", err)
-		return output.ExitFailure
-	}
-	absolute, _ := filepath.Abs(request.target)
-	result, err := install.Install(context.Background(), absolute, parsed, inventory, install.InstallOptions{
-		Platform: request.platform, Channel: request.channel, Release: request.release,
-		Profile: request.profile,
-	})
-	if err != nil {
-		fmt.Fprintf(stderr, "✗ %v\n", err)
-		return output.ExitFailure
-	}
-	for _, warning := range result.Warnings {
-		fmt.Fprintf(stderr, "! %s\n", warning)
-	}
-	fmt.Fprintf(stdout, "✓ Instalação completa: ezQuake + %d componentes · %d arquivos em %s\n", len(result.Installed), result.Files, absolute)
+	fmt.Fprintln(stdout, "  Jogar agora: x86qw play")
 	return output.ExitSuccess
 }
 
 func init() {
-	register("install", 40, "install              instala ezQuake e um perfil de conteúdo (pergunta o que faltar)", noName(runInstall))
+	register(command{name: "install", group: "Instalar e manter", order: 20, synopsis: "[DESTINO]",
+		summary: "instala ezQuake e um perfil de conteúdo",
+		about:   "Como setup --profile, sem tornar esta CLI a da instalação. Sem --profile, num terminal, abre o instalador do app.",
+		flags:   func() *cliargs.Parser { return (&setupArgs{}).parser(false) },
+		run:     noName(runInstall)})
 }
