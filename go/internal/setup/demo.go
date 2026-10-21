@@ -542,3 +542,32 @@ func (d *Demo) wait(ctx context.Context, milliseconds int) error {
 		return nil
 	}
 }
+
+// demoReports are what the tools print in the demo.
+var demoReports = map[string]string{
+	"doctor": "x86QW doctor\nTarget: ~/Games/x86qw\n\n[ok] installation: installation present\n[ok] trust: TUF timestamp valid\n" +
+		"[ok] runtime: published platform\n[skip] network: network not checked\n[ok] disk: enough disk space\n" +
+		"[ok] permissions: read permissions ok\n\nNo problems found.\n",
+	"verify":  "✓ ezQuake (1) + 6 components intact · 130 files\n",
+	"repair":  "✓ No repair needed; the installation is intact.\n",
+	"upgrade": "  Component  nQuake map selection      2.1 → 2.2  (12 MB)\n  Component  KTX x86QW                 1.47+x86qw.19 → 1.47+x86qw.20  (2 MB)\n\n· Dry run done; no file was changed.\n",
+	"changes": "\n· Local changes in the installation\n  M qw/maps/dm6.bsp  nquake-maps\n· 1 difference(s): A new, M modified, D removed.\n",
+	"library": "x86QW · library\nfavorites: 1\n  qw.example.com:27500\nrecents: 0\n",
+	"profile": "x86QW · profile\nsettings: ezquake/configs/config.cfg\npersonal data: 0\n",
+	"cleanup": "\nSafe cleanup\n✓ Regenerable data removed (12 files).\n· History, logs and demos were kept; use --personal-data to remove them.\n",
+	"ui":      "/tmp/x86qw-ui-demo/x86qw.html\n",
+	"help":    "x86QW · modern QuakeWorld\n\nUsage: x86qw [COMMAND] [options]\n",
+}
+
+// Tool prints the demo's version of what the command would.
+func (d *Demo) Tool(ctx context.Context, args []string) (string, error) {
+	if err := d.wait(ctx, 500); err != nil {
+		return "", err
+	}
+	if len(args) > 0 {
+		if report, ok := demoReports[args[0]]; ok {
+			return report, nil
+		}
+	}
+	return "", fmt.Errorf("the demo has no %v", args)
+}

@@ -97,7 +97,8 @@ func confirm(question, retry string, yes bool, stdout, stderr io.Writer) (procee
 	if yes {
 		return true, output.ExitSuccess
 	}
-	if !stdinIsTerminal() {
+	// While the app owns the terminal nobody can answer here either.
+	if !stdinIsTerminal() || appOpen {
 		fmt.Fprintf(stderr, "No terminal to confirm on. Run again with --yes: %s --yes\n", retry)
 		return false, output.ExitUsage
 	}

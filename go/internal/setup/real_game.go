@@ -260,3 +260,11 @@ func (r *Real) StartService(ctx context.Context, target, kind string, options Op
 	}
 	return r.run(ServiceCommand(target, options, kind))
 }
+
+// Tool runs an x86qw command and returns what it printed.
+func (r *Real) Tool(ctx context.Context, args []string) (string, error) {
+	if r.Capture == nil {
+		return "", problem("", "err.run")
+	}
+	return r.Capture(args)
+}

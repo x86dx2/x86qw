@@ -18,7 +18,7 @@ func main() {
 	speed := flag.Float64("speed", 1, "speed of the simulated install")
 	start := flag.String("start", "", "open straight on match, servers or host (with --existing)")
 	flag.Parse()
-	_, err := tui.Run(tui.Config{
+	err := tui.Run(tui.Config{
 		Backend: &setup.Demo{ExistingInstall: *existing, Speed: *speed},
 		Target:  tui.DefaultTarget(), Lang: tui.Lang(*lang), Demo: true, Theme: *theme, Start: *start,
 	})

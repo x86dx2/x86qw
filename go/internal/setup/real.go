@@ -41,6 +41,9 @@ type Real struct {
 	// Run runs an x86qw command (play, open, host) and reports how it
 	// ended; the command line provides it.
 	Run func(args []string) error
+	// Capture runs an x86qw command and returns what it printed; the
+	// command line provides it.
+	Capture func(args []string) (string, error)
 
 	mu      sync.Mutex
 	cat     *catalog.Catalog

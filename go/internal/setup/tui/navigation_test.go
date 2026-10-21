@@ -309,8 +309,8 @@ func TestDoneOpensTheApp(t *testing.T) {
 	for id, want := range map[string]screen{"play": scMatch, "server": scHost, "find": scServers} {
 		m.screen = scDone
 		m.activateDone(id)
-		if m.screen != want || m.next != nil {
-			t.Fatalf("%s: screen %d, next %v", id, m.screen, m.next)
+		if m.screen != want {
+			t.Fatalf("%s: screen %d", id, m.screen)
 		}
 	}
 	m.screen = scDone
