@@ -31,34 +31,34 @@ jobs:
       # The site challenges GitHub's Windows runner IPs (Cloudflare "Just a
       # moment..."), so the served install.ps1 runs from the checkout and the
       # catalog comes from the repository instead of the site's TUF chain.
-      - name: Instalar com o install.ps1 publicado (cópia do repositório)
+      - name: Install with the served install.ps1 (repository copy)
         run: |
           $ErrorActionPreference = "Stop"
           $inst = Join-Path $env:RUNNER_TEMP "inst"
           & .\site\public\install.ps1 --target $inst --profile complete --catalog-file "$PWD\site\public\api\v1\catalog.json"
-          if ($LASTEXITCODE -ne 0) { throw "setup falhou: $LASTEXITCODE" }
+          if ($LASTEXITCODE -ne 0) { throw "setup failed: $LASTEXITCODE" }
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go/go.mod
           cache-dependency-path: go/go.sum
-      - name: Adotar a CLI desta branch na instalação
+      - name: Adopt this branch's CLI in the installation
         run: |
           $ErrorActionPreference = "Stop"
           $inst = Join-Path $env:RUNNER_TEMP "inst"
           # A real version: a development build never replaces an installed CLI.
           go -C go build -ldflags "-X github.com/x86dx2/x86qw/go/internal/buildinfo.Version=9.9.9-e2e" -o "$env:RUNNER_TEMP\x86qw-branch.exe" ./cmd/x86qw
           & "$env:RUNNER_TEMP\x86qw-branch.exe" setup --target $inst --catalog-file "$PWD\site\public\api\v1\catalog.json"
-          if ($LASTEXITCODE -ne 0) { throw "setup da branch: $LASTEXITCODE" }
-      - name: links qw:// e demos pelos handlers do Windows
+          if ($LASTEXITCODE -ne 0) { throw "branch setup: $LASTEXITCODE" }
+      - name: qw:// links and demos through the Windows handlers
         run: |
           $ErrorActionPreference = "Stop"
           $inst = Join-Path $env:RUNNER_TEMP "inst"
-          # Uma receita na instalação aplica a integração.
+          # A recipe on the installation applies its integration.
           & "$inst\x86qw.cmd" setup --target $inst --catalog-file "$PWD\site\public\api\v1\catalog.json" `
             --intent play --nick tester --content complete --integrate shortcuts,qw-links,demos --yes
-          if ($LASTEXITCODE -ne 0) { throw "receita: $LASTEXITCODE" }
-          # O comando que o registro guarda para qw://, com --dry-run para
-          # não abrir o ezQuake no runner.
+          if ($LASTEXITCODE -ne 0) { throw "recipe: $LASTEXITCODE" }
+          # The command the registry keeps for qw://, with --dry-run so no
+          # ezQuake starts on the runner.
           $link = "qw://2@qtv.example.org:28000/qtvplay"
           $command = (Get-ItemProperty "HKCU:\Software\Classes\qw\shell\open\command").'(default)'
           Write-Host "qw:// -> $command"
@@ -67,21 +67,21 @@ jobs:
           $out = Join-Path $env:RUNNER_TEMP "link.out"
           Start-Process -FilePath $exe -ArgumentList $arguments -RedirectStandardOutput $out -NoNewWindow -Wait
           $printed = Get-Content $out -Raw
-          if ($printed -notmatch [regex]::Escape("+qwurl $link")) { throw "o handler de qw:// não abriu o link: $printed" }
-          # Um clique: sem "URL Protocol" o shell não entrega o link ao
-          # handler, que abre o ezQuake com +qwurl.
-          if ($null -eq (Get-ItemProperty "HKCU:\Software\Classes\qw").'URL Protocol') { throw "qw sem URL Protocol" }
+          if ($printed -notmatch [regex]::Escape("+qwurl $link")) { throw "the qw:// handler did not open the link: $printed" }
+          # A click: without "URL Protocol" the shell does not hand the link
+          # to the handler, which starts ezQuake with +qwurl.
+          if ($null -eq (Get-ItemProperty "HKCU:\Software\Classes\qw").'URL Protocol') { throw "qw without URL Protocol" }
           Start-Process $link
           $deadline = (Get-Date).AddSeconds(30)
           do {
             Start-Sleep -Milliseconds 250
             $started = @(Get-CimInstance Win32_Process -Filter "Name LIKE 'ezquake%'" | Where-Object { $_.CommandLine -like "*+qwurl $link*" })
           } while ($started.Count -eq 0 -and (Get-Date) -lt $deadline)
-          if ($started.Count -eq 0) { throw "o clique no link não abriu o ezQuake com +qwurl" }
-          Write-Host "clique -> $($started[0].CommandLine)"
+          if ($started.Count -eq 0) { throw "clicking the link did not start ezQuake with +qwurl" }
+          Write-Host "click -> $($started[0].CommandLine)"
           Get-Process ezquake* -ErrorAction SilentlyContinue | Stop-Process -Force
-          # Uma demo aberta pelo shell, como um duplo clique: o handler a copia
-          # para qw\demos antes de abrir o ezQuake.
+          # A demo opened by the shell, as a double click does: the handler
+          # copies it into qw\demos before starting ezQuake.
           $demo = Join-Path $env:RUNNER_TEMP "final.mvd"
           Set-Content -Path $demo -Value "demo bytes" -NoNewline
           Start-Process $demo
@@ -90,9 +90,9 @@ jobs:
             Start-Sleep -Seconds 1
             $copied = @(Get-ChildItem (Join-Path $inst "qw\demos") -Filter "x86qw-open-*.mvd" -ErrorAction SilentlyContinue)
           } while ($copied.Count -eq 0 -and (Get-Date) -lt $deadline)
-          if ($copied.Count -eq 0) { throw "a demo não chegou ao handler" }
+          if ($copied.Count -eq 0) { throw "the demo did not reach the handler" }
           Get-Process ezquake* -ErrorAction SilentlyContinue | Stop-Process -Force
-      - name: verify, doctor, atalhos e ACL
+      - name: verify, doctor, shortcuts and ACL
         run: |
           $ErrorActionPreference = "Stop"
           $inst = Join-Path $env:RUNNER_TEMP "inst"
@@ -100,21 +100,21 @@ jobs:
           .\x86qw.cmd verify; if ($LASTEXITCODE -ne 0) { throw "verify" }
           .\x86qw.cmd doctor; if ($LASTEXITCODE -ne 0) { throw "doctor" }
           foreach ($lnk in @("$env:APPDATA\Microsoft\Windows\Start Menu\Programs\x86QW.lnk", "$env:USERPROFILE\Desktop\x86QW.lnk")) {
-            if (-not (Test-Path -LiteralPath $lnk -PathType Leaf)) { throw "atalho ausente: $lnk" }
+            if (-not (Test-Path -LiteralPath $lnk -PathType Leaf)) { throw "missing shortcut: $lnk" }
             $target = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk).TargetPath
-            Write-Host "atalho $lnk -> $target"
+            Write-Host "shortcut $lnk -> $target"
           }
           icacls .x86qw
           $sddl = (Get-Acl .x86qw).Sddl
           Write-Host $sddl
-          if ($sddl -notmatch "D:P") { throw "DACL de .x86qw não é protegida" }
-      - name: o app abre num console de verdade (ConPTY)
+          if ($sddl -notmatch "D:P") { throw "the .x86qw DACL is not protected" }
+      - name: The app opens in a real console (ConPTY)
         env:
           X86QW_CONPTY_TARGET: ${{ runner.temp }}\inst
         run: |
           go -C go test -count=1 -run TestAppOpensInARealConsole -v ./cmd/x86qw
-          if ($LASTEXITCODE -ne 0) { throw "app no console: $LASTEXITCODE" }
-      - name: hospedar KTX em segundo plano, consultar e encerrar
+          if ($LASTEXITCODE -ne 0) { throw "app in a console: $LASTEXITCODE" }
+      - name: Host KTX in the background, query and stop it
         run: |
           $ErrorActionPreference = "Stop"
           $inst = Join-Path $env:RUNNER_TEMP "inst"
@@ -127,32 +127,32 @@ jobs:
             if ($out -match "MVDSV") { $active = $true; Write-Host $out; break }
             Start-Sleep -Seconds 1
           }
-          if (-not $active) { .\x86qw.cmd status; throw "stack não ficou ativa" }
+          if (-not $active) { .\x86qw.cmd status; throw "the stack did not come up" }
           Get-Process mvdsv
           .\x86qw.cmd status --stop --yes
           if ($LASTEXITCODE -ne 0) { throw "status --stop: $LASTEXITCODE" }
           Start-Sleep -Seconds 2
-          if (Get-Process mvdsv -ErrorAction SilentlyContinue) { throw "mvdsv sobreviveu ao stop" }
+          if (Get-Process mvdsv -ErrorAction SilentlyContinue) { throw "mvdsv survived the stop" }
           $out = .\x86qw.cmd status | Out-String
           Write-Host $out
-          if ($out -notmatch "Nenhum servi") { throw "stack ainda ativa" }
-      - name: desinstalar remove os atalhos e a CLI
+          if ($out -notmatch "Nenhum servi") { throw "the stack is still running" }
+      - name: Uninstall removes the shortcuts and the CLI
         run: |
           $ErrorActionPreference = "Stop"
           $inst = Join-Path $env:RUNNER_TEMP "inst"
           & "$inst\x86qw.cmd" uninstall --yes
           if ($LASTEXITCODE -ne 0) { throw "uninstall: $LASTEXITCODE" }
-          if (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\x86QW.lnk") { throw "atalho do Menu Iniciar ficou" }
-          if (Test-Path "$env:USERPROFILE\Desktop\x86QW.lnk") { throw "atalho da Area de Trabalho ficou" }
-          if (Test-Path "HKCU:\Software\Classes\qw") { throw "o handler de qw:// ficou no registro" }
+          if (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\x86QW.lnk") { throw "the Start Menu shortcut stayed" }
+          if (Test-Path "$env:USERPROFILE\Desktop\x86QW.lnk") { throw "the Desktop shortcut stayed" }
+          if (Test-Path "HKCU:\Software\Classes\qw") { throw "the qw:// handler stayed in the registry" }
           $deadline = (Get-Date).AddSeconds(30)
           do {
             Start-Sleep -Seconds 1
             $left = @(Get-ChildItem -Force (Join-Path $inst ".x86qw") -ErrorAction SilentlyContinue | Where-Object Name -match "quarantine")
             if (Test-Path "$inst\x86qw.cmd") { $left += "x86qw.cmd" }
           } while ($left.Count -gt 0 -and (Get-Date) -lt $deadline)
-          if ($left.Count -gt 0) { throw "nao removidos apos a saida: $($left -join ', ')" }
-          Write-Host "CLI removida apos a saida; restante: $((Get-ChildItem -Force (Join-Path $inst '.x86qw')).Name -join ', ')"
+          if ($left.Count -gt 0) { throw "not removed after exit: $($left -join ', ')" }
+          Write-Host "CLI removed after exit; left: $((Get-ChildItem -Force (Join-Path $inst '.x86qw')).Name -join ', ')"
           exit 0
 
   report:

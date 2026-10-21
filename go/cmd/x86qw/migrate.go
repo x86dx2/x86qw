@@ -17,7 +17,7 @@ type migrateArgs struct {
 func (a *migrateArgs) parser() *cliargs.Parser {
 	p := cliargs.New()
 	targetFlag(p, &a.target)
-	p.Bool(&a.dryRun, "mostra o que mudaria sem alterar arquivos", "--dry-run")
+	p.Bool(&a.dryRun, "shows what would change without changing files", "--dry-run")
 	return p
 }
 
@@ -42,27 +42,27 @@ func runMigrate(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail(err)
 	}
-	fmt.Fprintln(stdout, "\nMigração da instalação")
+	fmt.Fprintln(stdout, "\nInstallation migration")
 	if len(ops) == 0 {
-		fmt.Fprintln(stdout, "✓ Nenhuma migração é necessária; os metadados já estão no formato atual.")
+		fmt.Fprintln(stdout, "✓ No migration needed; the metadata is already in the current format.")
 		return output.ExitSuccess
 	}
 	for _, op := range ops {
 		fmt.Fprintf(stdout, "· %s: %s → %s\n", op.Phase, op.Source, op.Destination)
 	}
 	if a.dryRun {
-		fmt.Fprintln(stdout, "\n· Simulação concluída; nenhum arquivo foi alterado.")
+		fmt.Fprintln(stdout, "\n· Dry run done; no file was changed.")
 		return output.ExitSuccess
 	}
 	if _, err := maint.Migrate(target); err != nil {
 		return fail(err)
 	}
-	fmt.Fprintln(stdout, "✓ Migração concluída e validada.")
+	fmt.Fprintln(stdout, "✓ Migration done and validated.")
 	return output.ExitSuccess
 }
 
 func init() {
-	register(command{name: "migrate", group: "Diagnóstico", order: 30, synopsis: "[DESTINO]",
-		summary: "converte metadados de instalações antigas para o formato atual",
+	register(command{name: "migrate", group: "Diagnostics", order: 30, synopsis: "[TARGET]",
+		summary: "converts the metadata of old installations to the current format",
 		flags:   (&migrateArgs{}).parser, run: noName(runMigrate)})
 }

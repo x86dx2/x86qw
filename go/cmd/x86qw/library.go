@@ -15,8 +15,8 @@ type libraryArgs struct{ target, add, remove string }
 func (a *libraryArgs) parser() *cliargs.Parser {
 	p := cliargs.New()
 	targetFlag(p, &a.target)
-	p.String(&a.add, "ENDEREÇO", "adiciona um servidor aos favoritos", "--add")
-	p.String(&a.remove, "ENDEREÇO", "tira um servidor dos favoritos", "--remove")
+	p.String(&a.add, "ADDRESS", "adds a server to the favorites", "--add")
+	p.String(&a.remove, "ADDRESS", "removes a server from the favorites", "--remove")
 	p.Exclusive("--add", "--remove")
 	return p
 }
@@ -49,7 +49,7 @@ func runLibrary(args []string, stdout, stderr io.Writer) int {
 }
 
 func init() {
-	register(command{name: "library", group: "Seus dados", order: 10, synopsis: "[DESTINO]",
-		summary: "mostra e edita os servidores favoritos e recentes",
+	register(command{name: "library", group: "Your data", order: 10, synopsis: "[TARGET]",
+		summary: "shows and edits the favorite and recent servers",
 		flags:   (&libraryArgs{}).parser, run: noName(runLibrary)})
 }

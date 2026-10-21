@@ -80,7 +80,7 @@ func serviceMain(action string, args []string, stdout, stderr io.Writer) int {
 	if common.Menu && !common.BackgroundChild {
 		// The server screen does what the host, QTV and proxy menus did.
 		if !interactive() {
-			return usageFailure(action, cliargs.Usagef("--menu precisa de um terminal; informe as opções"), stderr)
+			return usageFailure(action, cliargs.Usagef("--menu needs a terminal; give the options"), stderr)
 		}
 		if common.Target == "" {
 			common.Target = install.DefaultTarget()
@@ -92,20 +92,20 @@ func serviceMain(action string, args []string, stdout, stderr io.Writer) int {
 }
 
 func init() {
-	register(command{name: "host", group: "Hospedar", order: 10, synopsis: "[JOGO] [opções]",
-		summary: "hospeda um servidor MVDSV (KTX pede --mode)",
-		about: "Hospeda um servidor MVDSV. KTX, o padrão, pede --mode; --instance acrescenta mais servidores à mesma sessão, " +
-			"--with-qtv e --with-proxy sobem o QTV e o QWFWD junto. Sem opções num terminal, use o app: x86qw host --menu.",
+	register(command{name: "host", group: "Host", order: 10, synopsis: "[GAME] [options]",
+		summary: "hosts an MVDSV server (KTX needs --mode)",
+		about: "Hosts an MVDSV server. KTX, the default, needs --mode; --instance adds more servers to the same session, " +
+			"--with-qtv and --with-proxy start QTV and QWFWD with it. Without options on a terminal, use the app: x86qw host --menu.",
 		flags: services.HostParser,
 		run: func(_ string, args []string, stdout, stderr io.Writer) int {
 			return serviceMain("host", args, stdout, stderr)
 		}})
-	register(command{name: "qtv", group: "Hospedar", order: 20, summary: "inicia o relay QTV de um servidor",
+	register(command{name: "qtv", group: "Host", order: 20, summary: "starts a server's QTV relay",
 		flags: services.QtvParser,
 		run: func(_ string, args []string, stdout, stderr io.Writer) int {
 			return serviceMain("qtv", args, stdout, stderr)
 		}})
-	register(command{name: "proxy", group: "Hospedar", order: 30, summary: "inicia o proxy QWFWD",
+	register(command{name: "proxy", group: "Host", order: 30, summary: "starts the QWFWD proxy",
 		flags: services.ProxyParser,
 		run: func(_ string, args []string, stdout, stderr io.Writer) int {
 			return serviceMain("proxy", args, stdout, stderr)

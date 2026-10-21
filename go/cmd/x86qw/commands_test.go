@@ -103,7 +103,7 @@ func runOK(t *testing.T, want int, args ...string) string {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
 	if code := run(args, &stdout, &stderr); code != want {
-		t.Fatalf("x86qw %v: código %d, esperado %d\n%s%s", args, code, want, stdout.String(), stderr.String())
+		t.Fatalf("x86qw %v: code %d, want %d\n%s%s", args, code, want, stdout.String(), stderr.String())
 	}
 	return stdout.String() + stderr.String()
 }
@@ -111,12 +111,12 @@ func runOK(t *testing.T, want int, args ...string) string {
 func TestLibraryAddsListsAndRemoves(t *testing.T) {
 	root := fixtureInstall(t)
 	if out := runOK(t, 0, "library", root, "--add", "QW.Example.com:27500"); !strings.Contains(out, "favoritos: 1\n  qw.example.com:27500") {
-		t.Fatalf("depois de --add: %s", out)
+		t.Fatalf("after --add: %s", out)
 	}
 	if out := runOK(t, 0, "library", "--remove", "qw.example.com:27500", "--target", root); !strings.Contains(out, "favoritos: 0") {
-		t.Fatalf("depois de --remove: %s", out)
+		t.Fatalf("after --remove: %s", out)
 	}
-	runOK(t, 1, "library", root, "--add", "não é endereço")
+	runOK(t, 1, "library", root, "--add", "not an address")
 	runOK(t, 2, "library", root, "--add", "a:1", "--remove", "b:2")
 }
 
@@ -130,10 +130,10 @@ func TestProfileBacksUpAndRestores(t *testing.T) {
 	config := filepath.Join(root, "ezquake", "configs", "config.cfg")
 	writeFile(t, config, "name outro\n")
 	if out := runOK(t, 0, "profile", "--restore", bundle, root); !strings.Contains(out, "ezquake/configs/config.cfg") {
-		t.Fatalf("restauração: %s", out)
+		t.Fatalf("restore: %s", out)
 	}
 	if data, _ := os.ReadFile(config); string(data) != "name jogador\n" {
-		t.Fatalf("config.cfg não voltou: %q", data)
+		t.Fatalf("config.cfg did not come back: %q", data)
 	}
 	runOK(t, 1, "profile", root, "--backup", filepath.Join(root, "sub", "dentro.zip"))
 }
@@ -149,7 +149,7 @@ func TestChangesShowsWhatTheUserEdited(t *testing.T) {
 func TestCleanupMigrateAndStatusLeaveTheInstallation(t *testing.T) {
 	root := fixtureInstall(t)
 	runOK(t, 0, "cleanup", root)
-	if out := runOK(t, 0, "migrate", root, "--dry-run"); !strings.Contains(out, "Migração da instalação") || strings.Contains(out, "Migração concluída") {
+	if out := runOK(t, 0, "migrate", root, "--dry-run"); !strings.Contains(out, "Installation migration") || strings.Contains(out, "Migration done") {
 		t.Fatalf("migrate: %s", out)
 	}
 	if out := runOK(t, 0, "status", root); !strings.Contains(out, "Nenhum serviço x86QW está ativo") {
@@ -181,8 +181,8 @@ func TestPlansRunDryWithAFileCatalog(t *testing.T) {
 	}
 	// Without --dry-run and without a terminal, applying needs --yes.
 	var stdout, stderr bytes.Buffer
-	if code := run([]string{"upgrade", root, "--catalog-file", published}, &stdout, &stderr); code == 0 && !strings.Contains(stdout.String(), "Nenhuma atualização") {
-		t.Fatalf("upgrade sem --yes aplicou: %s", stdout.String())
+	if code := run([]string{"upgrade", root, "--catalog-file", published}, &stdout, &stderr); code == 0 && !strings.Contains(stdout.String(), "No update available") {
+		t.Fatalf("upgrade without --yes applied: %s", stdout.String())
 	}
 }
 
@@ -192,12 +192,12 @@ func TestUninstallWithYesKeepsWhatIsYours(t *testing.T) {
 	runOK(t, 0, "uninstall", root, "--yes")
 	for _, kept := range []string{"id1/pak0.pak", "ezquake/configs/config.cfg", "qw/demos/partida.mvd"} {
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(kept))); err != nil {
-			t.Fatalf("%s deveria ficar: %v", kept, err)
+			t.Fatalf("%s should stay: %v", kept, err)
 		}
 	}
 	for _, gone := range []string{".x86qw/state.json", "qw/maps/x86qw-a.bsp", "x86qw.sh"} {
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(gone))); err == nil {
-			t.Fatalf("%s deveria sair", gone)
+			t.Fatalf("%s should go", gone)
 		}
 	}
 }
@@ -209,11 +209,11 @@ func TestSetupKeepsANewerCLIWhenADevBuildAdopts(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	run([]string{"setup", root}, &stdout, &stderr)
 	out := stdout.String() + stderr.String()
-	if strings.Contains(out, "agora usa a CLI x86QW 0.0.0-dev") || strings.Contains(out, "✓ A instalação") {
-		t.Fatalf("a adoção por um build de desenvolvimento afirmou ter trocado a CLI: %s", out)
+	if strings.Contains(out, "now uses x86QW CLI 0.0.0-dev") || strings.Contains(out, "✓ The installation") {
+		t.Fatalf("adoption by a development build claimed to replace the CLI: %s", out)
 	}
 	if receipt, _ := os.ReadFile(filepath.Join(root, ".x86qw", "cli", "receipt")); !strings.Contains(string(receipt), "2.3.2") {
-		t.Fatalf("o recibo da CLI mudou: %s", receipt)
+		t.Fatalf("the CLI receipt changed: %s", receipt)
 	}
 }
 
@@ -235,7 +235,7 @@ func TestPurgeTakesTheCachesWithTheirTUFMetadata(t *testing.T) {
 	runOK(t, 0, "uninstall", "--purge", "--yes", root)
 	for _, gone := range []string{root, cache, old} {
 		if _, err := os.Stat(gone); err == nil {
-			t.Errorf("%s deveria ter saído", gone)
+			t.Errorf("%s should have gone", gone)
 		}
 	}
 }

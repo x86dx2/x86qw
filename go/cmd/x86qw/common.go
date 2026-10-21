@@ -31,24 +31,24 @@ func defaultCacheDir() string {
 // targetFlag declares --target; the installation may also come as the
 // one positional argument.
 func targetFlag(p *cliargs.Parser, target *string) {
-	p.String(target, "DESTINO", "pasta da instalação (padrão: a desta CLI, senão ~/Games/x86qw)", "--target")
+	p.String(target, "TARGET", "installation folder (default: this CLI's, else ~/Games/x86qw)", "--target")
 }
 
 func jsonFlag(p *cliargs.Parser, asJSON *bool) {
-	p.Bool(asJSON, "saída JSON numa linha", "--json")
+	p.Bool(asJSON, "JSON output on one line", "--json")
 }
 
 // targetOf is the installation the command acts on: the positional
-// DESTINO or --target (they must agree), else install.DefaultTarget.
+// TARGET or --target (they must agree), else install.DefaultTarget.
 func targetOf(p *cliargs.Parser, flagTarget string) (string, error) {
 	positional := p.Positional()
 	if len(positional) > 1 {
-		return "", cliargs.Usagef("argumentos a mais: %s", strings.Join(positional[1:], " "))
+		return "", cliargs.Usagef("unexpected arguments: %s", strings.Join(positional[1:], " "))
 	}
 	target := flagTarget
 	if len(positional) == 1 {
 		if target != "" && filepath.Clean(target) != filepath.Clean(positional[0]) {
-			return "", cliargs.Usagef("--target e o destino posicional divergem")
+			return "", cliargs.Usagef("--target and the positional target disagree")
 		}
 		target = positional[0]
 	}
@@ -98,16 +98,16 @@ func confirm(question, retry string, yes bool, stdout, stderr io.Writer) (procee
 		return true, output.ExitSuccess
 	}
 	if !stdinIsTerminal() {
-		fmt.Fprintf(stderr, "Sem terminal para confirmar. Repita com --yes: %s --yes\n", retry)
+		fmt.Fprintf(stderr, "No terminal to confirm on. Run again with --yes: %s --yes\n", retry)
 		return false, output.ExitUsage
 	}
-	fmt.Fprintf(stdout, "%s [s/N] ", question)
+	fmt.Fprintf(stdout, "%s [y/N] ", question)
 	answer, _ := bufio.NewReader(stdin).ReadString('\n')
 	switch strings.ToLower(strings.TrimSpace(answer)) {
 	case "s", "sim", "y", "yes":
 		return true, output.ExitSuccess
 	}
-	fmt.Fprintln(stdout, "Cancelado; nada foi alterado.")
+	fmt.Fprintln(stdout, "Canceled; nothing was changed.")
 	return false, output.ExitSuccess
 }
 
@@ -130,6 +130,6 @@ func loadCatalog(catalogFile string) (*catalog.Catalog, error) {
 }
 
 func catalogFileFlag(p *cliargs.Parser, file *string) {
-	p.String(file, "ARQUIVO", "catálogo local já autenticado (testes)", "--catalog-file")
+	p.String(file, "FILE", "local catalog, already authenticated (tests)", "--catalog-file")
 	p.Hidden("--catalog-file")
 }

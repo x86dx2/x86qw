@@ -24,7 +24,7 @@ func runVersion(args []string, stdout, stderr io.Writer) int {
 		return code
 	}
 	if len(p.Positional()) > 0 {
-		return usageFailure("version", cliargs.Usagef("argumentos a mais: %v", p.Positional()), stderr)
+		return usageFailure("version", cliargs.Usagef("unexpected arguments: %v", p.Positional()), stderr)
 	}
 	if a.json {
 		data := map[string]any{"project": "x86qw", "version": buildinfo.Version}
@@ -38,6 +38,6 @@ func runVersion(args []string, stdout, stderr io.Writer) int {
 }
 
 func init() {
-	register(command{name: "version", group: "Diagnóstico", order: 40, summary: "mostra a versão",
+	register(command{name: "version", group: "Diagnostics", order: 40, summary: "shows the version",
 		flags: (&versionArgs{}).parser, run: noName(runVersion)}, "--version")
 }

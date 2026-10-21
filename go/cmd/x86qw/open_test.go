@@ -14,7 +14,7 @@ func TestOpenDryRunShowsTheRulesetAndTheLink(t *testing.T) {
 		t.Fatalf("%d %s", code, stderr.String())
 	}
 	if got := stdout.String(); !strings.Contains(got, "+set x86qw_ruleset 1") || !strings.HasSuffix(strings.TrimSpace(got), "+qwurl qw://qw.x86.com.br:27500") {
-		t.Fatalf("comando: %s", got)
+		t.Fatalf("command: %s", got)
 	}
 }
 
@@ -29,7 +29,7 @@ func TestOpenExitCodes(t *testing.T) {
 	} {
 		var stdout, stderr bytes.Buffer
 		if code := run([]string{"open", "--target", target, "--dry-run", item}, &stdout, &stderr); code != want {
-			t.Errorf("%s: código %d, esperado %d: %s", item, code, want, stderr.String())
+			t.Errorf("%s: code %d, want %d: %s", item, code, want, stderr.String())
 		}
 	}
 }

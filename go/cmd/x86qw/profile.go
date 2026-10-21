@@ -16,8 +16,8 @@ type profileArgs struct{ target, backup, restore string }
 func (a *profileArgs) parser() *cliargs.Parser {
 	p := cliargs.New()
 	targetFlag(p, &a.target)
-	p.Optional(&a.backup, "x86qw-profile.zip", "ARQUIVO.zip", "grava um backup das configurações pessoais", "--backup")
-	p.String(&a.restore, "ARQUIVO.zip", "restaura um backup", "--restore")
+	p.Optional(&a.backup, "x86qw-profile.zip", "FILE.zip", "writes a backup of the personal settings", "--backup")
+	p.String(&a.restore, "FILE.zip", "restores a backup", "--restore")
 	p.Exclusive("--backup", "--restore")
 	return p
 }
@@ -50,7 +50,7 @@ func runProfile(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
 			return output.ExitFailure
 		}
-		list := "(nenhum)"
+		list := "(none)"
 		if len(restored) > 0 {
 			list = strings.Join(restored, ", ")
 		}
@@ -60,7 +60,7 @@ func runProfile(args []string, stdout, stderr io.Writer) int {
 }
 
 func init() {
-	register(command{name: "profile", group: "Seus dados", order: 20, synopsis: "[DESTINO]",
-		summary: "lista, salva e restaura as configurações pessoais",
+	register(command{name: "profile", group: "Your data", order: 20, synopsis: "[TARGET]",
+		summary: "lists, saves and restores the personal settings",
 		flags:   (&profileArgs{}).parser, run: noName(runProfile)})
 }

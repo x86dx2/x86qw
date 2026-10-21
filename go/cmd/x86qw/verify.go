@@ -58,12 +58,12 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 		}
 		return output.ExitSuccess
 	}
-	fmt.Fprintf(stdout, "✓ ezQuake (%d) + %d componentes íntegros · %d arquivos\n", report.Clients, len(report.Components), report.Files)
+	fmt.Fprintf(stdout, "✓ ezQuake (%d) + %d components intact · %d files\n", report.Clients, len(report.Components), report.Files)
 	return output.ExitSuccess
 }
 
 func init() {
-	register(command{name: "verify", group: "Instalar e manter", order: 50, synopsis: "[DESTINO]",
-		summary: "confere cada arquivo gerenciado contra o catálogo",
+	register(command{name: "verify", group: "Install and maintain", order: 50, synopsis: "[TARGET]",
+		summary: "checks every managed file against the catalog",
 		flags:   (&targetArgs{}).parser, run: noName(runVerify)})
 }

@@ -35,7 +35,7 @@ func runPlay(args []string, stdout, stderr io.Writer) int {
 	if request.menu || request.configureRuleset || (request.mode == "" && ktxOrUnset) {
 		// Something is left to choose: the match screen chooses it.
 		if !interactive() {
-			return usageFailure("play", cliargs.Usagef("sem terminal, informe o modo (--mode) ou o jogo"), stderr)
+			return usageFailure("play", cliargs.Usagef("without a terminal, give the mode (--mode) or the game"), stderr)
 		}
 		return runApp(realBackend("", install.HostPlatform()), target, "match", stdout, stderr)
 	}
@@ -50,7 +50,7 @@ func runPlay(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return con.failed(err)
 	}
-	con.success(fmt.Sprintf("Componente %s íntegro (%s; seleção %s).", resolved.Component, fileCount(resolved.Files), resolved.Selection))
+	con.success(fmt.Sprintf("Component %s intact (%s; selection %s).", resolved.Component, fileCount(resolved.Files), resolved.Selection))
 	launch, err := play.Build(resolved.Game, resolved.Mode, resolved.Map, resolved.Assets, resolved.Options, resolved.Ruleset)
 	if err != nil {
 		return con.failed(err)
@@ -66,19 +66,19 @@ func runPlay(args []string, stdout, stderr io.Writer) int {
 	if resolved.Mode != nil {
 		selection += " · " + resolved.Mode.Label
 	}
-	con.info("Abrindo " + selection + " no mapa " + resolved.Map + "...")
+	con.info("Starting " + selection + " on map " + resolved.Map + "...")
 	if err := play.Start(target, resolved.Runtime.Path, resolved.Runtime.BinarySHA, launch); err != nil {
 		return con.failed(err)
 	}
-	con.success(resolved.Runtime.Label + " aberto com " + selection + ".")
+	con.success(resolved.Runtime.Label + " started with " + selection + ".")
 	return output.ExitSuccess
 }
 
 func init() {
-	register(command{name: "play", group: "Jogar", order: 10, synopsis: "[JOGO] [opções]",
-		summary: "abre uma partida local; sem modo, a tela de partida do app",
-		about: "Abre uma partida local no ezQuake. KTX, o padrão, pede --mode; sem ele, num terminal, abre a tela de partida do app. " +
-			"Bots, CTF e Race são opções do KTX.",
+	register(command{name: "play", group: "Play", order: 10, synopsis: "[GAME] [options]",
+		summary: "starts a local match; without a mode, the app's match screen",
+		about: "Starts a local match in ezQuake. KTX, the default, needs --mode; without it, on a terminal, opens the app's match screen. " +
+			"Bots, CTF and Race are KTX options.",
 		flags: func() *cliargs.Parser { return playParser(&playRequest{}, &playFlags{}) },
 		run:   noName(runPlay)})
 }

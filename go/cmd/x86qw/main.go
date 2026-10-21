@@ -35,7 +35,7 @@ type command struct {
 var commands = map[string]*command{}
 
 // groups are the sections of `x86qw help`, by task.
-var groups = []string{"Jogar", "Hospedar", "Instalar e manter", "Seus dados", "Diagnóstico"}
+var groups = []string{"Play", "Host", "Install and maintain", "Your data", "Diagnostics"}
 
 // register adds a command; aliases run it but are not listed.
 func register(c command, aliases ...string) {
@@ -66,7 +66,7 @@ func listed(group string) []*command {
 
 func usageText() string {
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "x86QW %s · QuakeWorld moderno\n\nUso: x86qw [COMANDO] [opções]\nSem comando, abre o app.\n", buildinfo.Version)
+	fmt.Fprintf(&builder, "x86QW %s · modern QuakeWorld\n\nUsage: x86qw [COMMAND] [options]\nWithout a command, opens the app.\n", buildinfo.Version)
 	width := 0
 	for _, group := range groups {
 		for _, cmd := range listed(group) {
@@ -80,7 +80,7 @@ func usageText() string {
 			fmt.Fprintf(&builder, "  %s%s  %s\n", left, strings.Repeat(" ", width-utf8.RuneCountInString(left)), cmd.summary)
 		}
 	}
-	builder.WriteString("\nDetalhes de um comando: x86qw COMANDO --help\n")
+	builder.WriteString("\nDetails of a command: x86qw COMMAND --help\n")
 	return builder.String()
 }
 
@@ -88,7 +88,7 @@ func usageText() string {
 func commandHelp(name string) string {
 	cmd := commands[name]
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "Uso: %s\n\n", strings.TrimSpace("x86qw "+cmd.name+" "+cmd.synopsis))
+	fmt.Fprintf(&builder, "Usage: %s\n\n", strings.TrimSpace("x86qw "+cmd.name+" "+cmd.synopsis))
 	about := cmd.about
 	if about == "" {
 		about = strings.ToUpper(cmd.summary[:1]) + cmd.summary[1:] + "."
@@ -96,7 +96,7 @@ func commandHelp(name string) string {
 	fmt.Fprintf(&builder, "%s\n", about)
 	if cmd.flags != nil {
 		if flags := cmd.flags().Flags(); flags != "" {
-			fmt.Fprintf(&builder, "\nOpções:\n%s", flags)
+			fmt.Fprintf(&builder, "\nOptions:\n%s", flags)
 		}
 	}
 	return builder.String()
@@ -118,8 +118,8 @@ func parse(name string, p *cliargs.Parser, args []string, stdout, stderr io.Writ
 
 // usageFailure reports a mistake in the command line and returns 2.
 func usageFailure(name string, err error, stderr io.Writer) int {
-	fmt.Fprintf(stderr, "x86qw %s: erro: %v\n", name, err)
-	fmt.Fprintf(stderr, "Veja: x86qw %s --help\n", name)
+	fmt.Fprintf(stderr, "x86qw %s: error: %v\n", name, err)
+	fmt.Fprintf(stderr, "See: x86qw %s --help\n", name)
 	return output.ExitUsage
 }
 
@@ -141,7 +141,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 				fmt.Fprint(stdout, commandHelp(cmd.name))
 				return output.ExitSuccess
 			}
-			fmt.Fprintf(stderr, "x86qw help: comando desconhecido: %s\n", args[1])
+			fmt.Fprintf(stderr, "x86qw help: unknown command: %s\n", args[1])
 			return output.ExitUsage
 		}
 		fmt.Fprint(stdout, usageText())
@@ -149,8 +149,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	cmd, ok := commands[args[0]]
 	if !ok {
-		fmt.Fprintf(stderr, "x86qw: comando desconhecido: %s\n", args[0])
-		fmt.Fprintln(stderr, "Veja: x86qw help")
+		fmt.Fprintf(stderr, "x86qw: unknown command: %s\n", args[0])
+		fmt.Fprintln(stderr, "See: x86qw help")
 		return output.ExitUsage
 	}
 	return cmd.run(args[0], args[1:], stdout, stderr)

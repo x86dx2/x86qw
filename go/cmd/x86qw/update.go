@@ -22,9 +22,9 @@ type planArgs struct {
 func (a *planArgs) parser() *cliargs.Parser {
 	p := cliargs.New()
 	targetFlag(p, &a.target)
-	p.Bool(&a.dryRun, "mostra o plano sem alterar arquivos", "--dry-run")
-	p.Bool(&a.json, "o plano em JSON (exige --dry-run)", "--json")
-	p.Bool(&a.yes, "aplica sem perguntar", "--yes")
+	p.Bool(&a.dryRun, "shows the plan without changing files", "--dry-run")
+	p.Bool(&a.json, "the plan as JSON (needs --dry-run)", "--json")
+	p.Bool(&a.yes, "applies without asking", "--yes")
 	catalogFileFlag(p, &a.catalogFile)
 	return p
 }
@@ -37,7 +37,7 @@ func parsePlan(name string, args []string, stdout, stderr io.Writer) (*planArgs,
 		return nil, "", code, false
 	}
 	if a.json && !a.dryRun {
-		return nil, "", usageFailure(name, cliargs.Usagef("--json exige --dry-run, para não esconder mudanças"), stderr), false
+		return nil, "", usageFailure(name, cliargs.Usagef("--json needs --dry-run, so no change goes unseen"), stderr), false
 	}
 	target, err := targetOf(p, a.target)
 	if err != nil {
@@ -99,15 +99,15 @@ func runPlan(command string, args []string, stdout, stderr io.Writer) int {
 		return output.ExitSuccess
 	}
 	if len(result.Operations) == 0 {
-		fmt.Fprintln(stdout, "✓ Nenhuma atualização disponível; o conteúdo instalado já está atualizado.")
+		fmt.Fprintln(stdout, "✓ No update available; the installed content is up to date.")
 		return output.ExitSuccess
 	}
 	printPlan(result, stdout)
 	if a.dryRun {
-		fmt.Fprintln(stdout, "\n· Simulação concluída; nenhum arquivo foi alterado.")
+		fmt.Fprintln(stdout, "\n· Dry run done; no file was changed.")
 		return output.ExitSuccess
 	}
-	question := fmt.Sprintf("Aplicar %d mudança(s) em %s?", len(result.Operations), target)
+	question := fmt.Sprintf("Apply %d change(s) to %s?", len(result.Operations), target)
 	if proceed, code := confirm(question, "x86qw "+command+" "+target, a.yes, stdout, stderr); !proceed {
 		return code
 	}
@@ -123,22 +123,22 @@ func runPlan(command string, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "✓ %s atualizado\n", client)
 	}
 	if len(applied.Installed) > 0 {
-		fmt.Fprintf(stdout, "✓ %d componentes atualizados · %d arquivos\n", len(applied.Installed), applied.Files)
+		fmt.Fprintf(stdout, "✓ %d components updated · %d files\n", len(applied.Installed), applied.Files)
 	}
 	if applied.CLIVersion != "" {
-		fmt.Fprintf(stdout, "✓ CLI x86QW atualizada para %s\n", applied.CLIVersion)
+		fmt.Fprintf(stdout, "✓ x86QW CLI updated to %s\n", applied.CLIVersion)
 	}
-	fmt.Fprintln(stdout, "✓ Conteúdo instalado atualizado e validado.")
+	fmt.Fprintln(stdout, "✓ Installed content updated and validated.")
 	return output.ExitSuccess
 }
 
 func init() {
-	register(command{name: "update", group: "Instalar e manter", order: 30, synopsis: "[DESTINO]",
-		summary: "atualiza o que está instalado",
-		about:   "Atualiza o ezQuake, os componentes e a CLI que você já tem. Mostra o plano e pergunta antes; sem terminal, exige --yes.",
+	register(command{name: "update", group: "Install and maintain", order: 30, synopsis: "[TARGET]",
+		summary: "updates what is installed",
+		about:   "Updates the ezQuake, components and CLI you already have. Shows the plan and asks first; without a terminal, needs --yes.",
 		flags:   (&planArgs{}).parser, run: runPlan})
-	register(command{name: "upgrade", group: "Instalar e manter", order: 40, synopsis: "[DESTINO]",
-		summary: "atualiza e acrescenta as novidades do seu perfil",
-		about:   "Como update, e também instala os componentes que o seu perfil de conteúdo ganhou desde a instalação.",
+	register(command{name: "upgrade", group: "Install and maintain", order: 40, synopsis: "[TARGET]",
+		summary: "updates and adds what your profile gained",
+		about:   "Like update, and also installs the components your content profile gained since the install.",
 		flags:   (&planArgs{}).parser, run: runPlan})
 }

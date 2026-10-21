@@ -59,9 +59,9 @@ func publishCLI(target string, link bool, out io.Writer) error {
 	case err != nil:
 		return err
 	case command != "" && runtime.GOOS == "windows":
-		fmt.Fprintf(out, "Atalhos do x86QW criados no Menu Iniciar e na Área de Trabalho (%s).\n", command)
+		fmt.Fprintf(out, "x86QW shortcuts created in the Start Menu and on the Desktop (%s).\n", command)
 	case command != "":
-		fmt.Fprintf(out, "Comando x86qw disponível em %s\n", command)
+		fmt.Fprintf(out, "x86qw command available at %s\n", command)
 	}
 	return nil
 }
@@ -70,7 +70,7 @@ func publishCLI(target string, link bool, out io.Writer) error {
 func lastLines(text string, count int) string {
 	var lines []string
 	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
-		if line = strings.TrimSpace(strings.TrimLeft(line, "✗!· ")); line != "" && !strings.HasPrefix(line, "Veja: x86qw") {
+		if line = strings.TrimSpace(strings.TrimLeft(line, "✗!· ")); line != "" && !strings.HasPrefix(line, "See: x86qw") {
 			lines = append(lines, line)
 		}
 	}
@@ -78,7 +78,7 @@ func lastLines(text string, count int) string {
 		lines = lines[len(lines)-count:]
 	}
 	if len(lines) == 0 {
-		return "o comando falhou"
+		return "the command failed"
 	}
 	return strings.Join(lines, " · ")
 }
@@ -99,7 +99,7 @@ func runApp(backend *setup.Real, root, start string, stdout, stderr io.Writer) i
 			err = publishCLI(root, link, io.Discard)
 			held.Release()
 			if err != nil {
-				fmt.Fprintf(stderr, "! A CLI nativa não pôde ser publicada: %v\n", err)
+				fmt.Fprintf(stderr, "! The native CLI could not be published: %v\n", err)
 			}
 		}
 	}
@@ -133,17 +133,23 @@ func runApp(backend *setup.Real, root, start string, stdout, stderr io.Writer) i
 	}
 }
 
-// interfaceLanguage follows the locale: Portuguese unless it says otherwise.
+// interfaceLanguage follows the locale: English unless it is Portuguese.
+// Windows keeps the language in its settings, not in LANG.
 func interfaceLanguage() tui.Lang {
 	for _, name := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
 		if value := os.Getenv(name); value != "" && value != "C" && value != "POSIX" {
-			if strings.HasPrefix(strings.ToLower(value), "pt") {
-				return tui.PT
-			}
-			return tui.EN
+			return languageOf(value)
 		}
 	}
-	return tui.PT
+	return languageOf(systemLanguage())
+}
+
+// languageOf is the interface language for a locale such as pt_BR.UTF-8.
+func languageOf(locale string) tui.Lang {
+	if strings.HasPrefix(strings.ToLower(locale), "pt") {
+		return tui.PT
+	}
+	return tui.EN
 }
 
 type appArgs struct {
@@ -171,11 +177,11 @@ func runMenuCommand(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprint(stdout, usageText())
 			return output.ExitSuccess
 		}
-		fmt.Fprintf(stderr, "x86qw: erro: %v\nVeja: x86qw help\n", err)
+		fmt.Fprintf(stderr, "x86qw: error: %v\nSee: x86qw help\n", err)
 		return output.ExitUsage
 	}
 	if len(p.Positional()) > 0 {
-		fmt.Fprintf(stderr, "x86qw: erro: argumentos a mais: %s\nVeja: x86qw help\n", strings.Join(p.Positional(), " "))
+		fmt.Fprintf(stderr, "x86qw: error: unexpected arguments: %s\nSee: x86qw help\n", strings.Join(p.Positional(), " "))
 		return output.ExitUsage
 	}
 	if !interactive() {
@@ -184,7 +190,7 @@ func runMenuCommand(args []string, stdout, stderr io.Writer) int {
 	}
 	root, err := targetOf(p, a.target)
 	if err != nil {
-		fmt.Fprintf(stderr, "x86qw: erro: %v\n", err)
+		fmt.Fprintf(stderr, "x86qw: error: %v\n", err)
 		return output.ExitUsage
 	}
 	return runApp(realBackend("", install.HostPlatform()), root, "", stdout, stderr)

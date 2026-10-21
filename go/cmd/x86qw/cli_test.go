@@ -27,15 +27,15 @@ func TestEveryCommandHasHelp(t *testing.T) {
 	}
 	names := publicCommandNames()
 	if len(names) < 20 {
-		t.Fatalf("poucos comandos: %v", names)
+		t.Fatalf("too few commands: %v", names)
 	}
 	for _, name := range names {
 		if !strings.Contains(listing.String(), "\n  "+name) {
-			t.Errorf("x86qw help não lista %s", name)
+			t.Errorf("x86qw help does not list %s", name)
 		}
 		for _, args := range [][]string{{name, "--help"}, {name, "-h"}, {"help", name}} {
 			var stdout, stderr bytes.Buffer
-			if code := run(args, &stdout, &stderr); code != 0 || !strings.HasPrefix(stdout.String(), "Uso: x86qw "+name) {
+			if code := run(args, &stdout, &stderr); code != 0 || !strings.HasPrefix(stdout.String(), "Usage: x86qw "+name) {
 				t.Errorf("x86qw %v: %d\n%s%s", args, code, stdout.String(), stderr.String())
 			}
 		}
@@ -59,7 +59,7 @@ func TestFlagsGoAnywhere(t *testing.T) {
 	}
 	var stdout, stderr bytes.Buffer
 	if code := run([]string{"update", target, "--dry-run", "--nope"}, &stdout, &stderr); code != 2 ||
-		!strings.Contains(stderr.String(), "x86qw update: erro: opção desconhecida: --nope") || !strings.Contains(stderr.String(), "x86qw update --help") {
+		!strings.Contains(stderr.String(), "x86qw update: error: unknown option: --nope") || !strings.Contains(stderr.String(), "x86qw update --help") {
 		t.Fatalf("%d %s", code, stderr.String())
 	}
 	stderr.Reset()
@@ -79,7 +79,7 @@ func TestChangesNeedYesWithoutATerminal(t *testing.T) {
 	} {
 		var stdout, stderr bytes.Buffer
 		code := run(args, &stdout, &stderr)
-		if code != 2 || !strings.Contains(stderr.String(), "Repita com --yes") {
+		if code != 2 || !strings.Contains(stderr.String(), "Run again with --yes") {
 			t.Errorf("x86qw %v: %d\n%s%s", args, code, stdout.String(), stderr.String())
 		}
 	}
@@ -88,10 +88,10 @@ func TestChangesNeedYesWithoutATerminal(t *testing.T) {
 func TestConfirmAsksOnATerminal(t *testing.T) {
 	stdinIsTerminal = func() bool { return true }
 	t.Cleanup(func() { stdinIsTerminal = func() bool { return false } })
-	for answer, want := range map[string]bool{"s\n": true, "sim\n": true, "\n": false, "n\n": false} {
+	for answer, want := range map[string]bool{"y\n": true, "yes\n": true, "s\n": true, "\n": false, "n\n": false} {
 		stdin = strings.NewReader(answer)
 		var stdout, stderr bytes.Buffer
-		if proceed, code := confirm("Seguir?", "x86qw x", false, &stdout, &stderr); proceed != want || code != 0 {
+		if proceed, code := confirm("Continue?", "x86qw x", false, &stdout, &stderr); proceed != want || code != 0 {
 			t.Errorf("%q: %v %d", answer, proceed, code)
 		}
 	}
