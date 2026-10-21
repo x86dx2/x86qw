@@ -1,11 +1,11 @@
 {
  "capabilities-duplicate-key": "[ERRO] cannot read capabilities catalog: <root>/maintenance/inventory/capabilities.json",
- "catalog-diverges-from-tuf-target": "[ERRO] TUF não autentica o catálogo local: catálogo local diverge do target TUF e não possui targets fonte autenticados",
+ "catalog-diverges-from-tuf-target": "[ERRO] TUF não autentica o catálogo local: catálogo local diverge do target TUF; assine-o com x86qw-release sign",
  "catalog-package-size": "[ERRO] packages[0].size must be a positive integer",
  "compatibility-unknown-runtime": "[ERRO] compatibility references invalid kind or runtime",
  "component-contract": "[ERRO] invalid component catalog contract",
  "component-kind": "[ERRO] invalid component kind: x86qw-client-bootstrap",
- "component-policy-consumers": "[ERRO] component has no explicit consumer: installer",
+ "component-policy-consumers": "[ERRO] component has no explicit consumer: core",
  "dist-integrity": "[ERRO] distribution file failed integrity verification: clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage",
  "dist-lfs-pointer": "[ERRO] distribution file is an unhydrated Git LFS pointer: clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage; run `git lfs pull --include='clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage'`",
  "dist-missing-file": "[ERRO] distribution is missing a registered upstream file: clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage",
@@ -24,6 +24,7 @@
  "runtime-missing-field": "[ERRO] runtime lacks required fields: ezquake-stable",
  "tree-partition-unassigned": "[ERRO] reference source is not assigned to a component: zz-unassigned.txt",
  "tuf-root-policy": "[ERRO] TUF não autentica o catálogo local: root TUF incorporada inválida: root TUF deve habilitar consistent snapshots",
+ "tuf-stale-generation": "[ERRO] TUF não autentica o catálogo local: a projeção TUF guarda gerações antigas (metadata/1.snapshot.json); rode x86qw-release prune",
  "tuf-timestamp-missing": "[ERRO] TUF não autentica o catálogo local: projeção pública de TUF não contém root/timestamp/snapshot/targets",
  "upstream-duplicate-id": "[ERRO] invalid or duplicate upstream id: ezquake-stable"
 }

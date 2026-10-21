@@ -1,0 +1,92 @@
+name: Deploy site
+
+# Every merge that touches site/public goes live right away, so production
+# always serves main: the timestamp renewal refuses to run otherwise. It
+# never rolls the TUF timestamp back and never replaces a version with
+# different bytes. Shipping a CLI release here also marks it latest.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/public/**"
+      - "site/wrangler.jsonc"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Shared with the timestamp renewal: one of them deploys at a time.
+concurrency:
+  group: x86qw-site-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy main to qw.x86.com.br
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          lfs: false
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      - name: Build the release tooling
+        working-directory: go
+        run: go build -o "$RUNNER_TEMP/x86qw-release" ./cmd/x86qw-release
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Install the pinned site toolchain
+        working-directory: site
+        run: npm ci
+      - name: Refuse to roll the TUF timestamp back
+        run: |
+          set -euo pipefail
+          checkout=site/public/api/v1/trust/metadata/timestamp.json
+          "$RUNNER_TEMP/x86qw-release" live-timestamp --out "$RUNNER_TEMP/live-timestamp.json"
+          live="$(jq -r .signed.version "$RUNNER_TEMP/live-timestamp.json")"
+          ours="$(jq -r .signed.version "$checkout")"
+          if [ "$ours" -lt "$live" ]; then
+            echo "::error::produção serve o timestamp $live e main o $ours; espere o PR da renovação entrar"
+            exit 1
+          fi
+          if [ "$ours" -eq "$live" ] && ! cmp -s "$checkout" "$RUNNER_TEMP/live-timestamp.json"; then
+            echo "::error::main e produção têm timestamps $ours diferentes; assine uma geração nova com x86qw-release sign"
+            exit 1
+          fi
+      - name: Assemble and deploy the site
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          "$RUNNER_TEMP/x86qw-release" site --source site/public --out "$RUNNER_TEMP/site/public" \
+            --commit "$GITHUB_SHA" --deploy-run "$GITHUB_RUN_ID"
+          cp site/wrangler.jsonc "$RUNNER_TEMP/site/wrangler.jsonc"
+          site/node_modules/.bin/wrangler deploy \
+            --config "$RUNNER_TEMP/site/wrangler.jsonc" \
+            --assets "$RUNNER_TEMP/site/public" \
+            --strict
+      - name: Verify the public chain against main
+        working-directory: go
+        run: '"$RUNNER_TEMP/x86qw-release" monitor --warning-hours 72 --checkout --checkout-time "$(git log -1 --format=%cI)"'
+      - name: Mark the served CLI release as latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(jq -r '[.packages[] | select(.package == "x86qw-cli") | .version] | unique | if length == 1 then .[0] else error("mais de uma versão da CLI") end' site/public/api/v1/catalog.json)"
+          tag="x86qw-cli-${version}"
+          if [ "$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)" = true ]; then
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --prerelease=false --latest
+            echo "$tag marcada como latest"
+          fi

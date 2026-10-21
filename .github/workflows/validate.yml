@@ -77,3 +77,16 @@ jobs:
           npx playwright install --with-deps chromium
           npm test
           npm run deploy:dry-run
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      # The same assembly the deploy ships: the current TUF generation only,
+      # the provenance files and the no-store headers.
+      - name: Dry-run the assembled site
+        run: |
+          go -C go build -o "$RUNNER_TEMP/x86qw-release" ./cmd/x86qw-release
+          "$RUNNER_TEMP/x86qw-release" site --source site/public --out "$RUNNER_TEMP/site/public" --commit "$GITHUB_SHA"
+          cp site/wrangler.jsonc "$RUNNER_TEMP/site/wrangler.jsonc"
+          site/node_modules/.bin/wrangler deploy --config "$RUNNER_TEMP/site/wrangler.jsonc" \
+            --assets "$RUNNER_TEMP/site/public" --dry-run --strict

@@ -485,7 +485,7 @@ func (p *Project) RegisterPackages(catalogPath string, manifest *Object, now tim
 			pyjson.Repr(getOr(item, "version", "")), pyjson.Repr(getOr(item, "platform", "")),
 		}
 	}
-	// The CLI binaries stay last, in the order x86qw-release catalog-cli
+	// The CLI binaries stay last, in the order x86qw-release prepare
 	// writes them, so both tools produce the same catalog bytes.
 	var content, cli []any
 	for _, raw := range packages {

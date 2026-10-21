@@ -189,7 +189,7 @@ roots não ancoradas e remoção de versões intermediárias falham fechados.
   incidente.
 
 O procedimento completo está no
-[runbook de operações de trust](../runbooks/trust-metadata-operations.md).
+[runbook de release e TUF](../runbooks/release.md).
 
 ### Compatibilidade e corte
 

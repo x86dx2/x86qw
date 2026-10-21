@@ -3,10 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
-	"os"
-	"strings"
 )
 
 // cliCoordinates maps release targets to catalog platform/architecture.
@@ -16,40 +13,6 @@ var cliCoordinates = map[string][2]string{
 	"linux-amd64":   {"linux", "x86_64"},
 	"linux-arm64":   {"linux", "arm64"},
 	"windows-amd64": {"windows", "x64"},
-}
-
-// runCatalogCLI replaces the x86qw-cli entries of catalog.json with the
-// pinned assets of one release (x86qw-release catalog-cli --version V --assets DIR).
-func runCatalogCLI(args []string) int {
-	flags := flag.NewFlagSet("catalog-cli", flag.ExitOnError)
-	version := flags.String("version", "", "versão da CLI")
-	assets := flags.String("assets", "", "diretório com os binários do release")
-	path := flags.String("catalog", "site/public/api/v1/catalog.json", "catálogo")
-	flags.Parse(args)
-	if *version == "" || *assets == "" {
-		flags.Usage()
-		return 2
-	}
-	pins, err := collect(*version, *assets)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "x86qw-release catalog-cli:", err)
-		return 1
-	}
-	raw, err := os.ReadFile(*path)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "x86qw-release catalog-cli:", err)
-		return 1
-	}
-	updated, err := withCLIPackages(raw, *version, pins)
-	if err == nil {
-		err = os.WriteFile(*path, updated, 0o644)
-	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "x86qw-release catalog-cli:", err)
-		return 1
-	}
-	fmt.Printf("%d pacotes x86qw-cli %s gravados em %s\n", len(Targets), *version, strings.TrimSpace(*path))
-	return 0
 }
 
 // catalogDocument keeps the catalog's key order (format, project,
@@ -80,9 +43,10 @@ type cliEntry struct {
 	ReleaseURL             string   `json:"release_url"`
 }
 
-// withCLIPackages replaces x86qw-cli entries, rendering like Python's
-// json.dumps(indent=2, ensure_ascii=False).
-func withCLIPackages(raw []byte, version string, p *pins) ([]byte, error) {
+// withCLIPackages replaces the x86qw-cli entries with p's binaries. Two-space
+// indent and no HTML escaping keep a round trip byte for byte; a non-empty
+// generatedAt replaces the catalog's generated_at.
+func withCLIPackages(raw []byte, version string, p *pins, generatedAt string) ([]byte, error) {
 	var document catalogDocument
 	if err := json.Unmarshal(raw, &document); err != nil {
 		return nil, err
@@ -117,6 +81,9 @@ func withCLIPackages(raw []byte, version string, p *pins) ([]byte, error) {
 		}
 	}
 	document.Packages = kept
+	if generatedAt != "" {
+		document.GeneratedAt, _ = json.Marshal(generatedAt)
+	}
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
 	encoder.SetEscapeHTML(false)
@@ -125,4 +92,36 @@ func withCLIPackages(raw []byte, version string, p *pins) ([]byte, error) {
 		return nil, err
 	}
 	return buffer.Bytes(), nil
+}
+
+// catalogPins are the x86qw-cli binaries the catalog lists.
+func catalogPins(raw []byte) (*pins, error) {
+	var document struct {
+		Packages []struct {
+			Package, Version, Platform, Architecture, SHA256 string
+			Size                                             int64
+		} `json:"packages"`
+	}
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return nil, err
+	}
+	p := &pins{SHA256: map[string]string{}, Size: map[string]int64{}}
+	for _, pkg := range document.Packages {
+		if pkg.Package != "x86qw-cli" {
+			continue
+		}
+		if p.Version != "" && pkg.Version != p.Version {
+			return nil, fmt.Errorf("o catálogo lista a CLI %s e a %s", p.Version, pkg.Version)
+		}
+		p.Version = pkg.Version
+		for target, coordinates := range cliCoordinates {
+			if coordinates == [2]string{pkg.Platform, pkg.Architecture} {
+				p.SHA256[target], p.Size[target] = pkg.SHA256, pkg.Size
+			}
+		}
+	}
+	if len(p.SHA256) != len(Targets) {
+		return nil, fmt.Errorf("o catálogo não lista os %d binários da CLI", len(Targets))
+	}
+	return p, nil
 }
