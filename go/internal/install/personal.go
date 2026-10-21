@@ -30,14 +30,14 @@ func SavePersonalFile(root, relative string, payload []byte) error {
 			return err
 		}
 		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("Caminho pessoal inseguro: %s", current)
+			return fmt.Errorf("Unsafe personal path: %s", current)
 		}
 	}
 	if info, err := os.Lstat(destination); err == nil && !info.Mode().IsRegular() {
-		return fmt.Errorf("Caminho pessoal inseguro: %s", destination)
+		return fmt.Errorf("Unsafe personal path: %s", destination)
 	}
 	if err := atomicfile.Write(destination, payload, 0o644); err != nil {
-		return fmt.Errorf("Falha ao publicar configuração pessoal: %s", destination)
+		return fmt.Errorf("Could not publish the personal settings: %s", destination)
 	}
 	return nil
 }

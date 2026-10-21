@@ -255,7 +255,7 @@ func CompatibleMaps(root string, game Game, requirements []Requirement, assets m
 		for index, requirement := range requirements {
 			keys[index] = requirement.Asset
 		}
-		return nil, errorf("Nenhum mapa instalado possui o recurso exigido por %s: %s.", label, strings.Join(keys, ", "))
+		return nil, errorf("No installed map has the asset %s needs: %s.", label, strings.Join(keys, ", "))
 	}
 	return filtered, nil
 }
@@ -272,5 +272,5 @@ func ResolveMap(root string, game Game, requested string, requirements []Require
 			return name, nil
 		}
 	}
-	return "", errorf("O mapa %s não está disponível ou não é compatível com %s.", requested, label)
+	return "", errorf("Map %s is not available or not compatible with %s.", requested, label)
 }

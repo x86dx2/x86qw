@@ -31,13 +31,13 @@ type Version struct {
 func Parse(value string) (Version, error) {
 	match := pattern.FindStringSubmatch(value)
 	if match == nil {
-		return Version{}, fmt.Errorf("SemVer inválido: %q", value)
+		return Version{}, fmt.Errorf("invalid SemVer: %q", value)
 	}
 	var version Version
 	var err error
 	for index, target := range []*uint64{&version.Major, &version.Minor, &version.Patch} {
 		if *target, err = strconv.ParseUint(match[index+1], 10, 64); err != nil {
-			return Version{}, fmt.Errorf("SemVer inválido: %q", value)
+			return Version{}, fmt.Errorf("invalid SemVer: %q", value)
 		}
 	}
 	if match[4] != "" {

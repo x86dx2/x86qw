@@ -98,7 +98,7 @@ func (p *Project) planReferenceMove(owner string, release *Object, upstream *NQu
 	for _, path := range move.changed {
 		for _, layer := range objects(getOr(release, "archive_layers", []any{})) {
 			if layer.Value("reference_source") == path {
-				return move, fmt.Sprintf("%s mudou e a camada x86QW sobre ele exige revisar a politica de composicao (%s)", path, pyjson.Repr(layer.Value("policy"))), nil
+				return move, fmt.Sprintf("%s changed and the x86QW layer over it needs its composition policy reviewed (%s)", path, pyjson.Repr(layer.Value("policy"))), nil
 			}
 		}
 		for index, replacement := range objects(getOr(release, "text_replacements", []any{})) {
@@ -110,7 +110,7 @@ func (p *Project) planReferenceMove(owner string, release *Object, upstream *NQu
 				return move, "", err
 			}
 			if !present || bytes.Count(data, []byte(pyjson.Repr(replacement.Value("before")))) != countInt(replacement) {
-				return move, fmt.Sprintf("a substituicao x86QW em %s nao se aplica mais ao arquivo novo; revise text_replacements", path), nil
+				return move, fmt.Sprintf("the x86QW replacement in %s no longer applies to the new file; review text_replacements", path), nil
 			}
 			move.repins = append(move.repins, referenceRepin{"text_replacements", index, sha256Hex(data)})
 		}
@@ -123,7 +123,7 @@ func (p *Project) planReferenceMove(owner string, release *Object, upstream *NQu
 				return move, "", err
 			}
 			if !present {
-				return move, fmt.Sprintf("%s saiu do nQuake e tem substituicoes x86QW; revise archive_text_replacements", path), nil
+				return move, fmt.Sprintf("%s left nQuake and has x86QW replacements; review archive_text_replacements", path), nil
 			}
 			members, err := ReadZipMembers(data, "nQuake "+path)
 			if err != nil {
@@ -135,7 +135,7 @@ func (p *Project) planReferenceMove(owner string, release *Object, upstream *NQu
 			case ok && bytes.Count(member, []byte(pyjson.Repr(replacement.Value("before")))) == countInt(replacement):
 				move.repins = append(move.repins, referenceRepin{"archive_text_replacements", index, sha256Hex(member)})
 			default:
-				return move, fmt.Sprintf("a substituicao x86QW em %s:%s nao se aplica mais; revise archive_text_replacements", path, pyjson.Repr(replacement.Value("member"))), nil
+				return move, fmt.Sprintf("the x86QW replacement in %s:%s no longer applies; review archive_text_replacements", path, pyjson.Repr(replacement.Value("member"))), nil
 			}
 		}
 	}

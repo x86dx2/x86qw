@@ -47,11 +47,11 @@ func BuildZip(entries []ZipEntry) ([]byte, error) {
 	var central bytes.Buffer
 	for _, entry := range entries {
 		if float64(len(entry.Data))*1.05 > zip64Limit {
-			return nil, fmt.Errorf("membro ZIP exige ZIP64, fora do layout determinístico: %s", entry.Name)
+			return nil, fmt.Errorf("ZIP member requires ZIP64, outside the deterministic layout: %s", entry.Name)
 		}
 		compressed := zdeflate.Compress(entry.Data)
 		if len(compressed) > zip64Limit || out.Len() > zip64Limit {
-			return nil, fmt.Errorf("ZIP exige ZIP64, fora do layout determinístico: %s", entry.Name)
+			return nil, fmt.Errorf("ZIP requires ZIP64, outside the deterministic layout: %s", entry.Name)
 		}
 		flags := uint16(0)
 		if !isASCII(entry.Name) {
@@ -85,7 +85,7 @@ func BuildZip(entries []ZipEntry) ([]byte, error) {
 	start := out.Len()
 	out.Write(central.Bytes())
 	if len(entries) > 0xffff || start > zip64Limit {
-		return nil, fmt.Errorf("ZIP exige ZIP64, fora do layout determinístico")
+		return nil, fmt.Errorf("ZIP requires ZIP64, outside the deterministic layout")
 	}
 	end := []any{
 		uint32(0x06054b50), uint16(0), uint16(0), uint16(len(entries)), uint16(len(entries)),

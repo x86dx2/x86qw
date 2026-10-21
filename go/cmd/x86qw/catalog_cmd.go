@@ -20,9 +20,9 @@ type catalogArgs struct {
 func (a *catalogArgs) parser() *cliargs.Parser {
 	p := cliargs.New()
 	jsonFlag(p, &a.json)
-	p.String(&a.baseURL, "URL", "repositório TUF (metadata/ e targets/)", "--base-url")
-	p.String(&a.cacheDir, "PASTA", "cache de metadados confiáveis; vazio desativa", "--cache-dir")
-	p.String(&a.output, "ARQUIVO", "grava o catálogo autenticado neste arquivo", "--output")
+	p.String(&a.baseURL, "URL", "TUF repository (metadata/ and targets/)", "--base-url")
+	p.String(&a.cacheDir, "FOLDER", "trusted metadata cache; empty turns it off", "--cache-dir")
+	p.String(&a.output, "FILE", "writes the authenticated catalog to this file", "--output")
 	return p
 }
 
@@ -33,7 +33,7 @@ func runCatalog(args []string, stdout, stderr io.Writer) int {
 		return code
 	}
 	if len(p.Positional()) > 0 {
-		return usageFailure("catalog", cliargs.Usagef("argumentos a mais: %v", p.Positional()), stderr)
+		return usageFailure("catalog", cliargs.Usagef("unexpected arguments: %v", p.Positional()), stderr)
 	}
 	catalog, err := trust.LoadCatalog(trust.Options{BaseURL: a.baseURL, CacheDir: a.cacheDir})
 	if err == nil && a.output != "" {
@@ -47,7 +47,7 @@ func runCatalog(args []string, stdout, stderr io.Writer) int {
 		if a.json {
 			output.Failure("catalog", output.ExitFailure, code, err.Error()).Write(stdout)
 		} else {
-			fmt.Fprintf(stderr, "✗ O catálogo x86QW não autenticou: %v\n", err)
+			fmt.Fprintf(stderr, "✗ The x86QW catalog did not authenticate: %v\n", err)
 		}
 		return output.ExitFailure
 	}
@@ -70,7 +70,7 @@ func runCatalog(args []string, stdout, stderr io.Writer) int {
 		}
 		return output.ExitSuccess
 	}
-	fmt.Fprintf(stdout, "✓ Catálogo autenticado: %d pacotes, sha256 %s\n", catalog.Packages, catalog.SHA256)
+	fmt.Fprintf(stdout, "✓ Catalog authenticated: %d packages, sha256 %s\n", catalog.Packages, catalog.SHA256)
 	names := make([]string, 0, len(catalog.Roles))
 	for name := range catalog.Roles {
 		names = append(names, name)
@@ -78,12 +78,12 @@ func runCatalog(args []string, stdout, stderr io.Writer) int {
 	sort.Strings(names)
 	for _, name := range names {
 		state := catalog.Roles[name]
-		fmt.Fprintf(stdout, "  %-9s v%-3d expira %s\n", name, state.Version, state.Expires.UTC().Format(time.RFC3339))
+		fmt.Fprintf(stdout, "  %-9s v%-3d expires %s\n", name, state.Version, state.Expires.UTC().Format(time.RFC3339))
 	}
 	return output.ExitSuccess
 }
 
 func init() {
-	register(command{name: "catalog", group: "Diagnóstico", order: 20, summary: "autentica o catálogo público via TUF",
+	register(command{name: "catalog", group: "Diagnostics", order: 20, summary: "authenticates the public catalog over TUF",
 		flags: (&catalogArgs{}).parser, run: noName(runCatalog)})
 }

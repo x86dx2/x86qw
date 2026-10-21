@@ -149,7 +149,7 @@ func ExpectedPlaySupport(root string, games []Game) (map[string][]byte, error) {
 			}
 		}
 		if !regular(program) {
-			return nil, fmt.Errorf("gamecode local não encontrado: %s", program)
+			return nil, fmt.Errorf("local gamecode not found: %s", program)
 		}
 		payload, err := gameProgram(program)
 		if err != nil {
@@ -167,18 +167,18 @@ func gameProgram(program string) ([]byte, error) {
 	case ".pk3":
 		plan, err := archive.Open(program, archive.DefaultLimits)
 		if err != nil {
-			return nil, fmt.Errorf("gamecode qwprogs.dat não encontrado em %s: %w", program, err)
+			return nil, fmt.Errorf("gamecode qwprogs.dat not found in %s: %w", program, err)
 		}
 		defer plan.Close()
 		payload, err := plan.ReadMember("qwprogs.dat")
 		if err != nil {
-			return nil, fmt.Errorf("gamecode qwprogs.dat não encontrado em %s", program)
+			return nil, fmt.Errorf("gamecode qwprogs.dat not found in %s", program)
 		}
 		return payload, nil
 	case ".pak":
 		return pakMember(program, "qwprogs.dat")
 	}
-	return nil, fmt.Errorf("formato de gamecode local não suportado: %s", program)
+	return nil, fmt.Errorf("unsupported local gamecode format: %s", program)
 }
 
 type pakEntry struct {
@@ -193,12 +193,12 @@ func pakDirectory(file *os.File, name string) ([]pakEntry, error) {
 	}
 	header := make([]byte, 12)
 	if _, err := file.ReadAt(header, 0); err != nil || string(header[:4]) != "PACK" {
-		return nil, fmt.Errorf("PAK inválido: %s", name)
+		return nil, fmt.Errorf("invalid PAK: %s", name)
 	}
 	offset := int64(binary.LittleEndian.Uint32(header[4:8]))
 	length := int64(binary.LittleEndian.Uint32(header[8:12]))
 	if length%64 != 0 || offset+length > info.Size() || length/64 > 4096 {
-		return nil, fmt.Errorf("PAK inválido: %s", name)
+		return nil, fmt.Errorf("invalid PAK: %s", name)
 	}
 	directory := make([]byte, length)
 	if _, err := file.ReadAt(directory, offset); err != nil {
@@ -214,7 +214,7 @@ func pakDirectory(file *os.File, name string) ([]pakEntry, error) {
 		position := int64(binary.LittleEndian.Uint32(entry[56:60]))
 		size := int64(binary.LittleEndian.Uint32(entry[60:64]))
 		if position+size > info.Size() {
-			return nil, fmt.Errorf("membro PAK fora dos limites: %s", entryName)
+			return nil, fmt.Errorf("PAK member out of bounds: %s", entryName)
 		}
 		entries = append(entries, pakEntry{entryName, position, size})
 	}
@@ -260,7 +260,7 @@ func pakMember(name, member string) ([]byte, error) {
 		}
 		return payload, nil
 	}
-	return nil, fmt.Errorf("membro %s ausente do PAK %s", member, name)
+	return nil, fmt.Errorf("member %s missing from PAK %s", member, name)
 }
 
 // PlaySupportIssues ports gameplay.local_play_support_issues.
@@ -286,18 +286,18 @@ func PlaySupportIssues(root string, games []Game) ([]string, map[string][]byte, 
 		}
 	}
 	if !same {
-		issues = append(issues, "recibo play-support ausente ou divergente")
+		issues = append(issues, "play-support receipt missing or different")
 	}
 	for relative, payload := range expected {
 		digest := sha256.Sum256(payload)
 		actual, err := fileSHA256(filepath.Join(root, filepath.FromSlash(relative)))
 		if err != nil || !regular(filepath.Join(root, filepath.FromSlash(relative))) || actual != hex.EncodeToString(digest[:]) {
-			issues = append(issues, "gamecode derivado ausente ou divergente: "+relative)
+			issues = append(issues, "derived gamecode missing or different: "+relative)
 		}
 	}
 	for _, game := range games {
 		if !regular(filepath.Join(root, filepath.FromSlash(game.PersonalConfig))) {
-			issues = append(issues, "configuração pessoal ausente: "+game.PersonalConfig)
+			issues = append(issues, "personal settings missing: "+game.PersonalConfig)
 		}
 	}
 	return issues, expected, nil

@@ -28,7 +28,7 @@ func TestLockFormat(t *testing.T) {
 	}
 	info, _ := os.Stat(lock.Path)
 	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("modo %v", info.Mode())
+		t.Fatalf("mode %v", info.Mode())
 	}
 }
 
@@ -40,12 +40,12 @@ func TestSecondAcquireRespectsLiveLock(t *testing.T) {
 	}
 	if second, err := Acquire(target, "update"); err == nil {
 		second.Release()
-		t.Fatal("um lock vivo deveria ser recusado")
+		t.Fatal("a live lock should be refused")
 	}
 	lock.Release()
 	again, err := Acquire(target, "update")
 	if err != nil {
-		t.Fatalf("deveria adquirir após a liberação: %v", err)
+		t.Fatalf("should acquire after release: %v", err)
 	}
 	again.Release()
 }
@@ -58,7 +58,7 @@ func TestReclaimsLockOfDeadController(t *testing.T) {
 	}
 	identity, status := Identity(child.Process.Pid)
 	if status != "alive" {
-		t.Skip("identidade de processo indisponível")
+		t.Skip("process identity unavailable")
 	}
 	sessions := filepath.Join(target, ".x86qw", "sessions")
 	os.MkdirAll(sessions, 0o700)
@@ -70,18 +70,18 @@ func TestReclaimsLockOfDeadController(t *testing.T) {
 	os.WriteFile(filepath.Join(sessions, "active.lock"), append(payload, '\n'), 0o600)
 	if lock, err := Acquire(target, "update"); err == nil {
 		lock.Release()
-		t.Fatal("o controlador vivo deveria manter o lock")
+		t.Fatal("the live controller should keep the lock")
 	}
 	child.Process.Kill()
 	child.Wait()
 	lock, err := Acquire(target, "update")
 	if err != nil {
-		t.Fatalf("deveria recuperar o lock de um controlador morto: %v", err)
+		t.Fatalf("should reclaim the lock of a dead controller: %v", err)
 	}
 	if err := lock.Release(); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(lock.Path); err == nil {
-		t.Fatal("lock não foi liberado")
+		t.Fatal("lock was not released")
 	}
 }

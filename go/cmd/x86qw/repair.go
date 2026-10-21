@@ -45,15 +45,15 @@ func runRepair(args []string, stdout, stderr io.Writer) int {
 		return output.ExitSuccess
 	}
 	if len(planned.Operations) == 0 {
-		fmt.Fprintln(stdout, "✓ Nenhum reparo é necessário; a instalação está íntegra.")
+		fmt.Fprintln(stdout, "✓ No repair needed; the installation is intact.")
 		return output.ExitSuccess
 	}
 	printPlan(planned, stdout)
 	if a.dryRun {
-		fmt.Fprintln(stdout, "\n· Simulação concluída; nenhum arquivo foi alterado.")
+		fmt.Fprintln(stdout, "\n· Dry run done; no file was changed.")
 		return output.ExitSuccess
 	}
-	question := fmt.Sprintf("Reparar %d item(ns) em %s?", len(planned.Operations), target)
+	question := fmt.Sprintf("Repair %d item(s) in %s?", len(planned.Operations), target)
 	if proceed, code := confirm(question, "x86qw repair "+target, a.yes, stdout, stderr); !proceed {
 		return code
 	}
@@ -65,13 +65,13 @@ func runRepair(args []string, stdout, stderr io.Writer) int {
 	for _, warning := range result.Warnings {
 		fmt.Fprintf(stderr, "! %s\n", warning)
 	}
-	fmt.Fprintln(stdout, "✓ Reparo concluído e validado.")
+	fmt.Fprintln(stdout, "✓ Repair done and validated.")
 	return output.ExitSuccess
 }
 
 func init() {
-	register(command{name: "repair", group: "Instalar e manter", order: 60, synopsis: "[DESTINO]",
-		summary: "restaura o que verify acusar",
-		about:   "Baixa de novo o que falta ou não confere com o catálogo, sem tocar no que você editou. Mostra o plano e pergunta antes; sem terminal, exige --yes.",
+	register(command{name: "repair", group: "Install and maintain", order: 60, synopsis: "[TARGET]",
+		summary: "restores what verify reports",
+		about:   "Downloads again what is missing or does not match the catalog, without touching what you edited. Shows the plan and asks first; without a terminal, needs --yes.",
 		flags:   (&planArgs{}).parser, run: noName(runRepair)})
 }

@@ -40,17 +40,17 @@ func ValidateTarget(target string, mustExist bool) (string, error) {
 	info, err := os.Lstat(target)
 	exists := err == nil
 	if exists && info.Mode()&os.ModeSymlink != 0 {
-		return "", fmt.Errorf("O diretório de destino não pode ser um link simbólico: %s", target)
+		return "", fmt.Errorf("The target folder cannot be a symbolic link: %s", target)
 	}
 	if exists && !info.IsDir() {
-		return "", fmt.Errorf("O destino não é um diretório: %s", target)
+		return "", fmt.Errorf("The target is not a folder: %s", target)
 	}
 	if !exists && mustExist {
-		return "", fmt.Errorf("O diretório de destino não existe: %s", target)
+		return "", fmt.Errorf("The target folder does not exist: %s", target)
 	}
 	resolved := resolve(target)
 	if resolved == filepath.Dir(resolved) {
-		return "", errors.New("A raiz do sistema de arquivos não pode ser usada como destino.")
+		return "", errors.New("The file system root cannot be used as the target.")
 	}
 	return resolved, nil
 }
@@ -63,17 +63,17 @@ func ManagedIdentity(target string) ([]string, error) {
 	}
 	if info, err := os.Lstat(filepath.Join(target, metadataDirectory)); err == nil {
 		if !info.IsDir() {
-			return nil, fmt.Errorf("Metadados da instalação inválidos: %s", filepath.Join(target, metadataDirectory))
+			return nil, fmt.Errorf("Invalid installation metadata: %s", filepath.Join(target, metadataDirectory))
 		}
 	}
 	var evidence []string
 	statePath := filepath.Join(target, filepath.FromSlash(stateRelative))
 	if info, err := os.Lstat(statePath); err == nil {
 		if !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("Estado da instalação inválido: %s", statePath)
+			return nil, fmt.Errorf("Invalid installation state: %s", statePath)
 		}
 		if _, err := state.Read(target); err != nil {
-			return nil, fmt.Errorf("Estado da instalação inválido: %s", statePath)
+			return nil, fmt.Errorf("Invalid installation state: %s", statePath)
 		}
 		evidence = append(evidence, "state")
 	}
@@ -105,7 +105,7 @@ func RequireManagedIdentity(target, action string) error {
 		return err
 	}
 	if len(evidence) == 0 {
-		return fmt.Errorf("A operação %s recusou um destino sem identidade gerenciada x86QW validada: %s", action, target)
+		return fmt.Errorf("%s refused a target without a validated x86QW managed identity: %s", action, target)
 	}
 	return nil
 }
@@ -140,10 +140,10 @@ func ownedCaches() ([]string, error) {
 			continue
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			return nil, fmt.Errorf("a pasta de cache é um symlink: %s", candidate.path)
+			return nil, fmt.Errorf("the cache folder is a symlink: %s", candidate.path)
 		}
 		if !info.IsDir() {
-			return nil, fmt.Errorf("O caminho reservado ao cache não é um diretório: %s", candidate.path)
+			return nil, fmt.Errorf("The path reserved for the cache is not a folder: %s", candidate.path)
 		}
 		markerPath := filepath.Join(candidate.path, candidate.marker)
 		marker, err := os.ReadFile(markerPath)
@@ -153,12 +153,12 @@ func ownedCaches() ([]string, error) {
 			continue
 		}
 		if err != nil || strings.TrimRight(string(marker), "\n") != candidate.value {
-			return nil, fmt.Errorf("O diretório de cache contém arquivos que não pertencem ao instalador e foi preservado: %s", candidate.path)
+			return nil, fmt.Errorf("The cache folder holds files that do not belong to the installer and was kept: %s", candidate.path)
 		}
 		// Like private_fs.validate_private_file: owner-only regular file
 		// (Windows relies on ACLs, which the mode bits do not reflect).
 		if info, err := os.Lstat(markerPath); err != nil || !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0) {
-			return nil, fmt.Errorf("O marcador de propriedade do cache não pôde ser protegido: %s", markerPath)
+			return nil, fmt.Errorf("The cache ownership marker could not be protected: %s", markerPath)
 		}
 		owned = append(owned, candidate.path)
 	}
@@ -216,7 +216,7 @@ func quarantineRemove(paths []string) error {
 			for index := len(done) - 1; index >= 0; index-- {
 				os.Rename(done[index].aside, done[index].original)
 			}
-			return fmt.Errorf("Recolher %s falhou; os domínios anteriores foram restaurados: %w", path, err)
+			return fmt.Errorf("Setting %s aside failed; the earlier domains were restored: %w", path, err)
 		}
 		done = append(done, moved{path, aside})
 	}

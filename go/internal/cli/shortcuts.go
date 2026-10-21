@@ -41,11 +41,11 @@ foreach ($Path in @($StartMenuShortcut, $DesktopShortcut)) {
   }
   if (Test-Path -LiteralPath $Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
-      throw "O caminho do atalho nao e um arquivo: $Path"
+      throw "The shortcut path is not a file: $Path"
     }
     $Existing = $Shell.CreateShortcut($Path)
     if ([IO.Path]::GetFullPath($Existing.TargetPath) -ne $LauncherFull) {
-      throw "Um atalho nao gerenciado ja ocupa: $Path"
+      throw "An unmanaged shortcut is already at: $Path"
     }
   }
   $Parent = Split-Path -Parent $Path
@@ -63,7 +63,7 @@ foreach ($Path in @($StartMenuShortcut, $DesktopShortcut)) {
 func ShortcutPaths() ([2]string, error) {
 	appdata, profile := os.Getenv("APPDATA"), os.Getenv("USERPROFILE")
 	if appdata == "" || profile == "" {
-		return [2]string{}, errors.New("APPDATA e USERPROFILE são necessários para criar atalhos.")
+		return [2]string{}, errors.New("APPDATA and USERPROFILE are needed to create shortcuts.")
 	}
 	return [2]string{
 		filepath.Join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", "x86QW.lnk"),
@@ -74,7 +74,7 @@ func ShortcutPaths() ([2]string, error) {
 func runShortcutScript(mode, launcher, iconPath string, shortcuts [2]string) error {
 	powershell, err := exec.LookPath("powershell.exe")
 	if err != nil {
-		return errors.New("Windows PowerShell não está disponível para criar atalhos.")
+		return errors.New("Windows PowerShell is not available to create shortcuts.")
 	}
 	dir, err := os.MkdirTemp("", "x86qw-shortcut.")
 	if err != nil {
@@ -96,11 +96,11 @@ func runShortcutScript(mode, launcher, iconPath string, shortcuts [2]string) err
 		detail := strings.TrimSpace(string(output))
 		switch {
 		case ctx.Err() != nil:
-			detail = "o PowerShell não respondeu em 2 minutos"
+			detail = "PowerShell did not answer within 2 minutes"
 		case detail == "":
 			detail = err.Error()
 		}
-		return fmt.Errorf("Não foi possível configurar os atalhos do Windows: %s", detail)
+		return fmt.Errorf("Could not set up the Windows shortcuts: %s", detail)
 	}
 	return nil
 }

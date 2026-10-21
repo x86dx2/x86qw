@@ -15,7 +15,7 @@ import (
 func MkdirAll(path string) error {
 	if info, err := os.Lstat(path); err == nil {
 		if !info.IsDir() {
-			return &os.PathError{Op: "mkdir", Path: path, Err: errors.New("não é um diretório")}
+			return &os.PathError{Op: "mkdir", Path: path, Err: errors.New("not a directory")}
 		}
 		return nil
 	}

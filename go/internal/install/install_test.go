@@ -14,7 +14,7 @@ func realRoot(t *testing.T) string {
 	home, _ := os.UserHomeDir()
 	root := filepath.Join(home, "Games", "x86qw")
 	if _, err := os.Stat(filepath.Join(root, ".x86qw", "state.json")); err != nil {
-		t.Skip("sem instalação local")
+		t.Skip("no local installation")
 	}
 	return root
 }
@@ -26,7 +26,7 @@ func TestVerifyRealInstallation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if report.Clients == 0 || len(report.Components) == 0 || report.Files == 0 {
-		t.Fatalf("relatório vazio: %+v", report)
+		t.Fatalf("empty report: %+v", report)
 	}
 }
 
@@ -41,7 +41,7 @@ func TestPackageOrderPriorityThenCaseInsensitive(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := strings.Join(order, ","); got != "ktx.pk3,models.pk3,Alpha.pk3,zeta.pk3" {
-		t.Fatalf("ordem: %s", got)
+		t.Fatalf("order: %s", got)
 	}
 }
 
@@ -72,8 +72,8 @@ func TestVerifyDetectsTamperedFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := verifyRecord(root, records); err == nil || !strings.Contains(err.Error(), "alterado") {
-		t.Fatalf("arquivo adulterado não detectado: %v", err)
+	if _, err := verifyRecord(root, records); err == nil || !strings.Contains(err.Error(), "changed") {
+		t.Fatalf("tampered file not detected: %v", err)
 	}
 }
 
@@ -87,7 +87,7 @@ func TestEmbeddedGamesMatchMaintenance(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(want) != string(GamesJSON) {
-		t.Fatal("go/internal/install/games.json diverge de maintenance/inventory/games.json")
+		t.Fatal("go/internal/install/games.json differs from maintenance/inventory/games.json")
 	}
 }
 
@@ -105,6 +105,6 @@ func TestPlaySupportOfRealInstallation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(issues) != 0 || len(expected) != 4 {
-		t.Fatalf("play-support: %v (%d arquivos)", issues, len(expected))
+		t.Fatalf("play-support: %v (%d files)", issues, len(expected))
 	}
 }

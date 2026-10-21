@@ -55,7 +55,7 @@ func treeFiles(t *testing.T, root string) []string {
 // X86QW_NETWORK_TESTS=1 and X86QW_REAL_INSTALL=1.
 func TestServerInstancesRunTogether(t *testing.T) {
 	if os.Getenv("X86QW_NETWORK_TESTS") == "" || os.Getenv("X86QW_REAL_INSTALL") == "" {
-		t.Skip("defina X86QW_NETWORK_TESTS=1 e X86QW_REAL_INSTALL=1 para instalar de verdade")
+		t.Skip("set X86QW_NETWORK_TESTS=1 and X86QW_REAL_INSTALL=1 to install for real")
 	}
 	// MVDSV cuts paths at 128 bytes: keep the folder short.
 	short, err := os.MkdirTemp("", "q")
@@ -74,7 +74,7 @@ func TestServerInstancesRunTogether(t *testing.T) {
 	}
 	options, err := setup.LoadChoices(target)
 	if err != nil || options == nil {
-		t.Fatalf("escolhas: %v", err)
+		t.Fatalf("choices: %v", err)
 	}
 	before := treeFiles(t, filepath.Join(target, "qw"))
 	// The test binary cannot be a background controller: run the same
@@ -91,25 +91,25 @@ func TestServerInstancesRunTogether(t *testing.T) {
 	deadline := time.Now().Add(30 * time.Second)
 	for queryServer(27720) == "" || queryServer(27721) == "" {
 		if time.Now().After(deadline) {
-			t.Fatalf("as instâncias não responderam:\n%s", hostOut.String())
+			t.Fatalf("the instances did not answer:\n%s", hostOut.String())
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
 	if first, second := queryServer(27720), queryServer(27721); first != "dm6" || second != "dm3" {
-		t.Fatalf("mapas: %q e %q", first, second)
+		t.Fatalf("maps: %q and %q", first, second)
 	}
 	var status bytes.Buffer
 	run([]string{"status", "--target", target}, &status, &status)
 	if !strings.Contains(status.String(), "MVDSV #2 · 27721") {
-		t.Fatalf("status sem a segunda instância:\n%s", status.String())
+		t.Fatalf("status without the second instance:\n%s", status.String())
 	}
 	run([]string{"status", "--target", target, "--stop", "--yes"}, &status, &status)
 	select {
 	case <-finished:
 	case <-time.After(30 * time.Second):
-		t.Fatal("a sessão não encerrou")
+		t.Fatal("the session did not stop")
 	}
 	if after := treeFiles(t, filepath.Join(target, "qw")); strings.Join(after, "\n") != strings.Join(before, "\n") {
-		t.Fatalf("qw/ não voltou ao que era: %d arquivos antes, %d depois", len(before), len(after))
+		t.Fatalf("qw/ is not back to what it was: %d files before, %d after", len(before), len(after))
 	}
 }

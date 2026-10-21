@@ -87,20 +87,20 @@ func TestPresetRoundTrip(t *testing.T) {
 func TestReadPasswordFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "pw")
-	os.WriteFile(path, []byte("segredo\n"), 0o600)
+	os.WriteFile(path, []byte("secret\n"), 0o600)
 	if err := privfs.ProtectFile(path); err != nil {
 		t.Fatal(err)
 	}
-	if value, err := ReadPasswordFile(path, "senha"); err != nil || value != "segredo" {
+	if value, err := ReadPasswordFile(path, "password"); err != nil || value != "secret" {
 		t.Fatalf("%q %v", value, err)
 	}
 	exposeToOthers(t, path)
-	if _, err := ReadPasswordFile(path, "senha"); err == nil {
+	if _, err := ReadPasswordFile(path, "password"); err == nil {
 		t.Fatal("world-readable password file accepted")
 	}
 	os.WriteFile(path, []byte("a\nb\n"), 0o600)
 	os.Chmod(path, 0o600)
-	if _, err := ReadPasswordFile(path, "senha"); err == nil {
+	if _, err := ReadPasswordFile(path, "password"); err == nil {
 		t.Fatal("multi-line password file accepted")
 	}
 }
@@ -122,7 +122,7 @@ func TestQtvResponseReady(t *testing.T) {
 
 func TestPreflightPortsRejectsDuplicates(t *testing.T) {
 	err := PreflightPorts([]PortRequest{{"MVDSV", "127.0.0.1", 28501, "udp"}, {"QTV", "127.0.0.1", 28501, "tcp"}})
-	if err == nil || !strings.Contains(err.Error(), "Porta local duplicada") {
+	if err == nil || !strings.Contains(err.Error(), "Duplicate local port") {
 		t.Fatalf("got %v", err)
 	}
 }

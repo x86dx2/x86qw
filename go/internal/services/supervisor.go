@@ -72,7 +72,7 @@ func RunProcesses(specs []*Spec, journal *Journal, console *Console, output *os.
 			return
 		}
 		if stopErr := stopGroups(commands, exited); stopErr != nil {
-			console.Warning("Falha ao finalizar árvore de processos: " + stopErr.Error())
+			console.Warning("Failed to stop the process tree: " + stopErr.Error())
 			if err == nil {
 				err = stopErr
 			}
@@ -81,7 +81,7 @@ func RunProcesses(specs []*Spec, journal *Journal, console *Console, output *os.
 
 	onSignal := func() (int, error) {
 		sig, _ := interrupted()
-		console.Info("Encerrando serviços x86QW…")
+		console.Info("Stopping x86QW services…")
 		if journal != nil {
 			if err := journal.SetStatus("interrupted"); err != nil {
 				return 0, err
@@ -100,10 +100,10 @@ func RunProcesses(specs []*Spec, journal *Journal, console *Console, output *os.
 		if _, ok := interrupted(); ok {
 			return onSignal()
 		}
-		console.Detail(fmt.Sprintf("Iniciando %s: %s", spec.Label, spec.Arguments[0]))
+		console.Detail(fmt.Sprintf("Starting %s: %s", spec.Label, spec.Arguments[0]))
 		release, holdErr := launchguard.Hold(spec.Arguments[0], spec.ExpectedSHA256)
 		if holdErr != nil {
-			return 0, errorf("O comando de %s diverge do alvo validado.", spec.Label)
+			return 0, errorf("The %s command does not match the validated target.", spec.Label)
 		}
 		command, startErr := startDetached(spec.Arguments, spec.Cwd, output)
 		release()
@@ -112,7 +112,7 @@ func RunProcesses(specs []*Spec, journal *Journal, console *Console, output *os.
 			if errors.As(startErr, &installerErr) {
 				return 0, startErr
 			}
-			return 0, errorf("Não foi possível iniciar um serviço: %v", startErr)
+			return 0, errorf("Could not start a service: %v", startErr)
 		}
 		process := &started{spec: spec, command: command}
 		processes = append(processes, process)
@@ -132,7 +132,7 @@ func RunProcesses(specs []*Spec, journal *Journal, console *Console, output *os.
 			if err := applyStartupRcon(ctx, spec.StartupRcon); err != nil {
 				return failed(err)
 			}
-			console.Detail("MVDSV pronto; configuração pós-map aplicada e senha RCON restaurada.")
+			console.Detail("MVDSV ready; post-map configuration applied and RCON password restored.")
 		}
 		if spec.Readiness != nil {
 			switch spec.Readiness.Kind {
@@ -140,12 +140,12 @@ func RunProcesses(specs []*Spec, journal *Journal, console *Console, output *os.
 				if err := waitHTTPReadiness(ctx, exited, spec.Readiness); err != nil {
 					return failed(err)
 				}
-				console.Detail("QTV pronto e respondendo por HTTP.")
+				console.Detail("QTV ready and answering over HTTP.")
 			case "udp":
 				if err := waitUDPReadiness(ctx, exited, spec.Readiness); err != nil {
 					return failed(err)
 				}
-				console.Detail("QWFWD pronto e mantendo a porta UDP.")
+				console.Detail("QWFWD ready and holding the UDP port.")
 			}
 		}
 	}
@@ -164,14 +164,14 @@ func RunProcesses(specs []*Spec, journal *Journal, console *Console, output *os.
 				return 0, err
 			}
 			if stop {
-				console.Info("Encerramento solicitado pelo gerenciador x86QW…")
+				console.Info("Stop requested by the x86QW manager…")
 				return 0, nil
 			}
 		}
 		for _, process := range processes {
 			if done, code := process.exited(); done {
 				if code != 0 {
-					console.Warning(fmt.Sprintf("%s encerrou com código %d.", process.spec.Label, code))
+					console.Warning(fmt.Sprintf("%s exited with code %d.", process.spec.Label, code))
 				}
 				return code, nil
 			}

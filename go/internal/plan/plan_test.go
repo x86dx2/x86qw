@@ -82,11 +82,11 @@ func TestUpdatePlansOutdatedComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.Status != "planned" || len(result.Operations) != 1 {
-		t.Fatalf("plano: %+v", result)
+		t.Fatalf("plan: %+v", result)
 	}
 	row := result.Operations[0]
-	if row.Kind != "Componente" || row.Installed != "0-old" || row.Action != "Atualizar" || row.Size == nil {
-		t.Fatalf("linha: %+v", row)
+	if row.Kind != "Component" || row.Installed != "0-old" || row.Action != "Update" || row.Size == nil {
+		t.Fatalf("row: %+v", row)
 	}
 }
 
@@ -97,22 +97,22 @@ func TestUpgradeAddsMissingProfileComponents(t *testing.T) {
 	}
 	added := 0
 	for _, row := range result.Operations {
-		if row.Action == "Adicionar" {
+		if row.Action == "Add" {
 			added++
-			if row.Installed != "não instalado" {
-				t.Fatalf("linha: %+v", row)
+			if row.Installed != "not installed" {
+				t.Fatalf("row: %+v", row)
 			}
 		}
 	}
 	if added != 9 {
-		t.Fatalf("recommended deveria adicionar 9 componentes, adicionou %d", added)
+		t.Fatalf("recommended should add 9 components, added %d", added)
 	}
 }
 
 func TestOverlayNewerThanCatalogIsKept(t *testing.T) {
 	if !newerOverlay("1.47+x86qw.20", "1.47+x86qw.19") || newerOverlay("1.47+x86qw.18", "1.47+x86qw.19") ||
 		newerOverlay("1.48+x86qw.20", "1.47+x86qw.19") {
-		t.Fatal("regra de overlay +x86qw.N")
+		t.Fatal("+x86qw.N overlay rule")
 	}
 }
 
@@ -120,6 +120,6 @@ func TestUpdateRequiresAManagedClient(t *testing.T) {
 	input := fixture(t)
 	os.RemoveAll(filepath.Join(input.Root, ".x86qw", "clients"))
 	if _, err := Update(input); err == nil {
-		t.Fatal("instalação sem ezQuake deveria falhar")
+		t.Fatal("an installation without ezQuake should fail")
 	}
 }

@@ -20,7 +20,7 @@ import (
 func realBackend(t *testing.T) *Real {
 	t.Helper()
 	if os.Getenv("X86QW_NETWORK_TESTS") == "" {
-		t.Skip("defina X86QW_NETWORK_TESTS=1 para usar o catálogo publicado")
+		t.Skip("set X86QW_NETWORK_TESTS=1 to use the published catalog")
 	}
 	return &Real{Trust: trust.Options{CacheDir: t.TempDir()}}
 }
@@ -32,11 +32,11 @@ func TestRealCatalogHasSizesAndModes(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cat.CoreSize == 0 || cat.ClientSize[install.HostPlatform()] == 0 || len(cat.Modes) == 0 || len(cat.Profiles["recommended"]) == 0 {
-		t.Fatalf("catálogo incompleto: core %d, cliente %v, %d modos", cat.CoreSize, cat.ClientSize, len(cat.Modes))
+		t.Fatalf("incomplete catalog: core %d, client %v, %d modes", cat.CoreSize, cat.ClientSize, len(cat.Modes))
 	}
 	for _, component := range cat.Components {
 		if component.Size == 0 {
-			t.Fatalf("%s sem tamanho", component.ID)
+			t.Fatalf("%s has no size", component.ID)
 		}
 	}
 	// A player never gets the server programs, even from "complete".
@@ -45,7 +45,7 @@ func TestRealCatalogHasSizesAndModes(t *testing.T) {
 	for _, id := range Selected(cat, options) {
 		for _, component := range cat.Components {
 			if component.ID == id && component.Kind == "server" {
-				t.Fatalf("jogador recebeu %s", id)
+				t.Fatalf("the player got %s", id)
 			}
 		}
 	}
@@ -56,7 +56,7 @@ func TestRealCatalogHasSizesAndModes(t *testing.T) {
 func TestRealInstall(t *testing.T) {
 	r := realBackend(t)
 	if os.Getenv("X86QW_REAL_INSTALL") == "" {
-		t.Skip("defina X86QW_REAL_INSTALL=1 para instalar de verdade")
+		t.Skip("set X86QW_REAL_INSTALL=1 to install for real")
 	}
 	t.Setenv("X86QW_CACHE_DIR", t.TempDir())
 	t.Setenv("X86QW_NO_MACOS_PREFERENCES", "1")
@@ -68,9 +68,9 @@ func TestRealInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	for check := range r.Preflight(context.Background(), options) {
-		t.Logf("pré-voo %s: %v %s — %s", check.ID, check.State, check.Value, check.Detail)
+		t.Logf("preflight %s: %v %s — %s", check.ID, check.State, check.Value, check.Detail)
 		if check.State == CheckFailed {
-			t.Fatalf("pré-voo falhou: %+v", check)
+			t.Fatalf("preflight failed: %+v", check)
 		}
 	}
 	control := make(chan bool, 2)
@@ -91,14 +91,14 @@ func TestRealInstall(t *testing.T) {
 	if last.Err != nil {
 		t.Fatal(last.Err)
 	}
-	t.Logf("%d bytes, %d faixas, %d linhas de log em %s; avisos: %v", last.Total, len(last.Lanes), len(last.Log), time.Since(started).Round(time.Second), last.Warnings)
+	t.Logf("%d bytes, %d lanes, %d log lines in %s; warnings: %v", last.Total, len(last.Lanes), len(last.Log), time.Since(started).Round(time.Second), last.Warnings)
 	again := options
 	again.Content = "recommended"
 	before := len(existingOrNil(t, r, target).Installed)
 	var applied Progress
 	for progress := range r.Install(context.Background(), again, nil) {
 		if applied.Total != 0 && progress.Total != applied.Total && !progress.Finished {
-			t.Fatalf("o total do apply mudou no caminho: %d → %d", applied.Total, progress.Total)
+			t.Fatalf("the apply total changed on the way: %d → %d", applied.Total, progress.Total)
 		}
 		applied = progress
 	}
@@ -106,11 +106,11 @@ func TestRealInstall(t *testing.T) {
 		t.Fatalf("apply: %+v", applied.Err)
 	}
 	if !last.Finished || last.Done != last.Total || last.Total == 0 {
-		t.Fatalf("terminou em %d de %d", last.Done, last.Total)
+		t.Fatalf("finished at %d of %d", last.Done, last.Total)
 	}
 	for _, lane := range last.Lanes {
 		if lane.FileCount == 0 || lane.Files != lane.FileCount {
-			t.Fatalf("%s: %d de %d arquivos", lane.ID, lane.Files, lane.FileCount)
+			t.Fatalf("%s: %d of %d files", lane.ID, lane.Files, lane.FileCount)
 		}
 	}
 	if _, err := install.Verify(target); err != nil {
@@ -119,7 +119,7 @@ func TestRealInstall(t *testing.T) {
 	user, _ := os.ReadFile(filepath.Join(target, "qw", "x86qw-user.cfg"))
 	setupCfg, _ := os.ReadFile(filepath.Join(target, filepath.FromSlash(SetupConfig)))
 	if !strings.Contains(string(user), `"exec x86qw-setup.cfg"`) || !strings.Contains(string(setupCfg), `name                     "tester"`) {
-		t.Fatalf("configuração do cliente ausente:\n%s\n%s", user, setupCfg)
+		t.Fatalf("client settings missing:\n%s\n%s", user, setupCfg)
 	}
 	presets, err := services.LoadPresets(target)
 	if err != nil || presets[PresetName(1)] == nil {
@@ -127,11 +127,11 @@ func TestRealInstall(t *testing.T) {
 	}
 	existing, err := r.Existing(context.Background(), target)
 	if err != nil || existing == nil || existing.Options.Nick != "tester" {
-		t.Fatalf("instalação não reconhecida: %+v %v", existing, err)
+		t.Fatalf("installation not recognized: %+v %v", existing, err)
 	}
 	report, err := r.Repair(context.Background(), target)
 	if err != nil || report.Problem != "" || report.Files == 0 {
-		t.Fatalf("verificação: %+v %v", report, err)
+		t.Fatalf("verify: %+v %v", report, err)
 	}
 }
 
@@ -139,9 +139,9 @@ func TestRealInstall(t *testing.T) {
 // folder that is not empty, or already installed, does not hide it.
 func TestDeepFolderWarnsAServer(t *testing.T) {
 	r := &Real{}
-	deep := filepath.Join(t.TempDir(), strings.Repeat("pasta-funda/", 9), "x86qw")
+	deep := filepath.Join(t.TempDir(), strings.Repeat("deep-folder/", 9), "x86qw")
 	os.MkdirAll(deep, 0o755)
-	os.WriteFile(filepath.Join(deep, "alheio.txt"), nil, 0o644)
+	os.WriteFile(filepath.Join(deep, "foreign.txt"), nil, 0o644)
 	options := Defaults(Host, deep)
 	ids := func() []string {
 		var out []string
@@ -151,23 +151,23 @@ func TestDeepFolderWarnsAServer(t *testing.T) {
 		return out
 	}
 	if !slices.Contains(ids(), "path") {
-		t.Fatalf("servidor sem a conferência do caminho: %v", ids())
+		t.Fatalf("server without the path check: %v", ids())
 	}
 	if check := r.checkFolder(options); check.State != CheckWarning || check.Value.Key != "folder.full" {
-		t.Fatalf("pasta: %+v", check)
+		t.Fatalf("folder: %+v", check)
 	}
 	if check := checkPath(options); check.State != CheckWarning || !strings.Contains(check.Detail.In(LangEN), "MVDSV") {
-		t.Fatalf("caminho: %+v", check)
+		t.Fatalf("path: %+v", check)
 	}
 	options.Intent = Play
 	if slices.Contains(ids(), "path") {
-		t.Fatal("jogador não precisa do aviso")
+		t.Fatal("a player does not need the warning")
 	}
 }
 
 // TestPreflightSaysEachCheckStarts: a slow check shows running first.
 func TestPreflightSaysEachCheckStarts(t *testing.T) {
-	r := &Real{CatalogFile: filepath.Join(t.TempDir(), "sem-catalogo.json")}
+	r := &Real{CatalogFile: filepath.Join(t.TempDir(), "no-catalog.json")}
 	options := Defaults(Play, filepath.Join(t.TempDir(), "x86qw"))
 	var states []CheckState
 	var ids []string
@@ -182,7 +182,7 @@ func TestPreflightSaysEachCheckStarts(t *testing.T) {
 // TestRunRecipeReportsEachCheckOnce: the command line prints how each
 // check ended, never the announcement, and a failed one stops the install.
 func TestRunRecipeReportsEachCheckOnce(t *testing.T) {
-	r := &Real{CatalogFile: filepath.Join(t.TempDir(), "sem-catalogo.json")}
+	r := &Real{CatalogFile: filepath.Join(t.TempDir(), "no-catalog.json")}
 	options := Defaults(Play, filepath.Join(t.TempDir(), "x86qw"))
 	var seen []CheckState
 	_, err := RunRecipe(context.Background(), r, options, RecipeReport{Check: func(check Check) { seen = append(seen, check.State) }})
@@ -190,7 +190,7 @@ func TestRunRecipeReportsEachCheckOnce(t *testing.T) {
 		t.Fatalf("checks: %v", seen)
 	}
 	if !errors.Is(err, ErrBlocked) {
-		t.Fatalf("sem catálogo o pré-voo deveria bloquear: %v", err)
+		t.Fatalf("without a catalog the preflight should block: %v", err)
 	}
 }
 
@@ -202,14 +202,14 @@ func TestOfflineInstallationStillOpens(t *testing.T) {
 	os.WriteFile(filepath.Join(target, ".x86qw", "state.json"), []byte("{}"), 0o644)
 	os.MkdirAll(filepath.Join(target, ".x86qw", "setup"), 0o755)
 	os.WriteFile(filepath.Join(target, ".x86qw", "setup", "choices.json"), []byte("{"), 0o600)
-	r := &Real{CatalogFile: filepath.Join(t.TempDir(), "sem-catalogo.json")}
+	r := &Real{CatalogFile: filepath.Join(t.TempDir(), "no-catalog.json")}
 	existing, err := r.Existing(context.Background(), target)
 	if err != nil || existing == nil || existing.UpdatesErr == nil || existing.Note.IsZero() {
-		t.Fatalf("instalação offline: %+v %v", existing, err)
+		t.Fatalf("offline installation: %+v %v", existing, err)
 	}
 	cat, err := r.Catalog(context.Background())
 	if err != nil || cat.Unavailable == nil || len(cat.Components) == 0 || len(cat.Modes) == 0 {
-		t.Fatalf("catálogo offline: %+v %v", cat, err)
+		t.Fatalf("offline catalog: %+v %v", cat, err)
 	}
 }
 
@@ -217,7 +217,7 @@ func existingOrNil(t *testing.T, r *Real, target string) *Existing {
 	t.Helper()
 	existing, err := r.Existing(context.Background(), target)
 	if err != nil || existing == nil {
-		t.Fatalf("instalação: %v", err)
+		t.Fatalf("install: %v", err)
 	}
 	return existing
 }
@@ -239,7 +239,7 @@ func TestCancelledWorkStillReportsHowItEnded(t *testing.T) {
 		last = progress
 	}
 	if !errors.Is(last.Err, context.Canceled) || last.Finished {
-		t.Fatalf("o fim deveria dizer cancelado: %+v", last)
+		t.Fatalf("the end should say canceled: %+v", last)
 	}
 }
 
@@ -249,7 +249,7 @@ func TestCancelledWorkStillReportsHowItEnded(t *testing.T) {
 func TestRealCancelThenInstallAgain(t *testing.T) {
 	r := realBackend(t)
 	if os.Getenv("X86QW_REAL_INSTALL") == "" {
-		t.Skip("defina X86QW_REAL_INSTALL=1 para instalar de verdade")
+		t.Skip("set X86QW_REAL_INSTALL=1 to install for real")
 	}
 	t.Setenv("X86QW_CACHE_DIR", t.TempDir())
 	t.Setenv("X86QW_NO_MACOS_PREFERENCES", "1")
@@ -266,16 +266,16 @@ func TestRealCancelThenInstallAgain(t *testing.T) {
 	}
 	cancel()
 	if !errors.Is(last.Err, context.Canceled) {
-		t.Fatalf("deveria terminar cancelada: %+v", last.Err)
+		t.Fatalf("should end canceled: %+v", last.Err)
 	}
 	if Installed(target) {
-		t.Fatal("o que sobrou do cancelamento passou por instalação")
+		t.Fatal("what the cancel left behind passed as an installation")
 	}
 	for progress := range r.Install(context.Background(), options, nil) {
 		last = progress
 	}
 	if last.Err != nil || !last.Finished {
-		t.Fatalf("segunda tentativa: %v", last.Err)
+		t.Fatalf("second try: %v", last.Err)
 	}
 	if _, err := install.Verify(target); err != nil {
 		t.Fatal(err)
@@ -287,7 +287,7 @@ func TestRealCancelThenInstallAgain(t *testing.T) {
 func TestRealResolve(t *testing.T) {
 	r := realBackend(t)
 	if os.Getenv("X86QW_REAL_INSTALL") == "" {
-		t.Skip("defina X86QW_REAL_INSTALL=1 para instalar de verdade")
+		t.Skip("set X86QW_REAL_INSTALL=1 to install for real")
 	}
 	t.Setenv("X86QW_CACHE_DIR", t.TempDir())
 	t.Setenv("X86QW_NO_MACOS_PREFERENCES", "1")
@@ -302,21 +302,21 @@ func TestRealResolve(t *testing.T) {
 		t.Fatal(last.Err)
 	}
 	if _, err := play.Resolve(target, play.Request{}); err == nil {
-		t.Fatal("KTX sem modo deveria ser recusado")
+		t.Fatal("KTX without a mode should be refused")
 	}
 	duel, err := play.Resolve(target, play.Request{Mode: "duel"})
 	if err != nil || duel.Map != "dm6" || duel.Ruleset != "x86qw" || duel.Runtime.Channel != "stable" {
-		t.Fatalf("duel padrão: %+v %v", duel, err)
+		t.Fatalf("default duel: %+v %v", duel, err)
 	}
 	all, _ := r.Maps(context.Background(), target, Match{Game: "ktx", Mode: "duel"})
 	bots, _ := r.Maps(context.Background(), target, Match{Game: "ktx", Mode: "duel", Bots: 1})
 	ctf, _ := r.Maps(context.Background(), target, Match{Game: "ktx", Mode: "ctf"})
 	if all == nil || bots == nil || ctf == nil || !bots.Narrowed || len(bots.Maps) >= len(all.Maps) || !ctf.Narrowed || len(ctf.Maps) >= len(all.Maps) {
-		t.Fatalf("mapas: todos %v, bots %v, ctf %v", all, bots, ctf)
+		t.Fatalf("maps: all %v, bots %v, ctf %v", all, bots, ctf)
 	}
-	for _, refused := range []play.Request{{Mode: "duel", Map: "nao-existe"}, {Mode: "duel", Channel: "nightly"}, {Game: "pro-x"}} {
+	for _, refused := range []play.Request{{Mode: "duel", Map: "missing"}, {Mode: "duel", Channel: "nightly"}, {Game: "pro-x"}} {
 		if _, err := play.Resolve(target, refused); err == nil {
-			t.Fatalf("%+v deveria ser recusado", refused)
+			t.Fatalf("%+v should be refused", refused)
 		}
 	}
 }

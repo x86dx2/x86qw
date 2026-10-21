@@ -10,50 +10,50 @@ import (
 func TestUninstallRemovesManagedFilesAndKeepsPersonalOnes(t *testing.T) {
 	isolate(t)
 	root := managedInstall(t)
-	write(t, filepath.Join(root, "qw", "maps", "x86qw-b.bsp"), "mapa b editado")
+	write(t, filepath.Join(root, "qw", "maps", "x86qw-b.bsp"), "map b edited")
 	report, err := Uninstall(root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, gone := range []string{"ezquake-nightly-x86_64.AppImage", "qw/maps/x86qw-a.bsp", "x86qw.sh", ".x86qw"} {
 		if exists(filepath.Join(root, filepath.FromSlash(gone))) {
-			t.Errorf("%s deveria ter sido removido", gone)
+			t.Errorf("%s should have been removed", gone)
 		}
 	}
-	for _, kept := range []string{"id1/pak0.pak", "id1/pak1.pak", "ezquake/configs/config.cfg", "qw/demos/partida.mvd"} {
+	for _, kept := range []string{"id1/pak0.pak", "id1/pak1.pak", "ezquake/configs/config.cfg", "qw/demos/match.mvd"} {
 		if !exists(filepath.Join(root, filepath.FromSlash(kept))) {
-			t.Errorf("%s deveria ter sido preservado", kept)
+			t.Errorf("%s should have been kept", kept)
 		}
 	}
-	if read(t, filepath.Join(root, "qw", "maps", "x86qw-b.bsp")) != "mapa b editado" {
-		t.Error("o arquivo modificado pelo usuário não foi preservado")
+	if read(t, filepath.Join(root, "qw", "maps", "x86qw-b.bsp")) != "map b edited" {
+		t.Error("the file the user modified was not kept")
 	}
 	if len(report.Warnings) != 1 || !strings.Contains(report.Warnings[0], "x86qw-b.bsp") {
-		t.Errorf("avisos: %v", report.Warnings)
+		t.Errorf("warnings: %v", report.Warnings)
 	}
 	lines := strings.Join(report.Lines, "\n")
-	if !strings.Contains(lines, "CLI permanente x86QW removida") || !strings.Contains(lines, "Componentes gerenciados removidos") {
-		t.Errorf("relatório: %s", lines)
+	if !strings.Contains(lines, "Permanent x86QW CLI removed") || !strings.Contains(lines, "Managed components removed") {
+		t.Errorf("report: %s", lines)
 	}
 }
 
 func TestUninstallRefusesWhatItDoesNotManage(t *testing.T) {
 	isolate(t)
 	plain := t.TempDir()
-	write(t, filepath.Join(plain, "notas.txt"), "minhas")
-	if _, err := Uninstall(plain); err == nil || !strings.Contains(err.Error(), "identidade gerenciada") {
-		t.Fatalf("pasta sem x86QW deveria ser recusada: %v", err)
+	write(t, filepath.Join(plain, "notes.txt"), "mine")
+	if _, err := Uninstall(plain); err == nil || !strings.Contains(err.Error(), "managed identity") {
+		t.Fatalf("a folder without x86QW should be refused: %v", err)
 	}
-	if !exists(filepath.Join(plain, "notas.txt")) {
-		t.Fatal("a recusa apagou arquivos")
+	if !exists(filepath.Join(plain, "notes.txt")) {
+		t.Fatal("the refusal deleted files")
 	}
 	legacy := managedInstall(t)
 	write(t, filepath.Join(legacy, filepath.FromSlash(nquakeReceipt)), "format=1\n")
-	if _, err := Uninstall(legacy); err == nil || !strings.Contains(err.Error(), "anteriores ao 1.0") {
-		t.Fatalf("layout pré-1.0 deveria ser recusado: %v", err)
+	if _, err := Uninstall(legacy); err == nil || !strings.Contains(err.Error(), "pre-1.0 metadata") {
+		t.Fatalf("a pre-1.0 layout should be refused: %v", err)
 	}
 	if !exists(filepath.Join(legacy, "ezquake-nightly-x86_64.AppImage")) {
-		t.Fatal("a recusa removeu o runtime")
+		t.Fatal("the refusal removed the runtime")
 	}
 }
 
@@ -62,19 +62,19 @@ func TestUninstallOfACLIOnlyFolderKeepsPersonalFiles(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "x86qw")
 	write(t, filepath.Join(root, ".x86qw", "cli", "receipt"), `{"version":"2.3.2"}`)
 	write(t, filepath.Join(root, "x86qw.sh"), "#!/bin/sh\n")
-	write(t, filepath.Join(root, "qw", "demos", "partida.mvd"), "demo")
+	write(t, filepath.Join(root, "qw", "demos", "match.mvd"), "demo")
 	report, err := Uninstall(root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if exists(filepath.Join(root, ".x86qw")) || exists(filepath.Join(root, "x86qw.sh")) {
-		t.Fatal("a CLI e os metadados deveriam ter saído")
+		t.Fatal("the CLI and the metadata should be gone")
 	}
-	if !exists(filepath.Join(root, "qw", "demos", "partida.mvd")) {
-		t.Fatal("a demo foi apagada")
+	if !exists(filepath.Join(root, "qw", "demos", "match.mvd")) {
+		t.Fatal("the demo was deleted")
 	}
-	if !strings.Contains(strings.Join(report.Lines, "\n"), "CLI permanente x86QW removida") {
-		t.Fatalf("relatório: %v", report.Lines)
+	if !strings.Contains(strings.Join(report.Lines, "\n"), "Permanent x86QW CLI removed") {
+		t.Fatalf("report: %v", report.Lines)
 	}
 }
 
@@ -87,11 +87,11 @@ func TestPurgeRemovesTheInstallationAndTheCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	if exists(root) || exists(cache) {
-		t.Fatalf("restou instalação (%v) ou cache (%v)", exists(root), exists(cache))
+		t.Fatalf("installation (%v) or cache (%v) left behind", exists(root), exists(cache))
 	}
 	lines := strings.Join(report.Lines, "\n")
-	if !strings.Contains(lines, "Cache removido") || !strings.Contains(lines, "Diretório da instalação removido") {
-		t.Fatalf("relatório: %s", lines)
+	if !strings.Contains(lines, "Cache removed") || !strings.Contains(lines, "Installation folder removed") {
+		t.Fatalf("report: %s", lines)
 	}
 }
 
@@ -99,43 +99,43 @@ func TestPurgeRemovesTheInstallationAndTheCache(t *testing.T) {
 // touches anything, the installation included.
 func TestPurgeStopsOnAForeignCache(t *testing.T) {
 	cache := isolate(t)
-	write(t, filepath.Join(cache, "alheio.txt"), "não é do x86QW")
+	write(t, filepath.Join(cache, "foreign.txt"), "not x86QW's")
 	root := managedInstall(t)
-	if _, err := Purge(root); err == nil || !strings.Contains(err.Error(), "não pertencem ao instalador") {
-		t.Fatalf("cache alheio deveria parar o purge: %v", err)
+	if _, err := Purge(root); err == nil || !strings.Contains(err.Error(), "do not belong to the installer") {
+		t.Fatalf("a foreign cache should stop the purge: %v", err)
 	}
-	if !exists(filepath.Join(root, "id1", "pak0.pak")) || !exists(filepath.Join(cache, "alheio.txt")) {
-		t.Fatal("o purge recusado apagou arquivos")
+	if !exists(filepath.Join(root, "id1", "pak0.pak")) || !exists(filepath.Join(cache, "foreign.txt")) {
+		t.Fatal("the refused purge deleted files")
 	}
 }
 
 func TestPurgeOfAMissingFolderStillClearsTheCache(t *testing.T) {
 	cache := isolate(t)
 	ownedCache(t, cache)
-	missing := filepath.Join(t.TempDir(), "nunca-instalado")
+	missing := filepath.Join(t.TempDir(), "never-installed")
 	report, err := Purge(missing)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if exists(cache) || !strings.Contains(strings.Join(report.Lines, "\n"), "Nenhum diretório de instalação") {
-		t.Fatalf("cache %v, relatório %v", exists(cache), report.Lines)
+	if exists(cache) || !strings.Contains(strings.Join(report.Lines, "\n"), "No installation folder") {
+		t.Fatalf("cache %v, report %v", exists(cache), report.Lines)
 	}
 }
 
 func TestQuarantineRestoresEverythingWhenOneMoveFails(t *testing.T) {
 	root := t.TempDir()
-	first := filepath.Join(root, "primeiro")
+	first := filepath.Join(root, "first")
 	write(t, filepath.Join(first, "a.txt"), "a")
-	missing := filepath.Join(root, "nao-existe")
+	missing := filepath.Join(root, "missing")
 	if err := quarantineRemove([]string{first, missing}); err == nil {
-		t.Fatal("mover um caminho inexistente deveria falhar")
+		t.Fatal("moving a missing path should fail")
 	}
 	if read(t, filepath.Join(first, "a.txt")) != "a" {
-		t.Fatal("o primeiro caminho não voltou do recolhimento")
+		t.Fatal("the first path did not come back from aside")
 	}
 	entries, _ := os.ReadDir(root)
 	if len(entries) != 1 {
-		t.Fatalf("sobrou quarentena: %v", entries)
+		t.Fatalf("quarantine left behind: %v", entries)
 	}
 }
 

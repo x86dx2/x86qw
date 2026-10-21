@@ -208,11 +208,11 @@ func (e *policyError) Error() string { return e.msg }
 func validateHTTPSURL(value any, label string) (splitURL, error) {
 	url, ok := value.(string)
 	if !ok || url == "" {
-		return splitURL{}, &policyError{label + " não é uma URL válida."}
+		return splitURL{}, &policyError{label + " is not a valid URL."}
 	}
 	for _, r := range url {
 		if r <= 32 || r == 127 {
-			return splitURL{}, &policyError{label + " contém espaço ou caractere de controle."}
+			return splitURL{}, &policyError{label + " contains a space or control character."}
 		}
 	}
 	parsed, err := urlsplit(url)
@@ -220,11 +220,11 @@ func validateHTTPSURL(value any, label string) (splitURL, error) {
 		err = parsed.port()
 	}
 	if err != nil {
-		return splitURL{}, &policyError{label + " não é uma URL válida."}
+		return splitURL{}, &policyError{label + " is not a valid URL."}
 	}
 	_, hasUser, _, _, _ := parsed.hostinfo()
 	if Casefold(parsed.Scheme) != "https" || parsed.Hostname() == "" || hasUser || parsed.Fragment != "" {
-		return splitURL{}, &policyError{label + " deve ser uma URL HTTPS absoluta."}
+		return splitURL{}, &policyError{label + " must be an absolute HTTPS URL."}
 	}
 	return parsed, nil
 }
@@ -252,7 +252,7 @@ func unquote(value string) string {
 func safeURLForLog(value string) string {
 	for _, r := range value {
 		if r <= 32 || r == 127 {
-			return "<URL HTTPS inválida>"
+			return "<invalid HTTPS URL>"
 		}
 	}
 	parsed, err := urlsplit(value)
@@ -260,7 +260,7 @@ func safeURLForLog(value string) string {
 		err = parsed.port()
 	}
 	if err != nil || Casefold(parsed.Scheme) != "https" || parsed.Hostname() == "" {
-		return "<URL HTTPS inválida>"
+		return "<invalid HTTPS URL>"
 	}
 	_, _, _, port, hasPort := parsed.hostinfo()
 	host := parsed.Hostname()
@@ -272,7 +272,7 @@ func safeURLForLog(value string) string {
 			host += ":" + strconv.Itoa(value)
 		}
 	}
-	return "https://" + host + "/<redigido>"
+	return "https://" + host + "/<redacted>"
 }
 
 func reprScalar(value any) string {

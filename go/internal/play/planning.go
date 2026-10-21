@@ -106,14 +106,14 @@ func BotNameSettings(o Options, mode *Mode) ([][2]string, error) {
 		return nil, nil
 	}
 	if len(o.BotNamePool) < count {
-		return nil, fmt.Errorf("O perfil de nomes não cobre todos os Frogbots solicitados.")
+		return nil, fmt.Errorf("The name profile does not cover every Frogbot requested.")
 	}
 	var settings [][2]string
 	for _, prefix := range botNamePrefixes {
 		for index := 0; index < count; index++ {
 			name := o.BotNamePool[index]
 			if !frogbotName.MatchString(name) {
-				return nil, fmt.Errorf("Nome Frogbot inválido em opções de lançamento: use de 1 a 13 caracteres ASCII.")
+				return nil, fmt.Errorf("Invalid Frogbot name in the launch options: use 1 to 13 ASCII characters.")
 			}
 			settings = append(settings, [2]string{fmt.Sprintf("%s_%d", prefix, index), ColoredName(name)})
 		}
@@ -147,11 +147,11 @@ func unsetLines(names []string) []string {
 // QuoteConsoleCommand keeps a body inside one ezQuake argument.
 func QuoteConsoleCommand(command string) (string, error) {
 	if strings.Contains(command, `"`) {
-		return "", fmt.Errorf("Comando interno do ezQuake contém caracteres inválidos.")
+		return "", fmt.Errorf("An internal ezQuake command has invalid characters.")
 	}
 	for _, r := range command {
 		if r < 32 {
-			return "", fmt.Errorf("Comando interno do ezQuake contém caracteres inválidos.")
+			return "", fmt.Errorf("An internal ezQuake command has invalid characters.")
 		}
 	}
 	return `"` + command + `"`, nil
@@ -209,12 +209,12 @@ func botManagementAliases(mode Mode, o Options) ([]string, error) {
 	}
 	var commands []string
 	for count := 0; count <= maximum; count++ {
-		action := "echo Limite de Frogbots deste modo atingido"
+		action := "echo Frogbot limit for this mode reached"
 		if count < maximum {
 			action = fmt.Sprintf("x86qw_ktx_bot_add_command;x86qw_ktx_bot_roster_%d", count+1)
 		}
 		commands = append(commands, fmt.Sprintf("tempalias x86qw_ktx_bot_add_%d %s", count, q.quote(action)))
-		action = "echo Nenhum Frogbot para remover"
+		action = "echo No Frogbot to remove"
 		if count > 0 {
 			action = fmt.Sprintf("cmd botcmd removebot;x86qw_ktx_bot_roster_%d", count-1)
 		}
@@ -223,7 +223,7 @@ func botManagementAliases(mode Mode, o Options) ([]string, error) {
 		commands = append(commands, fmt.Sprintf("tempalias x86qw_ktx_bot_roster_%d %s", count, q.quote(roster)))
 	}
 	if o.BotSkill == "random" {
-		message := "echo Habilidade aleatoria ativa para cada novo Frogbot"
+		message := "echo Random skill for each new Frogbot"
 		commands = append(commands,
 			"tempalias x86qw_ktx_bot_add_command "+q.quote("cmd botcmd addbot random"+team),
 			"tempalias x86qw_ktx_bot_skill_down "+q.quote(message),
@@ -237,8 +237,8 @@ func botManagementAliases(mode Mode, o Options) ([]string, error) {
 			if higher > 20 {
 				higher = 20
 			}
-			down := fmt.Sprintf("echo Habilidade dos proximos Frogbots: %d;cmd botcmd skill %d;x86qw_ktx_bot_skill_%d", lower, lower, lower)
-			up := fmt.Sprintf("echo Habilidade dos proximos Frogbots: %d;cmd botcmd skill %d;x86qw_ktx_bot_skill_%d", higher, higher, higher)
+			down := fmt.Sprintf("echo Skill of the next Frogbots: %d;cmd botcmd skill %d;x86qw_ktx_bot_skill_%d", lower, lower, lower)
+			up := fmt.Sprintf("echo Skill of the next Frogbots: %d;cmd botcmd skill %d;x86qw_ktx_bot_skill_%d", higher, higher, higher)
 			setup := strings.Join([]string{
 				fmt.Sprintf("tempalias x86qw_ktx_bot_skill_down x86qw_ktx_bot_skill_down_%d", skill),
 				fmt.Sprintf("tempalias x86qw_ktx_bot_skill_up x86qw_ktx_bot_skill_up_%d", skill),
@@ -265,7 +265,7 @@ func ChunkedSetupPlan(commands []string, maximum int) ([]string, string, error) 
 	total := 0
 	for _, command := range commands {
 		if length(command) > maximum {
-			return nil, "", fmt.Errorf("Comando de inicialização KTX excede o limite seguro.")
+			return nil, "", fmt.Errorf("A KTX startup command exceeds the safe limit.")
 		}
 		added := length(command)
 		if len(current) > 0 {
@@ -380,22 +380,22 @@ func LaunchCommands(mode Mode, mapName string, assets map[string]bool, o Options
 	for _, requirement := range ActiveRequirements(mode, o) {
 		asset := strings.ToLower(strings.ReplaceAll(requirement.Asset, "{map}", strings.ToLower(mapName)))
 		if !assets[asset] {
-			return nil, fmt.Errorf("O mapa %s não possui o recurso %s exigido pelo modo %s (%s).", mapName, requirement.Label, mode.Label, asset)
+			return nil, fmt.Errorf("Map %s lacks the %s that mode %s needs (%s).", mapName, requirement.Label, mode.Label, asset)
 		}
 	}
 	if BotOptionsRequested(o) {
 		if !mode.Bots {
-			return nil, fmt.Errorf("Bots Frogbot não são compatíveis com o modo %s.", mode.Label)
+			return nil, fmt.Errorf("Frogbot bots do not work with mode %s.", mode.Label)
 		}
 		if limit, ok := BotLimit(mode); ok && RequestedNames(o, &mode) > limit {
 			noun := "Frogbots"
 			if limit == 1 {
 				noun = "Frogbot"
 			}
-			return nil, fmt.Errorf("%s aceita no máximo %d %s com um jogador humano.", mode.Label, limit, noun)
+			return nil, fmt.Errorf("%s takes at most %d %s with one human player.", mode.Label, limit, noun)
 		}
 		if o.BotTeam != nil && o.Bots == 0 {
-			return nil, fmt.Errorf("--bot-team exige --bots; o comando fill distribui as equipes.")
+			return nil, fmt.Errorf("--bot-team needs --bots; the fill command spreads the teams.")
 		}
 		if o.BotTeam != nil && len(mode.BotTeams) > 0 {
 			known := false
@@ -403,11 +403,11 @@ func LaunchCommands(mode Mode, mapName string, assets map[string]bool, o Options
 				known = known || strings.EqualFold(team, *o.BotTeam)
 			}
 			if !known {
-				return nil, fmt.Errorf("A equipe %s não pertence ao modo %s; use uma destas: %s.", *o.BotTeam, mode.Label, strings.Join(mode.BotTeams, ", "))
+				return nil, fmt.Errorf("Team %s is not part of mode %s; use one of: %s.", *o.BotTeam, mode.Label, strings.Join(mode.BotTeams, ", "))
 			}
 		}
 		if mode.Key != "tot" && (o.BotWeapon != nil || o.BotHealth != nil || o.BotBreakOnDeath != nil) {
-			return nil, fmt.Errorf("--bot-weapon, --bot-health e --[no-]bot-break-on-death só podem ser usados com o modo KTX tot.")
+			return nil, fmt.Errorf("--bot-weapon, --bot-health and --[no-]bot-break-on-death only work with the KTX tot mode.")
 		}
 		count := RequestedNames(o, &mode)
 		if !o.FillBots || len(mode.BotTeams) > 0 {
@@ -459,7 +459,7 @@ func LaunchCommands(mode Mode, mapName string, assets map[string]bool, o Options
 		}
 	}
 	if (o.CTFHook != nil || o.CTFRunes != nil || o.CTFBasedSpawn) && mode.Key != "ctf" {
-		return nil, fmt.Errorf("Opções --ctf-* só podem ser usadas com o modo KTX ctf.")
+		return nil, fmt.Errorf("--ctf-* options only work with the KTX ctf mode.")
 	}
 	if mode.Key == "ctf" {
 		hooks := map[string]string{"off": "nohook", "smooth": "hook_smooth", "fast": "hook_fast", "classic": "hook_classic", "crhook": "hook_crhook"}
@@ -474,7 +474,7 @@ func LaunchCommands(mode Mode, mapName string, assets map[string]bool, o Options
 		}
 	}
 	if (o.RaceStyle != nil || o.RaceScoring != nil || o.RacePacemaker != nil || o.RaceHidePlayers) && mode.Key != "race" {
-		return nil, fmt.Errorf("Opções --race-* só podem ser usadas com o modo KTX race.")
+		return nil, fmt.Errorf("--race-* options only work with the KTX race mode.")
 	}
 	if mode.Key == "race" {
 		style := ""
@@ -482,7 +482,7 @@ func LaunchCommands(mode Mode, mapName string, assets map[string]bool, o Options
 			style = *o.RaceStyle
 		}
 		if o.RaceScoring != nil && (style == "solo" || style == "simultaneous") {
-			return nil, fmt.Errorf("--race-scoring exige --race-style match (ou omitir o estilo).")
+			return nil, fmt.Errorf("--race-scoring needs --race-style match (or no style).")
 		}
 		if style == "solo" {
 			commands = append(commands, "cmd race_simultaneous")

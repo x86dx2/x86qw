@@ -22,6 +22,6 @@ func TestCapabilitiesListTheCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	if want := publicCommandNames(); !slices.Equal(capabilities.Commands, want) {
-		t.Fatalf("capabilities.json lista %v; x86qw help lista %v", capabilities.Commands, want)
+		t.Fatalf("capabilities.json lists %v; x86qw help lists %v", capabilities.Commands, want)
 	}
 }

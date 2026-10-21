@@ -73,7 +73,7 @@ func runtimeBinary(target, component string) (string, string, error) {
 		return "", "", err
 	}
 	if record == nil {
-		return "", "", errorf("O componente %s não está instalado. Execute install.sh e selecione o perfil completo ou esse componente.", component)
+		return "", "", errorf("The %s component is not installed. Run install.sh and pick the complete profile or this component.", component)
 	}
 	variant, err := install.HostVariant()
 	if err != nil {
@@ -81,22 +81,22 @@ func runtimeBinary(target, component string) (string, string, error) {
 	}
 	relative, ok := runtimePaths[component][variant]
 	if !ok {
-		return "", "", errorf("Runtime %s indisponível na variante %s.", component, variant)
+		return "", "", errorf("Runtime %s is not available for the %s variant.", component, variant)
 	}
 	binary := filepath.Join(target, filepath.FromSlash(relative))
 	info, err := os.Lstat(binary)
 	if err != nil || !info.Mode().IsRegular() {
-		return "", "", errorf("Executável gerenciado ausente ou inseguro: %s", binary)
+		return "", "", errorf("Managed executable missing or unsafe: %s", binary)
 	}
 	if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
-		return "", "", errorf("Executável gerenciado sem permissão de execução: %s. Execute repair.", binary)
+		return "", "", errorf("Managed executable without execute permission: %s. Run repair.", binary)
 	}
 	for _, entry := range record.Inventory.Entries {
 		if entry.Path == relative {
 			return binary, entry.SHA256, nil
 		}
 	}
-	return "", "", errorf("O inventário de %s não registra seu executável: %s", component, relative)
+	return "", "", errorf("The %s inventory does not record its executable: %s", component, relative)
 }
 
 // Hosted is the selected game, mode and map (services.HostedGame).
@@ -119,14 +119,14 @@ func SelectHosted(target string, o *HostOptions) (*Hosted, error) {
 	}
 	available := install.AvailableGames(target, games)
 	if len(available) == 0 {
-		return nil, errorf("Nenhum mod gerenciado está instalado. Execute o bootstrap e selecione um jogo.")
+		return nil, errorf("No managed mod is installed. Run the bootstrap and pick a game.")
 	}
 	if o.Game == "" {
 		ids := make([]string, len(available))
 		for index, game := range available {
 			ids[index] = game.ID
 		}
-		return nil, errorf("Informe o jogo a hospedar (%s) ou use --menu.", strings.Join(ids, ", "))
+		return nil, errorf("Name the game to host (%s) or use --menu.", strings.Join(ids, ", "))
 	}
 	var installed *install.Game
 	for index := range available {
@@ -141,7 +141,7 @@ func SelectHosted(target string, o *HostOptions) (*Hosted, error) {
 		}
 	}
 	if installed == nil {
-		return nil, errorf("%s não está instalado. Adicione o componente %s pelo bootstrap x86QW.", game.Label, game.Component)
+		return nil, errorf("%s is not installed. Add the %s component with the x86QW bootstrap.", game.Label, game.Component)
 	}
 	component := installed.Component
 	if !hasRecord(target, component) {
@@ -159,12 +159,12 @@ func SelectHosted(target string, o *HostOptions) (*Hosted, error) {
 		return nil, err
 	}
 	if len(issues) > 0 {
-		return nil, errorf("Suporte de execução incompleto (%s). Execute update, upgrade ou repair antes de jogar ou hospedar.", strings.Join(issues, "; "))
+		return nil, errorf("Incomplete runtime support (%s). Run update, upgrade or repair before you play or host.", strings.Join(issues, "; "))
 	}
 	hosted := &Hosted{Game: game, Options: o.KtxOptions}
 	if game.UsesModeCatalog() {
 		if !o.ModeGiven {
-			return nil, errorf("Informe --mode para hospedar KTX ou use --menu.")
+			return nil, errorf("Give --mode to host KTX or use --menu.")
 		}
 		modes, err := play.LoadModes()
 		if err != nil {
@@ -180,13 +180,13 @@ func SelectHosted(target string, o *HostOptions) (*Hosted, error) {
 		}
 		pk3 := filepath.Join(target, "qw", "ktx.pk3")
 		if info, err := os.Lstat(pk3); err != nil || !info.Mode().IsRegular() {
-			return nil, errorf("Pacote KTX ausente ou inseguro: %s", pk3)
+			return nil, errorf("KTX package missing or unsafe: %s", pk3)
 		}
 		if hosted.Assets, err = play.KtxAssets(target); err != nil {
-			return nil, errorf("Pacote KTX inválido: %s", pk3)
+			return nil, errorf("Invalid KTX package: %s", pk3)
 		}
 		if o.Map == "" {
-			return nil, errorf("Informe --map ou use --menu.")
+			return nil, errorf("Give --map or use --menu.")
 		}
 		hosted.Map, err = play.ResolveMap(target, game, o.Map, play.ActiveRequirements(mode, hosted.Options), hosted.Assets, "KTX · "+mode.Label)
 		if err != nil {
@@ -195,7 +195,7 @@ func SelectHosted(target string, o *HostOptions) (*Hosted, error) {
 		return hosted, nil
 	}
 	if o.Map == "" {
-		return nil, errorf("Informe --map ou use --menu.")
+		return nil, errorf("Give --map or use --menu.")
 	}
 	hosted.Map, err = play.ResolveMap(target, game, o.Map, nil, nil, game.Label)
 	return hosted, err
@@ -226,7 +226,7 @@ func dedicatedKtxSettings(mode play.Mode, mapName string, assets map[string]bool
 	if play.BotOptionsRequested(o) {
 		targetClients := play.RequestedNames(o, &mode) + 1
 		if targetClients > maxclients {
-			return nil, errorf("%s com os Frogbots selecionados exige --maxclients de pelo menos %d.", mode.Label, targetClients)
+			return nil, errorf("%s with the selected Frogbots needs --maxclients of at least %d.", mode.Label, targetClients)
 		}
 		skill, random := o.BotSkill, "0"
 		if o.BotSkill == "random" {
@@ -407,9 +407,9 @@ func HostSpec(target string, o *HostOptions, hosted *Hosted, session *Session, j
 	arguments := []string{binary, "-basedir", target}
 	arguments = append(arguments, game.DedicatedArguments...)
 	arguments = append(arguments, "-ip", o.Bind, "-port", fmt.Sprint(o.Port), "-mem", "64", "+exec", filepath.Base(sessionConfig.Path))
-	mvdLabel := "automática"
+	mvdLabel := "automatic"
 	if o.NoMVD {
-		mvdLabel = "desativada"
+		mvdLabel = "off"
 	}
 	parameters := [][2]string{
 		{"game", game.Label}, {"map", hosted.Map}, {"hostname", hostname}, {"bind", o.Bind},
@@ -419,12 +419,12 @@ func HostSpec(target string, o *HostOptions, hosted *Hosted, session *Session, j
 		parameters = append(parameters[:1], append([][2]string{{"mode", hosted.Mode.Label}}, parameters[1:]...)...)
 		k := hosted.Options
 		if k.FillBots {
-			parameters = append(parameters, [2]string{"bots", "preencher servidor"})
+			parameters = append(parameters, [2]string{"bots", "fill the server"})
 		} else {
 			parameters = append(parameters, [2]string{"bots", fmt.Sprint(k.Bots)})
 		}
 		if k.Bots > 0 || k.FillBots {
-			names := map[string]string{"default": "KTX Default", "x86qw": "x86QW aleatório", "one-piece": "One Piece (opcional)", "personal": "lista pessoal"}[k.BotNamesProfile]
+			names := map[string]string{"default": "KTX Default", "x86qw": "random x86QW", "one-piece": "One Piece (optional)", "personal": "personal list"}[k.BotNamesProfile]
 			if names == "" {
 				names = k.BotNamesProfile
 			}
@@ -449,12 +449,12 @@ func HostSpec(target string, o *HostOptions, hosted *Hosted, session *Session, j
 		}
 	}
 	var configured []string
-	for _, item := range []struct{ label, value string }{{"jogadores", o.Password}, {"espectadores", o.SpectatorPassword}, {"RCON", o.RconPassword}} {
+	for _, item := range []struct{ label, value string }{{"players", o.Password}, {"spectators", o.SpectatorPassword}, {"RCON", o.RconPassword}} {
 		if item.value != "" {
 			configured = append(configured, item.label)
 		}
 	}
-	secrets := "nenhum"
+	secrets := "none"
 	if len(configured) > 0 {
 		secrets = strings.Join(configured, ", ")
 	}
@@ -482,7 +482,7 @@ func ProxySpec(target, bind string, port int) (*Spec, error) {
 	directory := filepath.Join(target, "qwfwd")
 	config := filepath.Join(directory, "qwfwd.cfg")
 	if info, err := os.Lstat(config); err != nil || !info.Mode().IsRegular() {
-		return nil, errorf("Configuração QWFWD ausente ou insegura: %s", config)
+		return nil, errorf("QWFWD configuration missing or unsafe: %s", config)
 	}
 	return &Spec{
 		Label: "QWFWD", Arguments: []string{binary, fmt.Sprint(port), bind}, Cwd: directory, ExpectedSHA256: digest,
@@ -500,12 +500,12 @@ func QtvSpec(target, bind string, port int, hostname, upstream, password string,
 	directory := filepath.Join(target, "qtv")
 	config := filepath.Join(directory, "qtv.cfg")
 	if info, err := os.Lstat(config); err != nil || !info.Mode().IsRegular() {
-		return nil, errorf("Configuração QTV ausente ou insegura: %s", config)
+		return nil, errorf("QTV configuration missing or unsafe: %s", config)
 	}
 	if err := ensurePrivateDirectory(filepath.Join(directory, "demos")); err != nil {
 		return nil, err
 	}
-	safeHostname, err := SafeText(hostname, "hostname QTV", 96)
+	safeHostname, err := SafeText(hostname, "QTV hostname", 96)
 	if err != nil {
 		return nil, err
 	}
@@ -521,7 +521,7 @@ func QtvSpec(target, bind string, port int, hostname, upstream, password string,
 			return nil, err
 		}
 		if password != "" {
-			if _, err := SafeText(password, "senha QTV", 96); err != nil {
+			if _, err := SafeText(password, "QTV password", 96); err != nil {
 				return nil, err
 			}
 		}
@@ -532,12 +532,12 @@ func QtvSpec(target, bind string, port int, hostname, upstream, password string,
 		return nil, err
 	}
 	session.Temporary = append(session.Temporary, sessionConfig)
-	upstreamLabel, secret := upstream, "não configurado"
+	upstreamLabel, secret := upstream, "not set"
 	if upstreamLabel == "" {
-		upstreamLabel = "nenhum"
+		upstreamLabel = "none"
 	}
 	if password != "" {
-		secret = "configurado"
+		secret = "set"
 	}
 	return &Spec{
 		Label: "QTV", Arguments: []string{binary, "exec", filepath.Base(sessionConfig.Path)}, Cwd: directory, ExpectedSHA256: digest,

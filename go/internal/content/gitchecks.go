@@ -75,24 +75,24 @@ func CheckLFS(root string) (int, []string, error) {
 			count++
 			file, err := os.Open(path)
 			if err != nil {
-				problems = append(problems, fmt.Sprintf("objeto LFS ilegível: %s: %v", relative, err))
+				problems = append(problems, fmt.Sprintf("unreadable LFS object: %s: %v", relative, err))
 				continue
 			}
 			head := make([]byte, len(GitLFSPointerPrefix))
 			n, _ := io.ReadFull(file, head)
 			file.Close()
 			if bytes.Equal(head[:n], GitLFSPointerPrefix) {
-				problems = append(problems, "objeto LFS não materializado: "+relative)
+				problems = append(problems, "LFS object not materialized: "+relative)
 			}
 			continue
 		}
 		info, err := os.Stat(path)
 		if err != nil {
-			problems = append(problems, fmt.Sprintf("arquivo rastreado ilegível: %s: %v", relative, err))
+			problems = append(problems, fmt.Sprintf("unreadable tracked file: %s: %v", relative, err))
 			continue
 		}
 		if info.Size() > maxDirectBinary && looksBinary(path) {
-			problems = append(problems, fmt.Sprintf("binário grande fora do Git LFS (%d bytes): %s", info.Size(), relative))
+			problems = append(problems, fmt.Sprintf("large binary outside Git LFS (%d bytes): %s", info.Size(), relative))
 		}
 	}
 	return count, problems, nil
@@ -118,7 +118,7 @@ func checkedSHA(value any, label string) (string, error) {
 		valid = valid && strings.ContainsRune("0123456789abcdefABCDEF", c)
 	}
 	if !valid {
-		return "", fmt.Errorf("SHA inválido para %s: %s", label, pyRepr(value))
+		return "", fmt.Errorf("invalid SHA for %s: %s", label, pyRepr(value))
 	}
 	return text, nil
 }
@@ -130,12 +130,12 @@ func CommittedDiffCommand(eventName string, event *Object) ([]string, error) {
 	case "pull_request":
 		pull, ok := event.Value("pull_request").(*Object)
 		if !ok {
-			return nil, errors.New("Evento de pull request sem metadados do PR.")
+			return nil, errors.New("Pull request event without PR metadata.")
 		}
 		base, baseOK := pull.Value("base").(*Object)
 		head, headOK := pull.Value("head").(*Object)
 		if !baseOK || !headOK {
-			return nil, errors.New("Evento de pull request sem base/head.")
+			return nil, errors.New("Pull request event without base/head.")
 		}
 		baseSHA, err := checkedSHA(base.Value("sha"), "base")
 		if err != nil {
@@ -171,11 +171,11 @@ func CommittedDiffFromEnvironment() ([]string, error) {
 	}
 	value, err := ReadJSON(path)
 	if err != nil {
-		return nil, fmt.Errorf("Erro ao determinar o diff commitado: %v", err)
+		return nil, fmt.Errorf("Could not determine the committed diff: %v", err)
 	}
 	event, ok := value.(*Object)
 	if !ok {
-		return nil, errors.New("Evento do GitHub precisa ser um objeto JSON.")
+		return nil, errors.New("The GitHub event must be a JSON object.")
 	}
 	return CommittedDiffCommand(os.Getenv("GITHUB_EVENT_NAME"), event)
 }
@@ -186,7 +186,7 @@ func CheckCommittedDiff(root string, command []string) (string, error) {
 	process.Dir = root
 	output, err := process.CombinedOutput()
 	if err != nil {
-		return string(output), fmt.Errorf("%s falhou: %s", strings.Join(command, " "), strings.TrimSpace(string(output)))
+		return string(output), fmt.Errorf("%s failed: %s", strings.Join(command, " "), strings.TrimSpace(string(output)))
 	}
 	return string(output), nil
 }

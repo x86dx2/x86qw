@@ -52,7 +52,7 @@ type RepairAssessment struct {
 }
 
 func diagnosticCategory(diagnostic string) string {
-	if strings.Contains(diagnostic, "runtime presente sem recibo; preservado") {
+	if strings.Contains(diagnostic, "runtime present without a receipt; kept") {
 		return "advisory"
 	}
 	return "fatal"
@@ -87,9 +87,9 @@ func assessRepair(in plan.Input) (*RepairAssessment, error) {
 		current, readErr := state.Read(root)
 		switch {
 		case !info.Mode().IsRegular():
-			assessment.diagnostics = append(assessment.diagnostics, fmt.Sprintf("state.json: Estado da instalação inválido: %s", statePath))
+			assessment.diagnostics = append(assessment.diagnostics, fmt.Sprintf("state.json: invalid installation state: %s", statePath))
 		case readErr != nil:
-			assessment.diagnostics = append(assessment.diagnostics, fmt.Sprintf("state.json: Estado da instalação inválido: %s", statePath))
+			assessment.diagnostics = append(assessment.diagnostics, fmt.Sprintf("state.json: invalid installation state: %s", statePath))
 		default:
 			recorded := map[string]bool{}
 			for _, id := range current.Installed() {
@@ -103,13 +103,13 @@ func assessRepair(in plan.Input) (*RepairAssessment, error) {
 			}
 			sort.Strings(missing)
 			if len(missing) > 0 {
-				assessment.diagnostics = append(assessment.diagnostics, "state.json registra componentes sem metadados íntegros: "+strings.Join(missing, ", "))
+				assessment.diagnostics = append(assessment.diagnostics, "state.json records components without intact metadata: "+strings.Join(missing, ", "))
 			} else if len(recorded) != len(installed) {
 				assessment.recoveredState = current
 			}
 		}
 	} else if len(assessment.diagnostics) > 0 {
-		assessment.diagnostics = append(assessment.diagnostics, "state.json ausente e metadados parciais impedem inferência segura")
+		assessment.diagnostics = append(assessment.diagnostics, "state.json is missing and partial metadata prevents a safe inference")
 	} else if len(installed) > 0 {
 		assessment.inferredState = inferState(in, installed)
 	}
@@ -142,7 +142,7 @@ func assessRepair(in plan.Input) (*RepairAssessment, error) {
 			receiptPath := filepath.Join(root, filepath.FromSlash(spec.Receipt(channel)))
 			if _, err := os.Lstat(receiptPath); err != nil {
 				if _, err := os.Lstat(runtime); err == nil {
-					assessment.diagnostics = append(assessment.diagnostics, fmt.Sprintf("ezQuake %s %s: runtime presente sem recibo; preservado", spec.Label, channel))
+					assessment.diagnostics = append(assessment.diagnostics, fmt.Sprintf("ezQuake %s %s: runtime present without a receipt; kept", spec.Label, channel))
 				}
 				continue
 			}
@@ -152,7 +152,7 @@ func assessRepair(in plan.Input) (*RepairAssessment, error) {
 				rec, err = receipt.ParseClient(payload, spec.Context(channel))
 			}
 			if err != nil {
-				assessment.diagnostics = append(assessment.diagnostics, fmt.Sprintf("ezQuake %s %s: recibo inválido ou parcial (%v)", spec.Label, channel, err))
+				assessment.diagnostics = append(assessment.diagnostics, fmt.Sprintf("ezQuake %s %s: invalid or partial receipt (%v)", spec.Label, channel, err))
 				continue
 			}
 			available := false
@@ -163,28 +163,28 @@ func assessRepair(in plan.Input) (*RepairAssessment, error) {
 			}
 			issue := clientIssue{spec: spec, channel: channel, selection: rec.Get("selection"), mode: "payload", available: available}
 			if _, err := os.Lstat(runtime); err != nil {
-				issue.reason = "runtime ausente"
+				issue.reason = "runtime missing"
 				if !available {
-					issue.reason = "runtime ausente; payload precisa do bootstrap"
+					issue.reason = "runtime missing; the payload needs the bootstrap"
 				}
 				assessment.clients = append(assessment.clients, issue)
 				continue
 			}
 			if spec.Platform == "linux" && regular(runtime) && executableMissing(runtime) {
 				if digest, _ := fileSHA256(runtime); digest == rec.Get("binary_sha256") {
-					issue.reason, issue.mode = "AppImage sem permissão de execução", "permission"
+					issue.reason, issue.mode = "AppImage without execute permission", "permission"
 					assessment.clients = append(assessment.clients, issue)
 					continue
 				}
 			}
 			if _, err := verifyClient(root, spec, channel); err != nil {
-				issue.reason = "runtime ausente, incompleto ou divergente"
+				issue.reason = "runtime missing, incomplete or different"
 				assessment.clients = append(assessment.clients, issue)
 				continue
 			}
 			if spec.Platform == "macos" && channel == "stable" {
 				if legacy, ok := legacyStableIdentities[rec.Get("artifact_sha256")]; ok && legacy == rec.Get("binary_sha256") {
-					issue.reason = "bundle x86QW re-assinado; restaurar o bundle upstream integral"
+					issue.reason = "x86QW re-signed bundle; restore the intact upstream bundle"
 					assessment.clients = append(assessment.clients, issue)
 				}
 			}
@@ -232,13 +232,13 @@ func RepairPlan(in plan.Input) (*plan.Plan, *RepairAssessment, error) {
 	}
 	var rows []plan.Row
 	for _, diagnostic := range assessment.diagnostics {
-		rows = append(rows, plan.Row{Kind: "Diagnóstico " + diagnosticCategory(diagnostic), Item: "Metadados gerenciados", Installed: diagnostic, Available: "preservar e reconciliar pelo bootstrap", Action: "Inspecionar"})
+		rows = append(rows, plan.Row{Kind: "Diagnostic " + diagnosticCategory(diagnostic), Item: "Managed metadata", Installed: diagnostic, Available: "keep and reconcile through the bootstrap", Action: "Inspect"})
 	}
 	if assessment.recoveredState != nil || assessment.inferredState != nil {
-		rows = append(rows, plan.Row{Kind: "Metadados", Item: "state.json", Installed: "ausente ou desatualizado", Available: "reconstruído dos recibos íntegros", Action: "Reparar"})
+		rows = append(rows, plan.Row{Kind: "Metadata", Item: "state.json", Installed: "missing or out of date", Available: "rebuilt from the intact receipts", Action: "Repair"})
 	}
 	for _, issue := range assessment.clients {
-		rows = append(rows, plan.Row{Kind: "Cliente", Item: fmt.Sprintf("ezQuake %s %s", issue.spec.Label, issue.channel), Installed: issue.reason, Available: issue.selection, Action: "Reparar"})
+		rows = append(rows, plan.Row{Kind: "Client", Item: fmt.Sprintf("ezQuake %s %s", issue.spec.Label, issue.channel), Installed: issue.reason, Available: issue.selection, Action: "Repair"})
 	}
 	for _, id := range assessment.invalidComponents {
 		record, err := receipt.Load(filepath.Join(in.Root, receipt.ComponentsDir, id))
@@ -251,16 +251,16 @@ func RepairPlan(in plan.Input) (*plan.Plan, *RepairAssessment, error) {
 		}
 		component, _ := in.Inventory.Get(id)
 		size := pkg.Size
-		rows = append(rows, plan.Row{Kind: "Componente", Item: component.Label, Installed: record.Receipt.Get("selection"), Available: pkg.Version, Action: "Reparar", Size: &size})
+		rows = append(rows, plan.Row{Kind: "Component", Item: component.Label, Installed: record.Receipt.Get("selection"), Available: pkg.Version, Action: "Repair", Size: &size})
 	}
 	if assessment.supportInvalid {
-		rows = append(rows, plan.Row{Kind: "Gerado", Item: "Suporte de execução dos mods", Installed: "ausente ou divergente", Available: "derivado dos componentes instalados", Action: "Reparar"})
+		rows = append(rows, plan.Row{Kind: "Generated", Item: "Mod run support", Installed: "missing or different", Available: "derived from the installed components", Action: "Repair"})
 	}
 	for _, binary := range assessment.permissions {
-		rows = append(rows, plan.Row{Kind: "Runtime", Item: filepath.Base(binary), Installed: "sem execução", Available: "executável", Action: "Reparar"})
+		rows = append(rows, plan.Row{Kind: "Runtime", Item: filepath.Base(binary), Installed: "not executable", Available: "executable", Action: "Repair"})
 	}
 	if assessment.packageOrder {
-		rows = append(rows, plan.Row{Kind: "Gerado", Item: "Ordem de PK3", Installed: "ausente ou divergente", Available: "catálogo instalado", Action: "Reparar"})
+		rows = append(rows, plan.Row{Kind: "Generated", Item: "PK3 order", Installed: "missing or different", Available: "installed catalog", Action: "Repair"})
 	}
 	if rows == nil {
 		rows = []plan.Row{}
@@ -284,12 +284,12 @@ func Repair(ctx context.Context, in plan.Input) (*Result, error) {
 	}
 	for _, diagnostic := range assessment.diagnostics {
 		if diagnosticCategory(diagnostic) == "fatal" {
-			return nil, errors.New("O repair encontrou metadados incompletos ou ambíguos e não alterou a instalação. Preserve os arquivos e reexecute o bootstrap install.sh para reconciliar o estado.")
+			return nil, errors.New("Repair found incomplete or ambiguous metadata and did not change the installation. Keep the files and run the install.sh bootstrap again to reconcile the state.")
 		}
 	}
 	for _, issue := range assessment.clients {
 		if issue.mode == "payload" && !issue.available {
-			return nil, errors.New("O plano exige payload validado. A CLI instalada não baixa conteúdo durante repair; reexecute o bootstrap install.sh no mesmo destino.")
+			return nil, errors.New("The plan needs a validated payload. The installed CLI downloads no content during repair; run the install.sh bootstrap again on the same target.")
 		}
 	}
 	held, err := lock.Acquire(in.Root, "repair")
@@ -307,7 +307,7 @@ func Repair(ctx context.Context, in plan.Input) (*Result, error) {
 	defer tx.Close()
 	fail := func(err error) (*Result, error) {
 		if undoErr := tx.Rollback(); undoErr != nil {
-			return nil, fmt.Errorf("%w; rollback incompleto: %v", err, undoErr)
+			return nil, fmt.Errorf("%w; incomplete rollback: %v", err, undoErr)
 		}
 		return nil, err
 	}
@@ -390,7 +390,7 @@ func Repair(ctx context.Context, in plan.Input) (*Result, error) {
 		return fail(err)
 	}
 	if _, err := Verify(in.Root); err != nil {
-		return fail(fmt.Errorf("verificação após o reparo falhou: %w", err))
+		return fail(fmt.Errorf("verification after the repair failed: %w", err))
 	}
 	result.Warnings = tx.Warnings
 	return result, nil

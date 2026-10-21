@@ -50,7 +50,7 @@ func RemoveUserPath(root string) error { return runUserPathScript("remove", root
 func runUserPathScript(mode, root string) error {
 	powershell, err := exec.LookPath("powershell.exe")
 	if err != nil {
-		return errors.New("Windows PowerShell não está disponível para ajustar o PATH.")
+		return errors.New("Windows PowerShell is not available to update the PATH.")
 	}
 	dir, err := os.MkdirTemp("", "x86qw-path.")
 	if err != nil {
@@ -70,7 +70,7 @@ func runUserPathScript(mode, root string) error {
 		if detail == "" {
 			detail = err.Error()
 		}
-		return fmt.Errorf("Não foi possível ajustar o PATH do usuário: %s", detail)
+		return fmt.Errorf("Could not update the user PATH: %s", detail)
 	}
 	return nil
 }

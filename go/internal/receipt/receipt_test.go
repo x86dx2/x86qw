@@ -32,7 +32,7 @@ func TestInventoryRejectsUnsafeOrUnsorted(t *testing.T) {
 	for name, payload := range cases {
 		t.Run(name, func(t *testing.T) {
 			if _, err := ParseInventory([]byte(payload)); err == nil {
-				t.Fatal("inventário inválido aceito")
+				t.Fatal("invalid inventory accepted")
 			}
 		})
 	}
@@ -53,14 +53,14 @@ func TestRealInstallationRecords(t *testing.T) {
 	home, _ := os.UserHomeDir()
 	root := filepath.Join(home, "Games", "x86qw")
 	if _, err := os.Stat(filepath.Join(root, ComponentsDir)); err != nil {
-		t.Skip("sem instalação local")
+		t.Skip("no local installation")
 	}
 	records, err := LoadComponents(root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(records) == 0 {
-		t.Fatal("nenhum componente")
+		t.Fatal("no components")
 	}
 	if _, err := Load(filepath.Join(root, PersonalDir)); err != nil {
 		t.Fatal(err)

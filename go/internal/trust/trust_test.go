@@ -23,17 +23,17 @@ func TestEmbeddedRootMatchesMaintenanceRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(RootJSON, want) {
-		t.Fatal("go/internal/trust/root.json diverge de maintenance/trust/root.json")
+		t.Fatal("go/internal/trust/root.json differs from maintenance/trust/root.json")
 	}
 	if err := ValidateRootPolicy(RootJSON); err != nil {
-		t.Fatalf("root de produção rejeitada: %v", err)
+		t.Fatalf("production root rejected: %v", err)
 	}
 }
 
 func TestRootPolicyRejectsDeviations(t *testing.T) {
 	repo := newTestRepo(t)
 	if err := ValidateRootPolicy(repo.root); err != nil {
-		t.Fatalf("root conforme rejeitada: %v", err)
+		t.Fatalf("conforming root rejected: %v", err)
 	}
 	cases := map[string]func(*metadata.RootType){
 		"no consistent snapshots":  func(r *metadata.RootType) { r.ConsistentSnapshot = false },
@@ -48,7 +48,7 @@ func TestRootPolicyRejectsDeviations(t *testing.T) {
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
 			if err := ValidateRootPolicy(repo.buildRoot(mutate)); err == nil {
-				t.Fatal("root fora da política foi aceita")
+				t.Fatal("root outside the policy was accepted")
 			}
 		})
 	}
@@ -93,17 +93,17 @@ func TestParityWithCheckedOutProjection(t *testing.T) {
 		RefTime: generation.Expires.Add(-time.Second),
 	})
 	if err != nil {
-		t.Fatalf("projeção do checkout não autenticou: %v", err)
+		t.Fatalf("the checkout projection did not authenticate: %v", err)
 	}
 	want, err := os.ReadFile(repoPath(t, "site", "public", "api", "v1", "catalog.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(catalog.Raw, want) {
-		t.Fatal("catálogo autenticado diverge de site/public/api/v1/catalog.json")
+		t.Fatal("the authenticated catalog differs from site/public/api/v1/catalog.json")
 	}
 	if catalog.Packages == 0 {
-		t.Fatal("catálogo autenticado sem pacotes")
+		t.Fatal("authenticated catalog without packages")
 	}
 }
 
@@ -115,7 +115,7 @@ func TestLoadCatalogFromGeneratedRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 	if catalog.Packages != 2 || catalog.Roles[metadata.TIMESTAMP].Version != 3 {
-		t.Fatalf("catálogo inesperado: %+v", catalog)
+		t.Fatalf("unexpected catalog: %+v", catalog)
 	}
 }
 
@@ -124,10 +124,10 @@ func TestRejectsExpiredTimestamp(t *testing.T) {
 	repo.publish(publishSpec{version: 3, timestampExpires: time.Now().Add(-time.Hour)})
 	_, err := LoadCatalog(repo.options(""))
 	if err == nil || !strings.Contains(err.Error(), "timestamp.json is expired") {
-		t.Fatalf("timestamp vencido deveria falhar: %v", err)
+		t.Fatalf("an expired timestamp should fail: %v", err)
 	}
 	if !IsTrustError(err) {
-		t.Fatalf("erro deveria ser de trust: %T", err)
+		t.Fatalf("the error should be a trust error: %T", err)
 	}
 }
 
@@ -139,7 +139,7 @@ func TestRefTimeReplacesTheClock(t *testing.T) {
 	options := repo.options("")
 	options.RefTime = expired.Add(-time.Second)
 	if _, err := LoadCatalog(options); err != nil {
-		t.Fatalf("antes de vencer o timestamp vale: %v", err)
+		t.Fatalf("before it expires the timestamp is valid: %v", err)
 	}
 }
 
@@ -148,7 +148,7 @@ func TestRejectsTamperedTimestamp(t *testing.T) {
 	repo.publish(publishSpec{version: 3})
 	repo.files["timestamp.json"] = bytes.Replace(repo.files["timestamp.json"], []byte(`"version":3`), []byte(`"version":4`), 1)
 	if _, err := LoadCatalog(repo.options("")); err == nil {
-		t.Fatal("timestamp adulterado foi aceito")
+		t.Fatal("tampered timestamp was accepted")
 	}
 }
 
@@ -161,7 +161,7 @@ func TestRejectsRollback(t *testing.T) {
 	}
 	repo.publish(publishSpec{version: 4})
 	if _, err := LoadCatalog(repo.options(cache)); err == nil {
-		t.Fatal("rollback de v5 para v4 foi aceito")
+		t.Fatal("rollback from v5 to v4 was accepted")
 	}
 }
 
@@ -175,8 +175,8 @@ func TestRejectsTimestampEquivocation(t *testing.T) {
 	// Same timestamp version, different signed bytes.
 	repo.publish(publishSpec{version: 5, timestampExpires: time.Now().Add(20 * 24 * time.Hour)})
 	_, err := LoadCatalog(repo.options(cache))
-	if err == nil || !strings.Contains(err.Error(), "equivocação") {
-		t.Fatalf("equivocação deveria falhar: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "equivocation") {
+		t.Fatalf("equivocation should fail: %v", err)
 	}
 }
 
@@ -184,7 +184,7 @@ func TestRejectsForeignCatalogIdentity(t *testing.T) {
 	repo := newTestRepo(t)
 	repo.publish(publishSpec{version: 3, catalog: []byte(`{"format":1,"project":"other","packages":[]}`)})
 	if _, err := LoadCatalog(repo.options("")); err == nil {
-		t.Fatal("catálogo de outro projeto foi aceito")
+		t.Fatal("another project's catalog was accepted")
 	}
 }
 
@@ -197,12 +197,12 @@ func TestRejectsSwappedCatalogBytes(t *testing.T) {
 		}
 	}
 	if _, err := LoadCatalog(repo.options("")); err == nil {
-		t.Fatal("catálogo com bytes trocados foi aceito")
+		t.Fatal("catalog with swapped bytes was accepted")
 	}
 }
 
 func TestRejectsPlainHTTP(t *testing.T) {
 	if _, err := LoadCatalog(Options{BaseURL: "http://qw.x86.com.br/api/v1/trust/"}); err == nil {
-		t.Fatal("URL HTTP foi aceita")
+		t.Fatal("HTTP URL was accepted")
 	}
 }

@@ -81,20 +81,20 @@ func terminateRecordedProcess(entry map[string]any) (string, error) {
 		case "dead":
 			return "already_dead", nil
 		case "inconclusive":
-			return "", errorf("O líder PID %d terminou, mas seu grupo ficou inconclusivo.", pid)
+			return "", errorf("Leader PID %d ended, but its group is inconclusive.", pid)
 		}
 	}
 	if status == "identity_mismatch" {
 		return "identity_mismatch", nil
 	}
 	if status != "alive" && status != "dead" {
-		return "", errorf("A identidade de um processo órfão ficou inconclusiva.")
+		return "", errorf("The identity of an orphaned process is inconclusive.")
 	}
 	if err := signalRecorded(entry, false); err != nil {
 		if errors.Is(err, syscall.ESRCH) {
 			return "already_dead", nil
 		}
-		return "", errorf("Não foi possível encerrar o processo órfão PID %d.", pid)
+		return "", errorf("Could not stop orphaned process PID %d.", pid)
 	}
 	deadline := time.Now().Add(4 * time.Second)
 	for time.Now().Before(deadline) {
@@ -107,7 +107,7 @@ func terminateRecordedProcess(entry map[string]any) (string, error) {
 		if errors.Is(err, syscall.ESRCH) {
 			return "terminated", nil
 		}
-		return "", errorf("Não foi possível forçar o processo órfão PID %d.", pid)
+		return "", errorf("Could not force-stop orphaned process PID %d.", pid)
 	}
 	deadline = time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
@@ -116,7 +116,7 @@ func terminateRecordedProcess(entry map[string]any) (string, error) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	return "", errorf("O processo órfão PID %d não encerrou; estado preservado.", pid)
+	return "", errorf("Orphaned process PID %d did not stop; its state was kept.", pid)
 }
 
 // startDetached starts a service in its own session/process group.
@@ -141,10 +141,10 @@ func stopGroups(commands []*exec.Cmd, exited map[int]bool) error {
 		groups = append(groups, group)
 		switch processGroupStatus(group) {
 		case "inconclusive":
-			return errorf("Não foi possível confirmar o grupo de processos %d; estado preservado.", group)
+			return errorf("Could not confirm process group %d; its state was kept.", group)
 		case "alive":
 			if err := syscall.Kill(-group, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
-				return errorf("Não foi possível encerrar o grupo de processos %d.", group)
+				return errorf("Could not stop process group %d.", group)
 			}
 		}
 	}
@@ -159,12 +159,12 @@ func stopGroups(commands []*exec.Cmd, exited map[int]bool) error {
 			continue
 		}
 		if err := syscall.Kill(-group, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
-			return errorf("Não foi possível forçar o encerramento do grupo %d.", group)
+			return errorf("Could not force-stop group %d.", group)
 		}
 		groupDeadline := time.Now().Add(time.Second)
 		for processGroupStatus(group) == "alive" {
 			if time.Now().After(groupDeadline) {
-				return errorf("O grupo de processos %d permaneceu ativo após SIGKILL.", group)
+				return errorf("Process group %d stayed alive after SIGKILL.", group)
 			}
 			time.Sleep(50 * time.Millisecond)
 		}
@@ -197,16 +197,16 @@ func spawnBackgroundController(executable string, arguments []string, request []
 	command.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	stdin, err := command.StdinPipe()
 	if err != nil {
-		return nil, errorf("Não foi possível criar o controlador em segundo plano: %v", err)
+		return nil, errorf("Could not create the background controller: %v", err)
 	}
 	if err := command.Start(); err != nil {
-		return nil, errorf("Não foi possível criar o controlador em segundo plano: %v", err)
+		return nil, errorf("Could not create the background controller: %v", err)
 	}
 	_, writeErr := stdin.Write(request)
 	if err := errors.Join(writeErr, stdin.Close()); err != nil {
 		syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
 		command.Wait()
-		return nil, errorf("O handoff privado do controlador falhou: %v", err)
+		return nil, errorf("The controller's private handoff failed: %v", err)
 	}
 	return command, nil
 }

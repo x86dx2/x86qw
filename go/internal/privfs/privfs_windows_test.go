@@ -41,11 +41,11 @@ func TestPrivateDirectoriesAndInheritance(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := Mkdir(root); !os.IsExist(err) {
-		t.Fatalf("segundo Mkdir: %v", err)
+		t.Fatalf("second Mkdir: %v", err)
 	}
 	for _, path := range []string{filepath.Dir(root), root} {
 		if !protected(t, path) || strings.Count(acl(t, path), "(A;") != 2 {
-			t.Fatalf("DACL de %s não é privada: %s", path, acl(t, path))
+			t.Fatalf("DACL of %s is not private: %s", path, acl(t, path))
 		}
 	}
 	file := filepath.Join(root, "state.json")
@@ -53,7 +53,7 @@ func TestPrivateDirectoriesAndInheritance(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !IsPrivateFile(file, nil) || strings.Count(acl(t, file), "(A;") != 2 {
-		t.Fatalf("arquivo não herdou a DACL privada: %s", acl(t, file))
+		t.Fatalf("file did not inherit the private DACL: %s", acl(t, file))
 	}
 	plain := filepath.Join(t.TempDir(), "plain")
 	os.Mkdir(plain, 0o755)
@@ -61,6 +61,6 @@ func TestPrivateDirectoriesAndInheritance(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !protected(t, plain) {
-		t.Fatalf("Protect não aplicou a DACL privada: %s", acl(t, plain))
+		t.Fatalf("Protect did not apply the private DACL: %s", acl(t, plain))
 	}
 }

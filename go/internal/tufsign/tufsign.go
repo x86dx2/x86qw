@@ -49,15 +49,15 @@ func LoadKey(path string) (signature.Signer, string, error) {
 	}
 	block, _ := pem.Decode(payload)
 	if block == nil || block.Type != "PRIVATE KEY" {
-		return nil, "", fmt.Errorf("chave privada PEM inválida: %s", path)
+		return nil, "", fmt.Errorf("invalid PEM private key: %s", path)
 	}
 	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
-		return nil, "", fmt.Errorf("chave privada inválida: %s: %w", path, err)
+		return nil, "", fmt.Errorf("invalid private key: %s: %w", path, err)
 	}
 	private, ok := parsed.(ed25519.PrivateKey)
 	if !ok {
-		return nil, "", fmt.Errorf("chave não é Ed25519: %s", path)
+		return nil, "", fmt.Errorf("key is not Ed25519: %s", path)
 	}
 	key, err := metadata.KeyFromPublicKey(private.Public())
 	if err != nil {
@@ -89,14 +89,14 @@ func RoleSigners(keyDir string, root *metadata.RootType, role string) ([]signatu
 			return nil, err
 		}
 		if !authorized[id] {
-			return nil, fmt.Errorf("%s não é uma chave %s da root", path, role)
+			return nil, fmt.Errorf("%s is not a %s key of the root", path, role)
 		}
 		signers = append(signers, signer)
 		if len(signers) == root.Roles[role].Threshold {
 			return signers, nil
 		}
 	}
-	return nil, fmt.Errorf("chaves %s insuficientes para o threshold %d", role, root.Roles[role].Threshold)
+	return nil, fmt.Errorf("not enough %s keys for threshold %d", role, root.Roles[role].Threshold)
 }
 
 type signable interface {
@@ -137,7 +137,7 @@ func writeNew(path string, data []byte) error {
 // a new repository directory (metadata/ + targets/catalog/<sha>.catalog.json).
 func Generate(keyDir, rootPath, catalogPath, output string, version int64, now time.Time) error {
 	if _, err := os.Stat(output); err == nil {
-		return fmt.Errorf("repositório de saída já existe: %s", output)
+		return fmt.Errorf("output repository already exists: %s", output)
 	}
 	// TUF serializes expiries at second precision; other clients reject more.
 	now = now.UTC().Truncate(time.Second)
@@ -219,7 +219,7 @@ func RenewTimestamp(current []byte, keyPath, rootPath string, lease time.Duratio
 		allowed = allowed || keyID == id
 	}
 	if !allowed {
-		return nil, errors.New("a chave fornecida não pertence à role timestamp; root/targets não são aceitas")
+		return nil, errors.New("the given key does not belong to the timestamp role; root/targets keys are not accepted")
 	}
 	old, err := metadata.Timestamp().FromBytes(current)
 	if err != nil {

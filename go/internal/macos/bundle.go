@@ -34,7 +34,7 @@ func readPlist(app string) (*Value, []byte, error) {
 	path := plistPath(app)
 	info, err := os.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Size() > 1<<20 {
-		return nil, nil, fmt.Errorf("Info.plist inválido no bundle macOS: %s", app)
+		return nil, nil, fmt.Errorf("Invalid Info.plist in the macOS bundle: %s", app)
 	}
 	payload, err := os.ReadFile(path)
 	if err != nil {
@@ -42,7 +42,7 @@ func readPlist(app string) (*Value, []byte, error) {
 	}
 	root, err := ParsePlist(payload)
 	if err != nil || root.Kind != "dict" {
-		return nil, nil, fmt.Errorf("Info.plist inválido no bundle macOS: %s", app)
+		return nil, nil, fmt.Errorf("Invalid Info.plist in the macOS bundle: %s", app)
 	}
 	return root, payload, nil
 }
@@ -98,9 +98,9 @@ func codesign(args ...string) error {
 			detail = strings.TrimSpace(string(stdout))
 		}
 		if detail != "" {
-			return fmt.Errorf("O comando codesign falhou: %s", detail)
+			return fmt.Errorf("The codesign command failed: %s", detail)
 		}
-		return errors.New("O comando codesign falhou")
+		return errors.New("The codesign command failed")
 	}
 	return nil
 }
@@ -113,12 +113,12 @@ func IsSandboxed(app string) (bool, error) {
 	}
 	stdout, stderr, err := run("codesign", "-d", "--entitlements", ":-", app)
 	if err != nil {
-		return false, errors.New("Não foi possível ler os entitlements do ezQuake.")
+		return false, errors.New("Could not read ezQuake's entitlements.")
 	}
 	output := append(stdout, stderr...)
 	var payload []byte
 	if index := bytes.Index(output, []byte("bplist00")); index >= 0 {
-		return false, errors.New("entitlements binários não são suportados")
+		return false, errors.New("binary entitlements are not supported")
 	} else if start := bytes.Index(output, []byte("<?xml")); start >= 0 {
 		end := bytes.LastIndex(output, []byte("</plist>"))
 		if end >= start {
@@ -130,7 +130,7 @@ func IsSandboxed(app string) (bool, error) {
 	}
 	root, err := ParsePlist(payload)
 	if err != nil || root.Kind != "dict" {
-		return false, errors.New("Os entitlements do ezQuake são inválidos.")
+		return false, errors.New("ezQuake's entitlements are invalid.")
 	}
 	value, ok := root.Dict["com.apple.security.app-sandbox"]
 	if !ok {
@@ -169,7 +169,7 @@ func PrepareNightly(app string) (bool, error) {
 	}
 	if !full {
 		if err := EnableFullDisplay(app); err != nil {
-			return false, fmt.Errorf("Info.plist não pôde ser atualizado: %s", app)
+			return false, fmt.Errorf("Info.plist could not be updated: %s", app)
 		}
 	}
 	if err := codesign("--force", "--deep", "--sign", "-", app); err != nil {
@@ -179,10 +179,10 @@ func PrepareNightly(app string) (bool, error) {
 		return false, err
 	}
 	if sandboxed, err := IsSandboxed(app); err != nil || sandboxed {
-		return false, fmt.Errorf("Não foi possível remover o sandbox incompatível de %s.", app)
+		return false, fmt.Errorf("Could not remove the incompatible sandbox from %s.", app)
 	}
 	if full, err := UsesFullDisplay(app); err != nil || !full {
-		return false, fmt.Errorf("Não foi possível habilitar o fullscreen integral em %s.", app)
+		return false, fmt.Errorf("Could not enable native fullscreen in %s.", app)
 	}
 	return true, nil
 }
@@ -231,12 +231,12 @@ func EnsureProcessAbsent(name string) error {
 	}
 	stdout, stderr, err := run("pgrep", "-x", name)
 	if err == nil {
-		return fmt.Errorf("Feche o %s antes de continuar. O macOS mantém a autorização do diretório do jogo enquanto o aplicativo está aberto.", name)
+		return fmt.Errorf("Quit %s before continuing. macOS keeps the game folder's authorization while the app is open.", name)
 	}
 	var exit *exec.ExitError
 	if errors.As(err, &exit) && exit.ExitCode() == 1 {
 		return nil
 	}
 	detail := strings.TrimSpace(string(stderr) + string(stdout))
-	return fmt.Errorf("Não foi possível verificar se o %s está aberto: %s", name, detail)
+	return fmt.Errorf("Could not check whether %s is open: %s", name, detail)
 }

@@ -1109,10 +1109,16 @@ func (m *Model) panelPage(p *page) {
 			if !u.Note.IsZero() {
 				note = p.st(t.Gray).Render("  " + m.in(u.Note))
 			}
-			left := p.st(t.Text2).Render("  "+m.label("component", u.ID, u.Label)) + note
-			right := p.st(t.Dim).Render(m.in(u.From)+"  → ") + p.st(t.Success).Render(u.To) + p.st(t.Base).Render("  ")
+			// What is not a component, and words standing for a version,
+			// are plan words.
+			label, to := m.label("component", u.ID, u.Label), m.label("plan", u.To, u.To)
+			if u.ID == "" {
+				label = m.label("plan", u.Label, u.Label)
+			}
+			left := p.st(t.Text2).Render("  "+label) + note
+			right := p.st(t.Dim).Render(m.in(u.From)+"  → ") + p.st(t.Success).Render(to) + p.st(t.Base).Render("  ")
 			if lipgloss.Width(left)+lipgloss.Width(right)+2 > p.width {
-				right = p.st(t.Dim).Render("→ ") + p.st(t.Success).Render(u.To) + p.st(t.Base).Render("  ")
+				right = p.st(t.Dim).Render("→ ") + p.st(t.Success).Render(to) + p.st(t.Base).Render("  ")
 			}
 			// The versions always show; the name gives way.
 			if room := p.width - lipgloss.Width(right) - 2; lipgloss.Width(left) > room {

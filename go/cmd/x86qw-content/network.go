@@ -16,22 +16,22 @@ import (
 func confirm(env *environment) content.Confirm {
 	return func(message string) error {
 		if env.stdin == nil || !term.IsTerminal(int(env.stdin.Fd())) {
-			return errors.New("use --yes para confirmar a operacao sem terminal interativo")
+			return errors.New("use --yes to confirm the operation without an interactive terminal")
 		}
-		fmt.Fprintf(env.stdout, "%s [s/N]: ", message)
+		fmt.Fprintf(env.stdout, "%s [y/N]: ", message)
 		answer, _ := bufio.NewReader(env.stdin).ReadString('\n')
 		switch strings.ToLower(strings.TrimSpace(answer)) {
-		case "s", "sim":
+		case "y", "yes", "s", "sim":
 			return nil
 		}
-		return errors.New("operacao cancelada; nenhum arquivo foi alterado")
+		return errors.New("operation cancelled; no file was changed")
 	}
 }
 
 func runCheck(env *environment, args []string) (int, error) {
 	flags := flag.NewFlagSet("check", flag.ContinueOnError)
-	offline := flags.Bool("offline", false, "valida somente versoes declaradas")
-	asJSON := flags.Bool("json", false, "saida estruturada")
+	offline := flags.Bool("offline", false, "validates declared versions only")
+	asJSON := flags.Bool("json", false, "structured output")
 	components, rest := splitPositional(args)
 	if err := parseFlags("check", flags, rest, env.stderr); err != nil {
 		return 0, err
@@ -46,12 +46,12 @@ func runCheck(env *environment, args []string) (int, error) {
 func runUpdate(env *environment, args []string) (int, error) {
 	flags := flag.NewFlagSet("update", flag.ContinueOnError)
 	options := content.UpdateOptions{Confirm: confirm(env)}
-	flags.IntVar(&options.Workers, "workers", 8, "downloads paralelos (1-32)")
-	flags.BoolVar(&options.DryRun, "dry-run", false, "somente mostra o plano")
-	flags.BoolVar(&options.Yes, "yes", false, "confirma sem terminal interativo")
-	flags.BoolVar(&options.Commit, "commit", false, "cria commit apos atualizar")
-	flags.BoolVar(&options.Push, "push", false, "envia o commit para origin e gitlab")
-	flags.StringVar(&options.Message, "message", "", "mensagem do commit")
+	flags.IntVar(&options.Workers, "workers", 8, "parallel downloads (1-32)")
+	flags.BoolVar(&options.DryRun, "dry-run", false, "only shows the plan")
+	flags.BoolVar(&options.Yes, "yes", false, "confirms without an interactive terminal")
+	flags.BoolVar(&options.Commit, "commit", false, "commits after updating")
+	flags.BoolVar(&options.Push, "push", false, "pushes the commit to origin and gitlab")
+	flags.StringVar(&options.Message, "message", "", "commit message")
 	components, rest := splitPositional(args)
 	if err := parseFlags("update", flags, rest, env.stderr); err != nil {
 		return 0, err
@@ -66,8 +66,8 @@ func runUpdate(env *environment, args []string) (int, error) {
 func runAdd(env *environment, args []string) (int, error) {
 	flags := flag.NewFlagSet("add", flag.ContinueOnError)
 	options := content.AddOptions{Confirm: confirm(env)}
-	flags.BoolVar(&options.DryRun, "dry-run", false, "somente valida a definicao")
-	flags.BoolVar(&options.Yes, "yes", false, "confirma sem terminal interativo")
+	flags.BoolVar(&options.DryRun, "dry-run", false, "only validates the definition")
+	flags.BoolVar(&options.Yes, "yes", false, "confirms without an interactive terminal")
 	// The positional definition may come before or after the flags.
 	var positional []string
 	var rest []string
@@ -93,9 +93,9 @@ func runAdd(env *environment, args []string) (int, error) {
 
 func runPublish(env *environment, args []string) (int, error) {
 	flags := flag.NewFlagSet("publish", flag.ContinueOnError)
-	githubOnly := flags.Bool("github-only", false, "publica somente no GitHub")
-	gitlabOnly := flags.Bool("gitlab-only", false, "publica somente no GitLab")
-	dryRun := flags.Bool("dry-run", false, "somente verifica")
+	githubOnly := flags.Bool("github-only", false, "publishes to GitHub only")
+	gitlabOnly := flags.Bool("gitlab-only", false, "publishes to GitLab only")
+	dryRun := flags.Bool("dry-run", false, "only verifies")
 	if err := parseFlags("publish", flags, args, env.stderr); err != nil {
 		return 0, err
 	}
@@ -110,8 +110,8 @@ func runPublish(env *environment, args []string) (int, error) {
 
 func runCommit(env *environment, args []string) (int, error) {
 	flags := flag.NewFlagSet("commit", flag.ContinueOnError)
-	message := flags.String("message", "", "mensagem do commit")
-	push := flags.Bool("push", false, "envia para origin e gitlab")
+	message := flags.String("message", "", "commit message")
+	push := flags.Bool("push", false, "pushes to origin and gitlab")
 	if err := parseFlags("commit", flags, args, env.stderr); err != nil {
 		return 0, err
 	}
@@ -122,11 +122,11 @@ func runCommit(env *environment, args []string) (int, error) {
 }
 
 func init() {
-	register("check", "consulta upstreams sem alterar arquivos; [COMPONENTE...] (exit 2 = atualizacoes, 1 = indisponivel)", runCheck)
-	register("update", "atualiza cada componente de forma independente; [COMPONENTE...]", runUpdate)
-	register("add", "incorpora pacote/configuracao por definicao revisada", runAdd)
-	register("publish", "publica os artefatos nos mirrors GitHub e GitLab", runPublish)
-	register("commit", "registra no Git somente mudancas da distribuicao", runCommit)
+	register("check", "checks upstreams without changing files; [COMPONENT...] (exit 2 = updates, 1 = unavailable)", runCheck)
+	register("update", "updates each component independently; [COMPONENT...]", runUpdate)
+	register("add", "incorporates a package/configuration from a reviewed definition", runAdd)
+	register("publish", "publishes the artifacts to the GitHub and GitLab mirrors", runPublish)
+	register("commit", "records only distribution changes in Git", runCommit)
 	_ = os.Stdin
 }
 

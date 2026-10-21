@@ -513,7 +513,7 @@ func ExpandHome(path string) string {
 
 // labels names every package an installation reports.
 func (r *Real) labels() map[string]string {
-	labels := map[string]string{corePackage: "Dados do Quake", "client": "ezQuake", "cli": "CLI x86QW"}
+	labels := map[string]string{corePackage: "Quake data", "client": "ezQuake", "cli": "x86QW CLI"}
 	for _, component := range r.inv.Components {
 		labels[component.ID] = component.Label
 	}
@@ -620,7 +620,7 @@ func (r *Real) applyPlan(options Options) (*plan.Plan, error) {
 			return nil, err
 		}
 		size := pkg.Size
-		planned.Operations = append(planned.Operations, plan.Row{Kind: "Componente", Item: labels[id], Action: "Adicionar", Available: pkg.Version, Size: &size})
+		planned.Operations = append(planned.Operations, plan.Row{Kind: "Component", Item: labels[id], Action: "Add", Available: pkg.Version, Size: &size})
 	}
 	return planned, nil
 }
@@ -637,7 +637,7 @@ func (r *Real) apply(ctx context.Context, options Options, control <-chan bool) 
 	var lanes []Lane
 	for _, row := range planned.Operations {
 		id := ids[row.Item]
-		if row.Kind == "Cliente" {
+		if row.Kind == "Client" {
 			id = "client"
 		}
 		if id == "" || row.Size == nil {

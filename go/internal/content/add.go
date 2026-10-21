@@ -24,16 +24,16 @@ var (
 // safeRelative checks a definition's relative path, optionally under
 // prefixDir.
 func safeRelative(value any, prefixDir string) (string, error) {
-	portable, err := ValidatePortableRelativePath(value, "caminho")
+	portable, err := ValidatePortableRelativePath(value, "path")
 	if err != nil {
 		return "", &ManagerError{err.Error()}
 	}
 	parts := strings.Split(portable, "/")
 	if len(parts) < 2 {
-		return "", managerError("caminho inseguro: %s", pyjson.Repr(value))
+		return "", managerError("unsafe path: %s", pyjson.Repr(value))
 	}
 	if parts[0] != prefixDir {
-		return "", managerError("o caminho precisa ficar em %s/: %s", prefixDir, pyjson.Repr(value))
+		return "", managerError("the path must stay under %s/: %s", prefixDir, pyjson.Repr(value))
 	}
 	return portable, nil
 }
@@ -60,18 +60,18 @@ func (p *Project) validateDestinationTree(destination string) error {
 	for depth := 1; depth <= len(relative); depth++ {
 		candidate := strings.Join(relative[:depth], "/")
 		if known, ok := existing[semanticIdentity(candidate)]; ok && known != candidate {
-			return managerError("destino colide com caminho existente em caixa ou Unicode: %s", candidate)
+			return managerError("destination collides with an existing path by case or Unicode: %s", candidate)
 		}
 		target := joinPosix(dist, candidate)
 		if isSymlink(target) {
-			return managerError("destino atravessa symlink existente: %s", candidate)
+			return managerError("destination crosses an existing symlink: %s", candidate)
 		}
 		if exists(target) {
 			if depth < len(relative) && !isDir(target) {
-				return managerError("pai do destino nao e diretorio: %s", candidate)
+				return managerError("destination parent is not a directory: %s", candidate)
 			}
 			if depth == len(relative) && !isFile(target) {
-				return managerError("destino existente nao e arquivo regular: %s", candidate)
+				return managerError("existing destination is not a regular file: %s", candidate)
 			}
 		}
 	}
@@ -81,7 +81,7 @@ func (p *Project) validateDestinationTree(destination string) error {
 // validateLocalSourcePath resolves a local source path, which must stay
 // under base.
 func validateLocalSourcePath(base string, value any) (string, error) {
-	portable, err := ValidatePortableRelativePath(value, "source local")
+	portable, err := ValidatePortableRelativePath(value, "local source")
 	if err != nil {
 		return "", &ManagerError{err.Error()}
 	}
@@ -93,14 +93,14 @@ func validateLocalSourcePath(base string, value any) (string, error) {
 	for _, part := range strings.Split(portable, "/") {
 		candidate = filepath.Join(candidate, part)
 		if isSymlink(candidate) {
-			return "", managerError("source local precisa ser arquivo regular sem symlink")
+			return "", managerError("local source must be a regular file without symlinks")
 		}
 	}
 	if !isFile(candidate) {
-		return "", managerError("source local precisa ser arquivo regular sem symlink")
+		return "", managerError("local source must be a regular file without symlinks")
 	}
 	if relative, err := filepath.Rel(root, resolve(candidate)); err != nil || strings.HasPrefix(relative, "..") {
-		return "", managerError("source local escapa do diretorio da definicao")
+		return "", managerError("local source escapes the definition's directory")
 	}
 	return candidate, nil
 }
@@ -121,7 +121,7 @@ type filePlan struct {
 func validateDefinitionFile(raw any, base string) (*filePlan, error) {
 	entry, ok := raw.(*Object)
 	if !ok {
-		return nil, managerError("entrada de arquivo invalida")
+		return nil, managerError("invalid file entry")
 	}
 	destination, err := safeRelative(entry.Value("destination"), "dist")
 	if err != nil {
@@ -129,7 +129,7 @@ func validateDefinitionFile(raw any, base string) (*filePlan, error) {
 	}
 	source, url := entry.Value("source"), entry.Value("url")
 	if (source == nil) == (url == nil) {
-		return nil, managerError("cada arquivo da definicao deve possuir exatamente source ou url")
+		return nil, managerError("each definition file must have exactly one of source or url")
 	}
 	plan := &filePlan{entry: entry, destination: destination}
 	var parsedURL splitURL
@@ -140,29 +140,29 @@ func validateDefinitionFile(raw any, base string) (*filePlan, error) {
 		}
 		expectedSize, expectedSHA := entry.Value("size"), entry.Value("sha256")
 		if expectedSize != nil && !sizeWithin(expectedSize, true) {
-			return nil, managerError("size local invalido na definicao")
+			return nil, managerError("invalid local size in the definition")
 		}
 		if text, ok := expectedSHA.(string); expectedSHA != nil && (!ok || !sha256Pattern.MatchString(text)) {
-			return nil, managerError("sha256 local invalido na definicao")
+			return nil, managerError("invalid local sha256 in the definition")
 		}
 		info, err := os.Stat(origin)
 		if err != nil {
 			return nil, err
 		}
 		if info.Size() <= 0 || info.Size() > MaxArtifactBytes {
-			return nil, managerError("arquivo local precisa ser nao vazio e respeitar o limite global")
+			return nil, managerError("a local file must be non-empty and within the global limit")
 		}
 		if expectedSize != nil && !pyjson.EqInt(expectedSize, info.Size()) {
-			return nil, managerError("size local nao corresponde ao arquivo da definicao")
+			return nil, managerError("local size does not match the definition file")
 		}
 		digest, err := fileSHA256(origin)
 		if err != nil {
 			return nil, err
 		}
 		if expectedSHA != nil && expectedSHA != digest {
-			return nil, managerError("sha256 local nao corresponde ao arquivo da definicao")
+			return nil, managerError("local sha256 does not match the definition file")
 		}
-		plan.source, plan.origin, plan.size, plan.sha256 = origin, "arquivo local validado", info.Size(), digest
+		plan.source, plan.origin, plan.size, plan.sha256 = origin, "validated local file", info.Size(), digest
 		plan.mode = 0o644
 		if info.Mode()&0o111 != 0 {
 			plan.mode = 0o755
@@ -170,37 +170,37 @@ func validateDefinitionFile(raw any, base string) (*filePlan, error) {
 	} else {
 		text, ok := url.(string)
 		if !ok {
-			return nil, managerError("URL de arquivo invalida")
+			return nil, managerError("invalid file URL")
 		}
-		if parsedURL, err = validateHTTPSURL(text, "URL do arquivo da definicao"); err != nil {
+		if parsedURL, err = validateHTTPSURL(text, "definition file URL"); err != nil {
 			return nil, &ManagerError{err.Error()}
 		}
 		size, digest := entry.Value("size"), entry.Value("sha256")
 		digestText, digestOK := digest.(string)
 		if !sizeWithin(size, true) || !digestOK || !sha256Pattern.MatchString(digestText) {
-			return nil, managerError("arquivo remoto da definição exige size e sha256 válidos")
+			return nil, managerError("a remote definition file requires a valid size and sha256")
 		}
 		plan.url, plan.origin, plan.size, plan.sha256 = text, safeURLForLog(text), int64Of(size), digestText
 	}
 	managed := getOr(entry, "managed", false)
 	if _, ok := managed.(bool); !ok {
-		return nil, managerError("managed precisa ser booleano")
+		return nil, managerError("managed must be a boolean")
 	}
 	if managed == true {
 		if source != nil {
-			return nil, managerError("arquivo upstream gerenciado precisa usar URL HTTPS fixada")
+			return nil, managerError("a managed upstream file must use a pinned HTTPS URL")
 		}
 		if parsedURL.Query != "" {
-			return nil, managerError("URL persistente de arquivo gerenciado nao pode conter query")
+			return nil, managerError("a managed file's persistent URL cannot have a query")
 		}
 		component, componentOK := entry.Value("distribution_component").(string)
 		consumer, consumerOK := entry.Value("consumer").(string)
 		if !componentOK || !componentID.MatchString(component) || !consumerOK || !safeConsumer.MatchString(consumer) {
-			return nil, managerError("arquivo upstream gerenciado exige distribution_component e consumer seguros")
+			return nil, managerError("a managed upstream file requires a safe distribution_component and consumer")
 		}
 		if pkg := entry.Value("package"); pkg != nil {
 			if text, ok := pkg.(string); !ok || !safeIdentifier.MatchString(text) {
-				return nil, managerError("package do arquivo gerenciado precisa ser identificador seguro")
+				return nil, managerError("the managed file's package must be a safe identifier")
 			}
 		}
 	}
@@ -222,43 +222,43 @@ func applyReferenceTransition(releases *Object, proposed any) (referenceTransiti
 	}
 	transition, ok := proposed.(*Object)
 	if !ok || !sameKeys(transition.Keys(), "repository", "revision", "components") {
-		return referenceTransition{}, false, managerError("reference precisa declarar somente repository, revision e components")
+		return referenceTransition{}, false, managerError("reference must declare only repository, revision and components")
 	}
 	current, ok := releases.Value("reference").(*Object)
 	if !ok {
-		return referenceTransition{}, false, managerError("inventario de releases nao possui referencia nQuake")
+		return referenceTransition{}, false, managerError("the release inventory has no nQuake reference")
 	}
 	repository, repositoryOK := transition.Value("repository").(string)
 	revision, revisionOK := transition.Value("revision").(string)
 	moving, movingOK := transition.Value("components").(*Object)
 	if !repositoryOK || !revisionOK || !hex40Strict.MatchString(revision) || !movingOK || len(moving.Keys()) == 0 {
-		return referenceTransition{}, false, managerError("transicao da referencia nQuake possui campos invalidos")
+		return referenceTransition{}, false, managerError("the nQuake reference transition has invalid fields")
 	}
-	parsed, err := validateHTTPSURL(repository, "repository da referencia nQuake")
+	parsed, err := validateHTTPSURL(repository, "nQuake reference repository")
 	if err != nil {
-		return referenceTransition{}, false, managerError("repository da referencia nQuake invalido")
+		return referenceTransition{}, false, managerError("invalid nQuake reference repository")
 	}
 	if parsed.Query != "" {
-		return referenceTransition{}, false, managerError("repository da referencia nQuake nao pode conter query")
+		return referenceTransition{}, false, managerError("the nQuake reference repository cannot have a query")
 	}
 	if !pyjson.Eq(repository, current.Value("repository")) {
-		return referenceTransition{}, false, managerError("transicao da referencia nQuake nao pode trocar o repository")
+		return referenceTransition{}, false, managerError("the nQuake reference transition cannot change the repository")
 	}
 	result := referenceTransition{revision, map[string]string{}}
 	for _, identifier := range moving.Keys() {
 		previous, ok := moving.Value(identifier).(string)
 		if !ok || !hex40Strict.MatchString(previous) {
-			return referenceTransition{}, false, managerError("revisao anterior invalida para %s", identifier)
+			return referenceTransition{}, false, managerError("invalid previous revision for %s", identifier)
 		}
 		pinned := ReferenceRevisionOf(releases, identifier)
 		if pinned == "" {
-			return referenceTransition{}, false, managerError("%s nao consome a referencia nQuake", identifier)
+			return referenceTransition{}, false, managerError("%s does not consume the nQuake reference", identifier)
 		}
 		if previous != pinned {
-			return referenceTransition{}, false, managerError("revisao anterior de %s diverge do inventario atual (%s)", identifier, pinned[:12])
+			return referenceTransition{}, false, managerError("previous revision of %s differs from the current inventory (%s)", identifier, pinned[:12])
 		}
 		if revision == previous {
-			return referenceTransition{}, false, managerError("transicao da referencia nQuake precisa alterar a revisao de %s", identifier)
+			return referenceTransition{}, false, managerError("the nQuake reference transition must change the revision of %s", identifier)
 		}
 		MoveReferenceRelease(pyjson.Get(releases, "components", identifier).(*Object), revision)
 		result.previous[identifier] = previous
@@ -270,15 +270,15 @@ func applyReferenceTransition(releases *Object, proposed any) (referenceTransiti
 // referenceAssetURL is the raw URL of a file of the reference repository
 // at revision.
 func referenceAssetURL(repository, revision, upstreamPath string) (string, error) {
-	parsed, err := validateHTTPSURL(repository, "repository da referencia nQuake")
+	parsed, err := validateHTTPSURL(repository, "nQuake reference repository")
 	if err != nil {
-		return "", managerError("repository da referencia nQuake invalido")
+		return "", managerError("invalid nQuake reference repository")
 	}
 	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
 	_, _, _, port, hasPort := parsed.hostinfo()
 	if Casefold(parsed.Hostname()) != "github.com" || (hasPort && port != "443") || parsed.Query != "" ||
 		len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", managerError("repository da referencia nQuake nao e um repositorio GitHub canonico")
+		return "", managerError("the nQuake reference repository is not a canonical GitHub repository")
 	}
 	return "https://raw.githubusercontent.com/" + parts[0] + "/" + parts[1] + "/" + revision + "/" + quotePath(upstreamPath), nil
 }
@@ -289,7 +289,7 @@ func upsertComponent(catalog *Object, component *Object, replace bool) error {
 	entries, ok := catalog.Value("components").([]any)
 	identifier, idOK := component.Value("id").(string)
 	if !ok || !idOK {
-		return managerError("componente da definicao invalido")
+		return managerError("invalid definition component")
 	}
 	index := -1
 	for position, item := range objects(entries) {
@@ -298,7 +298,7 @@ func upsertComponent(catalog *Object, component *Object, replace bool) error {
 		}
 	}
 	if index >= 0 && !replace {
-		return managerError("o componente %s ja existe; declare replace: true para atualiza-lo", identifier)
+		return managerError("component %s already exists; declare replace: true to update it", identifier)
 	}
 	if index >= 0 {
 		for position, raw := range entries {
@@ -323,13 +323,13 @@ func preserveProfileFingerprints(catalog *Object) error {
 	profiles, profilesOK := catalog.Value("profiles").(*Object)
 	history, historyOK := catalog.Value("profile_history").(*Object)
 	if !profilesOK || !historyOK || !sameKeys(profiles.Keys(), history.Keys()...) {
-		return managerError("historico de perfis de componentes invalido")
+		return managerError("invalid component profile history")
 	}
 	for _, name := range profiles.Keys() {
 		selected, selectedOK := pyjson.StrList(profiles.Value(name))
 		fingerprints, fingerprintsOK := history.Value(name).([]any)
 		if !selectedOK || !fingerprintsOK {
-			return managerError("historico do perfil %s invalido", name)
+			return managerError("invalid history for profile %s", name)
 		}
 		fingerprint := ProfileFingerprint(selected)
 		if !listContains(fingerprints, fingerprint) {
@@ -342,12 +342,12 @@ func preserveProfileFingerprints(catalog *Object) error {
 func addToProfiles(staged *Object, identifier string, profiles []string) error {
 	profileMap, ok := staged.Value("profiles").(*Object)
 	if !ok {
-		return managerError("perfis de componentes invalidos")
+		return managerError("invalid component profiles")
 	}
 	for _, profile := range profiles {
 		members, ok := profileMap.Value(profile).([]any)
 		if !ok {
-			return managerError("perfil desconhecido: %s", profile)
+			return managerError("unknown profile: %s", profile)
 		}
 		if !listContains(members, identifier) {
 			profileMap.Set(profile, append(members, identifier))
@@ -359,11 +359,11 @@ func addToProfiles(staged *Object, identifier string, profiles []string) error {
 // validateDistributionChange checks a whole definition and plans its files.
 func (p *Project) validateDistributionChange(definition *Object, definitionPath string) ([]*filePlan, error) {
 	if !pyjson.EqInt(definition.Value("format"), 1) || !pyjson.Eq(definition.Value("project"), "x86qw") || !pyjson.Eq(definition.Value("kind"), "distribution-change") {
-		return nil, managerError("a definicao precisa ser x86qw/distribution-change formato 1")
+		return nil, managerError("the definition must be x86qw/distribution-change format 1")
 	}
 	files, ok := getOr(definition, "files", []any{}).([]any)
 	if !ok || len(files) == 0 {
-		return nil, managerError("a definicao precisa incorporar ao menos um arquivo diretamente utilizado")
+		return nil, managerError("the definition must incorporate at least one directly used file")
 	}
 	var plans []*filePlan
 	for _, raw := range files {
@@ -378,7 +378,7 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 		identities[semanticIdentity(plan.destination)] = true
 	}
 	if len(identities) != len(plans) {
-		return nil, managerError("a definicao possui destinos duplicados ou colidentes")
+		return nil, managerError("the definition has duplicate or colliding destinations")
 	}
 	for _, plan := range plans {
 		if err := p.validateDestinationTree(plan.destination); err != nil {
@@ -387,15 +387,15 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 	}
 	policy, _, err := p.Policy()
 	if err != nil {
-		return nil, managerError("inventario da distribuicao invalido: %v", err)
+		return nil, managerError("invalid distribution inventory: %v", err)
 	}
 	manifest, err := LoadManifest(p.Path(ManifestPath))
 	if err != nil {
-		return nil, managerError("inventario da distribuicao invalido: %v", err)
+		return nil, managerError("invalid distribution inventory: %v", err)
 	}
 	registry, err := p.Upstreams()
 	if err != nil {
-		return nil, managerError("inventario da distribuicao invalido: %v", err)
+		return nil, managerError("invalid distribution inventory: %v", err)
 	}
 	currentFiles := manifest.Value("files").(*Object)
 	currentCatalog, err := LoadJSONObject(p.Path(CatalogPath))
@@ -403,7 +403,7 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 		return nil, err
 	}
 	if _, err := p.ValidateCatalog(currentCatalog); err != nil {
-		return nil, managerError("catalogo publico atual invalido: %v", err)
+		return nil, managerError("invalid current public catalog: %v", err)
 	}
 	pkgValue := definition.Value("package")
 	pkg, _ := pkgValue.(*Object)
@@ -412,7 +412,7 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 			return nil, &ManagerError{err.Error()}
 		}
 		if IsCLIPackage(pkg) {
-			return nil, managerError("pacotes da CLI x86qw so podem ser preparados pelo fluxo de release da CLI")
+			return nil, managerError("x86qw CLI packages can only be prepared by the CLI release flow")
 		}
 	}
 	stagedComponents, err := LoadJSONObject(p.Path(ComponentsPath))
@@ -429,36 +429,36 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 	}
 	replace := getOr(definition, "replace", false)
 	if _, ok := replace.(bool); !ok {
-		return nil, managerError("replace precisa ser booleano")
+		return nil, managerError("replace must be a boolean")
 	}
 	if componentValue := definition.Value("component"); componentValue != nil {
 		component, ok := componentValue.(*Object)
 		if !ok {
-			return nil, managerError("component precisa ser um objeto")
+			return nil, managerError("component must be an object")
 		}
 		if identifier, ok := component.Value("id").(string); !ok || !componentID.MatchString(identifier) {
-			return nil, managerError("component.id precisa ser identificador seguro")
+			return nil, managerError("component.id must be a safe identifier")
 		}
 		profiles, ok := pyjson.StrList(getOr(definition, "profiles", []any{}))
 		for _, profile := range profiles {
 			ok = ok && componentID.MatchString(profile)
 		}
 		if !ok {
-			return nil, managerError("profiles precisa ser uma lista de identificadores seguros")
+			return nil, managerError("profiles must be a list of safe identifiers")
 		}
 		proposed, ok := definition.Value("release").(*Object)
 		if !ok {
-			return nil, managerError("todo componente novo ou substituido precisa declarar release")
+			return nil, managerError("every new or replaced component must declare release")
 		}
 		entries, ok := stagedReleases.Value("components").(*Object)
 		if !ok {
-			return nil, managerError("inventario de releases nao possui componentes validos")
+			return nil, managerError("the release inventory has no valid components")
 		}
 		identifier := component.Value("id").(string)
 		if current, ok := entries.Value(identifier).(*Object); replace == true && ok {
 			currentNamespace := getOr(current, "distribution_component", "nquake")
 			if !pyjson.Eq(getOr(proposed, "distribution_component", "nquake"), currentNamespace) {
-				return nil, managerError("release substituta precisa preservar distribution_component %s: %s", pyjson.Repr(currentNamespace), identifier)
+				return nil, managerError("a replacement release must keep distribution_component %s: %s", pyjson.Repr(currentNamespace), identifier)
 			}
 		}
 		if err := preserveProfileFingerprints(stagedComponents); err != nil {
@@ -475,14 +475,14 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 		}
 		entries.Set(identifier, proposed)
 	} else if definition.Has("profiles") || definition.Has("release") {
-		return nil, managerError("profiles e release exigem component")
+		return nil, managerError("profiles and release require component")
 	}
 	if err := ValidateComponentCatalog(stagedComponents); err != nil {
-		return nil, managerError("inventarios propostos invalidos: %v", err)
+		return nil, managerError("invalid proposed inventories: %v", err)
 	}
 	namespaces, _ := pyjson.StrList(stagedComponents.Value("content_namespaces"))
 	if err := ValidateReleases(stagedReleases, setOf(ComponentIDs(stagedComponents)...), setOf(namespaces...)); err != nil {
-		return nil, managerError("inventarios propostos invalidos: %v", err)
+		return nil, managerError("invalid proposed inventories: %v", err)
 	}
 	projectConsumers := func(path string) int {
 		consumers := map[string]bool{}
@@ -523,7 +523,7 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 			}
 		}
 		if len(matches) > 1 {
-			return nil, managerError("destino aparece em mais de uma release proposta: %s", path)
+			return nil, managerError("destination appears in more than one proposed release: %s", path)
 		}
 		if len(matches) == 0 {
 			return nil, nil
@@ -532,7 +532,7 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 	}
 	requireIdentity := func(plan *filePlan, record *Object, label, urlField string) error {
 		if !pyjson.Eq(plan.entry.Value("url"), record.Value(urlField)) || !pyjson.EqInt(record.Value("size"), plan.size) || !pyjson.Eq(record.Value("sha256"), plan.sha256) {
-			return managerError("URL, tamanho ou SHA-256 diverge do %s: %s", label, plan.destination)
+			return managerError("URL, size or SHA-256 differs from the %s: %s", label, plan.destination)
 		}
 		return nil
 	}
@@ -544,7 +544,7 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 			}
 		}
 		if len(matches) > 1 {
-			return nil, managerError("fonte preservada duplicada no inventario: %s", path)
+			return nil, managerError("duplicate preserved source in the inventory: %s", path)
 		}
 		if len(matches) == 0 {
 			return nil, nil
@@ -557,15 +557,15 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 		relative := strings.TrimPrefix(plan.destination, "dist/")
 		if plan.source != "" {
 			if currentFiles.Has(relative) {
-				return nil, managerError("fonte local nao pode substituir arquivo upstream gerenciado: %s", relative)
+				return nil, managerError("a local source cannot replace a managed upstream file: %s", relative)
 			}
 			if projectConsumers(plan.destination) != 1 {
-				return nil, managerError("fonte local precisa de um consumidor exato no BOM proposto: %s", plan.destination)
+				return nil, managerError("a local source needs an exact consumer in the proposed BOM: %s", plan.destination)
 			}
 			continue
 		}
 		if entry.Value("managed") != true {
-			return nil, managerError("todo arquivo remoto persistente precisa declarar managed: true")
+			return nil, managerError("every persistent remote file must declare managed: true")
 		}
 		componentName := entry.Value("distribution_component").(string)
 		consumer := entry.Value("consumer").(string)
@@ -577,7 +577,7 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 			return nil, &ManagerError{err.Error()}
 		}
 		if owner != componentName {
-			return nil, managerError("componente declarado nao e dono do destino: %s != %s", componentName, ownerRepr(owner))
+			return nil, managerError("the declared component does not own the destination: %s != %s", componentName, ownerRepr(owner))
 		}
 		existing, _ := currentFiles.Value(relative).(*Object)
 		sourceComponent := SourceOwner(registry, relative)
@@ -591,7 +591,7 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 			}
 		}
 		if !allowed[consumer] {
-			return nil, managerError("consumer nao declarado para %s: %s", componentName, consumer)
+			return nil, managerError("undeclared consumer for %s: %s", componentName, consumer)
 		}
 		referencePackage := ""
 		if componentName == "nquake" {
@@ -599,7 +599,7 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 			if len(parts) >= 4 && parts[0] == "distributions" && parts[1] == "nquake" {
 				reference, ok := stagedReleases.Value("reference").(*Object)
 				if !ok {
-					return nil, managerError("inventario de releases nao possui referencia nQuake")
+					return nil, managerError("the release inventory has no nQuake reference")
 				}
 				upstreamPath, _ := nquakePath(relative)
 				if referencePackage, err = ComponentForSource(stagedComponents, upstreamPath, "reference"); err != nil {
@@ -607,18 +607,18 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 				}
 				revision := ReferenceRevisionOf(stagedReleases, referencePackage)
 				if revision == "" {
-					return nil, managerError("%s nao fixa uma revisao nQuake: %s", ownerRepr(referencePackage), relative)
+					return nil, managerError("%s does not pin an nQuake revision: %s", ownerRepr(referencePackage), relative)
 				}
 				repository, ok := reference.Value("repository").(string)
 				if !ok {
-					return nil, managerError("inventario de releases nao possui repository nQuake")
+					return nil, managerError("the release inventory has no nQuake repository")
 				}
 				expected, err := referenceAssetURL(repository, revision, upstreamPath)
 				if err != nil {
 					return nil, err
 				}
 				if !pyjson.Eq(entry.Value("url"), expected) {
-					return nil, managerError("URL do snapshot nQuake diverge da referencia fixada: %s", relative)
+					return nil, managerError("the nQuake snapshot URL differs from the pinned reference: %s", relative)
 				}
 			}
 		}
@@ -627,7 +627,7 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 			return nil, err
 		}
 		if artifactAuthority != nil && artifactAuthority.owner != componentName {
-			return nil, managerError("distribution_component da release diverge do plano gerenciado: %s != %s: %s", artifactAuthority.owner, componentName, relative)
+			return nil, managerError("the release distribution_component differs from the managed plan: %s != %s: %s", artifactAuthority.owner, componentName, relative)
 		}
 		var expectedPackage any
 		switch {
@@ -640,13 +640,13 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 		case existing != nil:
 			current := existing.Value("package")
 			if _, ok := current.(string); current != nil && !ok {
-				return nil, managerError("package atual invalido no manifesto: %s", relative)
+				return nil, managerError("invalid current package in the manifest: %s", relative)
 			}
 			expectedPackage = current
 		}
 		currentOwner, err := stagedProject.ConsumedComponent(relative)
 		if err != nil {
-			return nil, managerError("destino gerenciado invalido: %v", err)
+			return nil, managerError("invalid managed destination: %v", err)
 		}
 		stagedOwner := ""
 		if artifactAuthority != nil {
@@ -654,24 +654,24 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 		}
 		if currentOwner != componentName && stagedOwner != componentName &&
 			!(componentName == "nquake" && referencePackage != "" && sourceComponent == "") {
-			return nil, managerError("destino nao possui consumidor operacional declarado: %s", relative)
+			return nil, managerError("destination has no declared operational consumer: %s", relative)
 		}
 		provided := entry.Value("package")
 		if expectedPackage == nil && provided != nil {
-			return nil, managerError("package nao pertence ao destino gerenciado: %s", relative)
+			return nil, managerError("package does not belong to the managed destination: %s", relative)
 		}
 		if expectedPackage != nil && !pyjson.Eq(provided, expectedPackage) {
-			return nil, managerError("package do arquivo gerenciado deve ser %s: %s", pyjson.Repr(expectedPackage), relative)
+			return nil, managerError("the managed file's package must be %s: %s", pyjson.Repr(expectedPackage), relative)
 		}
 		// A file of a component moving to another nQuake revision is the
 		// only managed path that may change in place.
 		if existing != nil && !(referencePackage != "" && hasTransition && transition.previous[referencePackage] != "") {
-			if err := requireIdentity(plan, existing, "manifesto imutavel atual", "url"); err != nil {
+			if err := requireIdentity(plan, existing, "current immutable manifest", "url"); err != nil {
 				return nil, err
 			}
 			for _, field := range [][2]string{{"component", "distribution_component"}, {"consumer", "consumer"}, {"package", "package"}} {
 				if !pyjson.Eq(entry.Value(field[1]), existing.Value(field[0])) {
-					return nil, managerError("metadado %s diverge do manifesto imutavel atual: %s", field[0], relative)
+					return nil, managerError("metadata %s differs from the current immutable manifest: %s", field[0], relative)
 				}
 			}
 			continue
@@ -679,9 +679,9 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 		authorities := 0
 		if artifactAuthority != nil {
 			if !pyjson.Eq(entry.Value("package"), artifactAuthority.releaseID) {
-				return nil, managerError("package do arquivo gerenciado diverge da release proposta: %s", relative)
+				return nil, managerError("the managed file's package differs from the proposed release: %s", relative)
 			}
-			if err := requireIdentity(plan, artifactAuthority.artifact, "release proposta", "url"); err != nil {
+			if err := requireIdentity(plan, artifactAuthority.artifact, "proposed release", "url"); err != nil {
 				return nil, err
 			}
 			authorities++
@@ -691,13 +691,13 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 			return nil, err
 		}
 		if record != nil {
-			if err := requireIdentity(plan, record, "registro de upstream", "url"); err != nil {
+			if err := requireIdentity(plan, record, "upstream record", "url"); err != nil {
 				return nil, err
 			}
 			authorities++
 		}
 		if pkg != nil && pkg.Value("distribution_path") == relative {
-			if err := requireIdentity(plan, pkg, "pacote publico proposto", "origin_url"); err != nil {
+			if err := requireIdentity(plan, pkg, "proposed public package", "origin_url"); err != nil {
 				return nil, err
 			}
 			authorities++
@@ -706,7 +706,7 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 			authorities++
 		}
 		if authorities == 0 {
-			return nil, managerError("arquivo remoto nao esta vinculado a release, upstream ou pacote proposto: %s", relative)
+			return nil, managerError("remote file is not bound to a proposed release, upstream or package: %s", relative)
 		}
 	}
 	if hasTransition {
@@ -718,14 +718,14 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 					nquakeURLRevision(pyjson.Repr(plan.entry.Value("url"))) == transition.revision)
 			}
 			if !found {
-				return nil, managerError("transicao da referencia nQuake precisa incorporar os arquivos de %s em %s", identifier, transition.revision[:12])
+				return nil, managerError("the nQuake reference transition must incorporate the files of %s at %s", identifier, transition.revision[:12])
 			}
 		}
 	}
 	if pkg != nil {
 		distributionPath, isText := pkg.Value("distribution_path").(string)
 		if isText && currentFiles.Has(distributionPath) {
-			return nil, managerError("um pacote proposto nao pode reutilizar caminho ja registrado no manifesto")
+			return nil, managerError("a proposed package cannot reuse a path already registered in the manifest")
 		}
 		var matching *filePlan
 		for _, plan := range plans {
@@ -735,19 +735,19 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 			}
 		}
 		if matching == nil {
-			return nil, managerError("o pacote declarado precisa corresponder a um arquivo da definicao")
+			return nil, managerError("the declared package must match a definition file")
 		}
 		if !pyjson.EqInt(pkg.Value("size"), matching.size) || !pyjson.Eq(pkg.Value("sha256"), matching.sha256) {
-			return nil, managerError("o pacote declarado diverge dos pins do arquivo da definicao")
+			return nil, managerError("the declared package differs from the definition file's pins")
 		}
 		if !pyjson.Eq(matching.entry.Value("url"), pkg.Value("origin_url")) {
-			return nil, managerError("a origem do pacote diverge da URL do arquivo da definicao")
+			return nil, managerError("the package origin differs from the definition file URL")
 		}
 		if matching.entry.Value("managed") != true {
-			return nil, managerError("o pacote declarado precisa corresponder a arquivo gerenciado")
+			return nil, managerError("the declared package must match a managed file")
 		}
 		if !pyjson.Eq(matching.entry.Value("distribution_component"), pkg.Value("component")) {
-			return nil, managerError("componente do pacote diverge do dono do arquivo gerenciado")
+			return nil, managerError("the package component differs from the managed file's owner")
 		}
 		expectedPublic := matching.entry.Value("package")
 		if !pyjson.Truthy(expectedPublic) {
@@ -755,19 +755,19 @@ func (p *Project) validateDistributionChange(definition *Object, definitionPath 
 		}
 		public := getOr(pkg, "package", pkg.Value("component"))
 		if !pyjson.Eq(public, expectedPublic) {
-			return nil, managerError("identidade logica do pacote publico diverge do arquivo gerenciado: %s != %s", pyjson.Repr(public), pyjson.Repr(expectedPublic))
+			return nil, managerError("the public package's logical identity differs from the managed file: %s != %s", pyjson.Repr(public), pyjson.Repr(expectedPublic))
 		}
 		entries, ok := currentCatalog.Value("packages").([]any)
 		if !ok {
-			return nil, managerError("catalogo publico atual nao possui pacotes validos")
+			return nil, managerError("the current public catalog has no valid packages")
 		}
 		if packageIdentityExists(entries, pkg) {
-			return nil, managerError("a identidade de pacote ja existe: %s", identityRepr(pkg))
+			return nil, managerError("the package identity already exists: %s", identityRepr(pkg))
 		}
 		proposed := currentCatalog.Clone()
 		proposed.Set("packages", append(append([]any{}, entries...), pkg))
 		if _, err := p.ValidateCatalog(proposed); err != nil {
-			return nil, managerError("catalogo publico proposto invalido: %v", err)
+			return nil, managerError("invalid proposed public catalog: %v", err)
 		}
 	}
 	return plans, nil
@@ -812,17 +812,17 @@ func (p *Project) fetchDefinitionFile(plan *filePlan, destination string) (int64
 	if plan.source != "" {
 		payload, err := os.ReadFile(plan.source)
 		if err != nil {
-			return 0, "", managerError("nao foi possivel copiar o source local: %v", err)
+			return 0, "", managerError("could not copy the local source: %v", err)
 		}
 		if int64(len(payload)) != plan.size || sha256Hex(payload) != plan.sha256 {
-			return 0, "", managerError("source local mudou depois da validacao")
+			return 0, "", managerError("local source changed after validation")
 		}
 		os.Remove(destination) // never write through a workspace hard link
 		if err := writeAtomic(destination, payload, plan.mode); err != nil {
 			return 0, "", err
 		}
 	} else if err := p.Pinned(plan.url, destination, plan.size, plan.sha256, 1); err != nil {
-		return 0, "", managerError("falha ao baixar arquivo da definição: %v", err)
+		return 0, "", managerError("failed to download the definition file: %v", err)
 	}
 	size, err := fileSize(destination)
 	if err != nil {
@@ -834,10 +834,10 @@ func (p *Project) fetchDefinitionFile(plan *filePlan, destination string) (int64
 	}
 	label := pyjson.Repr(plan.entry.Value("destination"))
 	if size != plan.size {
-		return 0, "", managerError("tamanho inesperado para %s", label)
+		return 0, "", managerError("unexpected size for %s", label)
 	}
 	if digest != plan.sha256 {
-		return 0, "", managerError("SHA-256 inesperado para %s", label)
+		return 0, "", managerError("unexpected SHA-256 for %s", label)
 	}
 	return size, digest, nil
 }
@@ -865,18 +865,18 @@ func (p *Project) Add(out io.Writer, definitionPath string, options AddOptions) 
 	}
 	files := definition.Value("files").([]any)
 	if options.DryRun {
-		fmt.Fprintf(out, "[PLANO] Definicao valida: %d arquivo(s).\n", len(plans))
+		fmt.Fprintf(out, "[PLAN] Valid definition: %d file(s).\n", len(plans))
 		for _, plan := range plans {
 			fmt.Fprintf(out, "  %s | %s\n", plan.destination, plan.origin)
 		}
-		fmt.Fprintln(out, "[OK] Simulacao concluida; nenhum byte remoto foi baixado e nenhum arquivo foi alterado.")
+		fmt.Fprintln(out, "[OK] Dry run finished; no remote byte was downloaded and no file was changed.")
 		return nil
 	}
 	if err := p.requireCleanWorktree(); err != nil {
 		return err
 	}
 	if !options.Yes {
-		if err := options.Confirm(fmt.Sprintf("Incorporar %d arquivo(s) e atualizar os inventarios?", len(files))); err != nil {
+		if err := options.Confirm(fmt.Sprintf("Incorporate %d file(s) and update the inventories?", len(files))); err != nil {
 			return err
 		}
 	}
@@ -904,7 +904,7 @@ func (p *Project) Add(out io.Writer, definitionPath string, options AddOptions) 
 	if componentValue := definition.Value("component"); componentValue != nil {
 		component, ok := componentValue.(*Object)
 		if !ok {
-			return managerError("component precisa ser um objeto")
+			return managerError("component must be an object")
 		}
 		if err := preserveProfileFingerprints(stagedComponents); err != nil {
 			return err
@@ -915,7 +915,7 @@ func (p *Project) Add(out io.Writer, definitionPath string, options AddOptions) 
 		identifier := pyjson.Repr(component.Value("id"))
 		profiles, ok := pyjson.StrList(getOr(definition, "profiles", []any{}))
 		if !ok {
-			return managerError("profiles precisa ser uma lista")
+			return managerError("profiles must be a list")
 		}
 		if err := addToProfiles(stagedComponents, identifier, profiles); err != nil {
 			return err
@@ -926,7 +926,7 @@ func (p *Project) Add(out io.Writer, definitionPath string, options AddOptions) 
 		release, releaseOK := definition.Value("release").(*Object)
 		entries, entriesOK := stagedReleases.Value("components").(*Object)
 		if !releaseOK || !entriesOK {
-			return managerError("todo componente novo ou substituido precisa declarar release")
+			return managerError("every new or replaced component must declare release")
 		}
 		entries.Set(identifier, release)
 	}
@@ -947,7 +947,7 @@ func (p *Project) Add(out io.Writer, definitionPath string, options AddOptions) 
 			}
 			path := joinPosix(filepath.Join(work, "dist"), relative)
 			if isSymlink(path) {
-				return managerError("arquivo nQuake anterior inseguro no workspace: %s", relative)
+				return managerError("unsafe previous nQuake file in the workspace: %s", relative)
 			}
 			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 				return err
@@ -959,7 +959,7 @@ func (p *Project) Add(out io.Writer, definitionPath string, options AddOptions) 
 	for index, raw := range files {
 		entry, ok := raw.(*Object)
 		if !ok {
-			return managerError("entrada de arquivo invalida")
+			return managerError("invalid file entry")
 		}
 		destination, err := safeRelative(entry.Value("destination"), "dist")
 		if err != nil {
@@ -973,7 +973,7 @@ func (p *Project) Add(out io.Writer, definitionPath string, options AddOptions) 
 		if entry.Value("managed") == true {
 			component, consumer, url := entry.Value("distribution_component"), entry.Value("consumer"), entry.Value("url")
 			if !pyjson.NonEmptyStr(component) || !pyjson.NonEmptyStr(consumer) || !pyjson.NonEmptyStr(url) {
-				return managerError("arquivo upstream gerenciado exige distribution_component, consumer e url")
+				return managerError("a managed upstream file requires distribution_component, consumer and url")
 			}
 			metadata := object("component", component, "consumer", consumer, "url", url,
 				"size", pyjson.Number(fmt.Sprint(size)), "sha256", digest)
@@ -995,14 +995,14 @@ func (p *Project) Add(out io.Writer, definitionPath string, options AddOptions) 
 		size, _ := fileSize(artifact)
 		digest, _ := fileSHA256(artifact)
 		if !isFile(artifact) || !pyjson.EqInt(pkg.Value("size"), size) || !pyjson.Eq(pkg.Value("sha256"), digest) {
-			return managerError("o pacote declarado nao corresponde ao arquivo incorporado")
+			return managerError("the declared package does not match the incorporated file")
 		}
 		entries, ok := stagedCatalog.Value("packages").([]any)
 		if !ok {
-			return managerError("catalogo de pacotes invalido")
+			return managerError("invalid package catalog")
 		}
 		if packageIdentityExists(entries, pkg) {
-			return managerError("a identidade de pacote ja existe: %s", identityRepr(pkg))
+			return managerError("the package identity already exists: %s", identityRepr(pkg))
 		}
 		stagedCatalog.Set("packages", append(entries, pkg))
 		stagedCatalog.Set("generated_at", utcNow())
@@ -1026,7 +1026,7 @@ func (p *Project) Add(out io.Writer, definitionPath string, options AddOptions) 
 	if err := p.applyWorkspace(work, true); err != nil {
 		return err
 	}
-	fmt.Fprintln(out, "[OK] Arquivos incorporados, inventarios validados e pacotes reconstruidos.")
-	fmt.Fprintln(out, "[PROXIMO] Execute 'x86qw-content verify' e revise 'git diff'.")
+	fmt.Fprintln(out, "[OK] Files incorporated, inventories validated and packages rebuilt.")
+	fmt.Fprintln(out, "[NEXT] Run 'x86qw-content verify' and review 'git diff'.")
 	return nil
 }

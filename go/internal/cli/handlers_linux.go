@@ -34,7 +34,7 @@ func setHandlers(root string, links, demos bool) error {
 	}
 	entry := handlerEntryPath(home)
 	if payload, err := os.ReadFile(entry); err == nil && !launches(string(payload), root) {
-		return fmt.Errorf("Um atalho não gerenciado já ocupa %s.", entry)
+		return fmt.Errorf("An unmanaged shortcut is already at %s.", entry)
 	}
 	if !links && !demos {
 		os.Remove(demoMIMEPath(home))

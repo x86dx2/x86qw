@@ -35,7 +35,7 @@ func (p *Project) githubHeaders() (map[string]string, error) {
 	}
 	if token != "" {
 		if len(token) > 4096 || strings.IndexFunc(token, func(r rune) bool { return r < 33 || r == 127 }) >= 0 {
-			return nil, managerError("token GitHub inválido")
+			return nil, managerError("invalid GitHub token")
 		}
 		headers["Authorization"] = "Bearer " + token
 	}
@@ -47,7 +47,7 @@ func (p *Project) githubAPIObject(repository, endpoint, label string) (*Object, 
 	parts := strings.Split(repository, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || parts[0] == "." || parts[0] == ".." ||
 		parts[1] == "." || parts[1] == ".." || !githubRepositoryPattern.MatchString(repository) {
-		return nil, managerError("repositório GitHub inválido: %s", pyRepr(repository))
+		return nil, managerError("invalid GitHub repository: %s", pyRepr(repository))
 	}
 	headers, err := p.githubHeaders()
 	if err != nil {
@@ -58,25 +58,25 @@ func (p *Project) githubAPIObject(repository, endpoint, label string) (*Object, 
 		return nil, nil
 	}
 	if status, ok := err.(*HTTPError); ok {
-		return nil, managerError("falha ao consultar %s: HTTP %d", label, status.Status)
+		return nil, managerError("failed to query %s: HTTP %d", label, status.Status)
 	}
 	if err != nil {
-		return nil, managerError("falha ao consultar %s: %v", label, err)
+		return nil, managerError("failed to query %s: %v", label, err)
 	}
 	value, err := pyjson.Decode(response.Data, pyjson.LastWins)
 	if err != nil {
-		return nil, managerError("resposta JSON inválida ao consultar %s", label)
+		return nil, managerError("invalid JSON response when querying %s", label)
 	}
 	document, _ := value.(*Object)
 	return document, nil
 }
 
 func (p *Project) githubRelease(repository, tag string) (*Object, error) {
-	return p.githubAPIObject(repository, "releases/tags/"+quote(tag, ""), "release GitHub "+tag)
+	return p.githubAPIObject(repository, "releases/tags/"+quote(tag, ""), "GitHub release "+tag)
 }
 
 func (p *Project) githubLatestReleaseTag(repository string) (string, error) {
-	release, err := p.githubAPIObject(repository, "releases/latest", "latest GitHub de "+repository)
+	release, err := p.githubAPIObject(repository, "releases/latest", "GitHub latest of "+repository)
 	if err != nil || release == nil {
 		return "", err
 	}
@@ -139,7 +139,7 @@ func (p *Project) PublishGitHub(out io.Writer, catalog *Object, dryRun bool) err
 			break
 		}
 		if !found {
-			return managerError("pacote sem mirror GitHub: %s", filename)
+			return managerError("package without a GitHub mirror: %s", filename)
 		}
 	}
 	latest := map[string]string{}
@@ -163,7 +163,7 @@ func (p *Project) PublishGitHub(out io.Writer, catalog *Object, dryRun bool) err
 			latestValues[pyjson.Truthy(getOr(pkg, "mirror_latest", false))] = true
 		}
 		if len(titles) != 1 || len(notes) != 1 || len(latestValues) != 1 {
-			return managerError("release %s possui metadados de espelho conflitantes", group.tag)
+			return managerError("release %s has conflicting mirror metadata", group.tag)
 		}
 		title, body := sortedKeys(titles)[0], sortedKeys(notes)[0]
 		makeLatest := latestValues[true]
@@ -172,7 +172,7 @@ func (p *Project) PublishGitHub(out io.Writer, catalog *Object, dryRun bool) err
 			return err
 		}
 		if release == nil {
-			fmt.Fprintf(out, "[GITHUB %s] criar release %s (%s)\n", group.repository, group.tag, title)
+			fmt.Fprintf(out, "[GITHUB %s] create release %s (%s)\n", group.repository, group.tag, title)
 			if !dryRun {
 				flag := "--latest=false"
 				if makeLatest {
@@ -191,7 +191,7 @@ func (p *Project) PublishGitHub(out io.Writer, catalog *Object, dryRun bool) err
 		} else {
 			isLatest := latest[group.repository] == group.tag
 			if !pyjson.Eq(release.Value("name"), title) || !pyjson.Eq(release.Value("body"), body) || isLatest != makeLatest {
-				fmt.Fprintf(out, "[GITHUB %s] atualizar metadados de %s\n", group.repository, group.tag)
+				fmt.Fprintf(out, "[GITHUB %s] update metadata of %s\n", group.repository, group.tag)
 				if !dryRun {
 					value := "false"
 					if makeLatest {
@@ -212,7 +212,7 @@ func (p *Project) PublishGitHub(out io.Writer, catalog *Object, dryRun bool) err
 			}
 		}
 		if release == nil && !dryRun {
-			return managerError("release GitHub %s nao ficou disponivel apos a criacao", group.tag)
+			return managerError("GitHub release %s did not become available after creation", group.tag)
 		}
 		assets := remoteAssets(release)
 		for _, artifact := range artifacts {
@@ -223,12 +223,12 @@ func (p *Project) PublishGitHub(out io.Writer, catalog *Object, dryRun bool) err
 					return err
 				}
 				if !same {
-					return managerError("asset GitHub imutavel difere do catalogo: %s", filename)
+					return managerError("immutable GitHub asset differs from the catalog: %s", filename)
 				}
-				fmt.Fprintf(out, "[GITHUB %s] verificado %s\n", group.repository, filename)
+				fmt.Fprintf(out, "[GITHUB %s] verified %s\n", group.repository, filename)
 				continue
 			}
-			fmt.Fprintf(out, "[GITHUB %s] enviar %s\n", group.repository, filename)
+			fmt.Fprintf(out, "[GITHUB %s] upload %s\n", group.repository, filename)
 			if dryRun {
 				continue
 			}
@@ -243,19 +243,19 @@ func (p *Project) PublishGitHub(out io.Writer, catalog *Object, dryRun bool) err
 				return err
 			}
 			if release == nil {
-				return managerError("release GitHub %s desapareceu apos o upload", group.tag)
+				return managerError("GitHub release %s disappeared after the upload", group.tag)
 			}
 			assets = remoteAssets(release)
 			remote, ok := assets[filename]
 			if !ok {
-				return managerError("asset GitHub nao apareceu apos o upload: %s", filename)
+				return managerError("GitHub asset did not appear after the upload: %s", filename)
 			}
 			same, err := p.assetFingerprint(remote, artifact)
 			if err != nil {
 				return err
 			}
 			if !same {
-				return managerError("asset GitHub enviado difere do catalogo: %s", filename)
+				return managerError("uploaded GitHub asset differs from the catalog: %s", filename)
 			}
 		}
 	}
@@ -326,7 +326,7 @@ func (p *Project) PublishGitLab(out io.Writer, catalogPath string) error {
 			return err
 		}
 		if !found {
-			fmt.Fprintf(out, "[%d/%d] enviando %s...\n", index+1, len(packages), filename)
+			fmt.Fprintf(out, "[%d/%d] uploading %s...\n", index+1, len(packages), filename)
 			path, err := p.LocalArtifact(pkg)
 			if err != nil {
 				return err
@@ -347,10 +347,10 @@ func (p *Project) PublishGitLab(out io.Writer, catalogPath string) error {
 			changed = true
 		}
 		verified++
-		fmt.Fprintf(out, "[%d/%d] verificado %s\n", index+1, len(packages), filename)
+		fmt.Fprintf(out, "[%d/%d] verified %s\n", index+1, len(packages), filename)
 	}
 	if !changed {
-		fmt.Fprintf(out, "catálogo já continha os %d mirrors GitLab\n", verified)
+		fmt.Fprintf(out, "catalog already had the %d GitLab mirrors\n", verified)
 		return nil
 	}
 	catalog.Set("generated_at", utcNow())
@@ -360,7 +360,7 @@ func (p *Project) PublishGitLab(out io.Writer, catalogPath string) error {
 	if err := WriteJSON(catalogPath, catalog); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "catálogo atualizado com %d mirrors GitLab\n", verified)
+	fmt.Fprintf(out, "catalog updated with %d GitLab mirrors\n", verified)
 	return nil
 }
 
@@ -404,15 +404,15 @@ func (p *Project) Publish(out io.Writer, githubOnly, gitlabOnly, dryRun bool) er
 	}
 	if !githubOnly {
 		if dryRun {
-			fmt.Fprintf(out, "[GITLAB] verificar/publicar %d artefato(s)\n", len(objects(catalog.Value("packages"))))
+			fmt.Fprintf(out, "[GITLAB] verify/publish %d artifact(s)\n", len(objects(catalog.Value("packages"))))
 		} else if err := p.PublishGitLab(out, p.Path(CatalogPath)); err != nil {
 			return err
 		}
 	}
 	if dryRun {
-		fmt.Fprintln(out, "[OK] Simulacao de publicacao concluida.")
+		fmt.Fprintln(out, "[OK] Publication dry run finished.")
 	} else {
-		fmt.Fprintln(out, "[OK] Publicacao concluida.")
+		fmt.Fprintln(out, "[OK] Publication finished.")
 	}
 	return nil
 }
@@ -424,7 +424,7 @@ func (p *Project) Commit(out io.Writer, message string, push bool) error {
 		return err
 	}
 	if strings.TrimSpace(string(status)) == "" {
-		fmt.Fprintln(out, "[OK] Nao ha alteracoes para registrar no Git.")
+		fmt.Fprintln(out, "[OK] No changes to record in Git.")
 		return nil
 	}
 	if _, err := p.command(nil, "git", "add", "dist", "maintenance/inventory", "maintenance/recipes", CatalogPath); err != nil {
@@ -435,7 +435,7 @@ func (p *Project) Commit(out io.Writer, message string, push bool) error {
 		return err
 	}
 	if strings.TrimSpace(string(staged)) == "" {
-		return managerError("nao ha mudancas de distribuicao para commit")
+		return managerError("no distribution changes to commit")
 	}
 	if message == "" {
 		message = "chore(distribution): update preserved upstreams"
@@ -457,6 +457,6 @@ func (p *Project) Commit(out io.Writer, message string, push bool) error {
 			}
 		}
 	}
-	fmt.Fprintln(out, "[OK] Alteracoes da distribuicao registradas no Git.")
+	fmt.Fprintln(out, "[OK] Distribution changes recorded in Git.")
 	return nil
 }

@@ -14,7 +14,7 @@ func TestCheckoutInventoriesValidate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if count, err := project.ValidateCatalog(catalog); err != nil || count == 0 {
-		t.Fatalf("catálogo: %d %v", count, err)
+		t.Fatalf("catalog: %d %v", count, err)
 	}
 	if _, err := project.Components(); err != nil {
 		t.Fatal(err)
@@ -27,7 +27,7 @@ func TestCheckoutInventoriesValidate(t *testing.T) {
 	}
 	recipes, err := RecipePaths(project.Path(RecipesDir))
 	if err != nil || len(recipes) == 0 {
-		t.Fatalf("receitas: %v %v", recipes, err)
+		t.Fatalf("recipes: %v %v", recipes, err)
 	}
 	for _, path := range recipes {
 		recipe, _ := LoadJSONObject(path)
@@ -50,39 +50,39 @@ func TestProductIsByteIdentical(t *testing.T) {
 	}
 	actual, _ := os.ReadFile(project.Path(ProductPath))
 	if string(expected) != string(actual) {
-		t.Fatal("product.json regenerado diverge do publicado")
+		t.Fatal("regenerated product.json differs from the published one")
 	}
 }
 
 func TestPortablePaths(t *testing.T) {
 	for _, value := range []string{"a//b", "a/./b", "/a", "a/..", "CON.txt", "com¹", "a:b", "a\u0000b", "trailing.", "trailing ", "é"} {
 		if _, err := ValidatePortableRelativePath(value, "path"); err == nil {
-			t.Errorf("caminho não portável aceito: %q", value)
+			t.Errorf("non-portable path accepted: %q", value)
 		}
 	}
 	for _, value := range []string{"qw/maps/dm4.bsp", "ação/é.cfg", "a.b.c"} {
 		if _, err := ValidatePortableRelativePath(value, "path"); err != nil {
-			t.Errorf("caminho portável rejeitado: %q: %v", value, err)
+			t.Errorf("portable path rejected: %q: %v", value, err)
 		}
 	}
 	// safePath collapses "//" and ".".
 	if _, err := safePath("a//./b", "path"); err != nil {
-		t.Errorf("safePath diverge de PurePosixPath: %v", err)
+		t.Errorf("safePath differs from PurePosixPath: %v", err)
 	}
 	if _, err := safePath("a/../b", "path"); err == nil {
-		t.Error("safePath aceitou ..")
+		t.Error("safePath accepted ..")
 	}
 }
 
 func TestHTTPSURLPolicy(t *testing.T) {
 	for _, value := range []string{"http://x.test/a", "https://user@x.test/a", "https://x.test/a#f", "https:///a", "https://x.test:99999/a", "https://[::1/a", "https://x .test/a"} {
 		if _, err := validateHTTPSURL(value, "URL"); err == nil {
-			t.Errorf("URL inválida aceita: %s", value)
+			t.Errorf("invalid URL accepted: %s", value)
 		}
 	}
 	parsed, err := validateHTTPSURL("HTTPS://Example.TEST:443/a%20b.zip?q=1", "URL")
 	if err != nil || parsed.Hostname() != "example.test" || parsed.Query != "q=1" || unquote(parsed.Path) != "/a b.zip" {
-		t.Fatalf("URL válida mal interpretada: %+v %v", parsed, err)
+		t.Fatalf("valid URL misread: %+v %v", parsed, err)
 	}
 }
 
@@ -95,18 +95,18 @@ func TestSchemaVersions(t *testing.T) {
 		return value.(*Object)
 	}
 	if validateCatalogVersions(decode(`{"format": 1}`), true) != nil {
-		t.Error("catálogo legado rejeitado")
+		t.Error("legacy catalog rejected")
 	}
 	if validateCatalogVersions(decode(`{"format": 1}`), false) == nil {
-		t.Error("catálogo sem min_cli_version aceito sem legado")
+		t.Error("catalog without min_cli_version accepted without legacy")
 	}
 	if validateCatalogVersions(decode(`{"format": 1, "catalog_version": 1}`), true) == nil {
-		t.Error("versão explícita sem min_cli_version aceita")
+		t.Error("explicit version without min_cli_version accepted")
 	}
 	if validateCatalogVersions(decode(`{"catalog_version": 1, "min_cli_version": "0.7.0", "max_cli_version": "0.6.0"}`), false) == nil {
-		t.Error("faixa de CLI invertida aceita")
+		t.Error("inverted CLI range accepted")
 	}
 	if validateCatalogVersions(decode(`{"catalog_version": 1, "state_version": 2, "min_cli_version": "0.7.0"}`), false) == nil {
-		t.Error("campo de schema alheio aceito")
+		t.Error("foreign schema field accepted")
 	}
 }

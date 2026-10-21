@@ -16,7 +16,7 @@ type uiArgs struct{ target, output string }
 func (a *uiArgs) parser() *cliargs.Parser {
 	p := cliargs.New()
 	targetFlag(p, &a.target)
-	p.String(&a.output, "ARQUIVO.html", "onde gravar (padrão: um arquivo temporário)", "--output")
+	p.String(&a.output, "FILE.html", "where to write it (default: a temporary file)", "--output")
 	return p
 }
 
@@ -51,7 +51,7 @@ func runUI(args []string, stdout, stderr io.Writer) int {
 }
 
 func init() {
-	register(command{name: "ui", group: "Seus dados", order: 40, synopsis: "[DESTINO]",
-		summary: "gera um painel HTML local, só de leitura",
+	register(command{name: "ui", group: "Your data", order: 40, synopsis: "[TARGET]",
+		summary: "builds a local, read-only HTML panel",
 		flags:   (&uiArgs{}).parser, run: noName(runUI)})
 }

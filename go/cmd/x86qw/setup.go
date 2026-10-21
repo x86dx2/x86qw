@@ -34,18 +34,18 @@ type setupArgs struct {
 func (a *setupArgs) parser(withRecipe bool) *cliargs.Parser {
 	p := cliargs.New()
 	targetFlag(p, &a.target)
-	p.Choice(&a.profile, []string{"essential", "recommended", "complete"}, "instala este perfil sem abrir o app", "--profile")
-	p.Choice(&a.platform, []string{"macos", "linux", "windows"}, "sistema da instalação (padrão: este)", "--platform")
-	p.Choice(&a.channel, catalog.Channels, "canal do ezQuake", "--channel")
+	p.Choice(&a.profile, []string{"essential", "recommended", "complete"}, "installs this profile without opening the app", "--profile")
+	p.Choice(&a.platform, []string{"macos", "linux", "windows"}, "the installation's system (default: this one)", "--platform")
+	p.Choice(&a.channel, catalog.Channels, "ezQuake channel", "--channel")
 	catalogFileFlag(p, &a.catalogFile)
 	if withRecipe {
 		a.recipe = flag.NewFlagSet("setup", flag.ContinueOnError)
 		a.readRecipe = setup.AddRecipeFlags(a.recipe)
 		p.Adopt(a.recipe)
-		p.Bool(&a.yes, "instala a receita sem perguntar", "--yes")
+		p.Bool(&a.yes, "installs the recipe without asking", "--yes")
 	} else {
-		p.String(&a.release, "VERSÃO", "versão do ezQuake (padrão: a do catálogo)", "--release")
-		p.Bool(&a.nonInteractive, "nunca abre o app; exige --profile", "--non-interactive")
+		p.String(&a.release, "VERSION", "ezQuake version (default: the catalog's)", "--release")
+		p.Bool(&a.nonInteractive, "never opens the app; needs --profile", "--non-interactive")
 	}
 	return p
 }
@@ -93,14 +93,14 @@ func installProfile(root string, a *setupArgs, stdout, stderr io.Writer) error {
 	for _, warning := range result.Warnings {
 		fmt.Fprintf(stderr, "! %s\n", warning)
 	}
-	fmt.Fprintf(stdout, "✓ ezQuake + %d componentes instalados em %s · %d arquivos\n", len(result.Installed), root, result.Files)
+	fmt.Fprintf(stdout, "✓ ezQuake + %d components installed in %s · %d files\n", len(result.Installed), root, result.Files)
 	return nil
 }
 
 // failure reports err, naming a permission problem plainly, and returns 1.
 func failure(root string, err error, stderr io.Writer) int {
 	if errors.Is(err, os.ErrPermission) {
-		fmt.Fprintf(stderr, "✗ sem permissão para escrever em %s\n", root)
+		fmt.Fprintf(stderr, "✗ no permission to write to %s\n", root)
 	} else {
 		fmt.Fprintf(stderr, "✗ %v\n", err)
 	}
@@ -139,18 +139,18 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 			return failure(root, err, stderr)
 		}
 		if _, err := install.Verify(root); err != nil {
-			fmt.Fprintf(stderr, "! A verificação encontrou problemas: %v\n  Execute: x86qw repair\n", err)
+			fmt.Fprintf(stderr, "! Verification found problems: %v\n  Run: x86qw repair\n", err)
 			return output.ExitFailure
 		}
 		if !adopted {
-			fmt.Fprintf(stdout, "· A instalação em %s continua com a CLI %s: esta, %s, é mais antiga ou de desenvolvimento.\n",
+			fmt.Fprintf(stdout, "· The installation in %s keeps CLI %s: this one, %s, is older or a development build.\n",
 				root, cli.InstalledVersion(root), buildinfo.Version)
 			return output.ExitSuccess
 		}
-		fmt.Fprintf(stdout, "✓ A instalação em %s agora usa a CLI x86QW %s.\n", root, buildinfo.Version)
+		fmt.Fprintf(stdout, "✓ The installation in %s now uses x86QW CLI %s.\n", root, buildinfo.Version)
 		return output.ExitSuccess
 	case a.profile == "":
-		return usageFailure("setup", cliargs.Usagef("sem terminal, informe --profile ou uma receita (--intent … --yes)"), stderr)
+		return usageFailure("setup", cliargs.Usagef("without a terminal, give --profile or a recipe (--intent … --yes)"), stderr)
 	}
 	if err := installProfile(root, a, stdout, stderr); err != nil {
 		return failure(root, err, stderr)
@@ -158,7 +158,7 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 	if err := publishCLI(root, true, stdout); err != nil {
 		return failure(root, err, stderr)
 	}
-	fmt.Fprintln(stdout, "  Jogar agora: x86qw play")
+	fmt.Fprintln(stdout, "  Play now: x86qw play")
 	return output.ExitSuccess
 }
 
@@ -167,7 +167,7 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 func runRecipe(backend *setup.Real, options setup.Options, yes bool, stdout, stderr io.Writer) int {
 	con := newConsole(stdout, stderr, false, false)
 	recipe := strings.Join(options.Recipe(), " ")
-	if proceed, code := confirm("Instalar em "+options.Target+" com esta receita?", recipe, yes, stdout, stderr); !proceed {
+	if proceed, code := confirm("Install in "+options.Target+" with this recipe?", recipe, yes, stdout, stderr); !proceed {
 		return code
 	}
 	// Ctrl+C cancels and waits for the rollback instead of exiting midway.
@@ -185,37 +185,37 @@ func runRecipe(backend *setup.Real, options setup.Options, yes bool, stdout, std
 				con.success(text)
 			}
 		},
-		Landed: func(lane setup.Lane) { con.success(fmt.Sprintf("%s · %d arquivos", lane.Label, lane.Files)) },
+		Landed: func(lane setup.Lane) { con.success(fmt.Sprintf("%s · %d files", lane.Label, lane.Files)) },
 	})
 	switch {
 	case errors.Is(err, setup.ErrBlocked):
 		return output.ExitFailure
 	case errors.Is(err, context.Canceled):
-		con.failure("Instalação cancelada; a pasta voltou ao que era.")
+		con.failure("Install canceled; the folder is back to what it was.")
 		return output.ExitInterrupted
 	case err != nil:
-		con.failure(err.Error() + " — a pasta voltou ao que era.")
+		con.failure(err.Error() + " — the folder is back to what it was.")
 		return output.ExitFailure
 	}
 	for _, warning := range last.Warnings {
 		con.warning(warning)
 	}
-	fmt.Fprintf(stdout, "✓ x86QW instalado em %s\n", options.Target)
+	fmt.Fprintf(stdout, "✓ x86QW installed in %s\n", options.Target)
 	if options.Intent.WantsServer() {
-		fmt.Fprintf(stdout, "  Iniciar o servidor: x86qw %s\n", strings.Join(setup.HostCommand(options.Target, options), " "))
-		fmt.Fprintf(stdout, "  rcon: %s (guardado em %s)\n", options.Server.Rcon, filepath.Join(options.Target, filepath.FromSlash(setup.RconFile)))
+		fmt.Fprintf(stdout, "  Start the server: x86qw %s\n", strings.Join(setup.HostCommand(options.Target, options), " "))
+		fmt.Fprintf(stdout, "  rcon: %s (kept in %s)\n", options.Server.Rcon, filepath.Join(options.Target, filepath.FromSlash(setup.RconFile)))
 	}
 	if options.Intent.WantsClient() {
-		fmt.Fprintln(stdout, "  Jogar agora: x86qw play")
+		fmt.Fprintln(stdout, "  Play now: x86qw play")
 	}
 	return output.ExitSuccess
 }
 
 func init() {
-	register(command{name: "setup", group: "Instalar e manter", order: 10, synopsis: "[DESTINO]",
-		summary: "instala o x86QW ou adota uma instalação existente",
-		about: "Num terminal, abre o instalador do app. Com --profile, instala sem perguntar; com uma receita (--intent e as outras opções " +
-			"que o instalador copia), instala o que ela diz. Numa instalação existente, passa a usar esta CLI.",
+	register(command{name: "setup", group: "Install and maintain", order: 10, synopsis: "[TARGET]",
+		summary: "installs x86QW or adopts an existing installation",
+		about: "On a terminal, opens the app's installer. With --profile, installs without asking; with a recipe (--intent and the other options " +
+			"the installer copies), installs what it says. On an existing installation, switches it to this CLI.",
 		flags: func() *cliargs.Parser { return (&setupArgs{}).parser(true) },
 		run:   noName(runSetup)})
 }

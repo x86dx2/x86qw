@@ -17,7 +17,7 @@ import (
 // X86QW_REAL_INSTALL=1.
 func TestInterfaceInstallsForReal(t *testing.T) {
 	if os.Getenv("X86QW_NETWORK_TESTS") == "" || os.Getenv("X86QW_REAL_INSTALL") == "" {
-		t.Skip("defina X86QW_NETWORK_TESTS=1 e X86QW_REAL_INSTALL=1 para instalar de verdade")
+		t.Skip("set X86QW_NETWORK_TESTS=1 and X86QW_REAL_INSTALL=1 to install for real")
 	}
 	t.Setenv("X86QW_CACHE_DIR", t.TempDir())
 	t.Setenv("X86QW_NO_MACOS_PREFERENCES", "1")
@@ -26,14 +26,14 @@ func TestInterfaceInstallsForReal(t *testing.T) {
 	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
 	drive(m, run(m.Init())...)
 	if m.err != nil || m.catalog == nil {
-		t.Fatalf("catálogo: %v", m.err)
+		t.Fatalf("catalog: %v", m.err)
 	}
 	drive(m, typeText("tester")...)
 	drive(m, key("enter"))
 	m.opts.Content = "essential"
 	drive(m, key("i"))
 	if !m.preDone || m.preflightOutcome() == setup.CheckFailed {
-		t.Fatalf("pré-voo: %+v", m.checks)
+		t.Fatalf("preflight: %+v", m.checks)
 	}
 	snap(m, "real-01-preflight")
 	m.cfg.Backend.(*setup.Real).Publish = nil
@@ -47,10 +47,10 @@ func TestInterfaceInstallsForReal(t *testing.T) {
 	}
 	m.screen = scDone
 	if m.screen != scDone || !m.progress.Finished {
-		t.Fatalf("deveria terminar: tela %d, erro %v", m.screen, m.progress.Err)
+		t.Fatalf("should finish: screen %d, error %v", m.screen, m.progress.Err)
 	}
 	if filesDone(m.progress) != filesTotal(m.progress) || filesDone(m.progress) == 0 {
-		t.Fatalf("arquivos: %d de %d", filesDone(m.progress), filesTotal(m.progress))
+		t.Fatalf("files: %d of %d", filesDone(m.progress), filesTotal(m.progress))
 	}
 	snap(m, "real-03-done")
 	if _, err := install.Verify(target); err != nil {

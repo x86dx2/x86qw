@@ -20,7 +20,7 @@ import (
 // only with X86QW_CONTENT_PARITY_BUILD=1.
 func TestUpdateAppliesWorkspace(t *testing.T) {
 	if os.Getenv("X86QW_CONTENT_PARITY_BUILD") != "1" {
-		t.Skip("defina X86QW_CONTENT_PARITY_BUILD=1 para exercitar update completo")
+		t.Skip("set X86QW_CONTENT_PARITY_BUILD=1 to exercise a full update")
 	}
 	root := repoRoot(t)
 	requireHydrated(t, root)
@@ -64,7 +64,7 @@ func TestUpdateAppliesWorkspace(t *testing.T) {
 		t.Fatalf("update: %v\n%s", err, out.String())
 	}
 	if len(git.commands) != 1 || git.commands[0] != "git status --porcelain" {
-		t.Fatalf("update executou git além da verificação: %v", git.commands)
+		t.Fatalf("update ran git beyond the check: %v", git.commands)
 	}
 
 	fresh := NewProject(clone)
@@ -75,11 +75,11 @@ func TestUpdateAppliesWorkspace(t *testing.T) {
 	files := manifest.Value("files").(*Object)
 	for _, path := range unmirrored {
 		if !files.Has(path) {
-			t.Errorf("manifesto não incorporou %s", path)
+			t.Errorf("manifest did not incorporate %s", path)
 		}
 	}
 	if _, err := fresh.VerifyDistribution(fresh.Path(DistDir), manifest); err != nil {
-		t.Fatalf("dist atualizado não verifica: %v", err)
+		t.Fatalf("updated dist does not verify: %v", err)
 	}
 	updated, err := LoadJSONObject(catalogPath)
 	if err != nil {
@@ -96,14 +96,14 @@ func TestUpdateAppliesWorkspace(t *testing.T) {
 	}
 	zips, _ := filepath.Glob(filepath.Join(clone, BuildsDir, "*", "*.zip"))
 	if content != len(zips) || content == 0 {
-		t.Fatalf("catálogo registrou %d pacotes de conteúdo para %d builds", content, len(zips))
+		t.Fatalf("catalog recorded %d content packages for %d builds", content, len(zips))
 	}
 	leftovers, _ := filepath.Glob(filepath.Join(clone, "maintenance/build/update-*"))
 	if len(leftovers) != 0 {
-		t.Fatalf("workspace de update não foi removido: %v", leftovers)
+		t.Fatalf("update workspace was not removed: %v", leftovers)
 	}
-	if !strings.Contains(out.String(), "[OK] Working tree atualizado: ezQuake 3.6.9/") {
-		t.Fatalf("resumo inesperado:\n%s", out.String())
+	if !strings.Contains(out.String(), "[OK] Working tree updated: ezQuake 3.6.9/") {
+		t.Fatalf("unexpected summary:\n%s", out.String())
 	}
 }
 
@@ -114,7 +114,7 @@ func TestUpdateAppliesWorkspace(t *testing.T) {
 // files and its package bytes.
 func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 	if os.Getenv("X86QW_CONTENT_PARITY_BUILD") != "1" {
-		t.Skip("defina X86QW_CONTENT_PARITY_BUILD=1 para exercitar add completo")
+		t.Skip("set X86QW_CONTENT_PARITY_BUILD=1 to exercise a full add")
 	}
 	root := repoRoot(t)
 	requireHydrated(t, root)
@@ -206,7 +206,7 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 	components, _ := fresh.Components()
 	sources, err := LoadSourceContext(fresh.Path(DistDir), components, updatedReleases)
 	if err != nil {
-		t.Fatalf("dist depois do add: %v", err)
+		t.Fatalf("dist after add: %v", err)
 	}
 	// The dist holds exactly the revisions some component pins; the one
 	// only the moved component used is gone.
@@ -215,11 +215,11 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 		expected[pinned] = true
 	}
 	if revisions := sources.Revisions(); !slices.Equal(revisions, sortedKeys(expected)) || !expected[revision] {
-		t.Fatalf("revisoes nQuake no dist: %v", revisions)
+		t.Fatalf("nQuake revisions in dist: %v", revisions)
 	}
 	updatedManifest, _ := LoadManifest(fresh.Path(ManifestPath))
 	if _, err := fresh.VerifyDistribution(fresh.Path(DistDir), updatedManifest); err != nil {
-		t.Fatalf("dist depois do add nao verifica: %v", err)
+		t.Fatalf("dist after add does not verify: %v", err)
 	}
 	for identifier, pinned := range ReferenceRevisions(updatedReleases) {
 		want := pinnedBefore[identifier]
@@ -227,11 +227,11 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 			want = revision
 		}
 		if pinned != want {
-			t.Errorf("%s fixa %s, esperado %s", identifier, pinned, want)
+			t.Errorf("%s pins %s, expected %s", identifier, pinned, want)
 		}
 	}
 	if version := pyjson.Get(updatedReleases, "components", moved, "version"); version != "222222222222+x86qw.4" {
-		t.Errorf("versao do bootstrap: %v", version)
+		t.Errorf("bootstrap version: %v", version)
 	}
 	after, _ := LoadJSONObject(fresh.Path(CatalogPath))
 	movedFile := moved + "-222222222222+x86qw.4.zip"
@@ -244,11 +244,11 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 			found = strings.Contains(pyjson.Repr(pkg.Value("origin_url")), "/releases/download/nquake-"+revision+"/") &&
 				pkg.Value("source_commit") == revision
 		case before[filename] != pyjson.Repr(pkg.Value("sha256")):
-			t.Errorf("pacote de outro componente mudou: %s", filename)
+			t.Errorf("another component's package changed: %s", filename)
 		}
 	}
 	if !found {
-		t.Fatalf("catalogo nao registrou %s na release nquake-%s", movedFile, revision)
+		t.Fatalf("catalog did not record %s in release nquake-%s", movedFile, revision)
 	}
 
 	// The installed CLI reads this mixed-revision catalog package by package.
@@ -258,7 +258,7 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 	}
 	parsed, err := clicatalog.Parse(raw)
 	if err != nil {
-		t.Fatalf("a CLI recusa o catalogo: %v", err)
+		t.Fatalf("the CLI refuses the catalog: %v", err)
 	}
 	for _, pkg := range objects(after.Value("packages")) {
 		if pkg.Value("channel") != "content" {
@@ -267,14 +267,14 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 		id := pyjson.Repr(getOr(pkg, "package", pkg.Value("component")))
 		current, err := parsed.ComponentPackage(id, []string{pyjson.Repr(pkg.Value("component"))})
 		if err != nil {
-			t.Fatalf("a CLI recusa o pacote %s: %v", id, err)
+			t.Fatalf("the CLI refuses package %s: %v", id, err)
 		}
 		if id == moved && current.Revision() != revision {
-			t.Fatalf("a CLI le %s na revisao %s", id, current.Revision())
+			t.Fatalf("the CLI reads %s at revision %s", id, current.Revision())
 		}
 	}
 	if _, err := os.Stat(filepath.Join(clone, DistDir, "distributions/nquake/non-gpl/qw/maps")); err != nil {
-		t.Errorf("arquivos dos outros componentes sairam da revisao anterior: %v", err)
+		t.Errorf("other components' files left the previous revision: %v", err)
 	}
 }
 
@@ -285,7 +285,7 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 // every other package keeps its bytes.
 func TestUpdateFollowsNQuakeOneComponentAtATime(t *testing.T) {
 	if os.Getenv("X86QW_CONTENT_PARITY_BUILD") != "1" {
-		t.Skip("defina X86QW_CONTENT_PARITY_BUILD=1 para exercitar update completo")
+		t.Skip("set X86QW_CONTENT_PARITY_BUILD=1 to exercise a full update")
 	}
 	root := repoRoot(t)
 	requireHydrated(t, root)
@@ -319,7 +319,7 @@ func TestUpdateFollowsNQuakeOneComponentAtATime(t *testing.T) {
 	pinnedBefore := ReferenceRevisions(releases)
 
 	web := movedReference(currentUpstreams(t, clone, ""), appendComment)
-	web.nquake.files["sv-maps/qw/maps/novo.bsp"] = NQuakeFile{3, sha256Hex([]byte("bsp")), gitBlob([]byte("bsp"))}
+	web.nquake.files["sv-maps/qw/maps/new.bsp"] = NQuakeFile{3, sha256Hex([]byte("bsp")), gitBlob([]byte("bsp"))}
 	project.HTTP = web.client()
 	project.Run = (&recorder{}).run
 	var out bytes.Buffer
@@ -338,28 +338,28 @@ func TestUpdateFollowsNQuakeOneComponentAtATime(t *testing.T) {
 			want = movedRevision
 		}
 		if pinned != want {
-			t.Errorf("%s fixa %s, esperado %s", identifier, pinned, want)
+			t.Errorf("%s pins %s, expected %s", identifier, pinned, want)
 		}
 	}
 	if version := pyjson.Get(updated, "components", moved, "version"); version != "222222222222+x86qw.4" {
-		t.Errorf("versao do bootstrap: %v", version)
+		t.Errorf("bootstrap version: %v", version)
 	}
 	newFile, _ := web.nquake.body(changedFile)
 	for _, replacement := range objects(pyjson.Get(updated, "components", moved, "text_replacements")) {
 		if replacement.Value("source_sha256") != sha256Hex(newFile) {
-			t.Errorf("substituicao nao foi refixada no arquivo novo: %v", replacement.Value("before"))
+			t.Errorf("replacement was not re-pinned on the new file: %v", replacement.Value("before"))
 		}
 	}
 	inventory, err := LoadNQuakeInventory(fresh.Path(NQuakeInventoryPath))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := inventory.Files["sv-maps/qw/maps/novo.bsp"]; inventory.Revision != movedRevision || !ok {
-		t.Errorf("inventario nQuake nao avancou: %s", inventory.Revision)
+	if _, ok := inventory.Files["sv-maps/qw/maps/new.bsp"]; inventory.Revision != movedRevision || !ok {
+		t.Errorf("nQuake inventory did not advance: %s", inventory.Revision)
 	}
 	components, _ := fresh.Components()
 	if _, err := LoadSourceContext(fresh.Path(DistDir), components, updated); err != nil {
-		t.Fatalf("dist depois do update: %v", err)
+		t.Fatalf("dist after update: %v", err)
 	}
 	after, _ := LoadJSONObject(fresh.Path(CatalogPath))
 	movedFile := moved + "-222222222222+x86qw.4.zip"
@@ -371,10 +371,10 @@ func TestUpdateFollowsNQuakeOneComponentAtATime(t *testing.T) {
 		case filename == movedFile:
 			found = pkg.Value("source_commit") == movedRevision
 		case before[filename] != pyjson.Repr(pkg.Value("sha256")):
-			t.Errorf("pacote de outro componente mudou: %s", filename)
+			t.Errorf("another component's package changed: %s", filename)
 		}
 	}
 	if !found {
-		t.Fatalf("catalogo nao registrou %s:\n%s", movedFile, out.String())
+		t.Fatalf("catalog did not record %s:\n%s", movedFile, out.String())
 	}
 }

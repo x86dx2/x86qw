@@ -19,7 +19,7 @@ func waitStatus(t *testing.T, pid int, want string) {
 	deadline := time.Now().Add(5 * time.Second)
 	for processGroupStatus(pid) != want {
 		if time.Now().After(deadline) {
-			t.Fatalf("PID %d não ficou %s", pid, want)
+			t.Fatalf("PID %d did not become %s", pid, want)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -47,7 +47,7 @@ func TestJobObjectStartAndStop(t *testing.T) {
 	}
 	waitStatus(t, pid, "dead")
 	if job.handle != 0 {
-		t.Fatal("Job Object não foi fechado")
+		t.Fatal("Job Object was not closed")
 	}
 }
 
@@ -73,19 +73,19 @@ func TestTerminateRecordedProcess(t *testing.T) {
 	pid := command.Process.Pid
 	identity, status := lock.Identity(pid)
 	if status != "alive" {
-		t.Fatalf("identidade: %s", status)
+		t.Fatalf("identity: %s", status)
 	}
 	entry := map[string]any{"pid": json.Number(strconv.Itoa(pid)), "executable": identity.Executable, "creation_token": identity.Token}
-	mismatch := map[string]any{"pid": json.Number(strconv.Itoa(pid)), "executable": identity.Executable, "creation_token": "outro"}
+	mismatch := map[string]any{"pid": json.Number(strconv.Itoa(pid)), "executable": identity.Executable, "creation_token": "other"}
 	if result, err := terminateRecordedProcess(mismatch); err != nil || result != "identity_mismatch" {
-		t.Fatalf("identidade divergente: %s %v", result, err)
+		t.Fatalf("mismatched identity: %s %v", result, err)
 	}
 	if result, err := terminateRecordedProcess(entry); err != nil || result != "terminated" {
 		t.Fatalf("%s %v", result, err)
 	}
 	command.Wait()
 	if result, err := terminateRecordedProcess(entry); err != nil || result != "already_dead" {
-		t.Fatalf("segunda chamada: %s %v", result, err)
+		t.Fatalf("second call: %s %v", result, err)
 	}
 }
 
@@ -95,13 +95,13 @@ func TestFileIdentity(t *testing.T) {
 	info, _ := os.Lstat(path)
 	first := identityAt(path, info)
 	if first == ([2]int64{}) || identityAt(path, info) != first {
-		t.Fatalf("identidade instável: %v", first)
+		t.Fatalf("unstable identity: %v", first)
 	}
 	file, _ := os.Open(path)
 	byHandle, err := identityOfFile(file)
 	file.Close()
 	if err != nil || byHandle != first {
-		t.Fatalf("identidade pelo handle: %v %v", byHandle, err)
+		t.Fatalf("identity by handle: %v %v", byHandle, err)
 	}
 	replacement := path + ".new"
 	os.WriteFile(replacement, []byte("1"), 0o600)
@@ -110,6 +110,6 @@ func TestFileIdentity(t *testing.T) {
 	}
 	info, _ = os.Lstat(path)
 	if identityAt(path, info) == first {
-		t.Fatal("arquivo substituído manteve a identidade")
+		t.Fatal("a replaced file kept its identity")
 	}
 }

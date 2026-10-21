@@ -23,7 +23,7 @@ import (
 func TestAppOpensInARealConsole(t *testing.T) {
 	target := os.Getenv("X86QW_CONPTY_TARGET")
 	if target == "" {
-		t.Skip("defina X86QW_CONPTY_TARGET com uma instalação para abrir o app num console")
+		t.Skip("set X86QW_CONPTY_TARGET to an installation to open the app in a console")
 	}
 	exe := filepath.Join(t.TempDir(), "x86qw.exe")
 	if output, err := exec.Command("go", "build", "-o", exe, ".").CombinedOutput(); err != nil {
@@ -100,7 +100,7 @@ func TestAppOpensInARealConsole(t *testing.T) {
 			}
 			time.Sleep(200 * time.Millisecond)
 		}
-		t.Fatalf("o app não mostrou %s em 30 s:\n%s", what, text())
+		t.Fatalf("the app did not show %s in 30 s:\n%s", what, text())
 	}
 	send := func(keys string) {
 		var n uint32
@@ -109,7 +109,7 @@ func TestAppOpensInARealConsole(t *testing.T) {
 		}
 		time.Sleep(700 * time.Millisecond)
 	}
-	waitFor("a home", "Hospedar", "Host")
+	waitFor("home", "Host", "Hospedar")
 	send("\x1b[B") // down to the next row
 	send("\r")     // open it
 	send("\x1b")   // and back
@@ -118,14 +118,14 @@ func TestAppOpensInARealConsole(t *testing.T) {
 	event, err := windows.WaitForSingleObject(process.Process, 20000)
 	if err != nil || event != windows.WAIT_OBJECT_0 {
 		windows.TerminateProcess(process.Process, 1)
-		t.Fatalf("o app não saiu com ctrl+c duas vezes:\n%s", text())
+		t.Fatalf("the app did not quit on ctrl+c twice:\n%s", text())
 	}
 	var code uint32
 	windows.GetExitCodeProcess(process.Process, &code)
 	windows.ClosePseudoConsole(console)
 	windows.CloseHandle(inWrite)
 	if code != 0 {
-		t.Fatalf("o app saiu com código %d:\n%s", code, text())
+		t.Fatalf("the app exited with code %d:\n%s", code, text())
 	}
-	t.Logf("tela final:\n%s", text())
+	t.Logf("final screen:\n%s", text())
 }

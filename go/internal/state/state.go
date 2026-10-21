@@ -82,14 +82,14 @@ func Read(root string) (*State, error) {
 		return nil, err
 	}
 	if !info.Mode().IsRegular() {
-		return nil, fail("identity", "", "estado da instalação não é arquivo regular")
+		return nil, fail("identity", "", "the installation state is not a regular file")
 	}
 	payload, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
 	if err != nil {
 		return nil, err
 	}
 	if len(payload) > maxBytes {
-		return nil, fail("identity", "", "estado da instalação excede %d bytes", maxBytes)
+		return nil, fail("identity", "", "the installation state is over %d bytes", maxBytes)
 	}
 	return Parse(payload)
 }
@@ -100,12 +100,12 @@ func Parse(payload []byte) (*State, error) {
 	decoder.UseNumber()
 	var document map[string]any
 	if err := decoder.Decode(&document); err != nil {
-		return nil, fail("identity", "", "JSON de estado inválido: %v", err)
+		return nil, fail("identity", "", "invalid state JSON: %v", err)
 	}
 	format, ok := integer(document["format"])
 	profile, profileOK := document["profile"].(string)
 	if !ok || (format != 1 && format != CurrentFormat) || document["project"] != "x86qw" || !profileOK || !Profiles[profile] {
-		return nil, fail("identity", "", "identidade do estado da instalação inválida")
+		return nil, fail("identity", "", "invalid installation state identity")
 	}
 	state := &State{Format: format, Profile: profile, document: document}
 	var err error
@@ -119,7 +119,7 @@ func Parse(payload []byte) (*State, error) {
 		return nil, err
 	}
 	if profile != "custom" && len(state.RequestedComponents) > 0 {
-		return nil, fail("custom_requested", "", "somente o perfil custom pode registrar escolhas explícitas")
+		return nil, fail("custom_requested", "", "only the custom profile can record explicit choices")
 	}
 	if format == CurrentFormat {
 		if state.Capabilities, err = components(document, "capabilities"); err != nil {
@@ -128,7 +128,7 @@ func Parse(payload []byte) (*State, error) {
 		fingerprint, _ := document["component_fingerprint"].(string)
 		// No capability is currently defined (INSTALLATION_CAPABILITIES is empty).
 		if len(state.Capabilities) > 0 || fingerprint != Fingerprint(state.RecordedComponents) {
-			return nil, fail("capabilities", "", "capacidades ou fingerprint inválidos no estado da instalação")
+			return nil, fail("capabilities", "", "invalid capabilities or fingerprint in the installation state")
 		}
 		state.ComponentFingerprint = fingerprint
 	}
@@ -147,14 +147,14 @@ func integer(value any) (int, bool) {
 func components(document map[string]any, field string) ([]string, error) {
 	raw, ok := document[field].([]any)
 	if !ok {
-		return nil, fail("component_field", field, "campo %s inválido no estado da instalação", field)
+		return nil, fail("component_field", field, "invalid %s field in the installation state", field)
 	}
 	seen := map[string]bool{}
 	values := make([]string, 0, len(raw))
 	for _, item := range raw {
 		id, ok := item.(string)
 		if !ok || !componentID.MatchString(id) || seen[id] {
-			return nil, fail("component_field", field, "campo %s inválido no estado da instalação", field)
+			return nil, fail("component_field", field, "invalid %s field in the installation state", field)
 		}
 		seen[id] = true
 		values = append(values, id)

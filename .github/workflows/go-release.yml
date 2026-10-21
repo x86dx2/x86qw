@@ -76,9 +76,9 @@ jobs:
           set -euo pipefail
           tag="x86qw-cli-${VERSION}"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "release $tag já existe; nada foi sobrescrito" >&2
+            echo "release $tag already exists; nothing was overwritten" >&2
             exit 1
           fi
           gh release create "$tag" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "x86QW CLI ${VERSION}" \
-            --notes "CLI nativa x86QW ${VERSION}. Verifique os binários pelo SHA256SUMS ou com \`gh attestation verify ARQUIVO --repo ${GITHUB_REPOSITORY}\`. Fica como prerelease até o site passar a servi-la."
+            --notes "x86QW native CLI ${VERSION}. Verify the binaries with SHA256SUMS or with \`gh attestation verify FILE --repo ${GITHUB_REPOSITORY}\`. It stays a prerelease until the site serves it."

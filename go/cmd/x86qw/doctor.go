@@ -19,7 +19,7 @@ type doctorArgs struct {
 
 func (a *doctorArgs) parser() *cliargs.Parser {
 	p := a.targetArgs.parser()
-	p.Optional(&a.bundle, "x86qw-doctor.zip", "ARQUIVO.zip", "grava também um bundle de diagnóstico", "--bundle")
+	p.Optional(&a.bundle, "x86qw-doctor.zip", "FILE.zip", "also writes a diagnostic bundle", "--bundle")
 	return p
 }
 
@@ -46,7 +46,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
 			return output.ExitFailure
 		}
-		fmt.Fprintf(stderr, "Bundle de diagnóstico gravado em %s\n", written)
+		fmt.Fprintf(stderr, "Diagnostic bundle written to %s\n", written)
 	}
 	if a.json {
 		if err := output.Success("doctor", report).Write(stdout); err != nil {
@@ -59,7 +59,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 }
 
 func init() {
-	register(command{name: "doctor", group: "Diagnóstico", order: 10, synopsis: "[DESTINO]",
-		summary: "diagnostica a instalação sem alterar arquivos",
+	register(command{name: "doctor", group: "Diagnostics", order: 10, synopsis: "[TARGET]",
+		summary: "diagnoses the installation without changing files",
 		flags:   (&doctorArgs{}).parser, run: noName(runDoctor)})
 }

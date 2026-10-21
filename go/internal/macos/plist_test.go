@@ -12,14 +12,14 @@ func TestPlistRoundTripKeepsTheFormat(t *testing.T) {
 	sample := filepath.Join("testdata", "nightly-Info.plist")
 	payload, err := os.ReadFile(sample)
 	if err != nil {
-		t.Skip("sem amostra de Info.plist")
+		t.Skip("no Info.plist sample")
 	}
 	root, err := ParsePlist(payload)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(MarshalPlist(root)) != string(payload) {
-		t.Fatal("round-trip difere do original")
+		t.Fatal("the round trip differs from the original")
 	}
 	root.Set(safeAreaKey, &Value{Kind: "false"})
 	want, err := os.ReadFile(filepath.Join("testdata", "nightly-Info.safe-area.plist"))
@@ -27,7 +27,7 @@ func TestPlistRoundTripKeepsTheFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(MarshalPlist(root)) != string(want) {
-		t.Fatalf("difere do plistlib:\n%s", MarshalPlist(root))
+		t.Fatalf("differs from plistlib:\n%s", MarshalPlist(root))
 	}
 }
 

@@ -21,7 +21,7 @@ func TestPrecedenceMatchesSemVerSpec(t *testing.T) {
 func TestRejectsNonStrictVersions(t *testing.T) {
 	for _, value := range []string{"v1.0.0", "01.0.0", "1.0", "1.0.0-01", "1.0.0-", "1.0.0+", "1.47+x86qw.19"} {
 		if Valid(value) {
-			t.Fatalf("%q aceito", value)
+			t.Fatalf("%q accepted", value)
 		}
 	}
 	if got, _ := Parse("1.2.3-rc.1+b.5"); got.String() != "1.2.3-rc.1+b.5" {

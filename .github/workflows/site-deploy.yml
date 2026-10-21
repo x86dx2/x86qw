@@ -56,11 +56,11 @@ jobs:
           live="$(jq -r .signed.version "$RUNNER_TEMP/live-timestamp.json")"
           ours="$(jq -r .signed.version "$checkout")"
           if [ "$ours" -lt "$live" ]; then
-            echo "::error::produção serve o timestamp $live e main o $ours; espere o PR da renovação entrar"
+            echo "::error::production serves timestamp $live and main $ours; wait for the renewal PR to merge"
             exit 1
           fi
           if [ "$ours" -eq "$live" ] && ! cmp -s "$checkout" "$RUNNER_TEMP/live-timestamp.json"; then
-            echo "::error::main e produção têm timestamps $ours diferentes; assine uma geração nova com x86qw-release sign"
+            echo "::error::main and production have different timestamps $ours; sign a new generation with x86qw-release sign"
             exit 1
           fi
       - name: Assemble and deploy the site
@@ -84,10 +84,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          version="$(jq -r '[.packages[] | select(.package == "x86qw-cli") | .version] | unique | if length == 1 then .[0] else error("mais de uma versão da CLI") end' site/public/api/v1/catalog.json)"
+          version="$(jq -r '[.packages[] | select(.package == "x86qw-cli") | .version] | unique | if length == 1 then .[0] else error("more than one CLI version") end' site/public/api/v1/catalog.json)"
           tag="x86qw-cli-${version}"
           if [ "$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)" = true ]; then
             gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --prerelease=false --latest \
-              --notes "CLI nativa x86QW ${version}, servida por https://qw.x86.com.br. Verifique os binários pelo SHA256SUMS ou com \`gh attestation verify ARQUIVO --repo ${GITHUB_REPOSITORY}\`."
-            echo "$tag marcada como latest"
+              --notes "x86QW native CLI ${version}, served by https://qw.x86.com.br. Verify the binaries with SHA256SUMS or with \`gh attestation verify FILE --repo ${GITHUB_REPOSITORY}\`."
+            echo "$tag marked as latest"
           fi

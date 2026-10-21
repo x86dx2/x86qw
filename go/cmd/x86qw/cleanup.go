@@ -18,8 +18,8 @@ type cleanupArgs struct {
 func (a *cleanupArgs) parser() *cliargs.Parser {
 	p := cliargs.New()
 	targetFlag(p, &a.target)
-	p.Bool(&a.downloads, "também os mapas baixados de servidores", "--downloads")
-	p.Bool(&a.personal, "também histórico, logs e demos", "--personal-data")
+	p.Bool(&a.downloads, "also the maps downloaded from servers", "--downloads")
+	p.Bool(&a.personal, "also history, logs and demos", "--personal-data")
 	return p
 }
 
@@ -48,40 +48,40 @@ func runCleanup(args []string, stdout, stderr io.Writer) int {
 		return fail(err)
 	}
 	defer held.Release()
-	fmt.Fprintln(stdout, "\nLimpeza segura")
+	fmt.Fprintln(stdout, "\nSafe cleanup")
 	result, err := maint.Cleanup(target, a.downloads, a.personal)
 	if err != nil {
 		return fail(err)
 	}
 	for _, root := range result.Caches {
-		fmt.Fprintf(stdout, "✓ Cache removido: %s\n", root)
+		fmt.Fprintf(stdout, "✓ Cache removed: %s\n", root)
 	}
 	if result.Cache > 0 {
-		fmt.Fprintf(stdout, "✓ Dados regeneráveis removidos (%s).\n", fileCount(result.Cache))
+		fmt.Fprintf(stdout, "✓ Regenerable data removed (%s).\n", fileCount(result.Cache))
 	} else {
-		fmt.Fprintln(stdout, "· Nenhum dado regenerável da instalação precisava ser removido.")
+		fmt.Fprintln(stdout, "· No regenerable data in the installation needed removing.")
 	}
 	if result.Personal > 0 {
-		fmt.Fprintf(stdout, "✓ Dados pessoais locais removidos (%s).\n", fileCount(result.Personal))
+		fmt.Fprintf(stdout, "✓ Local personal data removed (%s).\n", fileCount(result.Personal))
 	} else if !a.personal {
-		fmt.Fprintln(stdout, "· Histórico, logs e demos foram preservados; use --personal-data para removê-los.")
+		fmt.Fprintln(stdout, "· History, logs and demos were kept; use --personal-data to remove them.")
 	}
 	if !a.downloads {
-		fmt.Fprintln(stdout, "· Downloads de servidores foram preservados; use --downloads para removê-los.")
+		fmt.Fprintln(stdout, "· Server downloads were kept; use --downloads to remove them.")
 	}
 	return output.ExitSuccess
 }
 
 func fileCount(count int) string {
 	if count == 1 {
-		return "1 arquivo"
+		return "1 file"
 	}
-	return fmt.Sprintf("%d arquivos", count)
+	return fmt.Sprintf("%d files", count)
 }
 
 func init() {
-	register(command{name: "cleanup", group: "Seus dados", order: 50, synopsis: "[DESTINO]",
-		summary: "apaga caches e, se pedir, dados pessoais",
-		about:   "Apaga o que o x86QW sabe regenerar: caches e arquivos temporários. Mapas baixados de servidores e seus dados pessoais só saem quando você pede.",
+	register(command{name: "cleanup", group: "Your data", order: 50, synopsis: "[TARGET]",
+		summary: "deletes caches and, when asked, personal data",
+		about:   "Deletes what x86QW can regenerate: caches and temporary files. Maps downloaded from servers and your personal data go only when you ask.",
 		flags:   (&cleanupArgs{}).parser, run: noName(runCleanup)})
 }

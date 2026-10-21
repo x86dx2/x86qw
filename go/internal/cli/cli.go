@@ -103,7 +103,7 @@ func (l *Layer) write(path string, data []byte, mode os.FileMode) error {
 		// it once that process has ended.
 		os.Remove(path + asideSuffix)
 		if err := os.Rename(path, path+asideSuffix); err != nil {
-			return fmt.Errorf("a CLI em uso não pôde ser substituída: %w", err)
+			return fmt.Errorf("the CLI in use could not be replaced: %w", err)
 		}
 	}
 	if err := os.Rename(temporary.Name(), path); err != nil {
@@ -156,7 +156,7 @@ func Install(root, source, version string) (*Layer, error) {
 	layer := &Layer{}
 	fail := func(err error) (*Layer, error) {
 		if undo := layer.Rollback(); undo != nil {
-			return nil, fmt.Errorf("%w; rollback incompleto: %v", err, undo)
+			return nil, fmt.Errorf("%w; incomplete rollback: %v", err, undo)
 		}
 		return nil, err
 	}
@@ -205,7 +205,7 @@ func LinkUserCommand(root, home string) (string, error) {
 	launcher := filepath.Join(root, "x86qw.sh")
 	if info, err := os.Lstat(command); err == nil {
 		if info.Mode()&os.ModeSymlink == 0 {
-			return "", fmt.Errorf("Um arquivo não gerenciado já ocupa %s.", command)
+			return "", fmt.Errorf("An unmanaged file is already at %s.", command)
 		}
 		target, _ := os.Readlink(command)
 		if !filepath.IsAbs(target) {
@@ -217,7 +217,7 @@ func LinkUserCommand(root, home string) (string, error) {
 			return command, nil
 		}
 		if _, err := os.Stat(target); err == nil {
-			return "", fmt.Errorf("Um link não gerenciado já ocupa %s.", command)
+			return "", fmt.Errorf("An unmanaged link is already at %s.", command)
 		}
 		// Dangling link from a removed installation: replace it.
 	}

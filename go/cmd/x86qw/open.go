@@ -20,7 +20,7 @@ type openArgs struct {
 func (a *openArgs) parser() *cliargs.Parser {
 	p := cliargs.New()
 	targetFlag(p, &a.target)
-	p.Bool(&a.dryRun, "mostra o comando do ezQuake sem abrir", "--dry-run")
+	p.Bool(&a.dryRun, "shows the ezQuake command without starting it", "--dry-run")
 	return p
 }
 
@@ -31,7 +31,7 @@ func runOpen(args []string, stdout, stderr io.Writer) int {
 		return code
 	}
 	if len(p.Positional()) != 1 {
-		return usageFailure("open", cliargs.Usagef("informe um endereço qw:// ou uma demo"), stderr)
+		return usageFailure("open", cliargs.Usagef("give a qw:// address or a demo"), stderr)
 	}
 	item := p.Positional()[0]
 	root, err := targetOf(cliargs.New(), a.target)
@@ -58,7 +58,7 @@ func runOpen(args []string, stdout, stderr io.Writer) int {
 	}
 	runtimes, err := install.HostRuntimes(root)
 	if err == nil && len(runtimes) == 0 {
-		err = errors.New("nenhum ezQuake instalado; execute x86qw setup")
+		err = errors.New("no ezQuake installed; run x86qw setup")
 	}
 	if err == nil {
 		err = play.Start(root, runtimes[0].Path, runtimes[0].BinarySHA, &play.Launch{Arguments: arguments})
@@ -71,7 +71,7 @@ func runOpen(args []string, stdout, stderr io.Writer) int {
 }
 
 func init() {
-	register(command{name: "open", group: "Jogar", order: 20, synopsis: "ENDEREÇO|DEMO",
-		summary: "abre um servidor qw:// ou uma demo .mvd/.qwd no ezQuake",
+	register(command{name: "open", group: "Play", order: 20, synopsis: "ADDRESS|DEMO",
+		summary: "opens a qw:// server or an .mvd/.qwd demo in ezQuake",
 		flags:   (&openArgs{}).parser, run: noName(runOpen)})
 }

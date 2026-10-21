@@ -37,7 +37,7 @@ func runHub(args []string, stdout, stderr io.Writer) int {
 }
 
 func init() {
-	register(command{name: "hub", group: "Jogar", order: 30, synopsis: "[DESTINO]",
-		summary: "lista os servidores públicos para jogar ou assistir",
+	register(command{name: "hub", group: "Play", order: 30, synopsis: "[TARGET]",
+		summary: "lists the public servers to play or watch",
 		flags:   (&targetArgs{}).parser, run: noName(runHub)})
 }

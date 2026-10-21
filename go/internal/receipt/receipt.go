@@ -63,10 +63,10 @@ func readBounded(name string) ([]byte, error) {
 		return nil, err
 	}
 	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("%s não é arquivo regular", name)
+		return nil, fmt.Errorf("%s is not a regular file", name)
 	}
 	if info.Size() > maxFileBytes {
-		return nil, fmt.Errorf("%s excede %d bytes", name, maxFileBytes)
+		return nil, fmt.Errorf("%s is over %d bytes", name, maxFileBytes)
 	}
 	return os.ReadFile(name)
 }
@@ -78,10 +78,10 @@ func ParseReceipt(payload []byte) (*Receipt, error) {
 	for scanner.Scan() {
 		key, value, ok := strings.Cut(scanner.Text(), "\t")
 		if !ok || key == "" || strings.Contains(value, "\t") {
-			return nil, fmt.Errorf("linha de receipt inválida: %q", scanner.Text())
+			return nil, fmt.Errorf("invalid receipt line: %q", scanner.Text())
 		}
 		if _, dup := receipt.Values[key]; dup {
-			return nil, fmt.Errorf("chave de receipt duplicada: %s", key)
+			return nil, fmt.Errorf("duplicate receipt key: %s", key)
 		}
 		receipt.Keys = append(receipt.Keys, key)
 		receipt.Values[key] = value
@@ -90,7 +90,7 @@ func ParseReceipt(payload []byte) (*Receipt, error) {
 		return nil, err
 	}
 	if receipt.Get("format") != "1" {
-		return nil, fmt.Errorf("formato de receipt não suportado: %q", receipt.Get("format"))
+		return nil, fmt.Errorf("unsupported receipt format: %q", receipt.Get("format"))
 	}
 	return receipt, nil
 }
@@ -109,7 +109,7 @@ func (r *Receipt) Marshal() []byte {
 func ParseInventory(payload []byte) (*Inventory, error) {
 	inventory := &Inventory{Raw: payload}
 	if len(payload) > 0 && payload[len(payload)-1] != '\n' {
-		return nil, fmt.Errorf("inventário sem quebra de linha final")
+		return nil, fmt.Errorf("inventory without a final line break")
 	}
 	seen := map[string]bool{}
 	for _, line := range strings.Split(strings.TrimSuffix(string(payload), "\n"), "\n") {
@@ -118,13 +118,13 @@ func ParseInventory(payload []byte) (*Inventory, error) {
 		}
 		name, digest, ok := strings.Cut(line, "\t")
 		if !ok || !hex64.MatchString(digest) {
-			return nil, fmt.Errorf("linha de inventário inválida: %q", line)
+			return nil, fmt.Errorf("invalid inventory line: %q", line)
 		}
 		if err := SafeRelative(name); err != nil {
 			return nil, err
 		}
 		if seen[name] {
-			return nil, fmt.Errorf("inventário duplicado: %s", name)
+			return nil, fmt.Errorf("duplicate inventory entry: %s", name)
 		}
 		seen[name] = true
 		inventory.Entries = append(inventory.Entries, Entry{Path: name, SHA256: digest})
@@ -147,11 +147,11 @@ func MarshalInventory(entries []Entry) []byte {
 func SafeRelative(name string) error {
 	if name == "" || strings.HasPrefix(name, "/") || strings.Contains(name, "\\") ||
 		path.Clean(name) != name || name == ".." || strings.HasPrefix(name, "../") {
-		return fmt.Errorf("caminho gerenciado inseguro: %q", name)
+		return fmt.Errorf("unsafe managed path: %q", name)
 	}
 	for _, r := range name {
 		if r < 0x20 || r == 0x7f {
-			return fmt.Errorf("caminho gerenciado com controle: %q", name)
+			return fmt.Errorf("managed path with a control character: %q", name)
 		}
 	}
 	return nil
@@ -183,7 +183,7 @@ func Load(dir string) (*Record, error) {
 		return nil, fmt.Errorf("%s: %w", dir, err)
 	}
 	if inventory.SHA256() != rec.Get("inventory_sha256") {
-		return nil, fmt.Errorf("%s: inventário não corresponde ao receipt", dir)
+		return nil, fmt.Errorf("%s: the inventory does not match the receipt", dir)
 	}
 	return &Record{ID: rec.Get("component"), Receipt: rec, Inventory: inventory}, nil
 }
@@ -204,7 +204,7 @@ func LoadComponents(root string) ([]*Record, error) {
 			return nil, err
 		}
 		if record.ID != entry.Name() {
-			return nil, fmt.Errorf("receipt de %s declara componente %q", entry.Name(), record.ID)
+			return nil, fmt.Errorf("the receipt of %s declares component %q", entry.Name(), record.ID)
 		}
 		records = append(records, record)
 	}

@@ -102,14 +102,14 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 		destination := t.path(relative)
 		if info, err := os.Lstat(destination); err == nil {
 			if !info.Mode().IsRegular() {
-				return 0, fmt.Errorf("caminho existente não é um arquivo regular: %s", destination)
+				return 0, fmt.Errorf("existing path is not a regular file: %s", destination)
 			}
 			current, err := fileSHA256(destination)
 			if err != nil {
 				return 0, err
 			}
 			if expected, owned := old[relative]; !owned || current != expected {
-				t.warn("Arquivo pessoal ou modificado preservado: %s", destination)
+				t.warn("Personal or modified file kept: %s", destination)
 				t.observer().file(id, relative, info.Size(), true)
 				continue
 			}
@@ -121,7 +121,7 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 		entries = append(entries, receipt.Entry{Path: relative, SHA256: digest})
 	}
 	if len(entries) == 0 {
-		return 0, fmt.Errorf("nenhum arquivo novo do componente %s pôde ser instalado", id)
+		return 0, fmt.Errorf("no new file of component %s could be installed", id)
 	}
 	newNames := map[string]bool{}
 	for _, entry := range entries {
@@ -138,12 +138,12 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 			continue
 		}
 		if err != nil || !info.Mode().IsRegular() {
-			return 0, fmt.Errorf("caminho gerenciado inválido: %s", path)
+			return 0, fmt.Errorf("invalid managed path: %s", path)
 		}
 		if current, _ := fileSHA256(path); current == digest {
 			stale = append(stale, name)
 		} else {
-			t.warn("Arquivo modificado preservado: %s", path)
+			t.warn("Modified file kept: %s", path)
 		}
 	}
 	sort.Strings(stale)
@@ -168,7 +168,7 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 	}
 	fail := func(err error) (int, error) {
 		if undoErr := restore(); undoErr != nil {
-			return 0, fmt.Errorf("falha ao instalar %s; rollback incompleto: %v (%w)", id, undoErr, err)
+			return 0, fmt.Errorf("installing %s failed; incomplete rollback: %v (%w)", id, undoErr, err)
 		}
 		return 0, err
 	}
@@ -204,7 +204,7 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 		}
 		t.observer().file(id, entry.Path, info.Size(), false)
 		if digest, _ := fileSHA256(destination); digest != entry.SHA256 {
-			return fail(fmt.Errorf("arquivo copiado diverge do plano: %s", destination))
+			return fail(fmt.Errorf("copied file differs from the plan: %s", destination))
 		}
 		if !existed {
 			created = append(created, entry.Path)
@@ -357,7 +357,7 @@ func (t *Transaction) InstallDefault(source, relative string) error {
 		}
 		file, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if err != nil {
-			return fmt.Errorf("configuração pessoal apareceu durante a instalação: %s", destination)
+			return fmt.Errorf("personal settings appeared during the installation: %s", destination)
 		}
 		in, err := os.Open(source)
 		if err == nil {
@@ -489,12 +489,12 @@ func (t *Transaction) ReconcilePlaySupport() error {
 		destination := t.path(relative)
 		if info, err := os.Lstat(destination); err == nil {
 			if !info.Mode().IsRegular() {
-				return fmt.Errorf("suporte local inválido: %s", destination)
+				return fmt.Errorf("invalid local support: %s", destination)
 			}
 			current, _ := fileSHA256(destination)
 			sum := sha256.Sum256(payload)
 			if current != hex.EncodeToString(sum[:]) && old[relative] != current {
-				t.warn("Arquivo pessoal preservado: %s", destination)
+				t.warn("Personal file kept: %s", destination)
 				continue
 			}
 		}
@@ -525,7 +525,7 @@ func (t *Transaction) ReconcilePlaySupport() error {
 		if err != nil {
 			return err
 		}
-		payload := []byte("// x86QW: personalizações locais de " + game.Label + "\n")
+		payload := []byte("// x86QW: local customizations for " + game.Label + "\n")
 		file, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 		if err != nil {
 			return err
@@ -545,7 +545,7 @@ func (t *Transaction) ReconcilePlaySupport() error {
 	}
 	if issues, _, err := PlaySupportIssues(t.Root, available); err != nil || len(issues) > 0 {
 		if err == nil {
-			err = fmt.Errorf("suporte de execução incompleto: %s", strings.Join(issues, "; "))
+			err = fmt.Errorf("incomplete run support: %s", strings.Join(issues, "; "))
 		}
 		return err
 	}

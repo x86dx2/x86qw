@@ -29,7 +29,7 @@ var commands = map[string]func(args []string) int{
 
 func main() {
 	if len(os.Args) < 2 || commands[os.Args[1]] == nil {
-		fmt.Fprintln(os.Stderr, "uso: x86qw-release prepare|sign|prune|renew-timestamp|site|monitor ...")
+		fmt.Fprintln(os.Stderr, "usage: x86qw-release prepare|sign|prune|renew-timestamp|live-timestamp|site|monitor ...")
 		os.Exit(2)
 	}
 	os.Exit(commands[os.Args[1]](os.Args[2:]))
@@ -57,7 +57,7 @@ func repoRoot() (string, error) {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", errors.New("rode dentro do checkout do x86qw")
+			return "", errors.New("run inside the x86qw checkout")
 		}
 		dir = parent
 	}

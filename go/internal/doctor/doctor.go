@@ -43,14 +43,14 @@ func BundleDestination(raw, target string) (string, error) {
 		return destination, nil
 	}
 	if filepath.Dir(raw) != "." {
-		return "", errors.New("o bundle não pode ser gravado dentro da instalação")
+		return "", errors.New("the bundle cannot be written inside the installation")
 	}
 	home, _ := os.UserHomeDir()
 	fallback := filepath.Join(fspath.Resolve(home), filepath.Base(raw))
 	if !fspath.Inside(fallback, root) {
 		return fallback, nil
 	}
-	return "", errors.New("o bundle não pode ser gravado dentro da instalação")
+	return "", errors.New("the bundle cannot be written inside the installation")
 }
 
 // Check is one diagnostic.
@@ -89,11 +89,11 @@ func Diagnose(target string, trustTimestamps []string, now time.Time) Report {
 	add("trust", status, summary)
 	platform := runtime.GOOS + "/" + runtime.GOARCH
 	if releasedPlatforms[platform] {
-		add("runtime", "ok", "plataforma publicada: "+platform)
+		add("runtime", "ok", "published platform: "+platform)
 	} else {
-		add("runtime", "warn", "plataforma sem build publicado: "+platform)
+		add("runtime", "warn", "no published build for this platform: "+platform)
 	}
-	add("network", "skip", "rede não consultada")
+	add("network", "skip", "network not checked")
 	status, summary = disk(target)
 	add("disk", status, summary)
 	status, summary = permissions(target)
@@ -103,19 +103,19 @@ func Diagnose(target string, trustTimestamps []string, now time.Time) Report {
 
 func installation(target string) (string, string) {
 	if info, err := os.Lstat(target); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		return "fail", "destino é um symlink"
+		return "fail", "the target is a symlink"
 	}
 	if _, err := os.Stat(target); err != nil {
-		return "fail", "instalação ausente"
+		return "fail", "installation missing"
 	}
 	if !install.Installed(target) {
-		return "warn", "nenhuma instalação x86QW nesta pasta"
+		return "warn", "no x86QW installation in this folder"
 	}
 	state := filepath.Join(target, ".x86qw", "state.json")
 	if info, err := os.Lstat(state); err != nil || !info.Mode().IsRegular() {
-		return "warn", "instalação sem state.json"
+		return "warn", "installation without state.json"
 	}
-	return "ok", "instalação presente"
+	return "ok", "installation present"
 }
 
 func trust(paths []string, now time.Time) (string, string) {
@@ -126,7 +126,7 @@ func trust(paths []string, now time.Time) (string, string) {
 		}
 		payload, err := os.ReadFile(path)
 		if err != nil || len(payload) > 64*1024 {
-			return "fail", "metadata TUF local ilegível"
+			return "fail", "local TUF metadata unreadable"
 		}
 		var document struct {
 			Signed struct {
@@ -135,27 +135,27 @@ func trust(paths []string, now time.Time) (string, string) {
 			} `json:"signed"`
 		}
 		if err := json.Unmarshal(payload, &document); err != nil {
-			return "fail", "metadata TUF local ilegível"
+			return "fail", "local TUF metadata unreadable"
 		}
 		if document.Signed.Expires == "" {
-			return "fail", "timestamp TUF sem validade"
+			return "fail", "TUF timestamp without an expiry"
 		}
 		expiry, err := time.Parse(time.RFC3339, strings.Replace(document.Signed.Expires, "Z", "+00:00", 1))
 		if err != nil {
-			return "fail", "timestamp TUF com validade inválida"
+			return "fail", "TUF timestamp with an invalid expiry"
 		}
 		if !now.Before(expiry) {
 			if document.Signed.Version != nil {
-				return "warn", fmt.Sprintf("cache TUF local v%d expirado", *document.Signed.Version)
+				return "warn", fmt.Sprintf("local TUF cache v%d expired", *document.Signed.Version)
 			}
-			return "warn", "cache TUF local expirado"
+			return "warn", "local TUF cache expired"
 		}
 		if expiry.Sub(now) <= trustWarning {
-			return "warn", "timestamp TUF perto de expirar"
+			return "warn", "TUF timestamp close to expiry"
 		}
-		return "ok", "timestamp TUF válido"
+		return "ok", "TUF timestamp valid"
 	}
-	return "skip", "sem metadata TUF local"
+	return "skip", "no local TUF metadata"
 }
 
 func disk(target string) (string, string) {
@@ -165,15 +165,15 @@ func disk(target string) (string, string) {
 	}
 	free, err := freeBytes(probe)
 	if err != nil {
-		return "skip", "espaço em disco indisponível"
+		return "skip", "disk space unavailable"
 	}
 	switch {
 	case free < criticalDisk:
-		return "fail", "espaço livre insuficiente"
+		return "fail", "not enough free space"
 	case free < lowDisk:
-		return "warn", "espaço livre baixo"
+		return "warn", "low free space"
 	}
-	return "ok", "espaço em disco suficiente"
+	return "ok", "enough disk space"
 }
 
 func permissions(target string) (string, string) {
@@ -184,25 +184,25 @@ func permissions(target string) (string, string) {
 		probe = filepath.Dir(target)
 	}
 	if !accessible(probe, 4) {
-		return "fail", "sem permissão de leitura"
+		return "fail", "no read permission"
 	}
 	if exists && !accessible(target, 2) {
-		return "warn", "sem permissão de escrita"
+		return "warn", "no write permission"
 	}
-	return "ok", "permissões de leitura ok"
+	return "ok", "read permissions ok"
 }
 
 // Render is the human report.
 func Render(report Report) string {
-	lines := []string{"x86QW doctor", "Destino: " + report.Target, ""}
+	lines := []string{"x86QW doctor", "Target: " + report.Target, ""}
 	for _, check := range report.Checks {
 		lines = append(lines, fmt.Sprintf("[%s] %s: %s", check.Status, check.ID, check.Summary))
 	}
 	lines = append(lines, "")
 	if report.Healthy {
-		lines = append(lines, "Nenhum problema encontrado.")
+		lines = append(lines, "No problems found.")
 	} else {
-		lines = append(lines, "Problemas encontrados.")
+		lines = append(lines, "Problems found.")
 	}
 	return strings.Join(lines, "\n") + "\n"
 }
@@ -215,7 +215,7 @@ func WriteBundle(envelope []byte, destination, target string) (string, error) {
 		return "", err
 	}
 	if _, err := os.Lstat(absolute); err == nil {
-		return "", fmt.Errorf("já existe um arquivo em %s", absolute)
+		return "", fmt.Errorf("a file already exists at %s", absolute)
 	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		envelope = []byte(strings.ReplaceAll(string(envelope), home, "~"))
@@ -227,7 +227,7 @@ func WriteBundle(envelope []byte, destination, target string) (string, error) {
 	}
 	writer := zip.NewWriter(file)
 	for _, entry := range []struct{ name, body string }{
-		{"NOTICE.txt", "Diagnóstico do x86QW. Nada é enviado automaticamente; revise o conteúdo antes de compartilhar.\n"},
+		{"NOTICE.txt", "x86QW diagnostics. Nothing is sent automatically; review the content before sharing it.\n"},
 		{"doctor.json", string(envelope)},
 	} {
 		out, err := writer.Create(entry.name)

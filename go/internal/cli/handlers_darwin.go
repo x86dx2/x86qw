@@ -146,7 +146,7 @@ func setHandlers(root string, links, demos bool) error {
 	}
 	for _, status := range strings.Fields(string(output)) {
 		if status != "0" {
-			return fmt.Errorf("Launch Services recusou o x86QW como padrão (OSStatus %s)", status)
+			return fmt.Errorf("Launch Services refused x86QW as the default (OSStatus %s)", status)
 		}
 	}
 	return nil

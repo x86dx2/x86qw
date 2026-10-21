@@ -34,27 +34,27 @@ type Demo struct {
 }
 
 var demoComponents = []Component{
-	{"x86qw-client-bootstrap", "Base e inicialização do cliente x86QW", "Compõe a base nQuake com a inicialização, os defaults e as camadas globais do cliente x86QW.", "core", 28919, nil},
-	{"nquake-visual-core", "Interface e recursos visuais nQuake", "Pacotes principais do ezQuake e da identidade visual nQuake.", "core", 15351608, []string{"x86qw-client-bootstrap"}},
+	{"x86qw-client-bootstrap", "x86QW client base and startup", "Builds on the nQuake base with the x86QW client's startup, defaults and global layers.", "core", 28919, nil},
+	{"nquake-visual-core", "nQuake interface and visuals", "ezQuake's main packages and the nQuake look.", "core", 15351608, []string{"x86qw-client-bootstrap"}},
 	{"ktx", "KTX x86QW", "KTX 1.47 com 24 modos, Frogbots e Coach de Quad.", "gameplay", 2542965, []string{"x86qw-client-bootstrap"}},
-	{"nquake-maps", "Mapas selecionados nQuake", "Somente os mapas, ENT e textos que fazem parte da distribuição nQuake.", "content", 20471003, []string{"x86qw-client-bootstrap"}},
-	{"nquake-base-textures", "Texturas base", "Pacote de texturas base selecionado pelo nQuake.", "content", 21149469, []string{"nquake-visual-core"}},
-	{"nquake-player-skins", "Skins de jogadores", "Skins GPL e comunitárias para jogadores e equipes.", "content", 14552089, []string{"nquake-visual-core"}},
-	{"nquake-models", "Modelos", "Modelos atualizados empacotados pelo nQuake.", "content", 4045436, []string{"nquake-visual-core"}},
-	{"nquake-skyboxes", "Skyboxes", "Céus de alta resolução e documentação correspondente.", "content", 3988263, []string{"nquake-visual-core"}},
-	{"nquake-external-textures", "Texturas externas", "Texturas individuais mantidas pelo nQuake.", "content", 3835861, []string{"nquake-visual-core"}},
-	{"nquake-scoreboard-flags", "Bandeiras do placar", "Bandeiras de países usadas no placar.", "content", 368135, []string{"nquake-visual-core"}},
-	{"nquake-crosshairs", "Miras", "Coleção de miras incluída pelo nQuake.", "content", 14979, []string{"nquake-visual-core"}},
-	{"nquake-documentation", "Documentação e licenças", "Licenças upstream e documentação atual da distribuição x86QW.", "documentation", 13000, nil},
-	{"nquake-matchinfo", "Informações de partidas", "Demos históricas e de treinamento mantidas pelo nQuake.", "content", 7411045, []string{"x86qw-client-bootstrap"}},
-	{"qrp-hires", "QRP alta resolução", "Texturas e brush models em alta resolução do Quake Retexturing Project.", "addon", 404142164, []string{"nquake-visual-core"}},
-	{"final-arena", "Final Arena", "Final Arena 1.20, com duelos individuais em fila e perfil próprio x86QW.", "addon", 6984652, []string{"x86qw-client-bootstrap"}},
-	{"pro-x", "Pro-X", "Pro-X QW 1.1, com rounds, equipes, votações e perfil próprio x86QW.", "addon", 9081189, []string{"x86qw-client-bootstrap"}},
-	{"team-fortress", "Team Fortress", "Team Fortress 2.9 com assets e mapas nQuake harmonizados pelo x86QW.", "addon", 8566807, []string{"x86qw-client-bootstrap"}},
+	{"nquake-maps", "nQuake map selection", "Only the maps, ENT files and texts of the nQuake distribution.", "content", 20471003, []string{"x86qw-client-bootstrap"}},
+	{"nquake-base-textures", "Base textures", "The base texture pack nQuake selects.", "content", 21149469, []string{"nquake-visual-core"}},
+	{"nquake-player-skins", "Player skins", "GPL and community skins for players and teams.", "content", 14552089, []string{"nquake-visual-core"}},
+	{"nquake-models", "Models", "Updated models packaged by nQuake.", "content", 4045436, []string{"nquake-visual-core"}},
+	{"nquake-skyboxes", "Skyboxes", "High resolution skies and their notes.", "content", 3988263, []string{"nquake-visual-core"}},
+	{"nquake-external-textures", "External textures", "Single textures kept by nQuake.", "content", 3835861, []string{"nquake-visual-core"}},
+	{"nquake-scoreboard-flags", "Scoreboard flags", "Country flags for the scoreboard.", "content", 368135, []string{"nquake-visual-core"}},
+	{"nquake-crosshairs", "Crosshairs", "The crosshair collection nQuake ships.", "content", 14979, []string{"nquake-visual-core"}},
+	{"nquake-documentation", "Documentation and licenses", "Upstream licenses and the current x86QW documentation.", "documentation", 13000, nil},
+	{"nquake-matchinfo", "Match information", "Demos históricas e de treinamento mantidas pelo nQuake.", "content", 7411045, []string{"x86qw-client-bootstrap"}},
+	{"qrp-hires", "QRP high resolution", "High resolution textures and brush models from the Quake Retexturing Project.", "addon", 404142164, []string{"nquake-visual-core"}},
+	{"final-arena", "Final Arena", "Final Arena 1.20: queued one-on-one duels, with its own x86QW profile.", "addon", 6984652, []string{"x86qw-client-bootstrap"}},
+	{"pro-x", "Pro-X", "Pro-X QW 1.1: rounds, teams and votes, with its own x86QW profile.", "addon", 9081189, []string{"x86qw-client-bootstrap"}},
+	{"team-fortress", "Team Fortress", "Team Fortress 2.9 with nQuake assets and maps fitted by x86QW.", "addon", 8566807, []string{"x86qw-client-bootstrap"}},
 	{"total-destruction-2", "Total Destruction 2", "TD2QW 2.22 com armas, magias, runas, modelos, sons e gamecode.", "addon", 502676, []string{"x86qw-client-bootstrap"}},
-	{"mvdsv", "MVDSV dedicado", "Servidor QuakeWorld MVDSV 1.11 para os gamecodes declarados, MVD e transmissão QTV.", "server", 1121507, nil},
-	{"qtv", "QTV broadcast", "QTV HTTP fixado por commit para streams locais ou upstream remoto e demos MVD.", "server", 12079507, nil},
-	{"qwfwd", "QWFWD proxy", "Proxy QuakeWorld QWFWD 1.30, local por padrão e exposição externa opcional.", "server", 287467, nil},
+	{"mvdsv", "Dedicated MVDSV", "The MVDSV 1.11 QuakeWorld server for the declared game codes, MVD and QTV.", "server", 1121507, nil},
+	{"qtv", "QTV broadcast", "QTV pinned by commit, for local streams, a remote upstream and MVD demos.", "server", 12079507, nil},
+	{"qwfwd", "QWFWD proxy", "The QWFWD 1.30 QuakeWorld proxy, local by default, open on request.", "server", 287467, nil},
 }
 
 var demoModes = []Mode{
@@ -109,9 +109,9 @@ func demoInstalled() []string {
 
 // demoUpdates are the demo installation's pending updates.
 var demoUpdates = []Update{
-	{ID: "x86qw-client-bootstrap", Label: "Base e inicialização do cliente x86QW", From: Raw("e4cb23d40aa2+x86qw.4"), To: "dfb2ac9299f7+x86qw.4", Note: Say("plan.component")},
+	{ID: "x86qw-client-bootstrap", Label: "x86QW client base and startup", From: Raw("e4cb23d40aa2+x86qw.4"), To: "dfb2ac9299f7+x86qw.4", Note: Say("plan.component")},
 	{ID: "ktx", Label: "KTX x86QW", From: Raw("1.47+x86qw.19"), To: "1.47+x86qw.20", Note: Say("plan.component")},
-	{ID: corePackage, Label: "Dados do Quake", From: Raw("0.1.0"), To: "0.1.1", Note: Say("plan.component")},
+	{ID: corePackage, Label: "Quake data", From: Raw("0.1.0"), To: "0.1.1", Note: Say("plan.component")},
 }
 
 // Existing reports the demo installation when ExistingInstall is set.
@@ -226,7 +226,7 @@ var demoFiles = map[string][]string{
 // updates.
 func (d *Demo) lanes(options Options) []Lane {
 	catalog, _ := d.Catalog(context.Background())
-	sizes, labels := map[string]int64{corePackage: demoCore, "client": demoClient[install.HostPlatform()]}, map[string]string{corePackage: "Dados do Quake", "client": "ezQuake 3.6.9"}
+	sizes, labels := map[string]int64{corePackage: demoCore, "client": demoClient[install.HostPlatform()]}, map[string]string{corePackage: "Quake data", "client": "ezQuake 3.6.9"}
 	for _, component := range catalog.Components {
 		sizes[component.ID], labels[component.ID] = component.Size, component.Label
 	}

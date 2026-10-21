@@ -39,14 +39,14 @@ func hasControl(value string) bool {
 func ownershipPath(value any, label string) (string, error) {
 	text, ok := value.(string)
 	if !ok || text == "" || len([]rune(text)) > 512 {
-		return "", ownershipError("%s inválido", label)
+		return "", ownershipError("invalid %s", label)
 	}
 	path := purePosix(text)
 	if strings.ContainsAny(text, `\:`) || hasControl(text) || path.absolute || path.hasPart("..") {
-		return "", ownershipError("%s não é um caminho POSIX seguro: %s", label, pyRepr(text))
+		return "", ownershipError("%s is not a safe POSIX path: %s", label, pyRepr(text))
 	}
 	if len(path.parts) > ownershipMaxDepth || path.asPosix() != text {
-		return "", ownershipError("%s excede o limite de profundidade ou não é canônico", label)
+		return "", ownershipError("%s exceeds the depth limit or is not canonical", label)
 	}
 	return text, nil
 }
@@ -54,24 +54,24 @@ func ownershipPath(value any, label string) (string, error) {
 func ownershipText(value any, label string) (string, error) {
 	text, ok := value.(string)
 	if !ok || text == "" || len([]rune(text)) > ownershipMaxText {
-		return "", ownershipError("%s inválido", label)
+		return "", ownershipError("invalid %s", label)
 	}
 	if hasControl(text) {
-		return "", ownershipError("%s contém controle", label)
+		return "", ownershipError("%s contains a control character", label)
 	}
 	return text, nil
 }
 
 func validateOwnershipEntry(value any, depth int, seen map[string]bool) (*Object, error) {
 	if depth > ownershipMaxDepth {
-		return nil, ownershipError("ownership excede a profundidade máxima")
+		return nil, ownershipError("ownership exceeds the maximum depth")
 	}
 	raw, ok := value.(*Object)
 	if !ok {
-		return nil, ownershipError("entrada de ownership inválida")
+		return nil, ownershipError("invalid ownership entry")
 	}
 	if !sameKeys(raw.Keys(), ownershipFields...) {
-		return nil, ownershipError("entrada de ownership contém campos desconhecidos ou ausentes")
+		return nil, ownershipError("ownership entry has unknown or missing fields")
 	}
 	path, err := ownershipPath(raw.Value("path"), "path")
 	if err != nil {
@@ -79,47 +79,47 @@ func validateOwnershipEntry(value any, depth int, seen map[string]bool) (*Object
 	}
 	semantic := Casefold(norm.NFC.String(path))
 	if seen[semantic] {
-		return nil, ownershipError("ownership contém membro duplicado: %s", path)
+		return nil, ownershipError("ownership has a duplicate member: %s", path)
 	}
 	seen[semantic] = true
 	size := raw.Value("size")
 	if order, _ := pyjson.IntCmp(size, 0); !pyjson.IsExactInt(size) || order < 0 {
-		return nil, ownershipError("size de %s excede o limite permitido", path)
+		return nil, ownershipError("size of %s exceeds the allowed limit", path)
 	}
 	if order, _ := pyjson.IntCmp(size, int64(ownershipMaxBytes)); order > 0 {
-		return nil, ownershipError("size de %s excede o limite permitido", path)
+		return nil, ownershipError("size of %s exceeds the allowed limit", path)
 	}
 	if digest, ok := raw.Value("sha256").(string); !ok || !hex64Pattern.MatchString(digest) {
-		return nil, ownershipError("sha256 de %s precisa ser SHA-256 hexadecimal minúsculo", path)
+		return nil, ownershipError("sha256 of %s must be a lowercase hexadecimal SHA-256", path)
 	}
 	if !inSet(raw.Value("kind"), ownershipKinds) {
-		return nil, ownershipError("kind inválido em %s", path)
+		return nil, ownershipError("invalid kind in %s", path)
 	}
 	if !inSet(raw.Value("ownership"), ownershipValues) {
-		return nil, ownershipError("ownership inválido em %s", path)
+		return nil, ownershipError("invalid ownership in %s", path)
 	}
 	if !inSet(raw.Value("ownership_basis"), ownershipBases) {
-		return nil, ownershipError("ownership_basis inválido em %s", path)
+		return nil, ownershipError("invalid ownership_basis in %s", path)
 	}
-	if _, err := ownershipText(raw.Value("source"), "source de "+path); err != nil {
+	if _, err := ownershipText(raw.Value("source"), "source of "+path); err != nil {
 		return nil, err
 	}
 	if !inSet(raw.Value("license_concluded"), ownershipLicenses) {
-		return nil, ownershipError("license_concluded inválido em %s", path)
+		return nil, ownershipError("invalid license_concluded in %s", path)
 	}
-	copyright, err := ownershipText(raw.Value("copyright_text"), "copyright_text de "+path)
+	copyright, err := ownershipText(raw.Value("copyright_text"), "copyright_text of "+path)
 	if err != nil {
 		return nil, err
 	}
 	members, ok := raw.Value("members").([]any)
 	if !ok || len(members) > ownershipMaxEntrys {
-		return nil, ownershipError("members inválido em %s", path)
+		return nil, ownershipError("invalid members in %s", path)
 	}
 	var children []*Object
 	childPaths := map[string]bool{}
 	for _, child := range members {
 		if _, ok := child.(*Object); !ok {
-			return nil, ownershipError("member inválido em %s", path)
+			return nil, ownershipError("invalid member in %s", path)
 		}
 		entry, err := validateOwnershipEntry(child, depth+1, childPaths)
 		if err != nil {
@@ -140,30 +140,30 @@ func validateOwnershipEntry(value any, depth int, seen map[string]bool) (*Object
 			expected = "upstream"
 		}
 		if ownership != expected {
-			return nil, ownershipError("ownership de %s não corresponde aos membros: %s != %s", path, ownership, expected)
+			return nil, ownershipError("ownership of %s does not match its members: %s != %s", path, ownership, expected)
 		}
 	}
 	license := raw.Value("license_concluded")
 	if ownership == "project" {
 		if license != "MIT" || copyright != projectCopyright {
-			return nil, ownershipError("ownership project inválido em %s", path)
+			return nil, ownershipError("invalid project ownership in %s", path)
 		}
 	} else if license != "NOASSERTION" || copyright != "NOASSERTION" {
-		return nil, ownershipError("ownership %s precisa ser NOASSERTION em %s", ownership, path)
+		return nil, ownershipError("ownership %s must be NOASSERTION in %s", ownership, path)
 	}
 	licenseURL := raw.Value("license_url")
 	if ownership != "project" {
 		if licenseURL != nil {
-			return nil, ownershipError("ownership upstream/mixed não pode carregar URL de licença do projeto")
+			return nil, ownershipError("upstream/mixed ownership cannot carry the project license URL")
 		}
 	} else {
 		text, ok := licenseURL.(string)
 		match := immutableLicense.FindStringSubmatch(text)
 		if !ok || match == nil {
-			return nil, ownershipError("ownership project exige URL imutável da licença MIT")
+			return nil, ownershipError("project ownership requires an immutable MIT license URL")
 		}
 		if contains([]string{"main", "master", "head", "latest"}, Casefold(match[1])) {
-			return nil, ownershipError("URL de licença não pode apontar para referência mutável")
+			return nil, ownershipError("a license URL cannot point at a mutable reference")
 		}
 	}
 	sort.SliceStable(children, func(i, j int) bool {
@@ -185,14 +185,14 @@ func validateOwnershipEntry(value any, depth int, seen map[string]bool) (*Object
 func ValidateOwnership(value any) (*Object, error) {
 	raw, ok := value.(*Object)
 	if !ok || !sameKeys(raw.Keys(), "format", "project", "artifacts") {
-		return nil, ownershipError("ownership document contém campos desconhecidos ou ausentes")
+		return nil, ownershipError("ownership document has unknown or missing fields")
 	}
 	if !pyjson.EqInt(raw.Value("format"), 1) || !pyjson.Eq(raw.Value("project"), "x86qw") {
-		return nil, ownershipError("identidade do ownership document inválida")
+		return nil, ownershipError("invalid ownership document identity")
 	}
 	artifacts, ok := raw.Value("artifacts").([]any)
 	if !ok || len(artifacts) == 0 || len(artifacts) > ownershipMaxEntrys {
-		return nil, ownershipError("ownership document não possui artifacts válidos")
+		return nil, ownershipError("ownership document has no valid artifacts")
 	}
 	var entries []*Object
 	paths, semantic := map[string]bool{}, map[string]bool{}
@@ -204,7 +204,7 @@ func ValidateOwnership(value any) (*Object, error) {
 		path := entry.Value("path").(string)
 		key := Casefold(norm.NFC.String(path))
 		if paths[path] || semantic[key] {
-			return nil, ownershipError("ownership document contém artifact duplicado: %s", path)
+			return nil, ownershipError("ownership document has a duplicate artifact: %s", path)
 		}
 		paths[path], semantic[key] = true, true
 		entries = append(entries, entry)
@@ -232,7 +232,7 @@ func MergeOwnership(documents ...*Object) (*Object, error) {
 		for _, entry := range objects(normalized.Value("artifacts")) {
 			path := entry.Value("path").(string)
 			if previous, ok := combined[path]; ok && !pyjson.Eq(previous, entry) {
-				return nil, ownershipError("fragmentos de ownership divergem para %s", path)
+				return nil, ownershipError("ownership fragments differ for %s", path)
 			}
 			if _, ok := combined[path]; !ok {
 				order = append(order, path)
@@ -241,7 +241,7 @@ func MergeOwnership(documents ...*Object) (*Object, error) {
 		}
 	}
 	if len(combined) == 0 {
-		return nil, ownershipError("nenhum artifact de ownership foi declarado")
+		return nil, ownershipError("no ownership artifact was declared")
 	}
 	artifacts := make([]any, len(order))
 	for index, path := range order {

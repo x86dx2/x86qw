@@ -128,11 +128,11 @@ func ReadJSON(path string) (any, error) {
 func LoadJSONObject(path string) (*Object, error) {
 	value, err := ReadJSON(path)
 	if err != nil {
-		return nil, fmt.Errorf("nao foi possivel ler %s: %v", path, err)
+		return nil, fmt.Errorf("could not read %s: %v", path, err)
 	}
 	object, ok := value.(*Object)
 	if !ok {
-		return nil, fmt.Errorf("o arquivo precisa conter um objeto JSON: %s", path)
+		return nil, fmt.Errorf("the file must hold a JSON object: %s", path)
 	}
 	return object, nil
 }

@@ -10,13 +10,13 @@ import (
 // The applet is built and checked without registering it: Launch
 // Services on the test machine stays as it is.
 func TestHandlerAppDeclaresLinksAndDemosSigned(t *testing.T) {
-	root := filepath.Join(t.TempDir(), `pasta "com" aspas`)
+	root := filepath.Join(t.TempDir(), `folder "with" quotes`)
 	app := filepath.Join(t.TempDir(), "x86QW.app")
 	if err := BuildHandlerApp(root, app, true, true); err != nil {
 		t.Fatal(err)
 	}
 	if output, err := exec.Command("codesign", "--verify", "--strict", app).CombinedOutput(); err != nil {
-		t.Fatalf("assinatura: %s", output)
+		t.Fatalf("signature: %s", output)
 	}
 	plist := filepath.Join(app, "Contents", "Info.plist")
 	for key, want := range map[string]string{
@@ -34,7 +34,7 @@ func TestHandlerAppDeclaresLinksAndDemosSigned(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := exec.Command("plutil", "-extract", "CFBundleDocumentTypes", "raw", filepath.Join(links, "Contents", "Info.plist")).Run(); err == nil {
-		t.Fatal("só links não deveria declarar demos")
+		t.Fatal("links only should not declare demos")
 	}
 }
 

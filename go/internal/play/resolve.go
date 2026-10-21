@@ -61,16 +61,16 @@ func SavedRuleset(root string) (string, error) {
 		return "", nil
 	}
 	if err != nil || len(payload) > 4096 {
-		return "", fmt.Errorf("Preferência de ruleset inválida: %s", path)
+		return "", fmt.Errorf("Invalid ruleset preference: %s", path)
 	}
 	var document map[string]any
 	if json.Unmarshal(payload, &document) != nil || len(document) != 3 || document["project"] != "x86qw" {
-		return "", fmt.Errorf("Preferência de ruleset inválida: %s", path)
+		return "", fmt.Errorf("Invalid ruleset preference: %s", path)
 	}
 	format, _ := document["format"].(float64)
 	ruleset, _ := document["ruleset"].(string)
 	if format != 1 || Rulesets[ruleset] == "" {
-		return "", fmt.Errorf("Preferência de ruleset inválida: %s", path)
+		return "", fmt.Errorf("Invalid ruleset preference: %s", path)
 	}
 	return ruleset, nil
 }
@@ -109,7 +109,7 @@ func Maps(root string, game Game, mode *Mode, o Options) (*MapList, error) {
 		assets = map[string]bool{}
 		if len(requirements) > 0 {
 			if assets, err = KtxAssets(root); err != nil {
-				return nil, fmt.Errorf("Não foi possível consultar os recursos do KTX: %s", filepath.Join(root, "qw", "ktx.pk3"))
+				return nil, fmt.Errorf("Could not read the KTX assets: %s", filepath.Join(root, "qw", "ktx.pk3"))
 			}
 		}
 	}
@@ -134,7 +134,7 @@ func Maps(root string, game Game, mode *Mode, o Options) (*MapList, error) {
 		}
 	}
 	if len(list.Maps) == 0 {
-		return nil, fmt.Errorf("Nenhum mapa compatível está disponível para %s.", label)
+		return nil, fmt.Errorf("No compatible map is available for %s.", label)
 	}
 	if found, ok := lookup[strings.ToLower(defaultMap)]; ok {
 		list.Default = found
@@ -156,7 +156,7 @@ func Resolve(root string, r Request) (*Choice, error) {
 		return nil, err
 	}
 	if len(games) == 0 {
-		return nil, errors.New("Nenhum mod local gerenciado está instalado. Reexecute o bootstrap x86QW no mesmo destino e adicione ao menos KTX.")
+		return nil, errors.New("No managed local mod is installed. Run the x86QW bootstrap again on the same target and add at least KTX.")
 	}
 	var game *Game
 	requested := r.Game
@@ -175,25 +175,25 @@ func Resolve(root string, r Request) (*Choice, error) {
 		all, _ := LoadGames()
 		for _, known := range all {
 			if strings.EqualFold(known.ID, requested) {
-				return nil, fmt.Errorf("%s não está instalado. Adicione o componente %s pelo bootstrap x86QW.", known.Label, known.Component)
+				return nil, fmt.Errorf("%s is not installed. Add the %s component through the x86QW bootstrap.", known.Label, known.Component)
 			}
 		}
 		keys := make([]string, len(games))
 		for index, candidate := range games {
 			keys[index] = candidate.ID
 		}
-		return nil, fmt.Errorf("Jogo local desconhecido: %s. Disponíveis: %s.", r.Game, strings.Join(keys, ", "))
+		return nil, fmt.Errorf("Unknown local game: %s. Available: %s.", r.Game, strings.Join(keys, ", "))
 	}
 	choice := &Choice{Game: *game, Options: r.Options}
 	if choice.Component = install.InstalledComponent(root, *game); choice.Component == "" {
-		return nil, fmt.Errorf("O componente de %s não está mais instalado.", game.Label)
+		return nil, fmt.Errorf("The %s component is no longer installed.", game.Label)
 	}
 	if choice.Files, choice.Selection, err = install.VerifyComponent(root, choice.Component); err != nil {
 		return nil, err
 	}
 	switch {
 	case game.UsesModeCatalog() && r.Mode == "":
-		return nil, errors.New("Escolha um modo KTX (--mode).")
+		return nil, errors.New("Pick a KTX mode (--mode).")
 	case game.UsesModeCatalog():
 		modes, err := LoadModes()
 		if err != nil {
@@ -205,7 +205,7 @@ func Resolve(root string, r Request) (*Choice, error) {
 		}
 		choice.Mode = &mode
 	case r.Mode != "":
-		return nil, errors.New("--mode só pode ser usado com o jogo KTX.")
+		return nil, errors.New("--mode only works with the KTX game.")
 	}
 	list, err := Maps(root, *game, choice.Mode, r.Options)
 	if err != nil {
@@ -224,7 +224,7 @@ func Resolve(root string, r Request) (*Choice, error) {
 			if choice.Mode != nil {
 				label = "KTX · " + choice.Mode.Label
 			}
-			return nil, fmt.Errorf("O mapa %s não está disponível ou não é compatível com %s.", r.Map, label)
+			return nil, fmt.Errorf("Map %s is not available or not compatible with %s.", r.Map, label)
 		}
 	}
 	if choice.Ruleset = r.Ruleset; choice.Ruleset == "" {
@@ -233,7 +233,7 @@ func Resolve(root string, r Request) (*Choice, error) {
 		}
 	}
 	if Rulesets[choice.Ruleset] == "" {
-		return nil, fmt.Errorf("Ruleset de cliente desconhecido: %s.", choice.Ruleset)
+		return nil, fmt.Errorf("Unknown client ruleset: %s.", choice.Ruleset)
 	}
 	runtimes, err := install.HostRuntimes(root)
 	if err != nil {
@@ -247,9 +247,9 @@ func Resolve(root string, r Request) (*Choice, error) {
 	}
 	if choice.Runtime.Path == "" {
 		if r.Channel != "" {
-			return nil, fmt.Errorf("O ezQuake %s não está instalado.", r.Channel)
+			return nil, fmt.Errorf("ezQuake %s is not installed.", r.Channel)
 		}
-		return nil, errors.New("Nenhum ezQuake instalado; execute x86qw setup.")
+		return nil, errors.New("No ezQuake installed; run x86qw setup.")
 	}
 	if err := install.VerifyPlaySupport(root, games); err != nil {
 		return nil, err

@@ -35,7 +35,7 @@ func (p *Project) Verify(out io.Writer, options VerifyOptions) error {
 	}
 	trustStatus, err := p.VerifyLocalTUFCatalog()
 	if err != nil {
-		return fmt.Errorf("TUF não autentica o catálogo local: %v", err)
+		return fmt.Errorf("TUF does not authenticate the local catalog: %v", err)
 	}
 	components, err := p.Components()
 	if err != nil {
@@ -97,8 +97,8 @@ func (p *Project) Verify(out io.Writer, options VerifyOptions) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "[OK] Catalogo: %d pacotes; componentes: %d; runtimes: %d; jogos: %d; receitas: %d; "+
-		"arquivos upstream: %d; fontes: %d; nQuake: %s; TUF: %s.\n",
+	fmt.Fprintf(out, "[OK] Catalog: %d packages; components: %d; runtimes: %d; games: %d; recipes: %d; "+
+		"upstream files: %d; sources: %d; nQuake: %s; TUF: %s.\n",
 		packageCount, len(objects(components.Value("components"))),
 		len(inventory.Runtimes.Value("runtimes").([]any)), len(inventory.Games.Value("games").([]any)),
 		len(recipes), upstreamCount, sourceCount, strings.Join(revisions, ", "), trustStatus)
@@ -109,7 +109,7 @@ func (p *Project) Verify(out io.Writer, options VerifyOptions) error {
 		}
 	}
 	if len(misplaced) > 0 {
-		return fmt.Errorf("itens fora de contexto na raiz: %s", strings.Join(misplaced, ", "))
+		return fmt.Errorf("out-of-place items at the root: %s", strings.Join(misplaced, ", "))
 	}
 	if !options.SkipGit && IsGitWorkTree(p.Root) {
 		count, problems, err := CheckLFS(p.Root)
@@ -119,7 +119,7 @@ func (p *Project) Verify(out io.Writer, options VerifyOptions) error {
 		if len(problems) > 0 {
 			return fmt.Errorf("Git LFS: %s", strings.Join(problems, "; "))
 		}
-		fmt.Fprintf(out, "[OK] Git LFS: %d objetos materializados; nenhum binário grande direto.\n", count)
+		fmt.Fprintf(out, "[OK] Git LFS: %d objects materialized; no large binary committed directly.\n", count)
 		command := options.DiffCommand
 		if command == nil {
 			if command, err = CommittedDiffFromEnvironment(); err != nil {
@@ -129,8 +129,8 @@ func (p *Project) Verify(out io.Writer, options VerifyOptions) error {
 		if _, err := CheckCommittedDiff(p.Root, command); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "[OK] Diff commitado sem erros de espaço: %s\n", strings.Join(command, " "))
+		fmt.Fprintf(out, "[OK] Committed diff has no whitespace errors: %s\n", strings.Join(command, " "))
 	}
-	fmt.Fprintln(out, "[OK] Distribuicao e estrutura do projeto validadas.")
+	fmt.Fprintln(out, "[OK] Distribution and project structure validated.")
 	return nil
 }

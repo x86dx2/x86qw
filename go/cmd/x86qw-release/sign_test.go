@@ -37,11 +37,11 @@ func TestLiveVersionSurvivesAnExpiredChain(t *testing.T) {
 	server := serve(string(timestamp))
 	defer server.Close()
 	if version, err := liveTimestamp(server.URL + "/trust/"); err != nil || version != generation.Timestamp {
-		t.Fatalf("versão %d, esperada %d: %v", version, generation.Timestamp, err)
+		t.Fatalf("version %d, expected %d: %v", version, generation.Timestamp, err)
 	}
 	tampered := serve(strings.Replace(string(timestamp), `"version":`, `"version": 1000, "x":`, 1))
 	defer tampered.Close()
 	if _, err := liveTimestamp(tampered.URL + "/trust/"); err == nil {
-		t.Fatal("timestamp adulterado aceito")
+		t.Fatal("tampered timestamp accepted")
 	}
 }

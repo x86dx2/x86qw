@@ -35,7 +35,7 @@ func roundTrip(t *testing.T, raw []byte, label string) {
 		t.Fatalf("%s: inflate: %v", label, err)
 	}
 	if again := Compress(plain); !bytes.Equal(again, raw) {
-		t.Fatalf("%s: deflate diverge (%d bytes vs %d publicados)", label, len(again), len(raw))
+		t.Fatalf("%s: deflate differs (%d bytes vs %d published)", label, len(again), len(raw))
 	}
 }
 
@@ -45,7 +45,7 @@ func TestPublishedPackagesRedeflate(t *testing.T) {
 	dir := cacheDir()
 	paths, _ := filepath.Glob(filepath.Join(dir, "*.zip"))
 	if len(paths) == 0 {
-		t.Skip("cache de pacotes publicados indisponível")
+		t.Skip("published package cache unavailable")
 	}
 	for _, path := range paths {
 		info, err := os.Stat(path)
@@ -137,12 +137,12 @@ func TestSyntheticInputs(t *testing.T) {
 		output := Compress(input)
 		plain, err := io.ReadAll(flate.NewReader(bytes.NewReader(output)))
 		if err != nil || !bytes.Equal(plain, input) {
-			t.Fatalf("%s: saída não reinfla para a entrada", name)
+			t.Fatalf("%s: output does not inflate back to the input", name)
 		}
 		sum := sha256.Sum256(output)
 		digest := hex.EncodeToString(sum[:])
 		if expected, ok := syntheticDigests[name]; ok && expected != digest {
-			t.Errorf("%s: digest %s, esperado %s", name, digest, expected)
+			t.Errorf("%s: digest %s, expected %s", name, digest, expected)
 		}
 	}
 }

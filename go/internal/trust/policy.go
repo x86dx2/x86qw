@@ -42,58 +42,58 @@ func errorf(format string, args ...any) error {
 // unused keys, and a root that satisfies its own threshold.
 func ValidateRootPolicy(rootBytes []byte) error {
 	if len(rootBytes) == 0 {
-		return errorf("root TUF incorporada está ausente")
+		return errorf("the embedded TUF root is missing")
 	}
 	root, err := metadata.Root().FromBytes(rootBytes)
 	if err != nil {
-		return errorf("root TUF incorporada é inválida: %v", err)
+		return errorf("the embedded TUF root is invalid: %v", err)
 	}
 	signed := root.Signed
 	if !signed.ConsistentSnapshot {
-		return errorf("root TUF deve habilitar consistent snapshots")
+		return errorf("the TUF root must enable consistent snapshots")
 	}
 	if len(signed.Roles) != len(rolePolicy) {
-		return errorf("root TUF declara roles fora da política aprovada")
+		return errorf("the TUF root declares roles outside the approved policy")
 	}
 	usedKeyIDs := map[string]bool{}
 	usedMaterial := map[string]bool{}
 	for name, policy := range rolePolicy {
 		role, ok := signed.Roles[name]
 		if !ok {
-			return errorf("root TUF declara roles fora da política aprovada")
+			return errorf("the TUF root declares roles outside the approved policy")
 		}
 		if len(role.KeyIDs) != policy.keys || role.Threshold != policy.threshold {
-			return errorf("role %s diverge da política %d-de-%d", name, policy.threshold, policy.keys)
+			return errorf("role %s differs from the %d-of-%d policy", name, policy.threshold, policy.keys)
 		}
 		seen := map[string]bool{}
 		for _, keyID := range role.KeyIDs {
 			if seen[keyID] {
-				return errorf("role %s repete key IDs", name)
+				return errorf("role %s repeats key IDs", name)
 			}
 			seen[keyID] = true
 			if usedKeyIDs[keyID] {
-				return errorf("uma chave TUF não pode pertencer a mais de uma role")
+				return errorf("a TUF key cannot belong to more than one role")
 			}
 			usedKeyIDs[keyID] = true
 			key, ok := signed.Keys[keyID]
 			if !ok {
-				return errorf("role %s referencia chave ausente", name)
+				return errorf("role %s references a missing key", name)
 			}
 			if key.Type != metadata.KeyTypeEd25519 || key.Scheme != metadata.KeySchemeEd25519 {
-				return errorf("todas as chaves TUF devem usar Ed25519")
+				return errorf("every TUF key must use Ed25519")
 			}
 			material := key.Value.PublicKey
 			if usedMaterial[material] {
-				return errorf("material público de chave TUF duplicado")
+				return errorf("duplicate TUF public key material")
 			}
 			usedMaterial[material] = true
 		}
 	}
 	if len(signed.Keys) != len(usedKeyIDs) {
-		return errorf("root TUF contém chaves sem role aprovada")
+		return errorf("the TUF root has keys without an approved role")
 	}
 	if err := root.VerifyDelegate(metadata.ROOT, root); err != nil {
-		return errorf("root TUF não satisfaz seu próprio threshold: %v", err)
+		return errorf("the TUF root does not meet its own threshold: %v", err)
 	}
 	return nil
 }

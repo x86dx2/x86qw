@@ -18,7 +18,7 @@ func TestOpenAcceptsOnlyCleanAddresses(t *testing.T) {
 	}
 	for _, bad := range []string{"qw://host;quit", `qw://host"`, "qw://host:27500 +exec x", "qw://$rcon_password", "qw://host/../x", "qw://", "http://host", "qw://host:123456", "qw://2@host:27500", "qw://x@host/qtvplay"} {
 		if _, err := OpenArguments(target, bad); err == nil {
-			t.Fatalf("%q deveria ser recusado", bad)
+			t.Fatalf("%q should be refused", bad)
 		}
 	}
 }
@@ -37,10 +37,10 @@ func TestOpenCopiesTheDemoUnderItsOwnName(t *testing.T) {
 			t.Fatalf("%s: %v %v", item, args, err)
 		}
 		if copied, _ := os.ReadFile(filepath.Join(target, "qw", filepath.FromSlash(args[1]))); string(copied) != "demo bytes" {
-			t.Fatal("a demo não foi copiada para qw/demos")
+			t.Fatal("the demo was not copied to qw/demos")
 		}
 	}
 	if _, err := OpenArguments(target, filepath.Join(elsewhere, "notes.txt")); err == nil {
-		t.Fatal("um .txt não é demo")
+		t.Fatal("a .txt is not a demo")
 	}
 }

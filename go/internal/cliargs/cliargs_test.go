@@ -12,19 +12,19 @@ func TestFlagsGoAnywhere(t *testing.T) {
 	var dry, yes bool
 	var count int
 	p := New()
-	p.String(&target, "DESTINO", "pasta", "--target")
-	p.Choice(&mode, []string{"duel", "ffa"}, "modo", "--mode")
-	p.Bool(&dry, "simula", "--dry-run", "-n")
-	p.Bool(&yes, "confirma", "--yes")
-	p.Int(&count, 1, 3, "N", "quantos", "--count")
-	if err := p.Parse([]string{"pasta", "--dry-run", "--mode=ffa", "--count", "2", "--", "--yes"}); err != nil {
+	p.String(&target, "TARGET", "folder", "--target")
+	p.Choice(&mode, []string{"duel", "ffa"}, "mode", "--mode")
+	p.Bool(&dry, "simulates", "--dry-run", "-n")
+	p.Bool(&yes, "confirms", "--yes")
+	p.Int(&count, 1, 3, "N", "how many", "--count")
+	if err := p.Parse([]string{"folder", "--dry-run", "--mode=ffa", "--count", "2", "--", "--yes"}); err != nil {
 		t.Fatal(err)
 	}
-	if !dry || yes || mode != "ffa" || count != 2 || strings.Join(p.Positional(), ",") != "pasta,--yes" {
+	if !dry || yes || mode != "ffa" || count != 2 || strings.Join(p.Positional(), ",") != "folder,--yes" {
 		t.Fatalf("dry %v yes %v mode %q count %d positional %v", dry, yes, mode, count, p.Positional())
 	}
 	if !p.Given("-n") || p.Given("--yes") {
-		t.Fatal("Given deve valer para qualquer nome da flag e só para o que veio")
+		t.Fatal("Given must hold for any name of the flag and only for what was given")
 	}
 }
 
@@ -34,7 +34,7 @@ func TestMistakesAreUsageErrors(t *testing.T) {
 		var dry bool
 		var count int
 		p := New()
-		p.String(&target, "DESTINO", "", "--target")
+		p.String(&target, "TARGET", "", "--target")
 		p.Bool(&dry, "", "--dry-run")
 		p.Choice(&mode, []string{"duel"}, "", "--mode")
 		p.Int(&count, 1, 3, "N", "", "--count")
@@ -50,28 +50,28 @@ func TestMistakesAreUsageErrors(t *testing.T) {
 func TestHelpAndOptionalValues(t *testing.T) {
 	var bundle string
 	p := New()
-	p.Optional(&bundle, "padrão.zip", "ARQUIVO.zip", "grava um bundle", "--bundle")
+	p.Optional(&bundle, "default.zip", "FILE.zip", "writes a bundle", "--bundle")
 	if err := p.Parse([]string{"--bundle", "--help"}); !errors.Is(err, ErrHelp) {
 		t.Fatalf("--help: %v", err)
 	}
-	if bundle != "padrão.zip" {
-		t.Fatalf("sem valor: %q", bundle)
+	if bundle != "default.zip" {
+		t.Fatalf("without a value: %q", bundle)
 	}
 	p = New()
-	p.Optional(&bundle, "padrão.zip", "ARQUIVO.zip", "grava um bundle", "--bundle")
-	if err := p.Parse([]string{"--bundle", "meu.zip"}); err != nil || bundle != "meu.zip" {
-		t.Fatalf("com valor: %q %v", bundle, err)
+	p.Optional(&bundle, "default.zip", "FILE.zip", "writes a bundle", "--bundle")
+	if err := p.Parse([]string{"--bundle", "my.zip"}); err != nil || bundle != "my.zip" {
+		t.Fatalf("with a value: %q %v", bundle, err)
 	}
-	if help := p.Flags(); !strings.Contains(help, "--bundle [ARQUIVO.zip]  grava um bundle") {
-		t.Fatalf("ajuda: %q", help)
+	if help := p.Flags(); !strings.Contains(help, "--bundle [FILE.zip]  writes a bundle") {
+		t.Fatalf("help: %q", help)
 	}
 }
 
 func TestAdoptKeepsPackageFlagWorking(t *testing.T) {
 	fs := flag.NewFlagSet("x", flag.ContinueOnError)
-	nick := fs.String("nick", "", "seu nick")
+	nick := fs.String("nick", "", "your nick")
 	volume := fs.Int("volume", -1, "volume")
-	local := fs.Bool("local", false, "só esta máquina")
+	local := fs.Bool("local", false, "this machine only")
 	p := New()
 	p.Adopt(fs)
 	if err := p.Parse([]string{"--nick", "tester", "dir", "--local", "--volume=40"}); err != nil {
@@ -82,7 +82,7 @@ func TestAdoptKeepsPackageFlagWorking(t *testing.T) {
 	if *nick != "tester" || *volume != 40 || !*local || !given["nick"] || len(p.Positional()) != 1 {
 		t.Fatalf("%q %d %v %v", *nick, *volume, *local, given)
 	}
-	if err := p.Parse([]string{"--volume", "alto"}); !IsUsage(err) {
-		t.Fatalf("volume inválido: %v", err)
+	if err := p.Parse([]string{"--volume", "loud"}); !IsUsage(err) {
+		t.Fatalf("invalid volume: %v", err)
 	}
 }

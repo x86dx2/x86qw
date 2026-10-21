@@ -36,19 +36,19 @@ func Raw(text string) Text {
 // IsZero reports whether nothing was said.
 func (t Text) IsZero() bool { return t.Key == "" }
 
-// String is the Portuguese, for logs and the command line.
-func (t Text) String() string { return t.In(LangPT) }
+// String is the English, for logs and the command line.
+func (t Text) String() string { return t.In(LangEN) }
 
-// In renders the text in lang ("pt" or "en").
+// In renders the text in lang: Portuguese for "pt", English otherwise.
 func (t Text) In(lang string) string {
 	if t.Key == "" {
 		return ""
 	}
 	format := t.Key
 	if pair, ok := messages[t.Key]; ok {
-		format = pair[0]
-		if lang == LangEN {
-			format = pair[1]
+		format = pair[1]
+		if lang == LangPT {
+			format = pair[0]
 		}
 	}
 	if len(t.Args) == 0 {
@@ -62,9 +62,9 @@ func (t Text) In(lang string) string {
 		case Size:
 			args[index] = FormatSize(int64(value), lang)
 		case Date:
-			layout := "02/01/2006 15:04"
-			if lang == LangEN {
-				layout = "2006-01-02 15:04"
+			layout := "2006-01-02 15:04"
+			if lang == LangPT {
+				layout = "02/01/2006 15:04"
 			}
 			args[index] = time.Time(value).Local().Format(layout)
 		default:
@@ -128,7 +128,7 @@ func FormatSize(b int64, lang string) string {
 	default:
 		text = fmt.Sprintf("%d B", b)
 	}
-	if lang != LangEN {
+	if lang == LangPT {
 		text = strings.Replace(text, ".", ",", 1)
 	}
 	return text
@@ -216,12 +216,14 @@ var messages = map[string][2]string{
 	"plan.missing":    {"não instalado", "not installed"},
 	"plan.safe":       {"área segura", "safe area"},
 	"plan.legacy":     {"ausente ou formato histórico", "missing or an old format"},
+	"plan.resigned":   {"bundle re-assinado localmente", "bundle re-signed locally"},
 }
 
 // planWords are what the update plan writes, as texts.
 var planWords = map[string]string{
-	"Componente": "plan.component", "Cliente": "plan.client", "Sistema": "plan.system",
-	"não instalado": "plan.missing", "área segura": "plan.safe", "ausente ou formato histórico": "plan.legacy",
+	"Component": "plan.component", "Client": "plan.client", "System": "plan.system",
+	"not installed": "plan.missing", "safe area": "plan.safe", "missing or an old format": "plan.legacy",
+	"bundle re-signed locally": "plan.resigned",
 }
 
 // planText translates a word of the update plan; versions stay as they are.

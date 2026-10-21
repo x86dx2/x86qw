@@ -108,7 +108,7 @@ func LoadChoices(target string) (*Options, error) {
 
 func writePrivate(path string, payload []byte) error {
 	if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
-		return fmt.Errorf("caminho privado inseguro: %s", path)
+		return fmt.Errorf("unsafe private path: %s", path)
 	}
 	temporary := path + ".tmp"
 	defer os.Remove(temporary)
@@ -128,8 +128,8 @@ func writePrivate(path string, payload []byte) error {
 func ClientConfig(o Options, stamp int64) string {
 	var b strings.Builder
 	line := func(name, value string) { fmt.Fprintf(&b, "%-24s %s\n", name, cfgQuote(value)) }
-	b.WriteString("// x86QW setup: escolhas do instalador, aplicadas uma vez a cada vez que mudam.\n")
-	b.WriteString("// Gerado por x86qw setup; mudanças feitas dentro do jogo continuam valendo.\n\n")
+	b.WriteString("// x86QW setup: the installer's choices, applied once each time they change.\n")
+	b.WriteString("// Written by x86qw setup; changes made in the game keep working.\n\n")
 	line("name", o.Nick)
 	line("cl_fakename", FakeName(o.Nick))
 	b.WriteString("\n")

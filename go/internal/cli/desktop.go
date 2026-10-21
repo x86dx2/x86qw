@@ -28,7 +28,8 @@ func handlerEntry(root string) string {
 	return fmt.Sprintf(`[Desktop Entry]
 Type=Application
 Name=x86QW
-Comment=Abre servidores qw:// e demos QuakeWorld
+Comment=Opens qw:// servers and QuakeWorld demos
+Comment[pt_BR]=Abre servidores qw:// e demos QuakeWorld
 Exec=%s open --target %s %%u
 NoDisplay=true
 Terminal=false
@@ -54,7 +55,8 @@ func desktopEntry(root string) string {
 	return fmt.Sprintf(`[Desktop Entry]
 Type=Application
 Name=x86QW
-Comment=QuakeWorld moderno
+Comment=Modern QuakeWorld
+Comment[pt_BR]=QuakeWorld moderno
 Exec=%s play
 Path=%s
 Terminal=true
@@ -96,7 +98,7 @@ func ownsEntry(path, root string) (bool, bool) {
 func InstallDesktopEntry(root, home string) error {
 	path := DesktopEntryPath(home)
 	if owned, exists := ownsEntry(path, root); exists && !owned {
-		return fmt.Errorf("Um atalho não gerenciado já ocupa %s.", path)
+		return fmt.Errorf("An unmanaged shortcut is already at %s.", path)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

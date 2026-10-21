@@ -15,11 +15,11 @@ func componentCacheDir(t *testing.T) string {
 	t.Helper()
 	output, err := exec.Command("getconf", "DARWIN_USER_CACHE_DIR").Output()
 	if err != nil {
-		t.Skip("sem cache de componentes")
+		t.Skip("no component cache")
 	}
 	dir := filepath.Join(strings.TrimSpace(string(output)), "x86qw", "components")
 	if _, err := os.Stat(dir); err != nil {
-		t.Skip("sem cache de componentes")
+		t.Skip("no component cache")
 	}
 	return dir
 }
@@ -73,7 +73,7 @@ func TestPreparedPackagesMatchInstalledInventories(t *testing.T) {
 				entries = append(entries, receipt.Entry{Path: name, SHA256: digest})
 			}
 			if got := string(receipt.MarshalInventory(entries)); got != string(record.Inventory.Raw) {
-				t.Fatalf("payload preparado diverge do inventário instalado (%d vs %d linhas)",
+				t.Fatalf("prepared payload differs from the installed inventory (%d vs %d lines)",
 					len(entries), len(record.Inventory.Entries))
 			}
 		})

@@ -58,19 +58,19 @@ func TestExtractsValidArchive(t *testing.T) {
 	}
 	data, _ := os.ReadFile(filepath.Join(destination, "payload/qw/ktx.cfg"))
 	if string(data) != "set a 1\n" {
-		t.Fatalf("conteúdo %q", data)
+		t.Fatalf("content %q", data)
 	}
 	// Windows has no POSIX mode bits to preserve.
 	info, _ := os.Stat(filepath.Join(destination, "payload/bin/run"))
 	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o755 {
-		t.Fatalf("modo %v", info.Mode())
+		t.Fatalf("mode %v", info.Mode())
 	}
 	info, _ = os.Stat(filepath.Join(destination, "payload/qw/ktx.cfg"))
 	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o644 {
-		t.Fatalf("modo %v", info.Mode())
+		t.Fatalf("mode %v", info.Mode())
 	}
 	if err := plan.Extract(destination); err == nil {
-		t.Fatal("extração sobre destino existente aceita")
+		t.Fatal("extraction over an existing target accepted")
 	}
 }
 
@@ -93,7 +93,7 @@ func TestRejectsUnsafeArchives(t *testing.T) {
 			plan, err := Open(build(t, entries...), DefaultLimits)
 			if err == nil {
 				plan.Close()
-				t.Fatal("ZIP inseguro aceito")
+				t.Fatal("unsafe ZIP accepted")
 			}
 		})
 	}
@@ -103,6 +103,6 @@ func TestMemberLimit(t *testing.T) {
 	limits := DefaultLimits
 	limits.MaxMembers = 1
 	if _, err := Open(build(t, entry{name: "a", body: "1"}, entry{name: "b", body: "2"}), limits); err == nil {
-		t.Fatal("limite de membros ignorado")
+		t.Fatal("member limit ignored")
 	}
 }

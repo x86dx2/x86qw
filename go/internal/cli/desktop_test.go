@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -12,22 +13,22 @@ func TestDesktopEntryBelongsToItsInstallation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := InstallDesktopEntry(root, home); err != nil {
-		t.Fatalf("reescrever a própria entrada: %v", err)
+		t.Fatalf("rewriting its own entry: %v", err)
 	}
 	if err := InstallDesktopEntry(other, home); err == nil {
-		t.Fatal("a entrada de outra instalação foi substituída")
+		t.Fatal("another installation's entry was replaced")
 	}
 	if err := RemoveDesktopEntry(other, home); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(DesktopEntryPath(home)); err != nil {
-		t.Fatal("outra instalação removeu a entrada")
+		t.Fatal("another installation removed the entry")
 	}
 	if err := RemoveDesktopEntry(root, home); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(DesktopEntryPath(home)); !os.IsNotExist(err) {
-		t.Fatal("a entrada deveria ter saído")
+		t.Fatal("the entry should be gone")
 	}
 }
 
@@ -39,14 +40,22 @@ func TestExecArgumentQuotesOnlyWhatNeedsIt(t *testing.T) {
 		`/home/a "b"/$c\d`: `"/home/a \\"b\\"/\\$c\\\\d"`,
 	} {
 		if got := execArgument(value); got != want {
-			t.Errorf("%s: %s, queria %s", value, got, want)
+			t.Errorf("%s: %s, want %s", value, got, want)
 		}
 	}
 	root := t.TempDir()
 	if !launches("[Desktop Entry]\nExec=\""+filepath.Join(root, "x86qw.sh")+"\" play\n", root) {
-		t.Fatal("uma entrada antiga, com aspas, deixou de ser reconhecida")
+		t.Fatal("an old quoted entry is no longer recognized")
 	}
 	if !launches(desktopEntry(root), root) || launches(desktopEntry(root+"2"), root) {
-		t.Fatal("a entrada não identifica a própria instalação")
+		t.Fatal("the entry does not identify its own installation")
+	}
+}
+
+func TestEntriesSayEnglishFirst(t *testing.T) {
+	for _, entry := range []string{desktopEntry("/opt/qw"), handlerEntry("/opt/qw")} {
+		if !strings.Contains(entry, "\nComment=") || !strings.Contains(entry, "\nComment[pt_BR]=") {
+			t.Fatalf("entry:\n%s", entry)
+		}
 	}
 }

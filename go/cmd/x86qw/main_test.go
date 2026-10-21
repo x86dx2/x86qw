@@ -28,7 +28,7 @@ func TestCatalogFailureIsJSONEnvelope(t *testing.T) {
 		t.Fatal(err)
 	}
 	if envelope["ok"] != false || envelope["exit_code"] != float64(1) {
-		t.Fatalf("envelope inesperado: %s", stdout.String())
+		t.Fatalf("unexpected envelope: %s", stdout.String())
 	}
 }
 
