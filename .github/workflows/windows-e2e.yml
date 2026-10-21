@@ -45,7 +45,8 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $inst = Join-Path $env:RUNNER_TEMP "inst"
-          go -C go build -o "$env:RUNNER_TEMP\x86qw-branch.exe" ./cmd/x86qw
+          # A real version: a development build never replaces an installed CLI.
+          go -C go build -ldflags "-X github.com/x86dx2/x86qw/go/internal/buildinfo.Version=9.9.9-e2e" -o "$env:RUNNER_TEMP\x86qw-branch.exe" ./cmd/x86qw
           & "$env:RUNNER_TEMP\x86qw-branch.exe" setup --target $inst --catalog-file "$PWD\site\public\api\v1\catalog.json"
           if ($LASTEXITCODE -ne 0) { throw "setup da branch: $LASTEXITCODE" }
       - name: verify, doctor, atalhos e ACL

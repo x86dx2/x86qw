@@ -49,7 +49,8 @@ jobs:
           bash site/public/install.sh --target "$target" --profile essential
           # This branch's CLI then adopts the installation, so the checks
           # below run the code under test, not the published release.
-          go -C go build -o "$RUNNER_TEMP/x86qw-branch" ./cmd/x86qw
+          # A real version: a development build never replaces an installed CLI.
+          go -C go build -ldflags "-X github.com/x86dx2/x86qw/go/internal/buildinfo.Version=9.9.9-e2e" -o "$RUNNER_TEMP/x86qw-branch" ./cmd/x86qw
           "$RUNNER_TEMP/x86qw-branch" setup --target "$target"
           "$target/x86qw.sh" verify
           "$target/x86qw.sh" doctor

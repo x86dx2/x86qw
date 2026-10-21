@@ -13,6 +13,7 @@ import (
 
 	"github.com/x86dx2/x86qw/go/internal/buildinfo"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
+	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/lock"
@@ -125,7 +126,9 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 	case a.profile == "" && interactive():
 		return runApp(realBackend(a.catalogFile, a.platform), root, "", stdout, stderr)
 	case install.Installed(root):
-		// Adopting an installation: this CLI becomes its CLI.
+		// Adopting an installation: this CLI becomes its CLI, unless it is
+		// older than the installed one or a development build.
+		adopted := cli.Replaces(buildinfo.Version, root, true)
 		held, err := lock.Acquire(root, "install")
 		if err != nil {
 			return failure(root, err, stderr)
@@ -136,8 +139,13 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 			return failure(root, err, stderr)
 		}
 		if _, err := install.Verify(root); err != nil {
-			fmt.Fprintf(stderr, "! CLI nativa instalada, mas a verificação encontrou problemas: %v\n  Execute: x86qw repair\n", err)
+			fmt.Fprintf(stderr, "! A verificação encontrou problemas: %v\n  Execute: x86qw repair\n", err)
 			return output.ExitFailure
+		}
+		if !adopted {
+			fmt.Fprintf(stdout, "· A instalação em %s continua com a CLI %s: esta, %s, é mais antiga ou de desenvolvimento.\n",
+				root, cli.InstalledVersion(root), buildinfo.Version)
+			return output.ExitSuccess
 		}
 		fmt.Fprintf(stdout, "✓ A instalação em %s agora usa a CLI x86QW %s.\n", root, buildinfo.Version)
 		return output.ExitSuccess
