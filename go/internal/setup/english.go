@@ -1,10 +1,11 @@
 package setup
 
 // The inventory speaks English; portuguese gives the Portuguese interface
-// its components. The games and the KTX modes come from signed content in
-// Portuguese; english gives the English interface their words. Both are
-// keyed by kind and ID ("component/ktx", "mode/duel.d"), so the data files
-// stay as they are. What is missing shows as the data has it.
+// its components and the words of the update plan. The games and the KTX
+// modes come from signed content in Portuguese; english gives the English
+// interface their words. Both are keyed by kind and ID ("component/ktx",
+// "mode/duel.d"), so the data files stay as they are. What is missing shows
+// as the data has it.
 var english = map[string]string{
 	"game/ktx.d":           "Competitive QuakeWorld with the KTX 1.47 QVM, built reproducibly by x86QW.",
 	"game/final-arena.d":   "Queued one-on-one duels: the winner stays in the arena.",
@@ -43,6 +44,12 @@ var english = map[string]string{
 }
 
 var portuguese = map[string]string{
+	"plan/Installation state":              "Estado da instalação",
+	"plan/Redundant nQuake sounds":         "Sons redundantes nQuake",
+	"plan/format 2":                        "formato 2",
+	"plan/full screen":                     "tela inteira",
+	"plan/merged into KTX":                 "incorporado ao KTX",
+	"plan/intact upstream bundle":          "bundle upstream integral",
 	"component/x86qw-core-id1":             "Dados do Quake",
 	"component/cli":                        "CLI x86QW",
 	"component/x86qw-client-bootstrap":     "Base e inicialização do cliente x86QW",
@@ -82,8 +89,8 @@ var portuguese = map[string]string{
 }
 
 // Localize is a data text in lang, when its words are known, else the text
-// as the data has it. kind is component, game, mode or group; id is the ID,
-// with ".d" for a description.
+// as the data has it. kind is component, game, mode, group or plan; id is
+// the ID, with ".d" for a description.
 func Localize(lang, kind, id, text string) string {
 	words := english
 	if lang == LangPT {

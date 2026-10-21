@@ -216,12 +216,14 @@ var messages = map[string][2]string{
 	"plan.missing":    {"não instalado", "not installed"},
 	"plan.safe":       {"área segura", "safe area"},
 	"plan.legacy":     {"ausente ou formato histórico", "missing or an old format"},
+	"plan.resigned":   {"bundle re-assinado localmente", "bundle re-signed locally"},
 }
 
 // planWords are what the update plan writes, as texts.
 var planWords = map[string]string{
 	"Component": "plan.component", "Client": "plan.client", "System": "plan.system",
 	"not installed": "plan.missing", "safe area": "plan.safe", "missing or an old format": "plan.legacy",
+	"bundle re-signed locally": "plan.resigned",
 }
 
 // planText translates a word of the update plan; versions stay as they are.

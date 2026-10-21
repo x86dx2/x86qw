@@ -291,3 +291,23 @@ func TestEnglishShowsNoPortuguese(t *testing.T) {
 		}
 	}
 }
+
+// The inventory speaks English; Portuguese shows its components in
+// Portuguese all the same.
+func TestPortugueseShowsTheInventoryInPortuguese(t *testing.T) {
+	m := started(t, true)
+	m.lang = PT
+	m.focus = homeRow(m, "update")
+	drive(m, key("enter"))
+	view := m.View().Content
+	for _, word := range []string{"Componente", "Dados do Quake", "Base e inicialização"} {
+		if !strings.Contains(view, word) {
+			t.Fatalf("%q missing in Portuguese:\n%s", word, view)
+		}
+	}
+	for _, word := range []string{"Quake data", "client base and startup"} {
+		if strings.Contains(view, word) {
+			t.Fatalf("%q in Portuguese:\n%s", word, view)
+		}
+	}
+}
