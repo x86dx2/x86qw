@@ -1,113 +1,113 @@
-# DACL privada no Windows — implementação corretiva
+# Private DACL on Windows — corrective implementation
 
-**Baseline inicial:** `b746d577fab5ffd95f170feb28b8a4bd4d4ce76c`
+**Initial baseline:** `b746d577fab5ffd95f170feb28b8a4bd4d4ce76c`
 
-**Versão pública preservada:** `0.7.1`
+**Preserved public version:** `0.7.1`
 
 **Issue:** [#47](https://github.com/x86dx2/x86qw/issues/47)
 
 **Pull request:** [#60](https://github.com/x86dx2/x86qw/pull/60)
 
-**Estado:** casos Win32 nativos aprovados; não publicada
+**State:** native Win32 cases passed; not published
 
-Esta nota registra o código corretivo da PR 4. Ela não altera versão, catálogo
-`current`, bootstrap público, bundle, tag ou release já publicados.
+This note records PR 4's corrective code. It does not change the version, the
+`current` catalog, the public bootstrap, a bundle, a tag or a release already published.
 
-## Problema e risco
+## Problem and risk
 
-Modos POSIX como `0600` e criação exclusiva não impediam que um objeto Windows
-herdasse ACEs de `Users` ou `Everyone`. Locks, journals, logs, configurações
-sensíveis, staging, downloads e o bootstrap poderiam ficar legíveis ou
-alteráveis por outro usuário local entre a criação e um endurecimento tardio.
+POSIX modes such as `0600` and exclusive creation did not keep a Windows object
+from inheriting ACEs from `Users` or `Everyone`. Locks, journals, logs, sensitive
+settings, staging, downloads and the bootstrap could end up readable or
+writable by another local user between creation and a late hardening.
 
-A revisão adversarial também reproduziu disputas de `DELETE_CHILD`, promoção
-por pathname depois de fechar o temporário, mutex preexistente hostil, recovery
-de journals legados e uma janela em que o processo Windows poderia executar
-antes da associação ao Job Object.
+The adversarial review also reproduced races on `DELETE_CHILD`, promotion
+by pathname after closing the temporary, a hostile pre-existing mutex, recovery
+of legacy journals and a window in which the Windows process could run
+before being assigned to the Job Object.
 
-## Contratos preservados
+## Preserved contracts
 
-- biblioteca padrão, sem dependência externa;
-- instalação sem solicitação de elevação;
-- leitura de locks formatos 1 e 2;
-- journal formato 1, recibos, estado e configurações pessoais;
-- prompts e arquivos externos de senha, sem reescrever seu owner, DACL, nome ou
-  conteúdo;
-- semântica conservadora de recovery e cleanup;
-- runtimes, jogos, mods, mapas, serviços e gameplay existentes;
-- bytes, hashes, tag, release e ponteiros públicos da `0.7.1`.
+- standard library, no external dependency;
+- installation without an elevation request;
+- reading formats 1 and 2 of locks;
+- journal format 1, receipts, state and personal settings;
+- password prompts and external password files, without rewriting their owner, DACL, name or
+  content;
+- conservative recovery and cleanup semantics;
+- the existing runtimes, games, mods, maps, services and gameplay;
+- the bytes, hashes, tag, release and public pointers of `0.7.1`.
 
-## Contratos alterados
+## Changed contracts
 
-- objetos privados gerenciados no Windows nascem com DACL protegida, limitada
-  ao usuário atual e a `LOCAL SYSTEM`;
-- um arquivo externo de senha precisa ter owner e DACL privados comprovados
-  pelo mesmo handle usado para leitura;
-- lock novo usa formato 3 com `private_filesystem`; journal formato 1 recebe
-  extensão aditiva para registrar a fronteira privada;
-- falha, ambiguidade, reparse point, herança ou principal adicional interrompem
-  a operação antes de consumir o objeto;
-- um processo Windows nasce suspenso, entra no Job Object e só então executa.
+- private managed objects on Windows are born with a protected DACL, limited
+  to the current user and `LOCAL SYSTEM`;
+- an external password file must have a private owner and DACL proven
+  through the same handle used for reading;
+- a new lock uses format 3 with `private_filesystem`; journal format 1 gets an
+  additive extension to record the private boundary;
+- a failure, ambiguity, reparse point, inheritance or additional principal stops
+  the operation before the object is consumed;
+- a Windows process is born suspended, joins the Job Object and only then runs.
 
-## Implementação
+## Implementation
 
-`x86qw_runtime/platform/windows_acl.py` concentra o adaptador Win32 e declara
-assinaturas `ctypes` explícitas. Criação usa `SECURITY_ATTRIBUTES` com descritor
-canônico desde a primeira visibilidade. Validação e leitura permanecem ligadas
-ao mesmo handle, e leases sem compartilhamento de delete bloqueiam rename e
-remoção concorrentes.
+`x86qw_runtime/platform/windows_acl.py` holds the Win32 adapter and declares
+explicit `ctypes` signatures. Creation uses `SECURITY_ATTRIBUTES` with the canonical
+descriptor from the first moment of visibility. Validation and reading stay bound
+to the same handle, and leases without delete sharing block concurrent rename and
+removal.
 
-A promoção de downloads usa `SetFileInformationByHandle` com
-`FILE_RENAME_INFO`, mantendo o temporário aberto até a substituição. A ABI usa
-o `BOOLEAN` de um byte exigido pela API e um caminho absoluto no mesmo volume.
-Nenhum shell participa da operação.
+Download promotion uses `SetFileInformationByHandle` with
+`FILE_RENAME_INFO`, keeping the temporary open until the replacement. The ABI uses
+the one-byte `BOOLEAN` the API requires and an absolute path on the same volume.
+No shell takes part in the operation.
 
-O plano de controle mantém o lease da raiz somente depois de adquirir o lock.
-Observação e reclamação são serializadas por `flock` no POSIX e mutex global
-privado no Windows. Objetos legados limpos podem migrar de forma conservadora;
-objetos interrompidos ou inconclusivos são preservados ou quarentenados sem
-`kill` ou `unlink` por inferência.
+The control plane holds the root's lease only after acquiring the lock.
+Observation and claiming are serialized by `flock` on POSIX and a private global
+mutex on Windows. Clean legacy objects can migrate conservatively;
+interrupted or inconclusive objects are preserved or quarantined without
+`kill` or `unlink` by inference.
 
-O bootstrap PowerShell cria `WorkDir`, helper e bundle sob a mesma DACL antes
-da primeira escrita. O supervisor inicia processos Windows suspensos, associa
-ao Job Object com `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` e retoma a thread apenas
-depois da associação bem-sucedida.
+The PowerShell bootstrap creates `WorkDir`, the helper and the bundle under the same DACL before
+the first write. The supervisor starts Windows processes suspended, assigns them
+to the Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` and resumes the thread only
+after a successful assignment.
 
-## Ciclo TDD e evidência
+## TDD cycle and evidence
 
-Os testes adversariais foram introduzidos antes das correções. O run
+The adversarial tests were introduced before the fixes. Run
 [`30864723157`](https://github.com/x86dx2/x86qw/actions/runs/30864723157)
-registrou o RED das disputas restantes. Runs intermediários expuseram o guard
-aplicado ao handle errado, ABI incompatível de `FILE_RENAME_INFO` e destino
-relativo em outro volume. Cada caso recebeu uma regressão focal antes da menor
-correção correspondente.
+recorded the RED of the remaining races. Intermediate runs exposed the guard
+applied to the wrong handle, an incompatible `FILE_RENAME_INFO` ABI and a relative
+destination on another volume. Each case got a focused regression before the smallest
+matching fix.
 
-| Validação | Resultado | Evidência |
+| Validation | Result | Evidence |
 |---|---|---|
-| fronteira privada, downloader e delete guards | 107 testes aprovados; 19 skips nativos esperados fora do Windows | execução local focal |
-| Windows / Python 3.10 | 745 testes de manutenção e cinco do site aprovados | [run 30866754435](https://github.com/x86dx2/x86qw/actions/runs/30866754435) |
-| Windows / Python 3.13 | 745 testes de manutenção e cinco do site aprovados | [run 30866754435](https://github.com/x86dx2/x86qw/actions/runs/30866754435) |
-| `maintenance/manage.py verify` | 745 testes de manutenção e cinco do site aprovados | execução local integral |
-| suítes explícitas de manutenção e site | 745 + 5 aprovados; 35 skips locais explícitos | execução local integral |
-| Git LFS, diff e Worker | `git lfs fsck`, `git diff --check` e dry-run aprovados | execução local integral |
+| private boundary, downloader and delete guards | 107 tests passed; 19 expected native skips outside Windows | focused local run |
+| Windows / Python 3.10 | 745 maintenance tests and five site tests passed | [run 30866754435](https://github.com/x86dx2/x86qw/actions/runs/30866754435) |
+| Windows / Python 3.13 | 745 maintenance tests and five site tests passed | [run 30866754435](https://github.com/x86dx2/x86qw/actions/runs/30866754435) |
+| `maintenance/manage.py verify` | 745 maintenance tests and five site tests passed | full local run |
+| explicit maintenance and site suites | 745 + 5 passed; 35 explicit local skips | full local run |
+| Git LFS, diff and Worker | `git lfs fsck`, `git diff --check` and dry-run passed | full local run |
 
-Os jobs Windows cobrem criação sob pai com herança ampla, DACL canônica,
-reparse points, arquivo externo inseguro, bootstrap, lock, journal, log,
-configuração sensível, staging, download, rename/delete guards, mutex hostil,
-migração legada e Job Object.
+The Windows jobs cover creation under a parent with broad inheritance, the canonical DACL,
+reparse points, an unsafe external file, bootstrap, lock, journal, log,
+sensitive settings, staging, download, rename/delete guards, a hostile mutex,
+legacy migration and the Job Object.
 
-## Riscos residuais
+## Residual risks
 
-- os testes nativos Win32 não equivalem a instalar e executar os runtimes sob
-  uma conta Windows padrão sem elevação; isso permanece no PR 11;
-- ezQuake, MVDSV, QTV e QWFWD reais não foram executados por este PR;
-- administrador, kernel comprometido e código executando como o mesmo usuário
-  permanecem fora do limite de ameaça;
-- filesystem sem ACL persistente ou API inconclusiva falha fechado;
-- esta evidência é de código corretivo, não de um candidato imutável de release.
+- the native Win32 tests are not the same as installing and running the runtimes under
+  a standard Windows account without elevation; that stays with PR 11;
+- real ezQuake, MVDSV, QTV and QWFWD were not run by this PR;
+- an administrator, a compromised kernel and code running as the same user
+  stay outside the threat boundary;
+- a filesystem without persistent ACLs or an inconclusive API fails closed;
+- this evidence is of corrective code, not of an immutable release candidate.
 
-## Próximo item desbloqueado
+## Next item unblocked
 
-Após review e CI integral verdes, a PR 5 pode remover a assinatura ad hoc do
-cliente stable macOS em issue e branch separadas. Este documento não autoriza
-publicação.
+After a green review and full CI, PR 5 can remove the ad hoc signature of the
+stable macOS client in a separate issue and branch. This document does not authorize
+publication.

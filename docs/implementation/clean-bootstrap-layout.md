@@ -1,22 +1,22 @@
-# Layout de bootstrap limpo
+# Clean bootstrap layout
 
-O layout atual assume uma instalação criada do zero. Árvores anteriores podem
-ser renomeadas e mantidas fora do destino apenas como referência; não existe
-conversão automática.
+The current layout assumes an installation created from scratch. Earlier trees can
+be renamed and kept outside the destination only as a reference; there is no
+automatic conversion.
 
-## Contrato
+## Contract
 
-- `.x86qw/`: CLI, estado, recibos, inventários, lock e journals;
-- `mvdsv` ou `mvdsv.exe`: servidor dedicado no basedir QuakeWorld;
-- `qtv/`: runtime, recursos, configuração e dados operacionais do QTV;
-- `qwfwd/`: runtime e configuração do QWFWD;
-- `docs/licenses/`: licenças distribuídas com os serviços.
+- `.x86qw/`: CLI, state, receipts, inventories, lock and journals;
+- `mvdsv` or `mvdsv.exe`: dedicated server in the QuakeWorld basedir;
+- `qtv/`: QTV's runtime, resources, configuration and operational data;
+- `qwfwd/`: QWFWD's runtime and configuration;
+- `docs/licenses/`: licenses distributed with the services.
 
-Os pacotes de MVDSV, QTV e QWFWD continuam reproduzíveis e podem transportar
-artefatos para os três sistemas. Antes do overlay, o instalador seleciona a
-variante declarada para o destino e elimina o staging das demais. Assim, uma
-instalação macOS arm64 não recebe ELF ou PE; Linux amd64 não recebe Mach-O ou
-PE; Windows x64 não recebe Mach-O ou ELF.
+The MVDSV, QTV and QWFWD packages stay reproducible and can carry
+artifacts for the three systems. Before the overlay, the installer selects the
+variant declared for the destination and drops the staging of the others. So a
+macOS arm64 installation gets no ELF or PE; Linux amd64 gets no Mach-O or
+PE; Windows x64 gets no Mach-O or ELF.
 
-`BUILD.json`, fontes e patches são evidência de manutenção. Eles participam da
-validação do componente, mas não são payload do jogador.
+`BUILD.json`, sources and patches are maintenance evidence. They take part in the
+component's validation, but are not player payload.
