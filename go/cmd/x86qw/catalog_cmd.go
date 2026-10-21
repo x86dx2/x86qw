@@ -1,46 +1,57 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"os"
 	"sort"
 	"time"
 
+	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/output"
 	"github.com/x86dx2/x86qw/go/internal/trust"
 )
 
-func runCatalog(args []string, stdout, stderr io.Writer) int {
-	flags := flag.NewFlagSet("catalog", flag.ContinueOnError)
-	flags.SetOutput(stderr)
-	asJSON := flags.Bool("json", false, "saída estruturada")
-	baseURL := flags.String("base-url", trust.DefaultBaseURL, "repositório TUF (metadata/ e targets/)")
-	cacheDir := flags.String("cache-dir", defaultCacheDir(), "cache de metadata confiável; vazio desativa")
-	outPath := flags.String("output", "", "grava o catálogo autenticado neste arquivo")
-	if err := flags.Parse(args); err != nil {
-		return output.ExitUsage
-	}
+type catalogArgs struct {
+	json                      bool
+	baseURL, cacheDir, output string
+}
 
-	catalog, err := trust.LoadCatalog(trust.Options{BaseURL: *baseURL, CacheDir: *cacheDir})
-	if err == nil && *outPath != "" {
-		err = os.WriteFile(*outPath, catalog.Raw, 0o644)
+func (a *catalogArgs) parser() *cliargs.Parser {
+	p := cliargs.New()
+	jsonFlag(p, &a.json)
+	p.String(&a.baseURL, "URL", "repositório TUF (metadata/ e targets/)", "--base-url")
+	p.String(&a.cacheDir, "PASTA", "cache de metadados confiáveis; vazio desativa", "--cache-dir")
+	p.String(&a.output, "ARQUIVO", "grava o catálogo autenticado neste arquivo", "--output")
+	return p
+}
+
+func runCatalog(args []string, stdout, stderr io.Writer) int {
+	a := catalogArgs{baseURL: trust.DefaultBaseURL, cacheDir: defaultCacheDir()}
+	p := a.parser()
+	if code, ok := parse("catalog", p, args, stdout, stderr); !ok {
+		return code
+	}
+	if len(p.Positional()) > 0 {
+		return usageFailure("catalog", cliargs.Usagef("argumentos a mais: %v", p.Positional()), stderr)
+	}
+	catalog, err := trust.LoadCatalog(trust.Options{BaseURL: a.baseURL, CacheDir: a.cacheDir})
+	if err == nil && a.output != "" {
+		err = os.WriteFile(a.output, catalog.Raw, 0o644)
 	}
 	if err != nil {
 		code := "operation"
 		if trust.IsTrustError(err) {
 			code = "trust"
 		}
-		if *asJSON {
+		if a.json {
 			output.Failure("catalog", output.ExitFailure, code, err.Error()).Write(stdout)
 		} else {
-			fmt.Fprintf(stderr, "✗ Falha de trust do catálogo x86QW: %v\n", err)
+			fmt.Fprintf(stderr, "✗ O catálogo x86QW não autenticou: %v\n", err)
 		}
 		return output.ExitFailure
 	}
-
-	if *asJSON {
+	if a.json {
 		roles := map[string]any{}
 		for name, state := range catalog.Roles {
 			roles[name] = map[string]any{
@@ -73,5 +84,6 @@ func runCatalog(args []string, stdout, stderr io.Writer) int {
 }
 
 func init() {
-	register("catalog", 100, "catalog              autentica o catálogo público via TUF", noName(runCatalog))
+	register(command{name: "catalog", group: "Diagnóstico", order: 20, summary: "autentica o catálogo público via TUF",
+		flags: (&catalogArgs{}).parser, run: noName(runCatalog)})
 }

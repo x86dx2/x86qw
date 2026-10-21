@@ -100,12 +100,12 @@ func (t *Transaction) prepareRelease(ctx context.Context, spec catalog.ClientSpe
 			return nil, err
 		}
 		if channel == "stable" && bundleVersion != release.Version {
-			return nil, fmt.Errorf("stable bundle version is %s, expected %s", bundleVersion, release.Version)
+			return nil, fmt.Errorf("o pacote stable traz a versão %s, esperada %s", bundleVersion, release.Version)
 		}
 		if channel == "nightly" {
 			revision := release.Version[strings.LastIndex(release.Version, "_")+1:]
 			if !strings.Contains(bundleVersion, "-g"+revision) {
-				return nil, fmt.Errorf("nightly bundle %s does not match %s", bundleVersion, release.Version)
+				return nil, fmt.Errorf("o pacote nightly %s não confere com %s", bundleVersion, release.Version)
 			}
 			changed, err := macos.PrepareNightly(app)
 			if err != nil {
@@ -141,7 +141,7 @@ func (t *Transaction) prepareRelease(ctx context.Context, spec catalog.ClientSpe
 			source = filepath.Join(extract, archiveBinary[spec.Platform])
 		}
 		if !regular(source) {
-			return nil, fmt.Errorf("artifact is missing %s", archiveBinary[spec.Platform])
+			return nil, fmt.Errorf("o pacote não contém %s", archiveBinary[spec.Platform])
 		}
 		if err := copyFile(source, prepared, keepMode); err != nil {
 			return nil, err
@@ -175,7 +175,7 @@ func (t *Transaction) checkRuntimeOwnership(spec catalog.ClientSpec, channel str
 	info, err := os.Lstat(runtimePath)
 	if err == nil {
 		if (spec.Platform == "macos") != info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
-			return fmt.Errorf("invalid managed runtime path: %s", runtimePath)
+			return fmt.Errorf("caminho de runtime gerenciado inválido: %s", runtimePath)
 		}
 		if !regular(receiptPath) {
 			return fmt.Errorf("refusing to replace an unmanaged %s runtime: %s", spec.Label, runtimePath)
@@ -402,7 +402,7 @@ func ClientAction(root string) func(spec catalog.ClientSpec, channel string, rec
 // clientRowTarget maps an `ezQuake <label> <channel>` row back to its spec.
 func clientRowTarget(item string) (catalog.ClientSpec, string, bool) {
 	for _, spec := range catalog.ClientSpecs {
-		for _, channel := range []string{"stable", "nightly"} {
+		for _, channel := range catalog.Channels {
 			if item == "ezQuake "+spec.Label+" "+channel {
 				return spec, channel, true
 			}

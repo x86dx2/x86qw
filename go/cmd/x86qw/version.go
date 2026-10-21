@@ -1,22 +1,32 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io"
 
 	"github.com/x86dx2/x86qw/go/internal/buildinfo"
+	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/output"
 )
 
+type versionArgs struct{ json bool }
+
+func (a *versionArgs) parser() *cliargs.Parser {
+	p := cliargs.New()
+	jsonFlag(p, &a.json)
+	return p
+}
+
 func runVersion(args []string, stdout, stderr io.Writer) int {
-	flags := flag.NewFlagSet("version", flag.ContinueOnError)
-	flags.SetOutput(stderr)
-	asJSON := flags.Bool("json", false, "saída estruturada")
-	if err := flags.Parse(args); err != nil {
-		return output.ExitUsage
+	var a versionArgs
+	p := a.parser()
+	if code, ok := parse("version", p, args, stdout, stderr); !ok {
+		return code
 	}
-	if *asJSON {
+	if len(p.Positional()) > 0 {
+		return usageFailure("version", cliargs.Usagef("argumentos a mais: %v", p.Positional()), stderr)
+	}
+	if a.json {
 		data := map[string]any{"project": "x86qw", "version": buildinfo.Version}
 		if err := output.Success("version", data).Write(stdout); err != nil {
 			return output.ExitFailure
@@ -28,5 +38,6 @@ func runVersion(args []string, stdout, stderr io.Writer) int {
 }
 
 func init() {
-	register("version", 10, "version              mostra a versão", noName(runVersion), "--version")
+	register(command{name: "version", group: "Diagnóstico", order: 40, summary: "mostra a versão",
+		flags: (&versionArgs{}).parser, run: noName(runVersion)}, "--version")
 }

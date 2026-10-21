@@ -1,31 +1,47 @@
+// Command x86qw is the x86QW command line and app: without a command it
+// opens the app on a terminal; each command does one task.
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/x86dx2/x86qw/go/internal/buildinfo"
+	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/output"
 )
 
 // command is one CLI verb. Each command file registers itself in init so
 // independent changes never touch this dispatcher.
 type command struct {
-	usage string // one-line help shown by `x86qw help`
-	order int    // position in the help listing
+	name     string
+	group    string // section of `x86qw help`; empty keeps it out
+	order    int    // position inside the section
+	synopsis string // what follows "x86qw NAME" in the usage
+	summary  string // its line in `x86qw help`
+	about    string // the paragraph of its --help, when more than summary
+	// flags builds the command's parser, for its --help.
+	flags func() *cliargs.Parser
 	run   func(name string, args []string, stdout, stderr io.Writer) int
 }
 
-var commands = map[string]command{}
+var commands = map[string]*command{}
 
-// register adds a command; aliases share its entry but are not listed twice.
-func register(name string, order int, usage string, run func(name string, args []string, stdout, stderr io.Writer) int, aliases ...string) {
-	commands[name] = command{usage: usage, order: order, run: run}
+// groups are the sections of `x86qw help`, by task.
+var groups = []string{"Jogar", "Hospedar", "Instalar e manter", "Seus dados", "Diagnóstico"}
+
+// register adds a command; aliases run it but are not listed.
+func register(c command, aliases ...string) {
+	commands[c.name] = &c
 	for _, alias := range aliases {
-		commands[alias] = command{order: -1, run: run}
+		copied := c
+		copied.group = ""
+		commands[alias] = &copied
 	}
 }
 
@@ -34,24 +50,86 @@ func noName(run func(args []string, stdout, stderr io.Writer) int) func(string, 
 	return func(_ string, args []string, stdout, stderr io.Writer) int { return run(args, stdout, stderr) }
 }
 
-func usageText() string {
-	type entry struct {
-		name string
-		command
-	}
-	var entries []entry
+// listed are the commands of a section, in order.
+func listed(group string) []*command {
+	var entries []*command
 	for name, cmd := range commands {
-		if cmd.order >= 0 {
-			entries = append(entries, entry{name, cmd})
+		if cmd.group == group && cmd.name == name {
+			entries = append(entries, cmd)
 		}
 	}
 	sort.Slice(entries, func(a, b int) bool { return entries[a].order < entries[b].order })
+	return entries
+}
+
+// publicCommandNames lists the commands `x86qw help` shows.
+func publicCommandNames() []string {
+	var names []string
+	for _, group := range groups {
+		for _, cmd := range listed(group) {
+			names = append(names, cmd.name)
+		}
+	}
+	return names
+}
+
+func usageText() string {
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "x86QW %s\nQuakeWorld moderno\n\nUso: x86qw <comando> [opções]\n\nComandos:\n", buildinfo.Version)
-	for _, item := range entries {
-		fmt.Fprintf(&builder, "  %s\n", item.usage)
+	fmt.Fprintf(&builder, "x86QW %s · QuakeWorld moderno\n\nUso: x86qw [COMANDO] [opções]\nSem comando, abre o app.\n", buildinfo.Version)
+	width := 0
+	for _, group := range groups {
+		for _, cmd := range listed(group) {
+			width = max(width, utf8.RuneCountInString(strings.TrimSpace(cmd.name+" "+cmd.synopsis)))
+		}
+	}
+	for _, group := range groups {
+		fmt.Fprintf(&builder, "\n%s\n", group)
+		for _, cmd := range listed(group) {
+			left := strings.TrimSpace(cmd.name + " " + cmd.synopsis)
+			fmt.Fprintf(&builder, "  %s%s  %s\n", left, strings.Repeat(" ", width-utf8.RuneCountInString(left)), cmd.summary)
+		}
+	}
+	builder.WriteString("\nDetalhes de um comando: x86qw COMANDO --help\n")
+	return builder.String()
+}
+
+// commandHelp is the --help of one command.
+func commandHelp(name string) string {
+	cmd := commands[name]
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "Uso: %s\n\n", strings.TrimSpace("x86qw "+cmd.name+" "+cmd.synopsis))
+	about := cmd.about
+	if about == "" {
+		about = strings.ToUpper(cmd.summary[:1]) + cmd.summary[1:] + "."
+	}
+	fmt.Fprintf(&builder, "%s\n", about)
+	if cmd.flags != nil {
+		if flags := cmd.flags().Flags(); flags != "" {
+			fmt.Fprintf(&builder, "\nOpções:\n%s", flags)
+		}
 	}
 	return builder.String()
+}
+
+// parse reads args into p for the command name. On --help it prints the
+// help and returns 0, on a mistake the message and 2; ok is false then.
+func parse(name string, p *cliargs.Parser, args []string, stdout, stderr io.Writer) (code int, ok bool) {
+	err := p.Parse(args)
+	switch {
+	case err == nil:
+		return output.ExitSuccess, true
+	case errors.Is(err, cliargs.ErrHelp):
+		fmt.Fprint(stdout, commandHelp(name))
+		return output.ExitSuccess, false
+	}
+	return usageFailure(name, err, stderr), false
+}
+
+// usageFailure reports a mistake in the command line and returns 2.
+func usageFailure(name string, err error, stderr io.Writer) int {
+	fmt.Fprintf(stderr, "x86qw %s: erro: %v\n", name, err)
+	fmt.Fprintf(stderr, "Veja: x86qw %s --help\n", name)
+	return output.ExitUsage
 }
 
 func main() {
@@ -59,23 +137,26 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		// Like `x86qw.sh` without arguments: the task-oriented main menu,
-		// which prints the usage lines and exits 0 when stdin is not a TTY.
-		return runMenuCommand(nil, stdout, stderr)
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") && args[0] != "-h" && args[0] != "--help" && args[0] != "--version" {
+		// No command: the app, on the installation --target names.
+		return runMenuCommand(args, stdout, stderr)
 	}
 	if args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
+		if len(args) > 1 && args[0] == "help" {
+			if cmd, ok := commands[args[1]]; ok && cmd.group != "" {
+				fmt.Fprint(stdout, commandHelp(cmd.name))
+				return output.ExitSuccess
+			}
+			fmt.Fprintf(stderr, "x86qw help: comando desconhecido: %s\n", args[1])
+			return output.ExitUsage
+		}
 		fmt.Fprint(stdout, usageText())
 		return output.ExitSuccess
-	}
-	if args[0] == "--target" || args[0] == "-v" || args[0] == "--verbose" || args[0] == "--no-color" {
-		// x86qw --target DIR opens the app on that installation.
-		return runMenuCommand(args, stdout, stderr)
 	}
 	cmd, ok := commands[args[0]]
 	if !ok {
 		fmt.Fprintf(stderr, "x86qw: comando desconhecido: %s\n", args[0])
-		fmt.Fprint(stderr, usageText())
+		fmt.Fprintln(stderr, "Veja: x86qw help")
 		return output.ExitUsage
 	}
 	return cmd.run(args[0], args[1:], stdout, stderr)

@@ -4,23 +4,40 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/maint"
 	"github.com/x86dx2/x86qw/go/internal/output"
 )
 
+type changesArgs struct {
+	target        string
+	syncGitignore bool
+}
+
+func (a *changesArgs) parser() *cliargs.Parser {
+	p := cliargs.New()
+	targetFlag(p, &a.target)
+	p.Bool(&a.syncGitignore, "atualiza o .gitignore seletivo da instalação", "--sync-gitignore")
+	return p
+}
+
 func runChanges(args []string, stdout, stderr io.Writer) int {
-	parsed, ok := parseArgs("changes", args, nil, []string{"--sync-gitignore"}, nil, stderr)
-	if !ok {
-		return output.ExitUsage
+	var a changesArgs
+	p := a.parser()
+	if code, ok := parse("changes", p, args, stdout, stderr); !ok {
+		return code
 	}
-	target, err := maint.ValidateTarget(parsed.target, true)
+	target, err := targetOf(p, a.target)
 	if err != nil {
+		return usageFailure("changes", err, stderr)
+	}
+	if target, err = maint.ValidateTarget(target, true); err != nil {
 		fmt.Fprintf(stderr, "✗ %v\n", err)
 		return output.ExitFailure
 	}
-	if parsed.bools["--sync-gitignore"] {
+	if a.syncGitignore {
 		if err := maint.SyncGitignore(target); err != nil {
-			fmt.Fprintf(stderr, "✗ Não foi possível atualizar o filtro Git da instalação: %s\n", target+"/.gitignore")
+			fmt.Fprintf(stderr, "✗ Não foi possível atualizar o filtro Git da instalação: %s/.gitignore\n", target)
 			return output.ExitFailure
 		}
 		fmt.Fprintf(stdout, "· Filtro Git seletivo atualizado: %s/.gitignore\n", target)
@@ -47,5 +64,7 @@ func runChanges(args []string, stdout, stderr io.Writer) int {
 }
 
 func init() {
-	register("changes", 140, "changes [--sync-gitignore] compara mudanças locais com a instalação", noName(runChanges))
+	register(command{name: "changes", group: "Seus dados", order: 30, synopsis: "[DESTINO]",
+		summary: "compara seus arquivos com os da instalação",
+		flags:   (&changesArgs{}).parser, run: noName(runChanges)})
 }

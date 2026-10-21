@@ -5,7 +5,8 @@ import (
 	"io"
 )
 
-// Console mirrors the x86QW console prefixes ([INFO], [OK], [ATENÇÃO], ✗).
+// Console prints service progress with the x86QW prefixes: · info, ✓ done,
+// ! warning, ✗ failure.
 type Console struct {
 	Out, Err io.Writer
 	Verbose  bool
@@ -29,17 +30,17 @@ func (c *Console) Section(title string) { fmt.Fprintf(c.Out, "\n%s\n", c.paint(t
 
 // Info prints an informational line.
 func (c *Console) Info(message string) {
-	fmt.Fprintf(c.Out, "%s %s\n", c.paint("[INFO]", "36"), message)
+	fmt.Fprintf(c.Out, "%s %s\n", c.paint("·", "36"), message)
 }
 
 // Success prints a success line.
 func (c *Console) Success(message string) {
-	fmt.Fprintf(c.Out, "%s %s\n", c.paint("[OK]", "32"), message)
+	fmt.Fprintf(c.Out, "%s %s\n", c.paint("✓", "32"), message)
 }
 
 // Warning prints a warning line.
 func (c *Console) Warning(message string) {
-	fmt.Fprintf(c.Out, "%s %s\n", c.paint("[ATENÇÃO]", "33"), message)
+	fmt.Fprintf(c.Out, "%s %s\n", c.paint("!", "33"), message)
 }
 
 // Detail prints a verbose-only line.
@@ -50,4 +51,4 @@ func (c *Console) Detail(message string) {
 }
 
 // Error prints an error on stderr.
-func (c *Console) Error(message string) { fmt.Fprintf(c.Err, "✗ %s\n", message) }
+func (c *Console) Error(message string) { fmt.Fprintf(c.Err, "%s %s\n", c.paint("✗", "31"), message) }

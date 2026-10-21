@@ -5,35 +5,47 @@ import (
 	"io"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/cliargs"
+	"github.com/x86dx2/x86qw/go/internal/doctor"
 	"github.com/x86dx2/x86qw/go/internal/maint"
 	"github.com/x86dx2/x86qw/go/internal/output"
 )
 
+type profileArgs struct{ target, backup, restore string }
+
+func (a *profileArgs) parser() *cliargs.Parser {
+	p := cliargs.New()
+	targetFlag(p, &a.target)
+	p.Optional(&a.backup, "x86qw-profile.zip", "ARQUIVO.zip", "grava um backup das configurações pessoais", "--backup")
+	p.String(&a.restore, "ARQUIVO.zip", "restaura um backup", "--restore")
+	p.Exclusive("--backup", "--restore")
+	return p
+}
+
 func runProfile(args []string, stdout, stderr io.Writer) int {
-	parsed, ok := parseArgs("profile", args, []string{"--restore"}, nil, []optionalValue{{"--backup", "x86qw-profile.zip"}}, stderr)
-	if !ok {
-		return output.ExitUsage
+	var a profileArgs
+	p := a.parser()
+	if code, ok := parse("profile", p, args, stdout, stderr); !ok {
+		return code
 	}
-	backup, hasBackup := parsed.values["--backup"]
-	restore, hasRestore := parsed.values["--restore"]
-	if hasBackup && hasRestore {
-		fmt.Fprintln(stderr, "x86qw profile: erro: --backup e --restore não podem ser combinados")
-		return output.ExitUsage
+	target, err := targetOf(p, a.target)
+	if err != nil {
+		return usageFailure("profile", err, stderr)
 	}
-	fmt.Fprint(stdout, maint.RenderProfile(maint.ClassifyInstallData(parsed.target)))
-	if hasBackup {
-		destination, err := maint.ResolveBundleDestination(backup, parsed.target)
+	fmt.Fprint(stdout, maint.RenderProfile(maint.ClassifyInstallData(target)))
+	if a.backup != "" {
+		destination, err := doctor.BundleDestination(expandHome(a.backup), target)
 		if err == nil {
-			destination, err = maint.BackupProfile(parsed.target, destination)
+			destination, err = maint.BackupProfile(target, destination)
 		}
 		if err != nil {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
 			return output.ExitFailure
 		}
-		fmt.Fprintf(stdout, "Perfil gravado: %s\n", destination)
+		fmt.Fprintf(stdout, "✓ Perfil gravado: %s\n", destination)
 	}
-	if hasRestore {
-		restored, err := maint.RestoreProfile(expandHome(restore), parsed.target)
+	if a.restore != "" {
+		restored, err := maint.RestoreProfile(expandHome(a.restore), target)
 		if err != nil {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
 			return output.ExitFailure
@@ -42,11 +54,13 @@ func runProfile(args []string, stdout, stderr io.Writer) int {
 		if len(restored) > 0 {
 			list = strings.Join(restored, ", ")
 		}
-		fmt.Fprintf(stdout, "Arquivos restaurados: %s\n", list)
+		fmt.Fprintf(stdout, "✓ Arquivos restaurados: %s\n", list)
 	}
 	return output.ExitSuccess
 }
 
 func init() {
-	register("profile", 120, "profile [--backup|--restore] configurações pessoais", noName(runProfile))
+	register(command{name: "profile", group: "Seus dados", order: 20, synopsis: "[DESTINO]",
+		summary: "lista, salva e restaura as configurações pessoais",
+		flags:   (&profileArgs{}).parser, run: noName(runProfile)})
 }

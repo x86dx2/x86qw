@@ -4,23 +4,47 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/maint"
 	"github.com/x86dx2/x86qw/go/internal/output"
 )
 
+type uninstallArgs struct {
+	target     string
+	purge, yes bool
+}
+
+func (a *uninstallArgs) parser() *cliargs.Parser {
+	p := cliargs.New()
+	targetFlag(p, &a.target)
+	p.Bool(&a.purge, "apaga a pasta inteira e o cache, dados pessoais inclusive", "--purge")
+	p.Bool(&a.yes, "não pergunta", "--yes")
+	return p
+}
+
 func runUninstall(args []string, stdout, stderr io.Writer) int {
-	parsed, ok := parseArgs("uninstall", args, nil, []string{"--purge"}, nil, stderr)
-	if !ok {
-		return output.ExitUsage
+	var a uninstallArgs
+	p := a.parser()
+	if code, ok := parse("uninstall", p, args, stdout, stderr); !ok {
+		return code
 	}
-	purge := parsed.bools["--purge"]
-	target, err := maint.ValidateTarget(parsed.target, !purge)
+	target, err := targetOf(p, a.target)
 	if err != nil {
+		return usageFailure("uninstall", err, stderr)
+	}
+	if target, err = maint.ValidateTarget(target, !a.purge); err != nil {
 		fmt.Fprintf(stderr, "✗ %v\n", err)
 		return output.ExitFailure
 	}
+	question, retry := "Remover o x86QW de "+target+"? Configurações, PAKs e demos ficam.", "x86qw uninstall "+target
+	if a.purge {
+		question, retry = "Apagar "+target+" inteira, com configurações e demos, e o cache do x86QW?", "x86qw uninstall --purge "+target
+	}
+	if proceed, code := confirm(question, retry, a.yes, stdout, stderr); !proceed {
+		return code
+	}
 	var report *maint.Report
-	if purge {
+	if a.purge {
 		fmt.Fprintln(stdout, "\nDesinstalação completa")
 		report, err = maint.Purge(target)
 	} else {
@@ -43,5 +67,8 @@ func runUninstall(args []string, stdout, stderr io.Writer) int {
 }
 
 func init() {
-	register("uninstall", 160, "uninstall [--purge]  remove o conteúdo gerenciado (ou tudo, com --purge)", noName(runUninstall))
+	register(command{name: "uninstall", group: "Instalar e manter", order: 70, synopsis: "[DESTINO]",
+		summary: "remove a instalação (com --purge, tudo)",
+		about:   "Remove o que o x86QW instalou e mantém configurações, PAKs, demos e arquivos que você editou. Com --purge, apaga a pasta inteira e o cache. Pergunta antes; sem terminal, exige --yes.",
+		flags:   (&uninstallArgs{}).parser, run: noName(runUninstall)})
 }

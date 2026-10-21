@@ -11,10 +11,11 @@ import (
 )
 
 func TestSetupRecipeAsksForYesAndRejectsBadFlags(t *testing.T) {
+	withoutTerminal(t)
 	target := filepath.Join(t.TempDir(), "x86qw")
 	var stdout, stderr bytes.Buffer
 	code := run([]string{"setup", "--intent", "play", "--nick", "x86dx2", "--target", target}, &stdout, &stderr)
-	if code != 2 || !strings.Contains(stderr.String(), "Confirme com: x86qw setup --intent play --nick x86dx2") {
+	if code != 2 || !strings.Contains(stderr.String(), "Repita com --yes: x86qw setup --intent play --nick x86dx2") {
 		t.Fatalf("sem --yes: %d %q", code, stderr.String())
 	}
 	stderr.Reset()

@@ -88,7 +88,7 @@ func ManagedIdentity(target string) ([]string, error) {
 		}
 	}
 	for _, spec := range catalog.ClientSpecs {
-		for _, channel := range []string{"stable", "nightly"} {
+		for _, channel := range catalog.Channels {
 			if regular(filepath.Join(target, filepath.FromSlash(spec.Receipt(channel)))) {
 				evidence = append(evidence, "client:"+spec.Platform+":"+channel)
 			}
@@ -139,7 +139,7 @@ func ownedCaches() ([]string, error) {
 			continue
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			return nil, fmt.Errorf("cache root is a symlink: %s", candidate.path)
+			return nil, fmt.Errorf("a pasta de cache é um symlink: %s", candidate.path)
 		}
 		if !info.IsDir() {
 			return nil, fmt.Errorf("O caminho reservado ao cache não é um diretório: %s", candidate.path)

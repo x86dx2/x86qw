@@ -56,6 +56,16 @@ func Installed(root string) ([]Game, []install.Game, error) {
 	return out, available, nil
 }
 
+// ClientRuleset is the ruleset ezQuake starts with at root: the saved one,
+// else x86qw.
+func ClientRuleset(root string) (string, error) {
+	ruleset, err := SavedRuleset(root)
+	if ruleset == "" && err == nil {
+		ruleset = defaultRuleset
+	}
+	return ruleset, err
+}
+
 // SavedRuleset is the client ruleset recorded for root, "" when none is.
 func SavedRuleset(root string) (string, error) {
 	path := filepath.Join(root, ".x86qw", "launcher", "client-ruleset.json")
@@ -237,11 +247,8 @@ func Resolve(root string, r Request) (*Choice, error) {
 		}
 	}
 	if choice.Ruleset = r.Ruleset; choice.Ruleset == "" {
-		if choice.Ruleset, err = SavedRuleset(root); err != nil {
+		if choice.Ruleset, err = ClientRuleset(root); err != nil {
 			return nil, err
-		}
-		if choice.Ruleset == "" {
-			choice.Ruleset = defaultRuleset
 		}
 	}
 	if Rulesets[choice.Ruleset] == "" {

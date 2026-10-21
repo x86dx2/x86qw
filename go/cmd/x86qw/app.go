@@ -7,26 +7,19 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/buildinfo"
 	"github.com/x86dx2/x86qw/go/internal/cli"
+	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/output"
-	"github.com/x86dx2/x86qw/go/internal/play"
 	"github.com/x86dx2/x86qw/go/internal/setup"
 	"github.com/x86dx2/x86qw/go/internal/setup/tui"
 	"github.com/x86dx2/x86qw/go/internal/trust"
 )
-
-const (
-	commandList = "Comandos: play, open, host, proxy, qtv, status, hub, setup, update, upgrade, verify, doctor, ui, profile, library, changes, migrate, repair, cleanup, uninstall e version."
-)
-
-// stdinIsTerminal is whether someone can answer (replaced by the tests).
-var stdinIsTerminal = func() bool { return isTerminalFile(os.Stdin) }
 
 // appOpen is set while the interface owns the terminal: a command it runs
 // in-process must never open a second one.
@@ -42,7 +35,7 @@ func realBackend(catalogFile, platform string) *setup.Real {
 	return &setup.Real{
 		Trust: trust.Options{CacheDir: defaultCacheDir()}, CatalogFile: catalogFile, Platform: platform,
 		// The interface owns the screen: what publishing prints is dropped.
-		Publish:   func(target string) error { return publishCLI(target, false, io.Discard, io.Discard) },
+		Publish:   func(target string) error { return publishCLI(target, false, io.Discard) },
 		Integrate: setup.Integrate,
 		// Services the app starts always run with --background, so none
 		// writes to the terminal the interface owns; ezQuake starts with
@@ -57,11 +50,27 @@ func realBackend(catalogFile, platform string) *setup.Real {
 	}
 }
 
+// publishCLI installs this executable as the installation's CLI (the same
+// version too) and, with link, links the user command or creates the
+// Windows shortcuts, saying where on out.
+func publishCLI(target string, link bool, out io.Writer) error {
+	command, err := cli.Publish(target, buildinfo.Version, true, link)
+	switch {
+	case err != nil:
+		return err
+	case command != "" && runtime.GOOS == "windows":
+		fmt.Fprintf(out, "Atalhos do x86QW criados no Menu Iniciar e na Área de Trabalho (%s).\n", command)
+	case command != "":
+		fmt.Fprintf(out, "Comando x86qw disponível em %s\n", command)
+	}
+	return nil
+}
+
 // lastLines keeps the end of a command's output, where its error is.
 func lastLines(text string, count int) string {
 	var lines []string
 	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
-		if line = strings.TrimSpace(strings.TrimLeft(line, "✗!· ")); line != "" {
+		if line = strings.TrimSpace(strings.TrimLeft(line, "✗!· ")); line != "" && !strings.HasPrefix(line, "Veja: x86qw") {
 			lines = append(lines, line)
 		}
 	}
@@ -74,23 +83,10 @@ func lastLines(text string, count int) string {
 	return strings.Join(lines, " · ")
 }
 
-// appTarget is the installation the app opens: the one holding this
-// executable, else the default folder, where the installer starts.
-func appTarget(target string) string {
-	root, _ := filepath.Abs(target)
-	if hasInstallation(root) {
-		return root
-	}
-	if target == "." || target == "" {
-		return tui.DefaultTarget()
-	}
-	return root
-}
-
 // runApp opens the interface on root, at start ("" is home), and opens it
 // again after each report it hands to the command line.
 func runApp(backend *setup.Real, root, start string, stdout, stderr io.Writer) int {
-	if hasInstallation(root) && cli.Replaces(buildinfo.Version, root, false) {
+	if install.Installed(root) && cli.Replaces(buildinfo.Version, root, false) {
 		// A newer CLI opening the app publishes itself, as re-running the
 		// bootstrap always did, linked unless the setup said otherwise;
 		// an older or development build leaves the installed one alone.
@@ -100,17 +96,19 @@ func runApp(backend *setup.Real, root, start string, stdout, stderr io.Writer) i
 			if choices, _ := setup.LoadChoices(root); choices != nil {
 				link = choices.Integration.Path
 			}
-			err = publishCLI(root, link, io.Discard, io.Discard)
+			err = publishCLI(root, link, io.Discard)
 			held.Release()
 			if err != nil {
 				fmt.Fprintf(stderr, "! A CLI nativa não pôde ser publicada: %v\n", err)
 			}
 		}
 	}
-	notice := ""
+	// The language and theme chosen in the app survive the trips through
+	// the command line.
+	lang, theme := interfaceLanguage(), ""
 	for {
 		appOpen = true
-		result, err := tui.Run(tui.Config{Backend: backend, Target: root, Lang: interfaceLanguage(), Start: start, Notice: notice})
+		result, err := tui.Run(tui.Config{Backend: backend, Target: root, Lang: lang, Theme: theme, Start: start})
 		appOpen = false
 		if err != nil {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
@@ -123,33 +121,75 @@ func runApp(backend *setup.Real, root, start string, stdout, stderr io.Writer) i
 		if !result.Back {
 			return code
 		}
-		fmt.Fprint(stdout, "\nEnter volta ao x86QW…")
-		if _, err := bufio.NewReader(os.Stdin).ReadString('\n'); err != nil {
+		if result.Lang != "" {
+			lang = result.Lang
+		}
+		theme = result.Theme
+		fmt.Fprint(stdout, "\n"+tui.T(lang, "back.enter"))
+		if _, err := bufio.NewReader(stdin).ReadString('\n'); err != nil {
 			return code
 		}
-		start, notice = "", ""
+		start = ""
 	}
+}
+
+// interfaceLanguage follows the locale: Portuguese unless it says otherwise.
+func interfaceLanguage() tui.Lang {
+	for _, name := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
+		if value := os.Getenv(name); value != "" && value != "C" && value != "POSIX" {
+			if strings.HasPrefix(strings.ToLower(value), "pt") {
+				return tui.PT
+			}
+			return tui.EN
+		}
+	}
+	return tui.PT
+}
+
+type appArgs struct {
+	target           string
+	verbose, noColor bool
+}
+
+func (a *appArgs) parser() *cliargs.Parser {
+	p := cliargs.New()
+	targetFlag(p, &a.target)
+	p.Bool(&a.verbose, "", "-v", "--verbose")
+	p.Bool(&a.noColor, "", "--no-color")
+	p.Hidden("--verbose")
+	p.Hidden("--no-color")
+	return p
 }
 
 // runMenuCommand is `x86qw` without a command: the app on a terminal,
 // the usage otherwise.
 func runMenuCommand(args []string, stdout, stderr io.Writer) int {
-	target := defaultTarget()
-	for _, arg := range args {
-		if !strings.HasPrefix(arg, "-") {
-			target = arg
+	var a appArgs
+	p := a.parser()
+	if err := p.Parse(args); err != nil {
+		if errors.Is(err, cliargs.ErrHelp) {
+			fmt.Fprint(stdout, usageText())
+			return output.ExitSuccess
 		}
+		fmt.Fprintf(stderr, "x86qw: erro: %v\nVeja: x86qw help\n", err)
+		return output.ExitUsage
+	}
+	if len(p.Positional()) > 0 {
+		fmt.Fprintf(stderr, "x86qw: erro: argumentos a mais: %s\nVeja: x86qw help\n", strings.Join(p.Positional(), " "))
+		return output.ExitUsage
 	}
 	if !interactive() {
-		launcher := play.Launcher()
-		fmt.Fprintf(stdout, "\nUso: %s <comando> [opções]\n", launcher)
-		fmt.Fprintf(stdout, "Exemplo: %s play\n", launcher)
-		fmt.Fprintln(stdout, commandList)
+		fmt.Fprint(stdout, usageText())
 		return output.ExitSuccess
 	}
-	return runApp(realBackend("", install.HostPlatform()), appTarget(target), "", stdout, stderr)
+	root, err := targetOf(p, a.target)
+	if err != nil {
+		fmt.Fprintf(stderr, "x86qw: erro: %v\n", err)
+		return output.ExitUsage
+	}
+	return runApp(realBackend("", install.HostPlatform()), root, "", stdout, stderr)
 }
 
 func init() {
-	register("menu", -1, "", noName(runMenuCommand))
+	register(command{name: "menu", run: noName(runMenuCommand)})
 }

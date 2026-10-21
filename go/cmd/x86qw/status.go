@@ -1,14 +1,11 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
 	"io"
-	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
+	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/output"
@@ -16,18 +13,34 @@ import (
 )
 
 func runStatus(args []string, stdout, stderr io.Writer) int {
+	asJSON := false
+	var rest []string
 	for _, argument := range args {
 		if argument == "--json" {
-			return runStatusJSON(args, stdout, stderr)
+			asJSON = true
+			continue
 		}
+		rest = append(rest, argument)
 	}
-	options, err := services.ParseStatus(args)
+	options, err := services.ParseStatus(rest)
 	if err != nil {
-		return serviceUsage("status", err, stderr)
+		return serviceUsage("status", err, stdout, stderr)
+	}
+	if options.Target == "" {
+		options.Target = install.DefaultTarget()
+	}
+	target, _ := filepath.Abs(expandHome(options.Target))
+	target = lock.Resolve(target)
+	if asJSON {
+		if options.Stop {
+			return usageFailure("status", cliargs.Usagef("--json só lê; não combina com --stop"), stderr)
+		}
+		if err := output.Success("status", install.ReadStatus(target)).Write(stdout); err != nil {
+			return output.ExitFailure
+		}
+		return output.ExitSuccess
 	}
 	console := serviceConsole(&options.Common, stdout, stderr)
-	target, _ := filepath.Abs(options.Target)
-	target = lock.Resolve(target)
 	active, err := services.ShowStatus(console, target)
 	if err != nil {
 		console.Error(err.Error())
@@ -40,43 +53,24 @@ func runStatus(args []string, stdout, stderr io.Writer) int {
 		console.Error("Nenhuma stack de serviços x86QW está ativa.")
 		return output.ExitFailure
 	}
-	if !options.Yes && !confirmStop(options.Menu, options.NoColor, stdout) {
-		console.Info("Encerramento cancelado; a stack continua ativa.")
-		return output.ExitSuccess
+	if proceed, code := confirm("Encerrar a stack ativa?", "x86qw status --stop "+target, options.Yes, stdout, stderr); !proceed {
+		return code
 	}
 	if err := services.RequestStop(target, 15*time.Second); err != nil {
 		console.Error(err.Error())
 		return output.ExitFailure
 	}
-	console.Success("Stack de serviços encerrada coordenadamente.")
-	return output.ExitSuccess
-}
-
-// confirmStop asks on a terminal; without one it declines (use --yes).
-func confirmStop(fromMenu, noColor bool, stdout io.Writer) bool {
-	if !isTerminal(os.Stdin) {
-		return false
-	}
-	fmt.Fprint(stdout, "Encerrar a stack ativa? [s/N] ")
-	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-	switch strings.ToLower(strings.TrimSpace(answer)) {
-	case "s", "sim", "y", "yes":
-		return true
-	}
-	return false
-}
-
-func runStatusJSON(args []string, stdout, stderr io.Writer) int {
-	target, _, ok := targetFlags("status", args, stderr)
-	if !ok {
-		return output.ExitUsage
-	}
-	if err := output.Success("status", install.ReadStatus(target)).Write(stdout); err != nil {
-		return output.ExitFailure
-	}
+	console.Success("Stack de serviços encerrada.")
 	return output.ExitSuccess
 }
 
 func init() {
-	register("status", 20, "status               mostra os serviços ativos (--json: instalação e sessões; --stop encerra a stack)", noName(runStatus))
+	register(command{name: "status", group: "Hospedar", order: 40, synopsis: "[DESTINO]",
+		summary: "mostra os serviços ativos; --stop encerra",
+		about:   "Mostra os servidores, o QTV e o QWFWD que estão rodando. Com --json, o estado da instalação e das sessões. Com --stop, encerra a stack; pergunta antes e, sem terminal, exige --yes.",
+		flags: func() *cliargs.Parser {
+			p := services.StatusParser()
+			jsonFlag(p, new(bool))
+			return p
+		}, run: noName(runStatus)})
 }

@@ -4,22 +4,40 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/maint"
 	"github.com/x86dx2/x86qw/go/internal/output"
 )
 
+type cleanupArgs struct {
+	target              string
+	downloads, personal bool
+}
+
+func (a *cleanupArgs) parser() *cliargs.Parser {
+	p := cliargs.New()
+	targetFlag(p, &a.target)
+	p.Bool(&a.downloads, "também os mapas baixados de servidores", "--downloads")
+	p.Bool(&a.personal, "também histórico, logs e demos", "--personal-data")
+	return p
+}
+
 func runCleanup(args []string, stdout, stderr io.Writer) int {
-	parsed, ok := parseArgs("cleanup", args, nil, []string{"--downloads", "--personal-data"}, nil, stderr)
-	if !ok {
-		return output.ExitUsage
+	var a cleanupArgs
+	p := a.parser()
+	if code, ok := parse("cleanup", p, args, stdout, stderr); !ok {
+		return code
+	}
+	target, err := targetOf(p, a.target)
+	if err != nil {
+		return usageFailure("cleanup", err, stderr)
 	}
 	fail := func(err error) int {
 		fmt.Fprintf(stderr, "✗ %v\n", err)
 		return output.ExitFailure
 	}
-	target, err := maint.ValidateTarget(parsed.target, true)
-	if err != nil {
+	if target, err = maint.ValidateTarget(target, true); err != nil {
 		return fail(err)
 	}
 	if err := maint.RequireManagedIdentity(target, "cleanup"); err != nil {
@@ -30,9 +48,8 @@ func runCleanup(args []string, stdout, stderr io.Writer) int {
 		return fail(err)
 	}
 	defer held.Release()
-	downloads, personal := parsed.bools["--downloads"], parsed.bools["--personal-data"]
 	fmt.Fprintln(stdout, "\nLimpeza segura")
-	result, err := maint.Cleanup(target, downloads, personal)
+	result, err := maint.Cleanup(target, a.downloads, a.personal)
 	if err != nil {
 		return fail(err)
 	}
@@ -46,10 +63,10 @@ func runCleanup(args []string, stdout, stderr io.Writer) int {
 	}
 	if result.Personal > 0 {
 		fmt.Fprintf(stdout, "✓ Dados pessoais locais removidos (%s).\n", fileCount(result.Personal))
-	} else if !personal {
-		fmt.Fprintln(stdout, "· Histórico, logs e demos válidas foram preservados; use --personal-data para removê-los.")
+	} else if !a.personal {
+		fmt.Fprintln(stdout, "· Histórico, logs e demos foram preservados; use --personal-data para removê-los.")
 	}
-	if !downloads {
+	if !a.downloads {
 		fmt.Fprintln(stdout, "· Downloads de servidores foram preservados; use --downloads para removê-los.")
 	}
 	return output.ExitSuccess
@@ -63,5 +80,8 @@ func fileCount(count int) string {
 }
 
 func init() {
-	register("cleanup", 150, "cleanup [--downloads] [--personal-data] limpa caches e dados locais", noName(runCleanup))
+	register(command{name: "cleanup", group: "Seus dados", order: 50, synopsis: "[DESTINO]",
+		summary: "apaga caches e, se pedir, dados pessoais",
+		about:   "Apaga o que o x86QW sabe regenerar: caches e arquivos temporários. Mapas baixados de servidores e seus dados pessoais só saem quando você pede.",
+		flags:   (&cleanupArgs{}).parser, run: noName(runCleanup)})
 }

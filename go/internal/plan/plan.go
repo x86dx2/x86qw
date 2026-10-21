@@ -148,7 +148,7 @@ func Update(in Input) (*Plan, error) {
 	}
 	clients := 0
 	for _, spec := range catalog.ClientSpecs {
-		for _, channel := range []string{"stable", "nightly"} {
+		for _, channel := range catalog.Channels {
 			payload, err := os.ReadFile(filepath.Join(in.Root, filepath.FromSlash(spec.Receipt(channel))))
 			if errors.Is(err, os.ErrNotExist) {
 				continue

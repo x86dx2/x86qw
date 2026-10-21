@@ -1,8 +1,8 @@
 // Package cli installs this binary as the command-line layer of an
-// installation, replacing the Python zipapp and launcher:
+// installation:
 //
 //	.x86qw/cli/x86qw[.exe]  the native CLI (0755)
-//	.x86qw/cli/receipt      {"format":1,...,"version":V} like the Python receipt
+//	.x86qw/cli/receipt      {"format":1,...,"version":V}
 //	x86qw.sh / x86qw.cmd    a shim that execs the native CLI
 //	~/.local/bin/x86qw      symlink to x86qw.sh (POSIX)
 package cli
@@ -190,7 +190,7 @@ func readExecutable(source string) ([]byte, error) {
 }
 
 // LinkUserCommand points ~/.local/bin/x86qw at root/x86qw.sh. An existing
-// link to another target or a regular file is refused, like the Python CLI.
+// link to another target or a regular file is refused.
 // On Windows it creates the Start Menu and Desktop shortcuts instead.
 func LinkUserCommand(root, home string) (string, error) {
 	if runtime.GOOS == "windows" {

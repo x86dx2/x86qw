@@ -26,16 +26,8 @@ type InstallOptions struct {
 	Requested []string // the components chosen for the custom profile
 }
 
-// HostPlatform maps GOOS to the installer's platform keys.
-func HostPlatform() string {
-	switch runtime.GOOS {
-	case "darwin":
-		return "macos"
-	case "windows":
-		return "windows"
-	}
-	return "linux"
-}
+// HostPlatform is the catalog platform of this machine.
+func HostPlatform() string { return catalog.Platform(runtime.GOOS) }
 
 // Install creates a new installation like `x86qw install --non-interactive`:
 // base PAKs from the core package, the ezQuake client, the profile's
@@ -71,7 +63,7 @@ func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory
 	// X86QW_NO_MACOS_PREFERENCES keeps tests and oracles from touching the
 	// user's real ezQuake preferences.
 	resetMacPreferences := runtime.GOOS == "darwin" && spec.Platform == "macos" && os.Getenv("X86QW_NO_MACOS_PREFERENCES") == ""
-	for _, channel := range []string{"stable", "nightly"} {
+	for _, channel := range catalog.Channels {
 		for _, relative := range []string{spec.Runtime(channel), spec.Receipt(channel), legacyClientReceipt(*spec, channel)} {
 			if _, err := os.Lstat(filepath.Join(target, filepath.FromSlash(relative))); err == nil {
 				resetMacPreferences = false

@@ -194,7 +194,7 @@ func ShowStatus(c *Console, target string) (bool, error) {
 	}
 	hint := func() {
 		if active {
-			c.Info("Para encerrar: Serviços › Encerrar serviços ativos ou status --stop.")
+			c.Info("Para encerrar: x86qw status --stop.")
 		}
 	}
 	if len(pending) == 0 {

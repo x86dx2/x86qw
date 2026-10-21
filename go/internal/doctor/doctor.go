@@ -1,5 +1,5 @@
-// Package doctor ports x86qw_runtime/doctor.py: seven read-only checks with
-// a closed report shape.
+// Package doctor diagnoses an installation without changing it: read-only
+// checks with a closed report shape, and an optional bundle to share.
 package doctor
 
 import (
@@ -12,15 +12,45 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/x86dx2/x86qw/go/internal/fspath"
 )
 
 const (
-	Audience          = "owner-only"
-	OwnerOnlyFirstRun = "Modo owner-only: um usuário, Apple M3. Instalação limpa permitida. Windows e Linux continuam preview."
-	lowDisk           = 512 << 20
-	criticalDisk      = 64 << 20
-	trustWarning      = 6 * time.Hour
+	Audience     = "owner-only"
+	lowDisk      = 512 << 20
+	criticalDisk = 64 << 20
+	trustWarning = 6 * time.Hour
 )
+
+// BundleDestination is where a bundle named raw goes: never inside the
+// installation. A bare file name that would land there goes to the home
+// folder instead; any other path inside is refused.
+func BundleDestination(raw, target string) (string, error) {
+	requested := raw
+	if requested == "~" || strings.HasPrefix(requested, "~/") || strings.HasPrefix(requested, `~\`) {
+		home, _ := os.UserHomeDir()
+		requested = filepath.Join(home, requested[1:])
+	}
+	destination, err := filepath.Abs(requested)
+	if err != nil {
+		return "", err
+	}
+	destination = filepath.Join(fspath.Resolve(filepath.Dir(destination)), filepath.Base(destination))
+	root := fspath.Resolve(target)
+	if !fspath.Inside(destination, root) {
+		return destination, nil
+	}
+	if filepath.Dir(raw) != "." {
+		return "", errors.New("o bundle não pode ser gravado dentro da instalação")
+	}
+	home, _ := os.UserHomeDir()
+	fallback := filepath.Join(fspath.Resolve(home), filepath.Base(raw))
+	if !fspath.Inside(fallback, root) {
+		return fallback, nil
+	}
+	return "", errors.New("o bundle não pode ser gravado dentro da instalação")
+}
 
 // Check is one diagnostic.
 type Check struct {
@@ -37,9 +67,14 @@ type Report struct {
 	Target   string  `json:"target"`
 }
 
+// releasedPlatforms are the GOOS/GOARCH pairs the CLI is published for.
+var releasedPlatforms = map[string]bool{
+	"darwin/arm64": true, "darwin/amd64": true, "linux/amd64": true, "linux/arm64": true, "windows/amd64": true,
+}
+
 // Diagnose runs every check against target. trustTimestamps are candidate
 // cached timestamp.json paths; the first readable one is used.
-func Diagnose(target string, commands []string, trustTimestamps []string, now time.Time) Report {
+func Diagnose(target string, trustTimestamps []string, now time.Time) Report {
 	report := Report{Audience: Audience, Target: target, Healthy: true}
 	add := func(id, status, summary string) {
 		report.Checks = append(report.Checks, Check{ID: id, Status: status, Summary: summary})
@@ -49,19 +84,13 @@ func Diagnose(target string, commands []string, trustTimestamps []string, now ti
 	}
 	status, summary := installation(target)
 	add("installation", status, summary)
-	if commands == nil {
-		add("catalog", "skip", "catálogo do bundle não lido")
-	} else if len(commands) == 0 {
-		add("catalog", "fail", "catálogo sem comandos públicos")
-	} else {
-		add("catalog", "ok", "catálogo de capacidades legível")
-	}
 	status, summary = trust(trustTimestamps, now)
 	add("trust", status, summary)
-	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
-		add("runtime", "ok", "runtime macOS arm64")
+	platform := runtime.GOOS + "/" + runtime.GOARCH
+	if releasedPlatforms[platform] {
+		add("runtime", "ok", "plataforma publicada: "+platform)
 	} else {
-		add("runtime", "warn", "plataforma sem evidência nativa M3")
+		add("runtime", "warn", "plataforma sem build publicado: "+platform)
 	}
 	add("network", "skip", "rede não consultada")
 	status, summary = disk(target)
@@ -161,7 +190,7 @@ func permissions(target string) (string, string) {
 
 // Render is the human report.
 func Render(report Report) string {
-	lines := []string{"x86QW doctor — " + report.Audience, OwnerOnlyFirstRun, "Destino: " + report.Target, ""}
+	lines := []string{"x86QW doctor", "Destino: " + report.Target, ""}
 	for _, check := range report.Checks {
 		lines = append(lines, fmt.Sprintf("[%s] %s: %s", check.Status, check.ID, check.Summary))
 	}
@@ -177,20 +206,12 @@ func Render(report Report) string {
 // WriteBundle writes a reviewable zip (NOTICE.txt + doctor.json) outside the
 // installation, with the home directory replaced by "~".
 func WriteBundle(envelope []byte, destination, target string) (string, error) {
-	absolute, err := filepath.Abs(destination)
+	absolute, err := BundleDestination(destination, target)
 	if err != nil {
 		return "", err
 	}
-	root, _ := filepath.Abs(target)
-	if rel, err := filepath.Rel(root, absolute); err == nil && !strings.HasPrefix(rel, "..") {
-		if filepath.Dir(destination) != "." {
-			return "", errors.New("o bundle não pode ser gravado dentro da instalação")
-		}
-		home, _ := os.UserHomeDir()
-		absolute = filepath.Join(home, filepath.Base(destination))
-	}
 	if _, err := os.Lstat(absolute); err == nil {
-		return "", errors.New("bundle destination already exists")
+		return "", fmt.Errorf("já existe um arquivo em %s", absolute)
 	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		envelope = []byte(strings.ReplaceAll(string(envelope), home, "~"))
@@ -202,7 +223,7 @@ func WriteBundle(envelope []byte, destination, target string) (string, error) {
 	}
 	writer := zip.NewWriter(file)
 	for _, entry := range []struct{ name, body string }{
-		{"NOTICE.txt", OwnerOnlyFirstRun + "\nSem upload automático. Revise o conteúdo antes de partilhar.\n"},
+		{"NOTICE.txt", "Diagnóstico do x86QW. Nada é enviado automaticamente; revise o conteúdo antes de compartilhar.\n"},
 		{"doctor.json", string(envelope)},
 	} {
 		out, err := writer.Create(entry.name)

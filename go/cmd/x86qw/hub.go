@@ -10,20 +10,20 @@ import (
 )
 
 func runHub(args []string, stdout, stderr io.Writer) int {
-	target, asJSON, ok := targetFlags("hub", args, stderr)
+	a, target, code, ok := parseTarget("hub", args, stdout, stderr)
 	if !ok {
-		return output.ExitUsage
+		return code
 	}
 	servers, err := hub.Servers(context.Background(), target)
 	if err != nil {
-		if asJSON {
+		if a.json {
 			output.Failure("hub", output.ExitFailure, "operation", err.Error()).Write(stdout)
 		} else {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
 		}
 		return output.ExitFailure
 	}
-	if asJSON {
+	if a.json {
 		data := map[string]any{"servers": servers, "target": target}
 		if err := output.Success("hub", data).Write(stdout); err != nil {
 			return output.ExitFailure
@@ -37,5 +37,7 @@ func runHub(args []string, stdout, stderr io.Writer) int {
 }
 
 func init() {
-	register("hub", 80, "hub                  lista servidores públicos para jogar ou observar", noName(runHub))
+	register(command{name: "hub", group: "Jogar", order: 30, synopsis: "[DESTINO]",
+		summary: "lista os servidores públicos para jogar ou assistir",
+		flags:   (&targetArgs{}).parser, run: noName(runHub)})
 }
