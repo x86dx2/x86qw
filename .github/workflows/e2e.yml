@@ -80,9 +80,10 @@ jobs:
             ps -axo command | grep -F -- "+qwurl $LINK" | grep -qv grep
           else
             # xdg-open runs the registered entry for the link, as a click
-            # does; strace records the ezQuake it starts, which exits at once
-            # without a display.
-            timeout 60 strace -f -qq -e trace=execve -s 256 -o "$RUNNER_TEMP/link.trace" xdg-open "$LINK" || true
+            # does; it only looks up scheme handlers when DISPLAY is set, as
+            # in a desktop session. strace records the ezQuake it starts,
+            # which exits at once: there is no X server behind DISPLAY.
+            DISPLAY=:0 timeout 60 strace -f -qq -e trace=execve -s 256 -o "$RUNNER_TEMP/link.trace" xdg-open "$LINK" || true
             grep -F -- "\"+qwurl\", \"$LINK\"" "$RUNNER_TEMP/link.trace"
             # The command the desktop entry registers, as xdg-open runs it,
             # with --dry-run so no ezQuake starts on the runner.
