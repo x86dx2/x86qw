@@ -104,7 +104,7 @@ func removeComponent(target, id string, report *Report) (int, error) {
 			continue
 		}
 		if !info.Mode().IsRegular() {
-			return removed, fmt.Errorf("Caminho gerenciado inválido: %s", path)
+			return removed, fmt.Errorf("Invalid managed path: %s", path)
 		}
 		if digest, _ := fileSHA256(path); digest == entry.SHA256 {
 			if err := os.Remove(path); err != nil {
@@ -112,7 +112,7 @@ func removeComponent(target, id string, report *Report) (int, error) {
 			}
 			removed++
 		} else {
-			report.warn("Arquivo modificado preservado: %s", path)
+			report.warn("Modified file kept: %s", path)
 		}
 	}
 	return removed, os.RemoveAll(dir)
@@ -126,7 +126,7 @@ func Uninstall(target string) (*Report, error) {
 		return nil, err
 	}
 	if lexists(filepath.Join(target, filepath.FromSlash(nquakeReceipt))) || legacyLayout(target) {
-		return nil, errors.New("esta instalação usa metadados anteriores ao 1.0 que esta versão não desinstala; reinstale antes")
+		return nil, errors.New("this installation uses pre-1.0 metadata this version does not uninstall; reinstall first")
 	}
 	held, err := lock.Acquire(target, "uninstall")
 	if err != nil {
@@ -213,10 +213,10 @@ func Uninstall(target string) (*Report, error) {
 	// After the lock is gone the sessions directory may be empty too.
 	removeEmptyMetadata(target, false)
 	if cliPresent {
-		report.success("CLI permanente x86QW removida.")
+		report.success("Permanent x86QW CLI removed.")
 	}
-	report.success("Componentes gerenciados removidos de %s.", target)
-	report.info("PAKs registrados e arquivos pessoais foram preservados.")
+	report.success("Managed components removed from %s.", target)
+	report.info("Registered PAKs and personal files were kept.")
 	return report, nil
 }
 
@@ -312,7 +312,7 @@ func Purge(target string) (*Report, error) {
 			}
 		}
 	} else {
-		report.info("Nenhum diretório de instalação foi encontrado em %s.", target)
+		report.info("No installation folder was found at %s.", target)
 	}
 	candidates = append(candidates, caches...)
 	if err := quarantineRemove(minimalRemovalPaths(candidates)); err != nil {
@@ -323,18 +323,18 @@ func Purge(target string) (*Report, error) {
 	}
 	removeShellIntegration(target)
 	if held != nil {
-		report.info("Conteúdo da instalação removido; o diretório do lock será finalizado ao encerrar a operação.")
+		report.info("Installation content removed; the lock folder goes when the operation ends.")
 	}
 	for _, root := range caches {
 		if !lexists(root) {
-			report.success("Cache removido: %s", root)
+			report.success("Cache removed: %s", root)
 		}
 	}
 	if len(caches) == 0 {
 		root, _ := download.CacheDir()
-		report.info("Nenhum cache do instalador foi encontrado em %s.", root)
+		report.info("No installer cache was found at %s.", root)
 	}
-	report.success("Remoção total concluída; nenhum dado gerenciado pelo x86QW foi preservado.")
+	report.success("Full removal done; no data x86QW manages was kept.")
 	// The directory is reported once the lock is gone.
 	if held != nil {
 		if err := held.Release(); err != nil {
@@ -342,9 +342,9 @@ func Purge(target string) (*Report, error) {
 		}
 		removeEmptyMetadata(target, true)
 		if lexists(target) {
-			return nil, errors.New("A topologia final da instalação não está vazia e foi preservada.")
+			return nil, errors.New("What is left of the installation is not empty and was kept.")
 		}
-		report.success("Diretório da instalação removido: %s", target)
+		report.success("Installation folder removed: %s", target)
 	}
 	return report, nil
 }

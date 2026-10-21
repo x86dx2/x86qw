@@ -70,7 +70,7 @@ func setHandlers(root string, links, demos bool) error {
 	owned, exists := ownedCommand(classes+"qw", root)
 	switch {
 	case links && exists && !owned:
-		errs = append(errs, errors.New("Outro programa já abre links qw://; o x86QW não o substituiu."))
+		errs = append(errs, errors.New("Another program already opens qw:// links; x86QW did not replace it."))
 	case links:
 		errs = append(errs, writeCommand(classes+"qw", root, "URL:QuakeWorld", true))
 	case owned:
@@ -78,7 +78,7 @@ func setHandlers(root string, links, demos bool) error {
 	}
 	owned, exists = ownedCommand(classes+demoProgID, root)
 	if demos && exists && !owned {
-		errs = append(errs, errors.New("O tipo x86qw.demo pertence a outra instalação."))
+		errs = append(errs, errors.New("The x86qw.demo type belongs to another installation."))
 		return errors.Join(errs...)
 	}
 	if demos {

@@ -9,7 +9,7 @@ import (
 func TestReplacesNeverDowngrades(t *testing.T) {
 	root := t.TempDir()
 	if !Replaces("2.3.1", root, false) {
-		t.Fatal("sem CLI instalada, uma release se instala")
+		t.Fatal("without an installed CLI, a release installs itself")
 	}
 	os.MkdirAll(filepath.Join(root, filepath.FromSlash(cliDir)), 0o755)
 	os.WriteFile(filepath.Join(root, filepath.FromSlash(cliDir), "receipt"), Receipt("2.3.1"), 0o644)
@@ -22,7 +22,7 @@ func TestReplacesNeverDowngrades(t *testing.T) {
 		{"2.3.0", true, false}, {"0.0.0-dev", true, false}, {"lixo", true, false},
 	} {
 		if got := Replaces(c.version, root, c.same); got != c.want {
-			t.Fatalf("%s (mesma=%v): %v", c.version, c.same, got)
+			t.Fatalf("%s (same=%v): %v", c.version, c.same, got)
 		}
 	}
 }

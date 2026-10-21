@@ -27,14 +27,14 @@ func profiled(t *testing.T) string {
 func TestProfileClassifiesOnlyUserOwnedFiles(t *testing.T) {
 	report := ClassifyInstallData(profiled(t))
 	if got := strings.Join(report.Profile, ","); got != "ezquake/configs/config.cfg,qtv/qtv.cfg,qw/x86qw-ktx-user.cfg" {
-		t.Fatalf("perfil: %s", got)
+		t.Fatalf("profile: %s", got)
 	}
 	if strings.Join(report.Cache, ",") != "ezquake/sb/cache" || strings.Join(report.Personal, ",") != "qw/demos" {
-		t.Fatalf("cache %v, pessoal %v", report.Cache, report.Personal)
+		t.Fatalf("cache %v, personal %v", report.Cache, report.Personal)
 	}
 	for _, path := range []string{"../qw/x86qw-a.cfg", "qw/x86qw-a.pk3", "qw/sub/x86qw-a.cfg", "/qw/x86qw-a.cfg", `qw\x86qw-a.cfg`} {
 		if IsUserProfilePath(path) {
-			t.Errorf("%s não é perfil", path)
+			t.Errorf("%s is not profile", path)
 		}
 	}
 }
@@ -46,7 +46,7 @@ func TestProfileBackupRestoresByteForByte(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := BackupProfile(root, archive); err == nil {
-		t.Fatal("um backup não pode sobrescrever outro")
+		t.Fatal("a backup must not overwrite another")
 	}
 	write(t, filepath.Join(root, "ezquake", "configs", "config.cfg"), "sensitivity 9\n")
 	os.Remove(filepath.Join(root, "qtv", "qtv.cfg"))
@@ -56,12 +56,12 @@ func TestProfileBackupRestoresByteForByte(t *testing.T) {
 	}
 	if len(restored) != 3 || read(t, filepath.Join(root, "ezquake", "configs", "config.cfg")) != "sensitivity 3\n" ||
 		read(t, filepath.Join(root, "qtv", "qtv.cfg")) != "port 28000\n" {
-		t.Fatalf("restaurados %v", restored)
+		t.Fatalf("restored %v", restored)
 	}
 	// The same backup restores into a fresh folder.
 	fresh := t.TempDir()
 	if _, err := RestoreProfile(archive, fresh); err != nil || read(t, filepath.Join(fresh, "qw", "x86qw-ktx-user.cfg")) != "// ktx\n" {
-		t.Fatalf("pasta nova: %v", err)
+		t.Fatalf("new folder: %v", err)
 	}
 }
 
@@ -103,10 +103,10 @@ func TestProfileRestoreRejectsTamperedBackups(t *testing.T) {
 			root := t.TempDir()
 			write(t, filepath.Join(root, "ezquake", "configs", "config.cfg"), "original\n")
 			if _, err := RestoreProfile(forged(t, members), root); err == nil {
-				t.Fatal("backup adulterado aceito")
+				t.Fatal("a tampered backup was accepted")
 			}
 			if read(t, filepath.Join(root, "ezquake", "configs", "config.cfg")) != "original\n" {
-				t.Fatal("a recusa alterou a configuração")
+				t.Fatal("the refusal changed the settings")
 			}
 		})
 	}
@@ -116,7 +116,7 @@ func TestProfileRestoreRejectsTamperedBackups(t *testing.T) {
 // it already wrote.
 func TestProfileRestoreRollsBackOnASymlinkedDestination(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("links simbólicos exigem privilégio no Windows")
+		t.Skip("symbolic links need a privilege on Windows")
 	}
 	root := profiled(t)
 	archive := filepath.Join(t.TempDir(), "perfil.zip")
@@ -131,13 +131,13 @@ func TestProfileRestoreRollsBackOnASymlinkedDestination(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := RestoreProfile(archive, root); err == nil || !strings.Contains(err.Error(), "symlink") {
-		t.Fatalf("link deveria parar a restauração: %v", err)
+		t.Fatalf("a link should stop the restore: %v", err)
 	}
 	if read(t, filepath.Join(root, "ezquake", "configs", "config.cfg")) != "sensitivity 9\n" {
-		t.Fatal("o rollback não devolveu o arquivo já restaurado")
+		t.Fatal("the rollback did not bring back the file already restored")
 	}
 	if read(t, outside) != "fora\n" {
-		t.Fatal("a restauração escreveu através do link")
+		t.Fatal("the restore wrote through the link")
 	}
 }
 
@@ -151,7 +151,7 @@ func TestInsideUsesTheOSSeparator(t *testing.T) {
 		filepath.Join(filepath.Dir(root), "a.zip"): false,
 	} {
 		if inside(name, root) != want {
-			t.Errorf("inside(%s) deveria ser %v", name, want)
+			t.Errorf("inside(%s) should be %v", name, want)
 		}
 	}
 }
@@ -160,11 +160,11 @@ func TestInsideUsesTheOSSeparator(t *testing.T) {
 // exist yet.
 func TestLocalUINeverLandsInsideTheInstallation(t *testing.T) {
 	root := t.TempDir()
-	if _, err := WriteLocalUI(root, filepath.Join(root, "novo", "ui.html")); err == nil || !strings.Contains(err.Error(), "dentro da instalação") {
-		t.Fatalf("snapshot dentro da instalação aceito: %v", err)
+	if _, err := WriteLocalUI(root, filepath.Join(root, "novo", "ui.html")); err == nil || !strings.Contains(err.Error(), "inside the installation") {
+		t.Fatalf("a snapshot inside the installation was accepted: %v", err)
 	}
 	if exists(filepath.Join(root, "novo")) {
-		t.Fatal("a recusa criou a pasta")
+		t.Fatal("the refusal created the folder")
 	}
 }
 
@@ -175,15 +175,15 @@ func TestBundleDestinationNeverLandsInsideTheInstallation(t *testing.T) {
 	root := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "bundle.zip")
 	if got, err := doctor.BundleDestination(outside, root); err != nil || got != filepath.Join(resolve(filepath.Dir(outside)), "bundle.zip") {
-		t.Fatalf("fora da instalação: %s %v", got, err)
+		t.Fatalf("outside the installation: %s %v", got, err)
 	}
 	if _, err := doctor.BundleDestination(filepath.Join(root, "sub", "bundle.zip"), root); err == nil {
-		t.Fatal("caminho dentro da instalação aceito")
+		t.Fatal("a path inside the installation was accepted")
 	}
 	previous, _ := os.Getwd()
 	defer os.Chdir(previous)
 	os.Chdir(root)
 	if got, err := doctor.BundleDestination("bundle.zip", root); err != nil || got != filepath.Join(resolve(home), "bundle.zip") {
-		t.Fatalf("nome solto dentro da instalação deveria ir para a home: %s %v", got, err)
+		t.Fatalf("a bare name inside the installation should go to home: %s %v", got, err)
 	}
 }

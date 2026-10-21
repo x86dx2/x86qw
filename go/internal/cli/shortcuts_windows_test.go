@@ -24,30 +24,30 @@ func TestShortcutsLifecycle(t *testing.T) {
 	}
 	for _, path := range shortcuts {
 		if info, err := os.Stat(path); err != nil || info.Size() == 0 {
-			t.Fatalf("atalho ausente: %s %v", path, err)
+			t.Fatalf("shortcut missing: %s %v", path, err)
 		}
 	}
 	if _, err := InstallShortcuts(root); err != nil {
-		t.Fatalf("reinstalar o próprio atalho: %v", err)
+		t.Fatalf("reinstalling its own shortcut: %v", err)
 	}
 	other := t.TempDir()
 	os.MkdirAll(filepath.Join(other, filepath.FromSlash(cliDir)), 0o755)
 	os.WriteFile(filepath.Join(other, "x86qw.cmd"), []byte("@echo off\r\n"), 0o644)
 	if _, err := InstallShortcuts(other); err == nil {
-		t.Fatal("atalho de outra instalação foi substituído")
+		t.Fatal("another installation's shortcut was replaced")
 	}
 	if err := RemoveShortcuts(other); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(shortcuts[0]); err != nil {
-		t.Fatal("remover pela outra instalação apagou o atalho desta")
+		t.Fatal("removing through the other installation deleted this one's shortcut")
 	}
 	if err := RemoveShortcuts(root); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range shortcuts {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
-			t.Fatalf("atalho não removido: %s", path)
+			t.Fatalf("shortcut not removed: %s", path)
 		}
 	}
 }
@@ -81,13 +81,13 @@ func TestUserPathKeepsOtherEntriesUnexpanded(t *testing.T) {
 	}
 	value, kind, err := key.GetStringValue("Path")
 	if err != nil || kind != registry.EXPAND_SZ || value != `%USERPROFILE%\bin;C:\Tools;`+root {
-		t.Fatalf("PATH depois de adicionar: %q (%d) %v", value, kind, err)
+		t.Fatalf("PATH after adding: %q (%d) %v", value, kind, err)
 	}
 	if err := RemoveUserPath(root); err != nil {
 		t.Fatal(err)
 	}
 	if value, _, _ := key.GetStringValue("Path"); value != `%USERPROFILE%\bin;C:\Tools` {
-		t.Fatalf("PATH depois de remover: %q", value)
+		t.Fatalf("PATH after removing: %q", value)
 	}
 }
 
@@ -96,7 +96,7 @@ func TestWindowsHandlersComeAndGo(t *testing.T) {
 	for _, key := range []string{"qw", demoProgID, ".mvd", ".qwd"} {
 		if k, err := registry.OpenKey(registry.CURRENT_USER, classes+key, registry.QUERY_VALUE); err == nil {
 			k.Close()
-			t.Skipf("HKCU\\%s%s já existe nesta máquina", classes, key)
+			t.Skipf("HKCU\\%s%s already exists on this machine", classes, key)
 		}
 	}
 	t.Cleanup(func() {
@@ -109,7 +109,7 @@ func TestWindowsHandlersComeAndGo(t *testing.T) {
 		t.Fatal(err)
 	}
 	if owned, _ := ownedCommand(classes+"qw", root); !owned {
-		t.Fatal("qw:// deveria abrir com esta instalação")
+		t.Fatal("qw:// should open with this installation")
 	}
 	k, _ := registry.OpenKey(registry.CURRENT_USER, classes+".mvd", registry.QUERY_VALUE)
 	if value, _, _ := k.GetStringValue(""); value != demoProgID {
@@ -117,12 +117,12 @@ func TestWindowsHandlersComeAndGo(t *testing.T) {
 	}
 	k.Close()
 	if err := SetHandlers(t.TempDir(), true, false); err == nil {
-		t.Fatal("outra instalação tomou qw://")
+		t.Fatal("another installation took qw://")
 	}
 	if err := SetHandlers(root, false, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, exists := ownedCommand(classes+"qw", root); exists {
-		t.Fatal("qw:// deveria ter saído")
+		t.Fatal("qw:// should be gone")
 	}
 }

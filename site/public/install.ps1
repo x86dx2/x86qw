@@ -11,23 +11,23 @@ $File = "x86qw-$Version-windows-amd64.exe"
 $Sha256 = "492ac061eff68535fae701598860fce2863cfee9ea8aef6fd8f03d5b538950a5"
 $Size = 16538624
 $Url = "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-$Version/$File"
-if ([Environment]::Is64BitOperatingSystem -ne $true) { throw "x86QW: Windows 64-bit e necessario." }
+if ([Environment]::Is64BitOperatingSystem -ne $true) { throw "x86QW: 64-bit Windows is required." }
 $Work = Join-Path ([IO.Path]::GetTempPath()) ("x86qw-bootstrap-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $Work | Out-Null
 $Binary = Join-Path $Work "x86qw.exe"
 try {
-  Write-Host "- Baixando x86QW $Version ($File)"
+  Write-Host "- Downloading x86QW $Version ($File)"
   Add-Type -AssemblyName System.Net.Http
   $Client = [System.Net.Http.HttpClient]::new()
   $Client.Timeout = [TimeSpan]::FromSeconds(300)
   try {
     $Bytes = $Client.GetByteArrayAsync($Url).GetAwaiter().GetResult()
   } finally { $Client.Dispose() }
-  if ($Bytes.Length -ne $Size) { throw "x86QW: tamanho inesperado ($($Bytes.Length), esperado $Size); nada foi instalado." }
+  if ($Bytes.Length -ne $Size) { throw "x86QW: unexpected size ($($Bytes.Length), expected $Size); nothing was installed." }
   [IO.File]::WriteAllBytes($Binary, $Bytes)
   $Actual = (Get-FileHash -Algorithm SHA256 -Path $Binary).Hash.ToLowerInvariant()
-  if ($Actual -ne $Sha256) { throw "x86QW: SHA-256 divergente; nada foi instalado." }
-  Write-Host "OK Download verificado"
+  if ($Actual -ne $Sha256) { throw "x86QW: SHA-256 mismatch; nothing was installed." }
+  Write-Host "OK Download verified"
   & $Binary setup @BootstrapArguments
   $global:LASTEXITCODE = $LASTEXITCODE
 } finally {

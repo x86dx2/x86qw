@@ -28,8 +28,8 @@ var (
 	personalRoot = []string{"ezquake/.ezquake_history", "ezquake/qconsole.log", "qw/qconsole.log", "qw/demos", "qw/screenshots", "logs", "td2/demos"}
 )
 
-const profileNotice = "Modo owner-only: perfil user-owned. Sem upload automático. " +
-	"Este zip contém só configurações pessoais, sem cache, demos ou bytes gerenciados.\n"
+const profileNotice = "Owner-only mode: user-owned profile. No automatic upload. " +
+	"This zip holds personal settings only: no cache, demos or managed bytes.\n"
 
 // IsUserProfilePath reports whether relative is a personal configuration
 // file a profile backup keeps.
@@ -139,11 +139,11 @@ func lessCodepoints(a, b string) bool {
 
 // RenderProfile is the classification as `x86qw profile` prints it.
 func RenderProfile(report DataReport) string {
-	lines := []string{"x86QW · perfil", ""}
+	lines := []string{"x86QW · profile", ""}
 	for _, group := range []struct {
 		key   string
 		items []string
-	}{{"configurações", report.Profile}, {"cache", report.Cache}, {"dados pessoais", report.Personal}} {
+	}{{"settings", report.Profile}, {"cache", report.Cache}, {"personal data", report.Personal}} {
 		lines = append(lines, fmt.Sprintf("%s: %d", group.key, len(group.items)))
 		for _, item := range group.items {
 			lines = append(lines, "  "+item)
@@ -161,7 +161,7 @@ var (
 // BackupProfile writes a zip of user-owned profile files.
 func BackupProfile(target, destination string) (string, error) {
 	if _, err := os.Lstat(destination); err == nil {
-		return "", errors.New("já existe um arquivo no destino do backup")
+		return "", errors.New("a file already exists where the backup would go")
 	}
 	files := ClassifyInstallData(target).Profile
 	var entries []any
@@ -235,7 +235,7 @@ func RestoreProfile(archive, target string) ([]string, error) {
 	read := func(name string) ([]byte, error) {
 		file, ok := members[name]
 		if !ok {
-			return nil, fmt.Errorf("o backup não contém %q", name)
+			return nil, fmt.Errorf("the backup does not contain %q", name)
 		}
 		source, err := file.Open()
 		if err != nil {
@@ -261,7 +261,7 @@ func RestoreProfile(archive, target string) ([]string, error) {
 		return nil, err
 	}
 	if manifest.Kind != "profile" || manifest.Format != 1 {
-		return nil, errors.New("o backup do perfil tem um manifesto inválido")
+		return nil, errors.New("the profile backup has an invalid manifest")
 	}
 	planned := map[string]bool{}
 	var order []string
@@ -275,12 +275,12 @@ func RestoreProfile(archive, target string) ([]string, error) {
 			continue
 		}
 		if !planned[name] {
-			return nil, errors.New("o conteúdo do backup do perfil não confere com o manifesto")
+			return nil, errors.New("the profile backup's content does not match its manifest")
 		}
 		extra++
 	}
 	if extra != len(planned) {
-		return nil, errors.New("o conteúdo do backup do perfil não confere com o manifesto")
+		return nil, errors.New("the profile backup's content does not match its manifest")
 	}
 	payloads := map[string][]byte{}
 	for _, item := range manifest.Files {
@@ -303,7 +303,7 @@ func RestoreProfile(archive, target string) ([]string, error) {
 	for _, relative := range order {
 		destination := filepath.Join(target, filepath.FromSlash(relative))
 		if info, err := os.Lstat(destination); err == nil && info.Mode()&os.ModeSymlink != 0 {
-			return nil, errors.Join(fmt.Errorf("o destino do perfil é um symlink: %s", relative), rollbackProfile(target, originals, missing))
+			return nil, errors.Join(fmt.Errorf("a profile destination is a symlink: %s", relative), rollbackProfile(target, originals, missing))
 		}
 		if info, err := os.Stat(destination); err == nil && info.Mode().IsRegular() {
 			data, err := os.ReadFile(destination)
@@ -349,7 +349,7 @@ func rollbackProfile(target string, originals map[string]original, missing map[s
 		}
 	}
 	if err := errors.Join(errs...); err != nil {
-		return fmt.Errorf("o perfil não pôde ser todo restaurado ao que era: %w", err)
+		return fmt.Errorf("the profile could not be fully restored to what it was: %w", err)
 	}
 	return nil
 }

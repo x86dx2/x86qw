@@ -9,7 +9,7 @@ import (
 
 func TestChangesReportAddedModifiedAndDeletedFiles(t *testing.T) {
 	root := managedInstall(t)
-	write(t, filepath.Join(root, "qw", "maps", "x86qw-a.bsp"), "mapa a editado")
+	write(t, filepath.Join(root, "qw", "maps", "x86qw-a.bsp"), "map a edited")
 	os.Remove(filepath.Join(root, "qw", "maps", "x86qw-b.bsp"))
 	write(t, filepath.Join(root, "qw", "meu.cfg"), "bind x")
 	// Operational paths never show up.
@@ -26,15 +26,15 @@ func TestChangesReportAddedModifiedAndDeletedFiles(t *testing.T) {
 	// The runtime, PAKs, demos, temp files and the launcher are operational.
 	expected := "A ezquake/configs/config.cfg |M qw/maps/x86qw-a.bsp nquake-maps|D qw/maps/x86qw-b.bsp nquake-maps|A qw/meu.cfg "
 	if strings.Join(got, "|") != expected {
-		t.Fatalf("mudanças:\n%s\nesperado:\n%s", strings.Join(got, "\n"), strings.ReplaceAll(expected, "|", "\n"))
+		t.Fatalf("changes:\n%s\nexpected:\n%s", strings.Join(got, "\n"), strings.ReplaceAll(expected, "|", "\n"))
 	}
 }
 
 func TestChangesRefuseInventoriesThatDisagree(t *testing.T) {
 	root := managedInstall(t)
-	record(t, root, "nquake-models", map[string]string{"qw/maps/x86qw-a.bsp": "outro conteúdo"})
-	if _, err := InspectChanges(root); err == nil || !strings.Contains(err.Error(), "divergem") {
-		t.Fatalf("inventários conflitantes deveriam falhar: %v", err)
+	record(t, root, "nquake-models", map[string]string{"qw/maps/x86qw-a.bsp": "other content"})
+	if _, err := InspectChanges(root); err == nil || !strings.Contains(err.Error(), "disagree") {
+		t.Fatalf("conflicting inventories should fail: %v", err)
 	}
 }
 
@@ -55,11 +55,11 @@ func TestGitignoreListsOperationalAndManagedPaths(t *testing.T) {
 	}
 	for _, line := range []string{"/.x86qw", "/qw/demos", "/ezquake-nightly-x86_64.AppImage", "/qw/maps/x86qw-a.bsp", `/qw/progs/a\ b\[1\].mdl`} {
 		if !has(line) {
-			t.Errorf("falta %q em .gitignore", line)
+			t.Errorf("%q missing from .gitignore", line)
 		}
 	}
 	if exists(filepath.Join(root, ".gitignore.tmp")) {
-		t.Fatal("sobrou o temporário")
+		t.Fatal("the temporary file was left behind")
 	}
 	// The .gitignore itself is operational, so it is never a change.
 	changes, err := InspectChanges(root)
@@ -68,7 +68,7 @@ func TestGitignoreListsOperationalAndManagedPaths(t *testing.T) {
 	}
 	for _, change := range changes {
 		if change.Path == ".gitignore" {
-			t.Fatal(".gitignore apareceu como mudança")
+			t.Fatal(".gitignore showed up as a change")
 		}
 	}
 }
