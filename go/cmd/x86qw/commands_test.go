@@ -43,6 +43,8 @@ func fixtureInstall(t *testing.T) string {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(home, "AppData", "Local"))
 	t.Setenv(download.CacheEnv, filepath.Join(t.TempDir(), "cache"))
 	withoutTerminal(t)
 	root := filepath.Join(t.TempDir(), "x86qw")
@@ -212,5 +214,28 @@ func TestSetupKeepsANewerCLIWhenADevBuildAdopts(t *testing.T) {
 	}
 	if receipt, _ := os.ReadFile(filepath.Join(root, ".x86qw", "cli", "receipt")); !strings.Contains(string(receipt), "2.3.2") {
 		t.Fatalf("o recibo da CLI mudou: %s", receipt)
+	}
+}
+
+// Purge takes the installation and the caches: the download cache with
+// its TUF metadata, and the user cache folder where the CLI kept that
+// metadata before 2.4.
+func TestPurgeTakesTheCachesWithTheirTUFMetadata(t *testing.T) {
+	root := fixtureInstall(t)
+	cache := os.Getenv(download.CacheEnv)
+	writeFile(t, filepath.Join(cache, "tuf", "metadata", "timestamp.json"), "{}")
+	writeFile(t, filepath.Join(cache, ".x86qw-cache"), "x86qw-cache-v1\n")
+	os.Chmod(filepath.Join(cache, ".x86qw-cache"), 0o600)
+	user, err := os.UserCacheDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := filepath.Join(user, "x86qw")
+	writeFile(t, filepath.Join(old, "tuf", "metadata", "timestamp.json"), "{}")
+	runOK(t, 0, "uninstall", "--purge", "--yes", root)
+	for _, gone := range []string{root, cache, old} {
+		if _, err := os.Stat(gone); err == nil {
+			t.Errorf("%s deveria ter saído", gone)
+		}
 	}
 }

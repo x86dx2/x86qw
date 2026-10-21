@@ -21,6 +21,8 @@ func isolate(t *testing.T) (cache string) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(home, "AppData", "Local"))
 	cache = filepath.Join(t.TempDir(), "x86qw-cache")
 	t.Setenv(download.CacheEnv, cache)
 	return cache

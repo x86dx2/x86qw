@@ -162,6 +162,13 @@ func ownedCaches() ([]string, error) {
 		}
 		owned = append(owned, candidate.path)
 	}
+	// Before 2.4 the CLI kept its TUF metadata in the user cache folder,
+	// which on macOS is not the download cache; nothing else lives there.
+	if user, err := os.UserCacheDir(); err == nil {
+		if old := filepath.Join(user, "x86qw"); old != current && download.AdoptableCache(old) {
+			owned = append(owned, old)
+		}
+	}
 	return owned, nil
 }
 
