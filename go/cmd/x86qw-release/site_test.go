@@ -34,7 +34,7 @@ func TestSiteShipsOneGenerationAndProvenance(t *testing.T) {
 	slices.Sort(shipped)
 	slices.Sort(want)
 	if !slices.Equal(shipped, want) {
-		t.Fatalf("trust publicado %v, geração %v", shipped, want)
+		t.Fatalf("published trust %v, generation %v", shipped, want)
 	}
 	for _, document := range []string{"version", "api/v1/version", "api/v1/health"} {
 		var fields map[string]any
@@ -48,6 +48,6 @@ func TestSiteShipsOneGenerationAndProvenance(t *testing.T) {
 	}
 	headers, _ := os.ReadFile(filepath.Join(out, "_headers"))
 	if !strings.Contains(string(headers), "/api/v1/product.json\n  Cache-Control: no-store") {
-		t.Fatal("_headers sem no-store do product.json")
+		t.Fatal("_headers without the product.json no-store")
 	}
 }

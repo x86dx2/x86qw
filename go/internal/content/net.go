@@ -25,7 +25,7 @@ type HTTPError struct {
 }
 
 func (e *HTTPError) Error() string {
-	return fmt.Sprintf("HTTP %d em %s", e.Status, safeURLForLog(e.URL))
+	return fmt.Sprintf("HTTP %d at %s", e.Status, safeURLForLog(e.URL))
 }
 
 // IntegrityError is a download whose size or digest is not the pinned one.
@@ -47,9 +47,9 @@ func (p *Project) client() *http.Client {
 	client := *base
 	client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
-			return errors.New("redirecionamentos demais")
+			return errors.New("too many redirects")
 		}
-		if _, err := validateHTTPSURL(request.URL.String(), "redirecionamento"); err != nil {
+		if _, err := validateHTTPSURL(request.URL.String(), "redirect"); err != nil {
 			return err
 		}
 		return nil
@@ -83,7 +83,7 @@ func (p *Project) request(method, url string, headers map[string]string, body io
 	response, err := p.client().Do(request)
 	if err != nil {
 		cancel()
-		return nil, nil, fmt.Errorf("falha de rede em %s: %v", safeURLForLog(url), err)
+		return nil, nil, fmt.Errorf("network failure at %s: %v", safeURLForLog(url), err)
 	}
 	return response, cancel, nil
 }
@@ -108,7 +108,7 @@ func (p *Project) Metadata(method, url string, maximum int64, deadline time.Dura
 		return nil, err
 	}
 	if int64(len(data)) > maximum {
-		return nil, fmt.Errorf("resposta excede %d bytes: %s", maximum, safeURLForLog(url))
+		return nil, fmt.Errorf("response exceeds %d bytes: %s", maximum, safeURLForLog(url))
 	}
 	result.Data = data
 	return result, nil
@@ -118,7 +118,7 @@ func (p *Project) Metadata(method, url string, maximum int64, deadline time.Dura
 // SHA-256 (download(PinnedArtifact(...))).
 func (p *Project) Pinned(url, destination string, size int64, digest string, attempts int) error {
 	if size <= 0 || size > MaxArtifactBytes || !sha256Pattern.MatchString(digest) {
-		return fmt.Errorf("download exige tamanho e SHA-256 revisados: %s", safeURLForLog(url))
+		return fmt.Errorf("download needs a reviewed size and SHA-256: %s", safeURLForLog(url))
 	}
 	var last error
 	for attempt := 0; attempt < max(1, attempts); attempt++ {
@@ -161,10 +161,10 @@ func (p *Project) pinnedOnce(url, destination string, size int64, digest string)
 		return closeErr
 	}
 	if written != size {
-		return &IntegrityError{fmt.Sprintf("tamanho divergente em %s: esperado %d, recebido %d", safeURLForLog(url), size, written)}
+		return &IntegrityError{fmt.Sprintf("size differs at %s: expected %d, got %d", safeURLForLog(url), size, written)}
 	}
 	if hex.EncodeToString(hash.Sum(nil)) != digest {
-		return &IntegrityError{"SHA-256 divergente em " + safeURLForLog(url)}
+		return &IntegrityError{"SHA-256 differs at " + safeURLForLog(url)}
 	}
 	if err := os.Chmod(temporary, 0o644); err != nil {
 		return err

@@ -17,7 +17,7 @@ func TestProductionKeysSignAVerifiableRepository(t *testing.T) {
 	repo, _ := filepath.Abs(filepath.Join("..", "..", ".."))
 	keys := filepath.Join(repo, ".tuf-production", "keys")
 	if _, err := os.Stat(keys); err != nil {
-		t.Skip("chaves offline indisponíveis")
+		t.Skip("offline keys unavailable")
 	}
 	out := filepath.Join(t.TempDir(), "repo")
 	catalogPath := filepath.Join(repo, "site", "public", "api", "v1", "catalog.json")
@@ -42,10 +42,10 @@ func TestProductionKeysSignAVerifiableRepository(t *testing.T) {
 	fetch := &localFetcher{files: files}
 	catalog, err := trust.LoadCatalog(trust.Options{BaseURL: "https://local.invalid/", Fetcher: fetch})
 	if err != nil {
-		t.Fatalf("repositório assinado em Go não autenticou: %v", err)
+		t.Fatalf("the repository signed in Go did not authenticate: %v", err)
 	}
 	if catalog.Roles["timestamp"].Version != 999 {
-		t.Fatalf("versão: %+v", catalog.Roles)
+		t.Fatalf("version: %+v", catalog.Roles)
 	}
 	renewed, err := RenewTimestamp(files["metadata/timestamp.json"], filepath.Join(keys, "timestamp-1.pem"), rootPath, 30*24*time.Hour, time.Now())
 	if err != nil {
@@ -54,9 +54,9 @@ func TestProductionKeysSignAVerifiableRepository(t *testing.T) {
 	files["metadata/timestamp.json"] = renewed
 	catalog, err = trust.LoadCatalog(trust.Options{BaseURL: "https://local.invalid/", Fetcher: fetch})
 	if err != nil || catalog.Roles["timestamp"].Version != 1000 {
-		t.Fatalf("timestamp renovado: %v %+v", err, catalog)
+		t.Fatalf("renewed timestamp: %v %+v", err, catalog)
 	}
 	if _, err := RenewTimestamp(renewed, filepath.Join(keys, "snapshot-1.pem"), rootPath, time.Hour, time.Now()); err == nil {
-		t.Fatal("chave snapshot aceita para timestamp")
+		t.Fatal("snapshot key accepted for timestamp")
 	}
 }

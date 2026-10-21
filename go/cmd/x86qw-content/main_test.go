@@ -13,7 +13,7 @@ func repoRoot(t *testing.T) string {
 	dir, _ := os.Getwd()
 	root, err := findRoot(dir)
 	if err != nil {
-		t.Skip("checkout indisponível")
+		t.Skip("checkout unavailable")
 	}
 	return root
 }
@@ -30,8 +30,8 @@ func TestExitCodesFollowManage(t *testing.T) {
 		{[]string{"--root", root, "verify", "--nope"}, exitUsage, "flag provided but not defined"},
 		{[]string{"--root", root, "publish", "--github-only", "--gitlab-only"}, exitUsage, "not allowed"},
 		{[]string{"--root", root, "add"}, exitUsage, "required: definition"},
-		{[]string{"--root", root, "add", filepath.Join(t.TempDir(), "missing.json"), "--dry-run"}, exitError, "[ERRO] nao foi possivel ler"},
-		{[]string{"--root", root, "update", "--workers", "0"}, exitError, "[ERRO] --workers deve estar entre 1 e 32"},
+		{[]string{"--root", root, "add", filepath.Join(t.TempDir(), "missing.json"), "--dry-run"}, exitError, "[ERROR] could not read"},
+		{[]string{"--root", root, "update", "--workers", "0"}, exitError, "[ERROR] --workers must be between 1 and 32"},
 		{[]string{"--root", root, "check", "--offline"}, exitOK, ""},
 		{[]string{"--root", root, "verify", "--help"}, exitOK, ""},
 	}

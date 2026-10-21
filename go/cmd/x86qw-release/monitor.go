@@ -30,14 +30,14 @@ const (
 // checkout's generation and production's have differed for over an hour.
 func runMonitor(args []string) int {
 	flags := flag.NewFlagSet("monitor", flag.ExitOnError)
-	baseURL := flags.String("base-url", trust.DefaultBaseURL, "repositório TUF público")
-	warning := flags.Int("warning-hours", 72, "janela de alerta do timestamp")
-	checkout := flags.Bool("checkout", false, "compara a geração do checkout com a de produção")
-	since := flags.String("checkout-time", "", "hora RFC 3339 do commit do checkout (o atraso conta a partir dela)")
+	baseURL := flags.String("base-url", trust.DefaultBaseURL, "public TUF repository")
+	warning := flags.Int("warning-hours", 72, "timestamp warning window")
+	checkout := flags.Bool("checkout", false, "compares the checkout's generation with production's")
+	since := flags.String("checkout-time", "", "RFC 3339 time of the checkout's commit (the delay counts from it)")
 	flags.Parse(args)
 	catalog, err := trust.LoadCatalog(trust.Options{BaseURL: *baseURL})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERRO] cadeia TUF pública não autenticou: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] the public TUF chain did not authenticate: %v\n", err)
 		return 1
 	}
 	now := time.Now().UTC()
@@ -56,7 +56,7 @@ func runMonitor(args []string) int {
 		expires[role] = state.Expires.UTC().Format(time.RFC3339)
 		versions[role] = state.Version
 		if !state.Expires.After(now.Add(window)) {
-			fmt.Fprintf(os.Stderr, "[ERRO] lease TUF %s expira em menos de %d dias: %s\n", role, int(window.Hours()/24), expires[role])
+			fmt.Fprintf(os.Stderr, "[ERROR] TUF %s lease expires in less than %d days: %s\n", role, int(window.Hours()/24), expires[role])
 			failed = true
 		}
 	}
@@ -68,7 +68,7 @@ func runMonitor(args []string) int {
 	if *checkout {
 		state, err := compareCheckout(catalog.Roles["timestamp"], *since, now)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "[ERRO] %v\n", err)
+			fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
 			failed = true
 		}
 		report["checkout"] = state
@@ -103,11 +103,11 @@ func compareCheckout(live trust.RoleState, since string, now time.Time) (string,
 		if err == nil && now.Sub(committed) < syncGrace {
 			return "deploying", nil
 		}
-		return "ahead", fmt.Errorf("main tem a geração TUF %d e produção ainda serve a %d: rode o workflow Deploy site", local.Timestamp, live.Version)
+		return "ahead", fmt.Errorf("main has TUF generation %d and production still serves %d: run the Deploy site workflow", local.Timestamp, live.Version)
 	default:
 		if now.Sub(live.Expires.Add(-timestampLease)) < syncGrace {
 			return "recording", nil
 		}
-		return "behind", fmt.Errorf("produção serve o timestamp %d e main registra o %d: o PR da renovação não entrou", live.Version, local.Timestamp)
+		return "behind", fmt.Errorf("production serves timestamp %d and main records %d: the renewal PR has not been merged", live.Version, local.Timestamp)
 	}
 }

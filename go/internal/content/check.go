@@ -103,7 +103,7 @@ type DeltaItem struct{ Path, Status, Reason string }
 func DistributionDelta(assets []Asset, manifest *Object) ([]DeltaItem, error) {
 	files, ok := manifest.Value("files").(*Object)
 	if !ok {
-		return nil, fmt.Errorf("dist/manifest.json nao possui uma colecao de arquivos valida")
+		return nil, fmt.Errorf("dist/manifest.json has no valid files collection")
 	}
 	desired := map[string]Asset{}
 	for _, asset := range assets {
@@ -115,13 +115,13 @@ func DistributionDelta(assets []Asset, manifest *Object) ([]DeltaItem, error) {
 		reason := ""
 		switch {
 		case !ok:
-			reason = "novo"
+			reason = "new"
 		case !pyjson.EqInt(current.Value("size"), asset.ExpectedSize):
-			reason = "tamanho alterado"
+			reason = "size changed"
 		case asset.ExpectedSHA256 != "" && !pyjson.Eq(current.Value("sha256"), asset.ExpectedSHA256):
-			reason = "conteudo alterado"
+			reason = "content changed"
 		case !pyjson.Eq(current.Value("url"), asset.URL):
-			reason = "origem alterada"
+			reason = "origin changed"
 		}
 		if reason != "" {
 			changes = append(changes, DeltaItem{path, "update-available", reason})
@@ -129,7 +129,7 @@ func DistributionDelta(assets []Asset, manifest *Object) ([]DeltaItem, error) {
 	}
 	for _, path := range files.Keys() {
 		if _, ok := desired[path]; !ok {
-			changes = append(changes, DeltaItem{path, "obsolete", "nao pertence mais ao conjunto atual"})
+			changes = append(changes, DeltaItem{path, "obsolete", "no longer in the current set"})
 		}
 	}
 	sort.SliceStable(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
@@ -189,11 +189,11 @@ func ReferenceRevision(assets []Asset) (string, error) {
 		}
 	}
 	if len(revisions) != 1 {
-		return "", fmt.Errorf("a descoberta nQuake nao produziu exatamente uma revisao")
+		return "", fmt.Errorf("nQuake discovery did not produce exactly one revision")
 	}
 	revision := sortedKeys(revisions)[0]
 	if !hex40Strict.MatchString(revision) {
-		return "", fmt.Errorf("revisao nQuake invalida: %s", revision)
+		return "", fmt.Errorf("invalid nQuake revision: %s", revision)
 	}
 	return revision, nil
 }
@@ -224,7 +224,7 @@ func GitBlobSHA1(path string) (string, error) {
 func ReferenceChanges(assets []Asset, manifest *Object, root string) (map[string]bool, error) {
 	files, ok := manifest.Value("files").(*Object)
 	if !ok {
-		return nil, fmt.Errorf("manifesto sem arquivos")
+		return nil, fmt.Errorf("manifest has no files")
 	}
 	type record struct {
 		relative, owner string
@@ -282,7 +282,7 @@ func ReferenceChanges(assets []Asset, manifest *Object, root string) (map[string
 func PreserveCurrentReferenceAssets(assets []Asset, manifest *Object, root string, keep func(owner string) bool) ([]Asset, error) {
 	files, ok := manifest.Value("files").(*Object)
 	if !ok {
-		return nil, fmt.Errorf("manifesto sem arquivos")
+		return nil, fmt.Errorf("manifest has no files")
 	}
 	var preserved []Asset
 	for _, asset := range assets {
@@ -300,7 +300,7 @@ func PreserveCurrentReferenceAssets(assets []Asset, manifest *Object, root strin
 		}
 		path := joinPosix(root, relative)
 		if !isFile(path) || isSymlink(path) {
-			return nil, fmt.Errorf("arquivo nQuake registrado esta ausente: %s", relative)
+			return nil, fmt.Errorf("registered nQuake file is missing: %s", relative)
 		}
 		subcomponent := ""
 		if pyjson.Truthy(metadata.Value("package")) {
@@ -343,7 +343,7 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool, selected []st
 		if asJSON {
 			progress = info
 		}
-		fmt.Fprintln(progress, "[INFO] Consultando clientes e arquivos incorporados...")
+		fmt.Fprintln(progress, "[INFO] Checking clients and incorporated files...")
 		var assets []Asset
 		if assets, unavailable, err = p.DiscoverAssets(); err != nil {
 			return 0, err
@@ -462,25 +462,25 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool, selected []st
 		for _, item := range shown {
 			switch {
 			case item.Error != "":
-				fmt.Fprintf(out, "[INDISPONIVEL] %s: %s\n", item.Component, item.Error)
+				fmt.Fprintf(out, "[UNAVAILABLE] %s: %s\n", item.Component, item.Error)
 			case item.Status == "current":
 				fmt.Fprintf(out, "[OK] %s: %s\n", item.Component, item.Installed)
 			default:
-				fmt.Fprintf(out, "[ATUALIZAR] %s: %s -> %s\n", item.Component, item.Installed, item.LatestSource)
+				fmt.Fprintf(out, "[UPDATE] %s: %s -> %s\n", item.Component, item.Installed, item.LatestSource)
 			}
 		}
 		if ezquakeDown {
-			fmt.Fprintf(out, "[INDISPONIVEL] ezquake: %s\n", unavailable["ezquake"])
+			fmt.Fprintf(out, "[UNAVAILABLE] ezquake: %s\n", unavailable["ezquake"])
 		}
 		if referenceNote != nil && len(referenceNote.Value("changed_components").([]any)) == 0 {
 			head := pyjson.Repr(referenceNote.Value("upstream"))
-			fmt.Fprintf(out, "[OK] nQuake %s nao alterou nenhum arquivo consumido; cada componente mantem sua revisao.\n", head[:12])
+			fmt.Fprintf(out, "[OK] nQuake %s changed no consumed file; each component keeps its revision.\n", head[:12])
 		}
 		for _, summary := range SummarizeDelta(delta) {
-			fmt.Fprintf(out, "[ATUALIZAR] %s\n", summary)
+			fmt.Fprintf(out, "[UPDATE] %s\n", summary)
 		}
 		if len(review) > 0 {
-			fmt.Fprintf(out, "[REVISAR] %d candidato(s) remoto(s) ainda não possuem SHA-256 previamente fixado; nenhum deles pode ser promovido por update.\n", len(review))
+			fmt.Fprintf(out, "[REVIEW] %d remote candidate(s) have no previously pinned SHA-256 yet; none of them can be promoted by update.\n", len(review))
 		}
 		if nquakeNote != nil {
 			for _, line := range nquakeNote.Lines() {
@@ -491,9 +491,9 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool, selected []st
 		if ezquakeDown {
 			unchecked++
 		}
-		fmt.Fprintf(out, "\n%d componente(s) e %d arquivo(s) envolvidos em mudancas", len(outdated), len(delta))
+		fmt.Fprintf(out, "\n%d component(s) and %d file(s) involved in changes", len(outdated), len(delta))
 		if unchecked > 0 {
-			fmt.Fprintf(out, "; %d componente(s) nao puderam ser consultados", unchecked)
+			fmt.Fprintf(out, "; %d component(s) could not be checked", unchecked)
 		}
 		fmt.Fprintln(out, ".")
 	}

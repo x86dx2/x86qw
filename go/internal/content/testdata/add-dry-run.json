@@ -1,23 +1,23 @@
 {
  "digest-mismatch": {
-  "error": "[ERRO] URL, tamanho ou SHA-256 diverge do manifesto imutavel atual: dist/mods/ktx/1.47/source/ktx-1.47.tar.gz"
+  "error": "[ERROR] URL, size or SHA-256 differs from the current immutable manifest: dist/mods/ktx/1.47/source/ktx-1.47.tar.gz"
  },
  "identical-managed-file": {
-  "plan": "[PLANO] Definicao valida: 1 arquivo(s).\n  dist/mods/ktx/1.47/source/ktx-1.47.tar.gz | https://github.com/<redigido>\n[OK] Simulacao concluida; nenhum byte remoto foi baixado e nenhum arquivo foi alterado.\n"
+  "plan": "[PLAN] Valid definition: 1 file(s).\n  dist/mods/ktx/1.47/source/ktx-1.47.tar.gz | https://github.com/<redacted>\n[OK] Dry run finished; no remote byte was downloaded and no file was changed.\n"
  },
  "outside-dist": {
-  "error": "[ERRO] o caminho precisa ficar em dist/: maintenance/x.bin"
+  "error": "[ERROR] the path must stay under dist/: maintenance/x.bin"
  },
  "unknown-consumer": {
-  "error": "[ERRO] consumer nao declarado para ktx: install:nobody"
+  "error": "[ERROR] undeclared consumer for ktx: install:nobody"
  },
  "unmanaged-remote": {
-  "error": "[ERRO] todo arquivo remoto persistente precisa declarar managed: true"
+  "error": "[ERROR] every persistent remote file must declare managed: true"
  },
  "wrong-kind": {
-  "error": "[ERRO] a definicao precisa ser x86qw/distribution-change formato 1"
+  "error": "[ERROR] the definition must be x86qw/distribution-change format 1"
  },
  "wrong-package": {
-  "error": "[ERRO] package do arquivo gerenciado deve ser ktx: mods/ktx/1.47/source/ktx-1.47.tar.gz"
+  "error": "[ERROR] the managed file's package must be ktx: mods/ktx/1.47/source/ktx-1.47.tar.gz"
  }
 }

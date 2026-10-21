@@ -20,7 +20,7 @@ import (
 
 // x86qw-content update and its workspace machinery.
 
-// ManagerError is an operational failure (printed as "[ERRO] ...").
+// ManagerError is an operational failure (printed as "[ERROR] ...").
 type ManagerError struct{ msg string }
 
 func (e *ManagerError) Error() string { return e.msg }
@@ -83,7 +83,7 @@ func (p *Project) UpdateInventoryLines(results []UpdateResult, assets []Asset, r
 	var lines []string
 	packages, ok := catalog.Value("packages").([]any)
 	if !ok {
-		return nil, managerError("catalogo sem pacotes")
+		return nil, managerError("catalog has no packages")
 	}
 	for _, channel := range []string{"stable", "nightly"} {
 		current, upstream := map[string]bool{}, map[string]bool{}
@@ -100,18 +100,18 @@ func (p *Project) UpdateInventoryLines(results []UpdateResult, assets []Asset, r
 			}
 		}
 		if len(current) != 1 || len(upstream) != 1 {
-			return nil, managerError("catalogo ezQuake %s precisa representar exatamente uma versao", channel)
+			return nil, managerError("the ezQuake %s catalog must hold exactly one version", channel)
 		}
 		currentVersion, upstreamVersion := sortedKeys(current)[0], sortedKeys(upstream)[0]
 		if currentVersion == upstreamVersion {
-			lines = append(lines, fmt.Sprintf("[OK] ezQuake %s: %s (%d plataformas)", channel, currentVersion, count))
+			lines = append(lines, fmt.Sprintf("[OK] ezQuake %s: %s (%d platforms)", channel, currentVersion, count))
 		} else {
-			lines = append(lines, fmt.Sprintf("[ATUALIZAR] ezQuake %s: %s -> %s (%d plataformas)", channel, currentVersion, upstreamVersion, count))
+			lines = append(lines, fmt.Sprintf("[UPDATE] ezQuake %s: %s -> %s (%d platforms)", channel, currentVersion, upstreamVersion, count))
 		}
 	}
 	releaseComponents, ok := releases.Value("components").(*Object)
 	if !ok {
-		return nil, managerError("inventario sem releases de componentes")
+		return nil, managerError("inventory has no component releases")
 	}
 	components, err := p.Components()
 	if err != nil {
@@ -137,11 +137,11 @@ func (p *Project) UpdateInventoryLines(results []UpdateResult, assets []Asset, r
 	for _, item := range referenceResults {
 		revisions[prefix(ReferenceRevisionOf(releases, item.Component), 12)] = true
 	}
-	lines = append(lines, fmt.Sprintf("[OK] Conteudo baseado no nQuake: %s (%d componentes)", strings.Join(sortedKeys(revisions), ", "), len(referenceResults)))
+	lines = append(lines, fmt.Sprintf("[OK] Content based on nQuake: %s (%d components)", strings.Join(sortedKeys(revisions), ", "), len(referenceResults)))
 	for _, item := range referenceResults {
 		release, ok := releaseComponents.Value(item.Component).(*Object)
 		if !ok {
-			return nil, managerError("release ausente: %s", item.Component)
+			return nil, managerError("missing release: %s", item.Component)
 		}
 		lines = append(lines, fmt.Sprintf("     - %s: %s", label(item.Component), pyjson.Repr(release.Value("version"))))
 	}
@@ -151,11 +151,11 @@ func (p *Project) UpdateInventoryLines(results []UpdateResult, assets []Asset, r
 		}
 		release, ok := releaseComponents.Value(item.Component).(*Object)
 		if !ok {
-			return nil, managerError("release ausente: %s", item.Component)
+			return nil, managerError("missing release: %s", item.Component)
 		}
 		marker := "OK"
 		if item.Status != "current" {
-			marker = "ATUALIZAR"
+			marker = "UPDATE"
 		}
 		upstreamVersion := item.LatestSource
 		if upstream, ok := release.Value("upstream").(*Object); ok {
@@ -166,7 +166,7 @@ func (p *Project) UpdateInventoryLines(results []UpdateResult, assets []Asset, r
 		}
 		detail := item.Installed
 		if upstreamVersion != detail {
-			detail = "upstream " + upstreamVersion + "; pacote x86QW " + detail
+			detail = "upstream " + upstreamVersion + "; x86QW package " + detail
 		}
 		var locations []string
 		for _, artifact := range objects(getOr(release, "artifacts", []any{})) {
@@ -176,7 +176,7 @@ func (p *Project) UpdateInventoryLines(results []UpdateResult, assets []Asset, r
 		}
 		location := ""
 		if len(locations) > 0 {
-			location = "; fonte " + strings.Join(locations, ", ")
+			location = "; source " + strings.Join(locations, ", ")
 		}
 		lines = append(lines, fmt.Sprintf("[%s] %s: %s%s", marker, label(item.Component), detail, location))
 	}
@@ -334,7 +334,7 @@ func (p *Project) requireCleanWorktree() error {
 		return err
 	}
 	if strings.TrimSpace(string(output)) != "" {
-		return managerError("o Git possui alteracoes locais. Conclua ou descarte essas alteracoes antes de modificar a distribuicao")
+		return managerError("Git has local changes. Commit or discard them before changing the distribution")
 	}
 	return nil
 }
@@ -496,14 +496,14 @@ func (p *Project) syncCandidate(out io.Writer, candidate string, assets []Asset,
 		}
 		files.Set(result.asset.Path, result.metadata)
 		completed++
-		action := "baixado"
+		action := "downloaded"
 		if result.cached {
 			action = "cache"
 		}
 		fmt.Fprintf(out, "[%3d/%d] %s: %s\n", completed, len(assets), action, result.asset.Path)
 	}
 	if len(failures) > 0 {
-		return nil, managerError("%d download(s) falharam; primeiro erro: %s", len(failures), failures[0])
+		return nil, managerError("%d download(s) failed; first error: %s", len(failures), failures[0])
 	}
 	for _, relative := range sortedKeys(objectMap(files)) {
 		if desired[relative] {
@@ -576,7 +576,7 @@ func (p *Project) validateStaged(work string) (*Project, error) {
 			path := filepath.Join(append([]string{candidate}, parts[1:]...)...)
 			info, err := os.Stat(path)
 			if !isFile(path) || isSymlink(path) || err != nil || info.Size() == 0 {
-				return nil, managerError("fonte x86QW ausente: %s", pyjson.Repr(source.Value("path")))
+				return nil, managerError("missing x86QW source: %s", pyjson.Repr(source.Value("path")))
 			}
 		}
 	}
@@ -588,7 +588,7 @@ func (p *Project) validateStaged(work string) (*Project, error) {
 		return nil, err
 	}
 	if _, ok := releases.Value("components").(*Object); !ok {
-		return nil, managerError("inventario de releases vazio")
+		return nil, managerError("empty release inventory")
 	}
 	return staged, nil
 }
@@ -613,7 +613,7 @@ type UpdateOptions struct {
 // current files.
 func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 	if options.Workers < 1 || options.Workers > 32 {
-		return managerError("--workers deve estar entre 1 e 32")
+		return managerError("--workers must be between 1 and 32")
 	}
 	releases, err := p.Releases()
 	if err != nil {
@@ -624,7 +624,7 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 		return err
 	}
 	explicit := setOf(options.Components...)
-	fmt.Fprintln(out, "[INFO] Consultando os upstreams declarados...")
+	fmt.Fprintln(out, "[INFO] Checking the declared upstreams...")
 	results, err := p.CheckUpdates(releases, true)
 	if err != nil {
 		return err
@@ -653,22 +653,22 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 	for _, item := range results {
 		switch {
 		case item.Error != "":
-			err = skip(item.Component, "upstream indisponível ("+item.Error+")")
+			err = skip(item.Component, "upstream unavailable ("+item.Error+")")
 		case item.Status != "current" && !IsReferenceStrategy(item.Strategy):
-			err = skip(item.Component, "exige nova versao/revisao explicita; use 'add' com uma definicao revisada")
+			err = skip(item.Component, "needs an explicit new version/revision; use 'add' with a reviewed definition")
 		}
 		if err != nil {
 			return err
 		}
 	}
 	if reason := unavailable["ezquake"]; reason != "" {
-		if err := skip("ezquake", "upstream indisponível ("+reason+")"); err != nil {
+		if err := skip("ezquake", "upstream unavailable ("+reason+")"); err != nil {
 			return err
 		}
 	}
 	if reason := unavailable["nquake"]; reason != "" {
 		for owner := range nquakeOwners {
-			if err := skip(owner, "referência nQuake indisponível ("+reason+")"); err != nil {
+			if err := skip(owner, "nQuake reference unavailable ("+reason+")"); err != nil {
 				return err
 			}
 		}
@@ -719,7 +719,7 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 			if reason != "" {
 				reason = "nQuake " + head[:12] + ": " + reason
 				if !IsReferenceStrategy(strategies[owner]) {
-					notices = append(notices, fmt.Sprintf("[REVISAR] %s: %s", owner, reason))
+					notices = append(notices, fmt.Sprintf("[REVIEW] %s: %s", owner, reason))
 				} else if err := skip(owner, reason); err != nil {
 					return err
 				}
@@ -753,7 +753,7 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 			results[index].Status, results[index].LatestSource = "current", results[index].Installed
 		}
 	}
-	fmt.Fprintln(out, "\nComponentes e clientes verificados:")
+	fmt.Fprintln(out, "\nComponents and clients checked:")
 	lines, err := p.UpdateInventoryLines(results, assets, releases, catalog)
 	if err != nil {
 		return err
@@ -762,13 +762,13 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 		fmt.Fprintln(out, line)
 	}
 	for _, id := range sortedKeys(setOfKeys(Unavailable(skipped))) {
-		fmt.Fprintf(out, "[PULADO] %s: %s\n", id, skipped[id])
+		fmt.Fprintf(out, "[SKIPPED] %s: %s\n", id, skipped[id])
 	}
 	for _, notice := range notices {
 		fmt.Fprintln(out, notice)
 	}
 	for _, move := range moves {
-		fmt.Fprintf(out, "[NQUAKE] %s: %s -> %s (%d arquivo(s) do nQuake alterado(s); %d customizacao(oes) x86QW reaplicada(s))\n",
+		fmt.Fprintf(out, "[NQUAKE] %s: %s -> %s (%d nQuake file(s) changed; %d x86QW customization(s) reapplied)\n",
 			move.owner, prefix(ReferenceRevisionOf(releases, move.owner), 12), head[:12], len(move.changed), len(move.repins))
 	}
 	inventoryChanged := false
@@ -778,10 +778,10 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 		}
 		inventoryChanged = len(nquakeReport.Unclassified) == 0 && (nquakeInventory.Revision != head || !nquakeInventory.Same(p.nquake))
 		if len(nquakeReport.Unclassified) > 0 {
-			fmt.Fprintf(out, "[INFO] O inventario nQuake so avanca quando todo arquivo estiver classificado em %s.\n", NQuakeInventoryPath)
+			fmt.Fprintf(out, "[INFO] The nQuake inventory only advances once every file is classified in %s.\n", NQuakeInventoryPath)
 		}
 		if inventoryChanged {
-			fmt.Fprintf(out, "[INFO] Inventario nQuake: %s -> %s.\n", nquakeInventory.Revision[:12], head[:12])
+			fmt.Fprintf(out, "[INFO] nQuake inventory: %s -> %s.\n", nquakeInventory.Revision[:12], head[:12])
 		}
 	}
 	if assets, err = PinAssetsFromManifest(assets, manifest); err != nil {
@@ -794,7 +794,7 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 	}
 	if len(delta) == 0 && len(review) == 0 {
 		if !inventoryChanged {
-			fmt.Fprintln(out, "[OK] O dist e os inventarios ja representam os upstreams atuais.")
+			fmt.Fprintln(out, "[OK] dist and the inventories already match the current upstreams.")
 			return nil
 		}
 		// Only the inventory of the unused nQuake files moves: no package
@@ -806,26 +806,26 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 			return err
 		}
 		if !options.Yes {
-			if err := options.Confirm("Atualizar o inventario nQuake?"); err != nil {
+			if err := options.Confirm("Update the nQuake inventory?"); err != nil {
 				return err
 			}
 		}
 		if err := WriteJSON(p.Path(NQuakeInventoryPath), nquakeInventory.Document(p.nquake)); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "[OK] Inventario nQuake atualizado para %s.\n", head[:12])
+		fmt.Fprintf(out, "[OK] nQuake inventory updated to %s.\n", head[:12])
 		return nil
 	}
-	fmt.Fprintf(out, "[INFO] %d alteracao(oes) de arquivo.\n", len(delta))
+	fmt.Fprintf(out, "[INFO] %d file change(s).\n", len(delta))
 	if options.DryRun {
 		for _, summary := range SummarizeDelta(delta) {
 			fmt.Fprintf(out, "  - %s\n", summary)
 		}
 	}
 	if len(review) > 0 {
-		return managerError("%d candidato(s) remoto(s) exige(m) tamanho e SHA-256 revisados antes do update; primeiro: %s. "+
-			"Use 'add' com uma definição revisada para incorporar o arquivo sem confiar na própria transferência. "+
-			"Nenhum payload candidato foi baixado.", len(review), review[0])
+		return managerError("%d remote candidate(s) need a reviewed size and SHA-256 before update; first: %s. "+
+			"Use 'add' with a reviewed definition to incorporate the file without trusting the transfer itself. "+
+			"No candidate payload was downloaded.", len(review), review[0])
 	}
 	if options.DryRun {
 		return nil
@@ -834,7 +834,7 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 		return err
 	}
 	if !options.Yes {
-		if err := options.Confirm("Aplicar esta atualizacao ao Git working tree?"); err != nil {
+		if err := options.Confirm("Apply this update to the Git working tree?"); err != nil {
 			return err
 		}
 	}
@@ -884,14 +884,14 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 	if err := p.applyWorkspace(work, true); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "[OK] Working tree atualizado: ezQuake %s/%s.\n", stable, nightly)
+	fmt.Fprintf(out, "[OK] Working tree updated: ezQuake %s/%s.\n", stable, nightly)
 	switch {
 	case options.Commit:
 		return p.Commit(out, options.Message, options.Push)
 	case options.Push:
-		return managerError("--push exige --commit")
+		return managerError("--push requires --commit")
 	}
-	fmt.Fprintln(out, "[PROXIMO] Execute 'x86qw-content verify' e revise 'git diff' antes do commit.")
+	fmt.Fprintln(out, "[NEXT] Run 'x86qw-content verify' and review 'git diff' before committing.")
 	return nil
 }
 
@@ -939,20 +939,20 @@ func updateClientCompatibility(releases *Object, stable, nightly string) {
 func assetPlatform(asset Asset) (string, error) {
 	_, _, variant, ok := EZQuakeRuntimeCoordinates(asset)
 	if !ok {
-		return "", managerError("artefato não é um runtime ezQuake: %s", asset.Path)
+		return "", managerError("artifact is not an ezQuake runtime: %s", asset.Path)
 	}
 	for _, platform := range []string{"macos", "linux", "windows"} {
 		if strings.HasPrefix(variant, platform) {
 			return platform, nil
 		}
 	}
-	return "", managerError("plataforma ezQuake desconhecida: %s", asset.Path)
+	return "", managerError("unknown ezQuake platform: %s", asset.Path)
 }
 
 func (p *Project) ezquakeSourceRevision(asset Asset) (string, error) {
 	channel, version, _, ok := EZQuakeRuntimeCoordinates(asset)
 	if !ok {
-		return "", managerError("artefato não é um runtime ezQuake: %s", asset.Path)
+		return "", managerError("artifact is not an ezQuake runtime: %s", asset.Path)
 	}
 	if channel == "stable" {
 		return version, nil
@@ -980,7 +980,7 @@ var githubReleasePattern = regexp.MustCompile(`^https://github\.com/([^/]+/[^/]+
 func GitHubReleaseCoordinates(url, filename string) (string, string, error) {
 	match := githubReleasePattern.FindStringSubmatch(url)
 	if match == nil || match[3] != filename {
-		return "", "", managerError("URL primaria nao representa um GitHub Release: %s", safeURLForLog(url))
+		return "", "", managerError("primary URL is not a GitHub Release: %s", safeURLForLog(url))
 	}
 	return match[1], match[2], nil
 }
@@ -996,7 +996,7 @@ func (p *Project) updateEZQuakeCatalog(catalog *Object, assets []Asset, manifest
 	packages, packagesOK := catalog.Value("packages").([]any)
 	files, filesOK := manifest.Value("files").(*Object)
 	if !packagesOK || !filesOK {
-		return "", "", managerError("catalogo ou manifesto invalido")
+		return "", "", managerError("invalid catalog or manifest")
 	}
 	templates := map[[2]string]*Object{}
 	for _, item := range objects(packages) {
@@ -1019,7 +1019,7 @@ func (p *Project) updateEZQuakeCatalog(catalog *Object, assets []Asset, manifest
 		template := templates[[2]string{channel, platform}]
 		metadata, ok := files.Value(asset.Path).(*Object)
 		if template == nil || !ok {
-			return "", "", managerError("faltam metadados para atualizar o catalogo: %s", asset.Path)
+			return "", "", managerError("metadata missing to update the catalog: %s", asset.Path)
 		}
 		sourceRevision, err := p.ezquakeSourceRevision(asset)
 		if err != nil {
@@ -1065,7 +1065,7 @@ func (p *Project) updateEZQuakeCatalog(catalog *Object, assets []Asset, manifest
 		}
 	}
 	if len(replacements) != 6 || stableVersion == "" || nightlyVersion == "" {
-		return "", "", managerError("a atualizacao exige tres builds stable e tres builds nightly do ezQuake")
+		return "", "", managerError("the update requires three stable and three nightly ezQuake builds")
 	}
 	var kept []any
 	for _, raw := range packages {
@@ -1095,7 +1095,7 @@ func (p *Project) updateEZQuakeCatalog(catalog *Object, assets []Asset, manifest
 	catalog.Set("generated_at", utcNow())
 	ezquakeRecipes := filepath.Join(recipes, "ezquake")
 	if _, err := ValidatePortableRelativePath(stableVersion, "ezQuake version"); err != nil || strings.Contains(stableVersion, "/") {
-		return "", "", fmt.Errorf("versão do ezQuake não serve de pasta: %q", stableVersion)
+		return "", "", fmt.Errorf("ezQuake version cannot be a folder name: %q", stableVersion)
 	}
 	os.RemoveAll(ezquakeRecipes)
 	targetRoot := filepath.Join(ezquakeRecipes, stableVersion)

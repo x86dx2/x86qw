@@ -25,7 +25,7 @@ func gitRun(t *testing.T, dir string, args ...string) string {
 func isolateGit(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git indisponível")
+		t.Skip("git unavailable")
 	}
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
@@ -73,7 +73,7 @@ func TestCheckLFS(t *testing.T) {
 				t.Fatal(err)
 			}
 			if len(problems) != item.problems {
-				t.Fatalf("problemas: %v", problems)
+				t.Fatalf("problems: %v", problems)
 			}
 		})
 	}
@@ -115,6 +115,6 @@ func TestCommittedDiffCheck(t *testing.T) {
 		})
 	}
 	if _, err := CommittedDiffCommand("push", object("before", "xyz", "after", dirty)); err == nil {
-		t.Fatal("SHA inválido aceito")
+		t.Fatal("invalid SHA accepted")
 	}
 }

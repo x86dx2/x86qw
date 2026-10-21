@@ -74,13 +74,13 @@ func LoadCatalog(opts Options) (*Catalog, error) {
 		baseURL = DefaultBaseURL
 	}
 	if !strings.HasPrefix(baseURL, "https://") && !strings.HasPrefix(baseURL, "http://127.0.0.1") {
-		return nil, errorf("URL de trust deve usar HTTPS: %s", baseURL)
+		return nil, errorf("the trust URL must use HTTPS: %s", baseURL)
 	}
 	baseURL = strings.TrimSuffix(baseURL, "/") + "/"
 
 	cfg, err := config.New(baseURL+"metadata/", root)
 	if err != nil {
-		return nil, errorf("configuração TUF inválida: %v", err)
+		return nil, errorf("invalid TUF configuration: %v", err)
 	}
 	cfg.RemoteTargetsURL = baseURL + "targets/"
 	// Size bounds per role.
@@ -111,23 +111,23 @@ func LoadCatalog(opts Options) (*Catalog, error) {
 
 	up, err := updater.New(cfg)
 	if err != nil {
-		return nil, errorf("falha de trust ao autenticar catálogo: %v", err)
+		return nil, errorf("trust failure authenticating the catalog: %v", err)
 	}
 	if !opts.RefTime.IsZero() {
 		up.UnsafeSetRefTime(opts.RefTime)
 	}
 	if err := up.Refresh(); err != nil {
-		return nil, errorf("falha de trust ao autenticar catálogo: %v", err)
+		return nil, errorf("trust failure authenticating the catalog: %v", err)
 	}
 	if err := checkEquivocation(previousTimestamp, observer.timestamp()); err != nil {
 		return nil, err
 	}
 	info, err := up.GetTargetInfo(CatalogTarget)
 	if err != nil {
-		return nil, errorf("catálogo não foi autorizado por targets TUF: %v", err)
+		return nil, errorf("the catalog was not authorized by the TUF targets: %v", err)
 	}
 	if info.Length > catalogMaxBytes {
-		return nil, errorf("catálogo autenticado excede %d bytes", catalogMaxBytes)
+		return nil, errorf("the authenticated catalog exceeds %d bytes", catalogMaxBytes)
 	}
 	targetPath := ""
 	if opts.CacheDir != "" {
@@ -135,7 +135,7 @@ func LoadCatalog(opts Options) (*Catalog, error) {
 	}
 	_, payload, err := up.DownloadTarget(info, targetPath, "")
 	if err != nil {
-		return nil, errorf("falha de trust ao baixar catálogo: %v", err)
+		return nil, errorf("trust failure downloading the catalog: %v", err)
 	}
 	packages, err := checkCatalogIdentity(payload)
 	if err != nil {
@@ -170,7 +170,7 @@ func checkEquivocation(previous, observed []byte) error {
 		return nil
 	}
 	if old.Signed.Version == cur.Signed.Version && !bytes.Equal(previous, observed) {
-		return errorf("equivocação TUF: timestamp diferente reutilizou a versão %d", cur.Signed.Version)
+		return errorf("TUF equivocation: a different timestamp reused version %d", cur.Signed.Version)
 	}
 	return nil
 }
@@ -182,10 +182,10 @@ func checkCatalogIdentity(payload []byte) (int, error) {
 		Packages []json.RawMessage `json:"packages"`
 	}
 	if err := json.Unmarshal(payload, &catalog); err != nil {
-		return 0, errorf("catálogo autenticado não é JSON válido: %v", err)
+		return 0, errorf("the authenticated catalog is not valid JSON: %v", err)
 	}
 	if catalog.Format == nil || *catalog.Format != 1 || catalog.Project != "x86qw" || catalog.Packages == nil {
-		return 0, errorf("catálogo autenticado usa identidade ou formato incompatível")
+		return 0, errorf("the authenticated catalog uses an incompatible identity or format")
 	}
 	return len(catalog.Packages), nil
 }

@@ -24,7 +24,7 @@ func TestAddDryRun(t *testing.T) {
 	const relative = "mods/ktx/1.47/source/ktx-1.47.tar.gz"
 	metadata, ok := manifest.Value("files").(*Object).Value(relative).(*Object)
 	if !ok {
-		t.Skip("artefato KTX ausente do manifesto")
+		t.Skip("KTX artifact missing from the manifest")
 	}
 	entry := func(mutate func(*Object)) *Object {
 		file := object("destination", "dist/"+relative, "url", metadata.Value("url"), "size", metadata.Value("size"),
@@ -62,10 +62,10 @@ func TestAddDryRun(t *testing.T) {
 			goErr := NewProject(root).Add(&out, path, AddOptions{DryRun: true})
 			expected := want[name]
 			switch {
-			case expected.Error != "" && (goErr == nil || "[ERRO] "+goErr.Error() != expected.Error):
+			case expected.Error != "" && (goErr == nil || "[ERROR] "+goErr.Error() != expected.Error):
 				t.Errorf("want %s, got %v", expected.Error, goErr)
 			case expected.Error == "" && (goErr != nil || out.String() != expected.Plan):
-				t.Errorf("plano diverge (%v):\nwant:\n%s\ngot:\n%s", goErr, expected.Plan, out.String())
+				t.Errorf("plan differs (%v):\nwant:\n%s\ngot:\n%s", goErr, expected.Plan, out.String())
 			}
 		})
 	}

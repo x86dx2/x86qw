@@ -2,7 +2,7 @@
 // checks, updates, extends, verifies, builds and publishes the x86QW
 // content distribution, and regenerates the public product facts.
 //
-// Exit codes: 0 success, 1 operational error ("[ERRO] ..."
+// Exit codes: 0 success, 1 operational error ("[ERROR] ..."
 // on stderr), 2 usage error or, for check, pending updates.
 package main
 
@@ -51,7 +51,7 @@ func usage(stderr io.Writer) {
 	}
 	sort.Strings(names)
 	fmt.Fprintf(stderr, "usage: x86qw-content [--root DIR] [--verbose] {%s} ...\n\n", strings.Join(names, ","))
-	fmt.Fprintln(stderr, "Fonte unica para verificar, atualizar, ampliar, montar e publicar o dist x86QW.")
+	fmt.Fprintln(stderr, "Single tool to verify, update, extend, build and publish the x86QW dist.")
 	for _, name := range names {
 		fmt.Fprintf(stderr, "  %-8s %s\n", name, commands[name].help)
 	}
@@ -65,7 +65,7 @@ func findRoot(dir string) (string, error) {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", errors.New("checkout x86QW não encontrado; use --root")
+			return "", errors.New("x86QW checkout not found; use --root")
 		}
 		dir = parent
 	}
@@ -111,14 +111,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 		cwd, _ := os.Getwd()
 		found, err := findRoot(cwd)
 		if err != nil {
-			fmt.Fprintf(stderr, "[ERRO] %v\n", err)
+			fmt.Fprintf(stderr, "[ERROR] %v\n", err)
 			return exitError
 		}
 		root = found
 	}
 	absolute, err := filepath.Abs(root)
 	if err != nil {
-		fmt.Fprintf(stderr, "[ERRO] %v\n", err)
+		fmt.Fprintf(stderr, "[ERROR] %v\n", err)
 		return exitError
 	}
 	env := &environment{project: content.NewProject(absolute), stdout: stdout, stderr: stderr, stdin: os.Stdin}
@@ -132,7 +132,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "x86qw-content %s: error: %s\n", args[0], usageErr.msg)
 			return exitUsage
 		}
-		fmt.Fprintf(stderr, "[ERRO] %v\n", err)
+		fmt.Fprintf(stderr, "[ERROR] %v\n", err)
 		if verbose {
 			fmt.Fprintf(stderr, "%+v\n", err)
 		}

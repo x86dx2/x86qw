@@ -57,7 +57,7 @@ func ReadGeneration(dir string) (*Generation, error) {
 	earliest(timestamp.Signed.Expires)
 	meta := timestamp.Signed.Meta["snapshot.json"]
 	if meta == nil {
-		return nil, errors.New("timestamp.json não aponta um snapshot")
+		return nil, errors.New("timestamp.json does not point at a snapshot")
 	}
 	g.Snapshot = meta.Version
 	if raw, err = read(fmt.Sprintf("%d.snapshot.json", g.Snapshot)); err != nil {
@@ -69,7 +69,7 @@ func ReadGeneration(dir string) (*Generation, error) {
 	}
 	earliest(snapshot.Signed.Expires)
 	if meta = snapshot.Signed.Meta["targets.json"]; meta == nil {
-		return nil, errors.New("snapshot não aponta um targets")
+		return nil, errors.New("snapshot does not point at a targets")
 	}
 	g.Targets = meta.Version
 	if raw, err = read(fmt.Sprintf("%d.targets.json", g.Targets)); err != nil {
@@ -82,7 +82,7 @@ func ReadGeneration(dir string) (*Generation, error) {
 	earliest(targets.Signed.Expires)
 	target := targets.Signed.Targets[CatalogTarget]
 	if target == nil || len(target.Hashes["sha256"]) != 32 {
-		return nil, errors.New("targets sem o hash do catálogo")
+		return nil, errors.New("targets without the catalog hash")
 	}
 	g.Catalog = hex.EncodeToString(target.Hashes["sha256"])
 	roots, _ := filepath.Glob(filepath.Join(dir, "metadata", "*.root.json"))
@@ -102,7 +102,7 @@ func ReadGeneration(dir string) (*Generation, error) {
 		g.Roots = append(g.Roots, filepath.Base(path))
 	}
 	if newest == nil {
-		return nil, errors.New("projeção TUF sem root")
+		return nil, errors.New("TUF projection without a root")
 	}
 	earliest(newest.Signed.Expires)
 	return g, nil

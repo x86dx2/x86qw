@@ -31,7 +31,7 @@ func TestParseLFSPointer(t *testing.T) {
 
 func TestMaterializeLFS(t *testing.T) {
 	root := t.TempDir()
-	payload := []byte("objeto LFS de teste")
+	payload := []byte("test LFS object")
 	sum := sha256.Sum256(payload)
 	oid := hex.EncodeToString(sum[:])
 	pointer := "version https://git-lfs.github.com/spec/v1\noid sha256:" + oid + "\nsize " + strconv.Itoa(len(payload)) + "\n"

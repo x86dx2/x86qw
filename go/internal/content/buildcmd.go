@@ -203,13 +203,13 @@ func (p *Project) Build(out io.Writer, register bool, projectRef string, now tim
 			return err
 		}
 	}
-	fmt.Fprintf(out, "[OK] %d pacote(s) gerado(s) em %s.\n", len(manifest.Value("packages").([]any)), builds)
+	fmt.Fprintf(out, "[OK] %d package(s) built in %s.\n", len(manifest.Value("packages").([]any)), builds)
 	return nil
 }
 
 func loadOwnershipFragment(path string) (*Object, error) {
 	if isSymlink(path) || !isFile(path) {
-		return nil, fmt.Errorf("fragmento de ownership ausente ou inseguro: %s", path)
+		return nil, fmt.Errorf("missing or unsafe ownership fragment: %s", path)
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -217,7 +217,7 @@ func loadOwnershipFragment(path string) (*Object, error) {
 	}
 	value, err := pyjson.Decode(raw, pyjson.RejectDuplicates)
 	if err != nil {
-		return nil, fmt.Errorf("fragmento de ownership inválido: %s", path)
+		return nil, fmt.Errorf("invalid ownership fragment: %s", path)
 	}
 	return ValidateOwnership(value)
 }

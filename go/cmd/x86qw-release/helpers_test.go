@@ -22,7 +22,7 @@ func catalogPins(raw []byte) (*pins, error) {
 			continue
 		}
 		if p.Version != "" && pkg.Version != p.Version {
-			return nil, fmt.Errorf("o catálogo lista a CLI %s e a %s", p.Version, pkg.Version)
+			return nil, fmt.Errorf("the catalog lists CLI %s and %s", p.Version, pkg.Version)
 		}
 		p.Version = pkg.Version
 		for target, coordinates := range cliCoordinates {
@@ -32,7 +32,7 @@ func catalogPins(raw []byte) (*pins, error) {
 		}
 	}
 	if len(p.SHA256) != len(Targets) {
-		return nil, fmt.Errorf("o catálogo não lista os %d binários da CLI", len(Targets))
+		return nil, fmt.Errorf("the catalog does not list the %d CLI binaries", len(Targets))
 	}
 	return p, nil
 }

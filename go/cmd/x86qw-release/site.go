@@ -26,11 +26,11 @@ const noStoreHeaders = "\n/api/v1/product.json\n  Cache-Control: no-store, no-ca
 //	x86qw-release site --source site/public --out DIR --commit SHA [--validate-run N --deploy-run N]
 func runSite(args []string) int {
 	flags := flag.NewFlagSet("site", flag.ExitOnError)
-	source := flags.String("source", "site/public", "projeção do site no checkout")
-	out := flags.String("out", "", "diretório de saída (novo)")
-	commit := flags.String("commit", "", "commit implantado (40 hex)")
-	validateRun := flags.Int64("validate-run", 0, "run do Validate")
-	deployRun := flags.Int64("deploy-run", 0, "run do deploy")
+	source := flags.String("source", "site/public", "site projection in the checkout")
+	out := flags.String("out", "", "output folder (new)")
+	commit := flags.String("commit", "", "deployed commit (40 hex)")
+	validateRun := flags.Int64("validate-run", 0, "Validate run")
+	deployRun := flags.Int64("deploy-run", 0, "deploy run")
 	flags.Parse(args)
 	if *out == "" || len(*commit) != 40 {
 		flags.Usage()
@@ -40,7 +40,7 @@ func runSite(args []string) int {
 		fmt.Fprintln(os.Stderr, "x86qw-release site:", err)
 		return 1
 	}
-	fmt.Println("site montado em", *out)
+	fmt.Println("site built in", *out)
 	return 0
 }
 
@@ -62,7 +62,7 @@ func copyTree(source, destination string, skip func(string) bool) error {
 			return os.MkdirAll(target, 0o755)
 		}
 		if !entry.Type().IsRegular() {
-			return fmt.Errorf("arquivo não regular no site: %s", relative)
+			return fmt.Errorf("non-regular file in the site: %s", relative)
 		}
 		info, err := entry.Info()
 		if err != nil {
@@ -87,7 +87,7 @@ func encodeIndented(value any) []byte {
 
 func assembleSite(source, out, commit string, validateRun, deployRun int64) error {
 	if _, err := os.Stat(out); err == nil {
-		return fmt.Errorf("destino já existe: %s", out)
+		return fmt.Errorf("destination already exists: %s", out)
 	}
 	trust := filepath.Join(source, "api", "v1", "trust")
 	generation, err := tufsign.ReadGeneration(trust)

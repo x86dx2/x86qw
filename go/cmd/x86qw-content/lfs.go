@@ -10,8 +10,8 @@ import (
 
 func runLFSMaterialize(env *environment, args []string) (int, error) {
 	flags := flag.NewFlagSet("lfs-materialize", flag.ContinueOnError)
-	repository := flags.String("repository", "", "repositório GitHub (owner/nome)")
-	commit := flags.String("commit", "", "commit cujos objetos LFS serão baixados")
+	repository := flags.String("repository", "", "GitHub repository (owner/name)")
+	commit := flags.String("commit", "", "commit whose LFS objects are downloaded")
 	if err := parseFlags("lfs-materialize", flags, args, env.stderr); err != nil {
 		return 0, err
 	}
@@ -22,10 +22,10 @@ func runLFSMaterialize(env *environment, args []string) (int, error) {
 	if err != nil {
 		return exitError, err
 	}
-	fmt.Fprintf(env.stdout, "[OK] LFS: %d objetos novos verificados no cache.\n", created)
+	fmt.Fprintf(env.stdout, "[OK] LFS: %d new objects verified in the cache.\n", created)
 	return exitOK, nil
 }
 
 func init() {
-	register("lfs-materialize", "baixa e verifica os objetos LFS do commit pelo endpoint de mídia do GitHub", runLFSMaterialize)
+	register("lfs-materialize", "downloads and verifies the commit's LFS objects through GitHub's media endpoint", runLFSMaterialize)
 }

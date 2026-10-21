@@ -26,11 +26,11 @@ type localTUFFetcher struct{ root string }
 func (f localTUFFetcher) DownloadFile(raw string, maxLength int64, _ time.Duration) ([]byte, error) {
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Scheme != "https" || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return nil, errors.New("projeção local de TUF recebeu URL inválida")
+		return nil, errors.New("the local TUF projection got an invalid URL")
 	}
 	name := path.Base(parsed.Path)
 	if name == "" || name == "." || name == ".." || name == "/" {
-		return nil, errors.New("projeção local de TUF recebeu caminho inválido")
+		return nil, errors.New("the local TUF projection got an invalid path")
 	}
 	var matches []string
 	filepath.WalkDir(f.root, func(candidate string, entry os.DirEntry, err error) error {
@@ -44,14 +44,14 @@ func (f localTUFFetcher) DownloadFile(raw string, maxLength int64, _ time.Durati
 		return nil, &metadata.ErrDownloadHTTP{StatusCode: 404, URL: raw}
 	}
 	if len(matches) > 1 {
-		return nil, fmt.Errorf("projeção local de TUF não possui %s", name)
+		return nil, fmt.Errorf("the local TUF projection has no %s", name)
 	}
 	payload, err := os.ReadFile(matches[0])
 	if err != nil {
 		return nil, err
 	}
 	if int64(len(payload)) > maxLength {
-		return nil, fmt.Errorf("metadata TUF local excede o limite: %s", name)
+		return nil, fmt.Errorf("local TUF metadata exceeds the limit: %s", name)
 	}
 	return payload, nil
 }
@@ -77,7 +77,7 @@ func (p *Project) VerifyLocalTUFCatalog() (string, error) {
 		err = trust.ValidateRootPolicy(rootBytes)
 	}
 	if err != nil {
-		return "", fmt.Errorf("root TUF incorporada inválida: %v", err)
+		return "", fmt.Errorf("invalid embedded TUF root: %v", err)
 	}
 	metadataDir, targetsDir := p.Path(TrustMetadataDir), p.Path(TrustTargetsDir)
 	var metadataFiles, targetFiles []string
@@ -88,32 +88,32 @@ func (p *Project) VerifyLocalTUFCatalog() (string, error) {
 		targetFiles = jsonFiles(targetsDir)
 	}
 	if len(metadataFiles) == 0 && len(targetFiles) == 0 {
-		return "root validada; metadata pública aguardando publicação", nil
+		return "root validated; public metadata awaiting publication", nil
 	}
 	if !isDir(metadataDir) || !isDir(targetsDir) {
-		return "", errors.New("projeção pública de TUF incompleta")
+		return "", errors.New("incomplete public TUF projection")
 	}
 	names := map[string]bool{}
 	for _, file := range metadataFiles {
 		if isSymlink(file) {
-			return "", fmt.Errorf("metadata TUF não pode ser link: %s", filepath.Base(file))
+			return "", fmt.Errorf("TUF metadata cannot be a link: %s", filepath.Base(file))
 		}
 		names[filepath.Base(file)] = true
 	}
 	if !names["timestamp.json"] || !names["1.root.json"] {
-		return "", errors.New("projeção pública de TUF não contém root/timestamp/snapshot/targets")
+		return "", errors.New("the public TUF projection lacks root/timestamp/snapshot/targets")
 	}
 	projection := p.Path(TrustDir)
 	generation, err := tufsign.ReadGeneration(projection)
 	if err != nil {
-		return "", fmt.Errorf("projeção pública de TUF incompleta: %v", err)
+		return "", fmt.Errorf("incomplete public TUF projection: %v", err)
 	}
 	stale, err := tufsign.Stale(projection)
 	if err != nil {
 		return "", err
 	}
 	if len(stale) > 0 {
-		return "", fmt.Errorf("a projeção TUF guarda gerações antigas (%s); rode x86qw-release prune", strings.Join(stale, ", "))
+		return "", fmt.Errorf("the TUF projection keeps old generations (%s); run x86qw-release prune", strings.Join(stale, ", "))
 	}
 	authenticated, err := trust.LoadCatalog(trust.Options{
 		BaseURL: "https://local.x86qw.invalid/trust/",
@@ -130,17 +130,17 @@ func (p *Project) VerifyLocalTUFCatalog() (string, error) {
 		local, err = pyjson.Decode(localBytes, pyjson.LastWins)
 	}
 	if err != nil {
-		return "", errors.New("catálogo local não pôde ser lido para comparação TUF")
+		return "", errors.New("the local catalog could not be read for the TUF comparison")
 	}
 	if remote, err = pyjson.Decode(authenticated.Raw, pyjson.LastWins); err != nil {
 		return "", err
 	}
 	if !pyjson.Eq(local, remote) {
-		return "", errors.New("catálogo local diverge do target TUF; assine-o com x86qw-release sign")
+		return "", errors.New("the local catalog differs from the TUF target; sign it with x86qw-release sign")
 	}
-	status := fmt.Sprintf("geração %d autenticada localmente, vale até %s", generation.Timestamp, generation.Expires.UTC().Format(time.DateOnly))
+	status := fmt.Sprintf("generation %d authenticated locally, valid until %s", generation.Timestamp, generation.Expires.UTC().Format(time.DateOnly))
 	if !time.Now().Before(generation.Expires) {
-		status += " (vencida: renove)"
+		status += " (expired: renew)"
 	}
 	return status, nil
 }

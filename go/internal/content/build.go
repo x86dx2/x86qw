@@ -151,10 +151,10 @@ func (p *Project) BuildPackages(distribution, output string, options BuildOption
 		return nil, err
 	}
 	if options.OwnershipOutput != "" && options.ProjectRef == "" {
-		return nil, fmt.Errorf("--project-ref é obrigatório quando --ownership-output é usado")
+		return nil, fmt.Errorf("--project-ref is required when --ownership-output is used")
 	}
 	if options.ProjectRef != "" && !projectRefPattern.MatchString(options.ProjectRef) {
-		return nil, fmt.Errorf("project-ref deve ser um SHA-1 hexadecimal minúsculo completo")
+		return nil, fmt.Errorf("project-ref must be a full lowercase hexadecimal SHA-1")
 	}
 	// One build carries every nQuake revision the components pin; each
 	// package records and is released under its own.
@@ -519,7 +519,7 @@ func (p *Project) RegisterPackages(catalogPath string, manifest *Object, now tim
 func (p *Project) NormalizeCatalogReleaseMetadata(catalog *Object) error {
 	packages, ok := catalog.Value("packages").([]any)
 	if !ok {
-		return fmt.Errorf("catalogo invalido ao normalizar metadados de release")
+		return fmt.Errorf("invalid catalog while normalizing release metadata")
 	}
 	setDefault := func(item *Object, key string, value any) {
 		if !item.Has(key) {

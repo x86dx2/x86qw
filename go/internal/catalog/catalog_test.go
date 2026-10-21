@@ -19,7 +19,7 @@ func repoFile(t *testing.T, parts ...string) []byte {
 
 func TestEmbeddedInventoryMatchesMaintenance(t *testing.T) {
 	if !bytes.Equal(ComponentsJSON, repoFile(t, "maintenance", "inventory", "components.json")) {
-		t.Fatal("go/internal/catalog/components.json diverge de maintenance/inventory/components.json")
+		t.Fatal("go/internal/catalog/components.json differs from maintenance/inventory/components.json")
 	}
 }
 
@@ -57,7 +57,7 @@ func TestCatalogSelectsComponentAndClientPackages(t *testing.T) {
 			t.Fatalf("%s: %v", id, err)
 		}
 		if pkg.Size <= 0 {
-			t.Fatalf("%s sem tamanho", id)
+			t.Fatalf("%s without a size", id)
 		}
 	}
 	for _, spec := range ClientSpecs {
@@ -68,7 +68,7 @@ func TestCatalogSelectsComponentAndClientPackages(t *testing.T) {
 			}
 			for index := 1; index < len(releases); index++ {
 				if ReleaseIsNewer(releases[index].Version, releases[index-1].Version, channel) {
-					t.Fatalf("%s %s fora de ordem", spec.Platform, channel)
+					t.Fatalf("%s %s out of order", spec.Platform, channel)
 				}
 			}
 		}
@@ -78,6 +78,6 @@ func TestCatalogSelectsComponentAndClientPackages(t *testing.T) {
 func TestResolveRejectsCycles(t *testing.T) {
 	_, err := ParseInventory([]byte(`{"components":[{"id":"a","requires":["b"]},{"id":"b","requires":["a"]}]}`))
 	if err == nil {
-		t.Fatal("ciclo aceito")
+		t.Fatal("cycle accepted")
 	}
 }
