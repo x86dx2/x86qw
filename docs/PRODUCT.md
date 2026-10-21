@@ -13,10 +13,11 @@ serviços.
 
 ## Product Purpose
 
-Oferecer uma distribuição QuakeWorld moderna, reproduzível e auditável, com uma
-interface de terminal que revela as opções relevantes no momento certo. O menu é
-uma porta de entrada para os mesmos comandos automatizáveis; ele não substitui nem
-altera a semântica das flags públicas.
+Oferecer uma distribuição QuakeWorld moderna, reproduzível e auditável, com um
+app de terminal que revela as opções relevantes no momento certo. O app é uma
+porta de entrada para os mesmos comandos automatizáveis; ele não substitui nem
+altera a semântica das flags públicas, e as ações que ele não faz sozinho rodam
+os comandos `x86qw` equivalentes.
 
 ## Brand Personality
 
@@ -32,26 +33,26 @@ estado.
 
 ## Design Principles
 
-- Começar pela intenção: jogar, encontrar servidor, hospedar ou gerenciar.
+- Começar pela intenção: no instalador, jogar, hospedar ou os dois; no app,
+  Jogar, Servidores e Hospedar antes da manutenção.
 - Usar divulgação progressiva: perguntar somente o que se aplica à escolha atual.
-- Manter contexto visível por breadcrumbs, descrições e valores padrão claros.
-- Oferecer busca e atalhos sem prejudicar a navegação básica por teclado.
-- Mostrar um resumo verificável e pedir confirmação antes de iniciar gameplay,
-  conectar pelo Hub, iniciar um serviço isolado ou subir uma stack de hospedagem.
-- Preservar o resultado de cada ação até confirmação do usuário, antes de
-  redesenhar o menu que a iniciou.
+- Uma tela por vez, em sanfona, com o rodapé fixo dizendo as teclas daquele
+  estado; nada muda de lugar enquanto a tela se atualiza.
+- Diálogos usam espaço para mudar, Enter para confirmar e Esc para cancelar.
+- Mostrar o que vai acontecer e pedir confirmação antes de instalar, atualizar,
+  desinstalar ou encerrar uma stack de hospedagem.
 - Permitir consultar a stack ativa, seus endpoints e parâmetros não sensíveis
   sem interromper nem alterar os serviços, e oferecer uma ação separada e
-  confirmada para encerrá-la coordenadamente.
+  confirmada para encerrá-la.
 - Permitir primeiro ou segundo plano sem criar dois modelos de lifecycle: ambos
   usam o mesmo lock, journal, readiness e cleanup.
-- Oferecer um caminho rápido com padrões seguros e um caminho avançado sem
-  misturar decisões de gameplay e infraestrutura.
+- Mostrar o comando e a receita equivalentes ao que foi escolhido, sem senhas.
 - Preservar os comandos existentes como contrato estável para usuários avançados e automação.
 
 ## Accessibility & Inclusion
 
-Garantir operação completa por teclado, fallback numerado sem TTY, foco textual
-visível, informação independente de cor, suporte a `NO_COLOR` e linguagem em
-português. A interface deve funcionar em terminais Unix e Windows e permanecer
-legível em larguras reduzidas.
+Garantir operação completa por teclado, foco visível, informação independente de
+cor, suporte a `NO_COLOR` e a terminais sem glifos Unicode (`X86QW_GLYPHS=ascii`),
+e português ou inglês conforme o sistema. Sem terminal, a CLI imprime a ajuda e
+cada comando diz o que precisa. A interface deve funcionar em terminais Unix e
+Windows e permanecer legível em larguras reduzidas.

@@ -11,21 +11,24 @@ cd site
 npm ci
 npm run deploy:dry-run
 cd ..
-./maintenance/manage.py verify --no-tests
+go -C go run ./cmd/x86qw-content verify
 ```
 
-A versão 4.114.0 do Wrangler foi usada para validar esta configuração em 25 de
-julho de 2026. Atualizações devem repetir o dry-run antes do deploy.
+O Wrangler vem fixado em `site/package.json`; uma atualização dele repete o
+dry-run antes do deploy. A CI também monta o site como o deploy faz
+(`x86qw-release site`) e roda o dry-run sobre essa montagem.
 
 ## Publicar
 
 1. Confirme que `x86.com.br` é uma zona ativa na conta Cloudflare correta.
 2. Confirme que `qw.x86.com.br` não possui um CNAME conflitante.
 3. Autentique o Wrangler com um token restrito à conta e à zona.
-4. Entre em `site/` e execute `npm ci && npm run deploy:dry-run` para validar o
-   bundle. A publicação remota só ocorre após autorização explícita: releases,
-   reparos de projeção e renovações TUF usam workflows protegidos; uma operação
-   excepcional também pode usar o Wrangler local com a mesma autorização.
+4. O deploy normal é o workflow `site-deploy.yml`, que roda a cada merge que
+   muda `site/public` (e por `workflow_dispatch`): monta o site com
+   `x86qw-release site`, recusa voltar o timestamp TUF e publica com
+   `wrangler deploy --assets`. A renovação semanal do timestamp publica pelo
+   mesmo caminho. O token `CLOUDFLARE_API_TOKEN` fica no ambiente `release` do
+   GitHub.
 5. Valide `/`, `/api/v1/catalog.json` e uma URL inexistente.
 
 O deploy cria o Custom Domain e seu registro DNS/certificado. O `account_id`
