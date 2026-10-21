@@ -1,47 +1,32 @@
-# Runbook — comprometimento de trust metadata
+# Runbook — comprometimento de chave TUF
 
-Este procedimento complementa o [ADR 0006](../adr/0006-trust-metadata.md).
-Ele não autoriza publicação automática nem substitui aprovação humana.
+Complementa o [ADR 0006](../adr/0006-tuf-trust-metadata.md) e o
+[runbook de chaves](key-management.md). Nada aqui roda automaticamente.
 
-1. Pare a promoção e preserve os bytes, digests, logs e horário observados.
-   Nunca registre segredo de assinatura em shell, argv, journal ou ticket.
-2. Coloque `root`, `current` e `snapshot` comprometidos em quarentena; não
-   sobrescreva os arquivos públicos existentes.
-3. Gere a nova chave fora do workspace e prepare root `N+1`. A transição deve
-   ser assinada pela threshold da raiz antiga e pela threshold da nova. Se a
-   raiz antiga não estiver disponível, pare para recuperação manual.
-4. Remova a chave comprometida dos papéis afetados (`current`, `snapshot` ou
-   `evidence`) e mantenha papéis distintos; não reutilize a chave de `current`
-   para evidência de release.
-5. Verifique a cadeia em ambiente limpo e confira tamanho/digest em cada
-   mirror. Publique assets primeiro, snapshot depois e o ponteiro `current`
-   por último.
-6. Invalide caches da versão comprometida, registre a revisão criptográfica e
-   obtenha aprovação antes de reabrir a promoção.
+## Chave online do timestamp (`TUF_TIMESTAMP_KEY_B64`)
 
-Ao validar `release-evidence.json`, persista atomicamente o `TrustedVersions`
-retornado, incluindo o envelope/digest do root e o par de evidence. Um estado
-evidence-only sem esse root não consegue provar a próxima rotação e deve ser
-tratado como incompleto.
+Quem tem essa chave consegue prolongar a validade da geração publicada, mas não
+mudar o catálogo nem os pacotes.
 
-As chaves privadas de produção ficam offline. Os arquivos locais desta PR usam
-uma chave de teste apenas para validar a cadeia; isso não é uma autorização de
-release.
+1. Desative o workflow `tuf-timestamp-auto-renewal.yml` e apague o segredo.
+2. Prepare uma root nova que troque a chave da role timestamp (ver abaixo).
+3. Com as chaves offline, assine uma geração nova (`x86qw-release sign`) e
+   publique pelo fluxo normal de PR e deploy.
+4. Grave a nova chave online no segredo e reative o workflow.
 
-## Gate externo para confiança oficial
+## Chaves offline (targets, snapshot ou root)
 
-Este checkout não contém endpoint, mirror ou chave pública de produção. Os
-arquivos `maintenance/inventory/trust/` e `ROOT_PUBLIC_KEY` são fixtures de
-verificação; não os reutilize como configuração oficial nem gere uma chave de
-produção durante testes locais. Antes de habilitar o trust no catálogo oficial,
-registre fora do repositório:
+1. Pare publicações: nenhum merge que mexa em `site/public` até o fim.
+2. Gere as chaves novas fora do checkout, numa máquina confiável.
+3. Prepare a root `N+1` sem as chaves comprometidas. Ela precisa da assinatura
+   da root atual (threshold 2 de 3) e da nova; se a root atual não alcançar o
+   threshold, pare: não há recuperação sem reinstalar a CLI com uma root nova
+   embutida.
+4. Publique a root nova em `site/public/api/v1/trust/metadata/N+1.root.json` e
+   em `maintenance/trust/root.json`, assine uma geração nova com as chaves
+   novas e confira com `x86qw-release monitor --checkout` depois do deploy.
+5. Registre o que aconteceu numa issue, sem segredos.
 
-- endpoint HTTPS e política de mirrors imutáveis;
-- custódia offline, operadores e threshold de cada papel;
-- revisão criptográfica independente do RSA-PSS e vetores cruzados;
-- cerimônia de assinatura, aprovação humana e plano de rotação/recuperação.
-
-Sem esses itens, mantenha o trust oficial desabilitado. Bundles públicos 0.7.3
-sem metadados locais continuam no fluxo legado por compatibilidade; qualquer
-conjunto local incompleto ou estado persistido inválido deve interromper a
-operação, nunca cair para um catálogo não autenticado.
+`x86qw-release` ainda não tem um comando para gerar uma root nova; esse passo
+é manual com a biblioteca go-tuf. As chaves privadas nunca entram em shell,
+argv, journal, ticket ou log.

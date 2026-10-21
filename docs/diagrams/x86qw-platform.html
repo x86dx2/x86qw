@@ -604,13 +604,13 @@
         <rect x="600" y="100" width="150" height="64" rx="6" class="c-mask"/>
         <rect x="600" y="100" width="150" height="64" rx="6" class="c-security" stroke-width="1.5"/>
         <text x="675" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">CI + gates</text>
-        <text x="675" y="146" class="t-muted" font-size="9" text-anchor="middle">Linux · macOS · Windows</text>
+        <text x="675" y="146" class="t-muted" font-size="9" text-anchor="middle">Linux · Windows · e2e noturno</text>
         <text x="675" y="156" class="t-security" font-size="7" text-anchor="middle">bloqueante</text>
 
         <rect x="800" y="100" width="150" height="64" rx="6" class="c-mask"/>
         <rect x="800" y="100" width="150" height="64" rx="6" class="c-messagebus" stroke-width="1.5"/>
         <text x="875" y="130" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Pacotes reproduzíveis</text>
-        <text x="875" y="146" class="t-muted" font-size="9" text-anchor="middle">component ZIPs + installer</text>
+        <text x="875" y="146" class="t-muted" font-size="9" text-anchor="middle">ZIPs de componentes + CLI</text>
         <text x="875" y="156" class="t-messagebus" font-size="7" text-anchor="middle">SHA-256</text>
 
         <rect x="1000" y="100" width="160" height="64" rx="6" class="c-mask"/>
@@ -633,7 +633,7 @@
         <rect x="470" y="390" width="170" height="64" rx="6" class="c-mask"/>
         <rect x="470" y="390" width="170" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
         <text x="555" y="420" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Instalador + CLI</text>
-        <text x="555" y="436" class="t-muted" font-size="9" text-anchor="middle">x86qw.pyz + launchers</text>
+        <text x="555" y="436" class="t-muted" font-size="9" text-anchor="middle">CLI x86qw em Go</text>
         <text x="555" y="446" class="t-frontend" font-size="7" text-anchor="middle">versionada</text>
 
         <rect x="710" y="390" width="170" height="64" rx="6" class="c-mask"/>
@@ -723,8 +723,8 @@
           <h3>Publicação bloqueada</h3>
         </div>
         <ul>
-          <li>&bull; Pull requests verificam LFS, schemas, testes e Worker nos três sistemas</li>
-          <li>&bull; Release é manual, protegida e só recebe artefatos depois de todos os gates</li>
+          <li>&bull; Pull requests rodam testes Go em Linux e Windows e validam LFS, catálogo, TUF e site</li>
+          <li>&bull; A CLI sai por workflow aprovado; o site entra no ar a cada merge</li>
         </ul>
       </div>
 
