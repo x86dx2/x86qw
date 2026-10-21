@@ -34,7 +34,7 @@ Exec=%s open --target %s %%u
 NoDisplay=true
 Terminal=false
 MimeType=x-scheme-handler/qw;%s;
-`, execArgument(filepath.Join(root, "x86qw.sh")), execArgument(root), demoMIME)
+`, execArgument(Command(root)), execArgument(root), demoMIME)
 }
 
 // RefreshEntries rewrites the Linux entries that launch root in the
@@ -61,7 +61,7 @@ Exec=%s play
 Path=%s
 Terminal=true
 Categories=Game;ActionGame;
-`, execArgument(filepath.Join(root, "x86qw.sh")), root)
+`, execArgument(Command(root)), root)
 }
 
 // execArgument writes one argument of an Exec line: bare when nothing in
@@ -78,11 +78,16 @@ func execArgument(value string) string {
 	return `"` + strings.ReplaceAll(quoted, `\`, `\\`) + `"`
 }
 
-// launches reports whether a desktop entry runs root's x86qw.sh, written
-// bare or always quoted, as entries were before 2.4.1.
+// launches reports whether a desktop entry runs root's CLI, or the
+// x86qw.sh that launched it before 2.5; written bare or, as entries were
+// before 2.4.1, always quoted.
 func launches(payload, root string) bool {
-	launcher := filepath.Join(root, "x86qw.sh")
-	return strings.Contains(payload, "Exec="+execArgument(launcher)+" ") || strings.Contains(payload, `Exec="`+launcher+`"`)
+	for _, launcher := range []string{Command(root), filepath.Join(root, "x86qw.sh")} {
+		if strings.Contains(payload, "Exec="+execArgument(launcher)+" ") || strings.Contains(payload, `Exec="`+launcher+`"`) {
+			return true
+		}
+	}
+	return false
 }
 
 // ownsEntry reports whether the entry at path launches root.
@@ -115,20 +120,19 @@ func RemoveDesktopEntry(root, home string) error {
 	return nil
 }
 
-// UnlinkUserCommand removes ~/.local/bin/x86qw when it points at root.
+// UnlinkUserCommand removes ~/.local/bin/x86qw when it points at root's
+// CLI or at the x86qw.sh of the layout before 2.5.
 func UnlinkUserCommand(root, home string) error {
 	command := filepath.Join(home, ".local", "bin", "x86qw")
-	link, err := os.Readlink(command)
-	if err != nil {
-		return nil
-	}
-	if !filepath.IsAbs(link) {
-		link = filepath.Join(filepath.Dir(command), link)
-	}
-	resolved, _ := filepath.EvalSymlinks(link)
-	expected, _ := filepath.EvalSymlinks(filepath.Join(root, "x86qw.sh"))
-	if resolved == expected || link == filepath.Join(root, "x86qw.sh") {
+	if PointsAt(command, root) {
 		return os.Remove(command)
 	}
 	return nil
+}
+
+// PointsAt reports whether the symlink at command runs root's CLI, now or
+// as the layout before 2.5 did.
+func PointsAt(command, root string) bool {
+	target := LinkTarget(command)
+	return samePath(target, Command(root)) || samePath(target, filepath.Join(root, "x86qw.sh"))
 }

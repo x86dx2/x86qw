@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// The Windows user PATH gets the installation folder, where x86qw.cmd
+// The Windows user PATH gets the installation folder, where x86qw.exe
 // lives, so a new terminal finds the x86qw command. Only the user's own
 // PATH changes, read and written in the registry as stored: entries such
 // as %USERPROFILE%\bin stay unexpanded and the value keeps its kind.

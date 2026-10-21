@@ -10,3 +10,5 @@ func setHandlers(root string, links, demos bool) error {
 	}
 	return nil
 }
+
+func legacyHandlers(string) []string { return nil }

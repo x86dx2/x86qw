@@ -28,8 +28,9 @@ func Installed(root string) bool {
 }
 
 // DefaultTarget is the installation a command uses when none is given: the
-// one holding the running executable (the CLI lives in .x86qw/cli), else
-// ~/Games/x86qw, where the installer puts a new one.
+// one holding the running executable (the CLI lives at its root, or in
+// .x86qw/cli before 2.5), else ~/Games/x86qw, where the installer puts a
+// new one.
 func DefaultTarget() string {
 	if executable, err := os.Executable(); err == nil {
 		if resolved, err := filepath.EvalSymlinks(executable); err == nil {

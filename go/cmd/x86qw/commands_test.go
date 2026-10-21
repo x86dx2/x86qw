@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/x86dx2/x86qw/go/internal/catalog"
+	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/download"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 	"github.com/x86dx2/x86qw/go/internal/state"
@@ -83,6 +84,7 @@ func fixtureInstall(t *testing.T) string {
 	writeFile(t, filepath.Join(records, "receipt"), string(component.Marshal()))
 	writeFile(t, filepath.Join(root, ".x86qw", "cli", "receipt"), `{"version":"2.3.2"}`)
 	writeFile(t, filepath.Join(root, "x86qw.sh"), "#!/bin/sh\n")
+	writeFile(t, cli.Command(root), "#!/bin/sh\n")
 	payload, err := state.MarshalDocument(map[string]any{
 		"capabilities": []string{}, "component_fingerprint": state.Fingerprint([]string{"nquake-maps"}), "format": 2,
 		"known_components": []string{"nquake-maps"}, "min_cli_version": "0.7.0", "profile": "essential", "project": "x86qw",
@@ -195,7 +197,7 @@ func TestUninstallWithYesKeepsWhatIsYours(t *testing.T) {
 			t.Fatalf("%s should stay: %v", kept, err)
 		}
 	}
-	for _, gone := range []string{".x86qw/state.json", "qw/maps/x86qw-a.bsp", "x86qw.sh"} {
+	for _, gone := range []string{".x86qw/state.json", "qw/maps/x86qw-a.bsp", "x86qw.sh", cli.BinaryName()} {
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(gone))); err == nil {
 			t.Fatalf("%s should go", gone)
 		}

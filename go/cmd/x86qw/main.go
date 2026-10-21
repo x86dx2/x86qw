@@ -127,6 +127,7 @@ func main() {
 	if runtime.GOOS == "windows" {
 		cli.TidyAside()
 	}
+	settleLayout(os.Stderr)
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 

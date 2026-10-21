@@ -41,7 +41,7 @@ end open
 on openItem(theItem)
 	do shell script quoted form of %s & " open --target " & quoted form of %s & " " & quoted form of theItem & " >/dev/null 2>&1 &"
 end openItem
-`, appleString(filepath.Join(root, "x86qw.sh")), appleString(root))
+`, appleString(Command(root)), appleString(root))
 }
 
 // handlerPlist are the Info.plist keys the applet gets, nil to remove.
@@ -148,6 +148,20 @@ func setHandlers(root string, links, demos bool) error {
 		if status != "0" {
 			return fmt.Errorf("Launch Services refused x86QW as the default (OSStatus %s)", status)
 		}
+	}
+	return nil
+}
+
+// legacyHandlers lists the applet when its script still runs x86qw.sh.
+func legacyHandlers(root string) []string {
+	app := HandlerApp(root)
+	script := filepath.Join(app, "Contents", "Resources", "Scripts", "main.scpt")
+	if _, err := os.Stat(script); err != nil {
+		return nil
+	}
+	source, err := exec.Command("osadecompile", script).Output()
+	if err != nil || strings.Contains(string(source), filepath.Join(root, "x86qw.sh")) {
+		return []string{app}
 	}
 	return nil
 }

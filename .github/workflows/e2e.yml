@@ -45,27 +45,55 @@ jobs:
       - name: The served install.sh installs the essential profile
         run: |
           set -euo pipefail
-          target="$RUNNER_TEMP/x86qw"
+          target="$RUNNER_TEMP/x86qw-served"
           bash site/public/install.sh --target "$target" --profile essential
-          # This branch's CLI then adopts the installation, so the checks
-          # below run the code under test, not the published release.
+          "$HOME/.local/bin/x86qw" verify --target "$target"
+          "$HOME/.local/bin/x86qw" doctor --target "$target"
+          "$HOME/.local/bin/x86qw" uninstall --yes --target "$target"
+      - name: A 2.4.2 installation moves to this branch's CLI
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/x86qw"
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo apt-get install -y -qq xdg-utils shared-mime-info strace >/dev/null
+            integrate=path,shortcuts,qw-links,demos
+          else
+            integrate=path,qw-links,demos
+          fi
+          # 2.4.2 is the last layout with x86qw.sh; its bootstrap is frozen
+          # here, pinned like the served one.
+          bash .github/e2e/install-2.4.2.sh --target "$target" --profile essential
+          # That CLI integrates the installation, so the adoption below has
+          # to move what it made to the CLI at the root.
+          "$target/x86qw.sh" setup --target "$target" --intent play --nick tester --content essential \
+            --integrate "$integrate" --yes
           # A real version: a development build never replaces an installed CLI.
           go -C go build -ldflags "-X github.com/x86dx2/x86qw/go/internal/buildinfo.Version=9.9.9-e2e" -o "$RUNNER_TEMP/x86qw-branch" ./cmd/x86qw
           "$RUNNER_TEMP/x86qw-branch" setup --target "$target"
-          "$target/x86qw.sh" verify
-          "$target/x86qw.sh" doctor
+          # Everything runs the binary at the root; the old launchers are gone.
+          test -x "$target/x86qw"
+          test ! -e "$target/x86qw.sh"
+          test ! -e "$target/.x86qw/cli/x86qw"
+          test "$(cd "$(dirname "$(readlink "$HOME/.local/bin/x86qw")")" && pwd -P)/x86qw" = "$(cd "$target" && pwd -P)/x86qw"
+          if [ "$RUNNER_OS" = Linux ]; then
+            for entry in x86qw.desktop x86qw-open.desktop; do
+              grep -F "Exec=$target/x86qw " "$HOME/.local/share/applications/$entry"
+              ! grep -F x86qw.sh "$HOME/.local/share/applications/$entry"
+            done
+          else
+            script="$(osadecompile "$target/.x86qw/handlers/x86QW.app/Contents/Resources/Scripts/main.scpt")"
+            echo "$script" | grep -F "\"$target/x86qw\""
+            ! echo "$script" | grep -F x86qw.sh
+          fi
+          "$HOME/.local/bin/x86qw" verify --target "$target"
+          "$target/x86qw" doctor
       - name: Links and demos open through the system's handlers
         env:
           LINK: qw://2@qtv.example.org:28000/qtvplay
         run: |
           set -euo pipefail
           target="$RUNNER_TEMP/x86qw"
-          if [ "$RUNNER_OS" = Linux ]; then
-            sudo apt-get install -y -qq xdg-utils shared-mime-info strace >/dev/null
-          fi
-          # A recipe on the installation applies its integration.
-          "$target/x86qw.sh" setup --target "$target" --intent play --nick tester --content essential \
-            --integrate qw-links,demos --yes
+          # The handlers the published CLI made, as the adoption moved them.
           demo="$RUNNER_TEMP/final.mvd"
           printf 'demo bytes' > "$demo"
           if [ "$RUNNER_OS" = macOS ]; then
@@ -100,7 +128,9 @@ jobs:
           done
           ls "$target"/qw/demos/x86qw-open-*.mvd
           pkill -f -i ezquake || true
-          "$target/x86qw.sh" uninstall --yes
+          "$target/x86qw" uninstall --yes
+          test ! -e "$target/x86qw"
+          test ! -L "$HOME/.local/bin/x86qw"
 
   report:
     name: Report a failed night

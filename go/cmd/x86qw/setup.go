@@ -164,10 +164,10 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 }
 
 // here is the command to type in this terminal: on Windows the PATH
-// reaches new terminals only, so it is the full path of x86qw.cmd.
+// reaches new terminals only, so it is the full path of x86qw.exe.
 func here(root string) string {
 	if runtime.GOOS == "windows" {
-		return filepath.Join(root, "x86qw.cmd")
+		return cli.Command(root)
 	}
 	return "x86qw"
 }

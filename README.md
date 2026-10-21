@@ -71,8 +71,9 @@ section you choose shortcuts, the command on the `PATH` and the file types:
 
 - **Command on the `PATH`:** on macOS and Linux, a `~/.local/bin/x86qw` link; if
   that folder is not on your `PATH`, use the full path
-  `~/Games/x86qw/x86qw.sh` or add it to your shell. On Windows, the
-  installation folder joins the user's `PATH`.
+  `~/Games/x86qw/x86qw` or add it to your shell. On Windows, the
+  installation folder, where `x86qw.exe` lives, joins the user's `PATH`;
+  terminals opened after the install see it.
 - **Shortcuts:** Start Menu and Desktop on Windows, a menu entry on
   Linux.
 - **`qw://` links and demos:** open servers and `.mvd`/`.qwd` demos in the
@@ -159,8 +160,8 @@ QuakeWorld directly in all five games.
 
 ## The app
 
-After the install, `x86qw` — or `x86qw.sh` in the installation folder, and
-`x86qw.cmd` on Windows — opens the app on a terminal. `x86qw --target FOLDER` opens
+After the install, `x86qw` — or `./x86qw` in the installation folder,
+`x86qw.exe` on Windows — opens the app on a terminal. `x86qw --target FOLDER` opens
 another installation. Without a terminal, `x86qw` only prints the help.
 
 The home screen brings together:

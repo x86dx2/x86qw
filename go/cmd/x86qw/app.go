@@ -63,6 +63,7 @@ func publishCLI(target string, link bool, out io.Writer) error {
 	case command != "":
 		fmt.Fprintf(out, "x86qw command available at %s\n", command)
 	}
+	retireLegacy(target, out)
 	return nil
 }
 

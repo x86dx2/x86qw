@@ -17,10 +17,11 @@ import (
 const demoProgID = "x86qw.demo"
 
 func handlerCommand(root string) string {
-	return fmt.Sprintf(`"%s" open --target "%s" "%%1"`, filepath.Join(root, ".x86qw", "cli", BinaryName()), root)
+	return fmt.Sprintf(`"%s" open --target "%s" "%%1"`, Command(root), root)
 }
 
-// ownedCommand reports whether the open command under key launches root.
+// ownedCommand reports whether the open command under key launches root:
+// its x86qw.exe, or the one in .x86qw\cli before 2.5.
 func ownedCommand(key, root string) (owned, exists bool) {
 	k, err := registry.OpenKey(registry.CURRENT_USER, key+`\shell\open\command`, registry.QUERY_VALUE)
 	if err != nil {
@@ -28,7 +29,8 @@ func ownedCommand(key, root string) (owned, exists bool) {
 	}
 	defer k.Close()
 	value, _, err := k.GetStringValue("")
-	return err == nil && strings.Contains(value, filepath.Join(root, ".x86qw", "cli")), true
+	legacy := strings.Contains(strings.ToLower(value), strings.ToLower(filepath.Join(root, ".x86qw", "cli")+`\`))
+	return err == nil && (strings.Contains(strings.ToLower(value), strings.ToLower(`"`+Command(root)+`"`)) || legacy), true
 }
 
 func writeCommand(key, root, label string, protocol bool) error {
@@ -81,10 +83,14 @@ func setHandlers(root string, links, demos bool) error {
 		errs = append(errs, errors.New("The x86qw.demo type belongs to another installation."))
 		return errors.Join(errs...)
 	}
-	if demos {
+	switch {
+	case demos:
 		errs = append(errs, writeCommand(classes+demoProgID, root, "QuakeWorld demo", false))
-	} else if owned {
+	case owned:
 		errs = append(errs, deleteTree(classes+demoProgID))
+	case exists:
+		// The demo type is another installation's, and so are .mvd and .qwd.
+		return errors.Join(errs...)
 	}
 	for _, extension := range []string{".mvd", ".qwd"} {
 		key, _, err := registry.CreateKey(registry.CURRENT_USER, classes+extension, registry.QUERY_VALUE|registry.SET_VALUE)
@@ -102,4 +108,43 @@ func setHandlers(root string, links, demos bool) error {
 		key.Close()
 	}
 	return errors.Join(errs...)
+}
+
+// legacyHandlers lists the qw:// and demo commands, and the shortcuts,
+// that still run root's CLI from .x86qw\cli or through x86qw.cmd.
+func legacyHandlers(root string) []string {
+	var found []string
+	legacy := strings.ToLower(filepath.Join(root, ".x86qw", "cli") + `\`)
+	for _, key := range []string{`Software\Classes\qw`, `Software\Classes\` + demoProgID} {
+		k, err := registry.OpenKey(registry.CURRENT_USER, key+`\shell\open\command`, registry.QUERY_VALUE)
+		if err != nil {
+			continue
+		}
+		value, _, err := k.GetStringValue("")
+		k.Close()
+		if err == nil && strings.Contains(strings.ToLower(value), legacy) {
+			found = append(found, `HKCU\`+key)
+		}
+	}
+	return append(found, legacyShortcuts(root)...)
+}
+
+// legacyShortcuts lists root's shortcuts that still point at x86qw.cmd.
+func legacyShortcuts(root string) []string {
+	shortcuts, err := ShortcutPaths()
+	if err != nil {
+		return nil
+	}
+	output, err := shortcutScriptOutput("legacy", root, filepath.Join(root, filepath.FromSlash(cliDir), "x86qw.ico"), shortcuts)
+	if err != nil {
+		// Unreadable shortcuts count as still pointing at the old launcher.
+		return shortcuts[:]
+	}
+	var found []string
+	for _, line := range strings.Split(output, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			found = append(found, line)
+		}
+	}
+	return found
 }

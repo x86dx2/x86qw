@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/x86dx2/x86qw/go/internal/catalog"
+	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/download"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 	"github.com/x86dx2/x86qw/go/internal/state"
@@ -120,6 +121,7 @@ func managedInstall(t *testing.T) string {
 	})
 	write(t, filepath.Join(root, ".x86qw", "cli", "receipt"), `{"version":"2.3.2"}`)
 	write(t, filepath.Join(root, "x86qw.sh"), "#!/bin/sh\n")
+	write(t, cli.Command(root), "#!/bin/sh\n")
 	payload, err := state.MarshalDocument(map[string]any{
 		"capabilities": []string{}, "component_fingerprint": state.Fingerprint([]string{"nquake-maps"}), "format": 2,
 		"known_components": []string{"nquake-maps"}, "min_cli_version": "0.7.0", "profile": "essential", "project": "x86qw",
