@@ -72,7 +72,7 @@ func Verify(root string) (*Report, error) {
 		}
 	}
 	if report.Clients == 0 {
-		return nil, fmt.Errorf("nenhum ezQuake gerenciado foi encontrado em %s; execute install primeiro", root)
+		return nil, fmt.Errorf("no managed ezQuake was found in %s; run install first", root)
 	}
 
 	records, err := receipt.LoadComponents(root)
@@ -91,7 +91,7 @@ func Verify(root string) (*Report, error) {
 		recorded := append([]string(nil), current.Installed()...)
 		sort.Strings(recorded)
 		if strings.Join(recorded, "\n") != strings.Join(report.Components, "\n") {
-			return nil, errors.New("o estado da instalação diverge dos componentes registrados; execute update para reconciliar")
+			return nil, errors.New("the installation state differs from the recorded components; run update to reconcile")
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, err
@@ -107,7 +107,7 @@ func Verify(root string) (*Report, error) {
 		report.Files += count
 	}
 	if _, err := os.Lstat(filepath.Join(root, "id1/gpl_maps.pk3")); err == nil {
-		return nil, errors.New("gpl_maps.pk3 shareware não pode ser instalado com os PAKs registrados")
+		return nil, errors.New("the shareware gpl_maps.pk3 cannot be installed with the recorded PAKs")
 	}
 	games, err := LoadGames()
 	if err != nil {
@@ -118,7 +118,7 @@ func Verify(root string) (*Report, error) {
 		return nil, err
 	}
 	if len(issues) > 0 {
-		return nil, fmt.Errorf("suporte de execução incompleto (%s); execute update, upgrade ou repair antes de jogar ou hospedar", strings.Join(issues, "; "))
+		return nil, fmt.Errorf("incomplete run support (%s); run update, upgrade or repair before you play or host", strings.Join(issues, "; "))
 	}
 	if err := verifyPackageOrder(root, byID["package-order"]); err != nil {
 		return nil, err
@@ -129,17 +129,17 @@ func Verify(root string) (*Report, error) {
 func checkPak(name, expected string) error {
 	header, err := readHeader(name, 4)
 	if err != nil {
-		return fmt.Errorf("PAK obrigatório não encontrado: %s", name)
+		return fmt.Errorf("required PAK not found: %s", name)
 	}
 	if string(header) != "PACK" {
-		return fmt.Errorf("o arquivo não possui um cabeçalho PAK válido: %s", name)
+		return fmt.Errorf("the file has no valid PAK header: %s", name)
 	}
 	digest, err := fileSHA256(name)
 	if err != nil {
 		return err
 	}
 	if digest != expected {
-		return fmt.Errorf("o PAK não corresponde à versão registrada original: %s", name)
+		return fmt.Errorf("the PAK does not match the original recorded version: %s", name)
 	}
 	return nil
 }
@@ -173,19 +173,19 @@ func loadVerifiedClient(root string, spec catalog.ClientSpec, channel string) (*
 			return nil, err
 		}
 		if version != rec.Get("bundle_version") {
-			return nil, fmt.Errorf("versão inesperada em %s: %s", runtime, version)
+			return nil, fmt.Errorf("unexpected version in %s: %s", runtime, version)
 		}
 	}
 	info, err := os.Lstat(binaryPath)
 	if err != nil || !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("runtime ezQuake ausente: %s", runtime)
+		return nil, fmt.Errorf("ezQuake runtime missing: %s", runtime)
 	}
 	digest, err := fileSHA256(binaryPath)
 	if err != nil {
 		return nil, err
 	}
 	if digest != rec.Get("binary_sha256") {
-		return nil, fmt.Errorf("hash inesperado do executável ezQuake: %s", runtime)
+		return nil, fmt.Errorf("unexpected ezQuake executable hash: %s", runtime)
 	}
 	return rec, nil
 }
@@ -195,7 +195,7 @@ func loadVerifiedClient(root string, spec catalog.ClientSpec, channel string) (*
 func bundleVersion(name string) (string, error) {
 	payload, err := os.ReadFile(name)
 	if err != nil {
-		return "", fmt.Errorf("Info.plist ausente: %s", name)
+		return "", fmt.Errorf("Info.plist missing: %s", name)
 	}
 	decoder := xml.NewDecoder(bytes.NewReader(payload))
 	decoder.Strict = false
@@ -207,7 +207,7 @@ func bundleVersion(name string) (string, error) {
 			break
 		}
 		if err != nil {
-			return "", fmt.Errorf("Info.plist inválido: %s", name)
+			return "", fmt.Errorf("invalid Info.plist: %s", name)
 		}
 		switch t := token.(type) {
 		case xml.StartElement:
@@ -226,7 +226,7 @@ func bundleVersion(name string) (string, error) {
 	}
 	short := values["CFBundleShortVersionString"]
 	if short == "" || short != values["CFBundleVersion"] {
-		return "", fmt.Errorf("versões divergentes no bundle macOS: %s", name)
+		return "", fmt.Errorf("mismatched versions in the macOS bundle: %s", name)
 	}
 	return short, nil
 }
@@ -236,25 +236,25 @@ func verifyRecord(root string, record *receipt.Record) (int, error) {
 		managed := filepath.Join(root, filepath.FromSlash(entry.Path))
 		info, err := os.Lstat(managed)
 		if err != nil || !info.Mode().IsRegular() {
-			return 0, fmt.Errorf("arquivo gerenciado ausente do componente %s: %s", record.ID, managed)
+			return 0, fmt.Errorf("managed file missing from component %s: %s", record.ID, managed)
 		}
 		digest, err := fileSHA256(managed)
 		if err != nil {
 			return 0, err
 		}
 		if digest != entry.SHA256 {
-			return 0, fmt.Errorf("arquivo gerenciado foi alterado no componente %s: %s", record.ID, managed)
+			return 0, fmt.Errorf("managed file changed in component %s: %s", record.ID, managed)
 		}
 		switch strings.ToLower(filepath.Ext(managed)) {
 		case ".bsp":
 			header, err := readHeader(managed, 4)
 			if err != nil || binary.LittleEndian.Uint32(header) != 29 {
-				return 0, fmt.Errorf("BSP gerenciado inválido: %s", managed)
+				return 0, fmt.Errorf("invalid managed BSP: %s", managed)
 			}
 		case ".pak":
 			header, err := readHeader(managed, 4)
 			if err != nil || string(header) != "PACK" {
-				return 0, fmt.Errorf("PAK gerenciado inválido: %s", managed)
+				return 0, fmt.Errorf("invalid managed PAK: %s", managed)
 			}
 		}
 	}
@@ -305,19 +305,19 @@ func verifyPackageOrder(root string, record *receipt.Record) error {
 	}
 	if len(packages) == 0 {
 		if record != nil {
-			return errors.New("pak.lst gerenciado existe sem pacotes PK3 em qw")
+			return errors.New("managed pak.lst exists without PK3 packages in qw")
 		}
 		return nil
 	}
 	if record == nil {
-		return errors.New("ordem de PK3 não registrada; reexecute o bootstrap x86QW no mesmo destino")
+		return errors.New("PK3 order not recorded; run the x86QW bootstrap again on the same target")
 	}
 	payload, err := os.ReadFile(filepath.Join(root, "qw/pak.lst"))
 	if err != nil {
 		return err
 	}
 	if string(payload) != strings.Join(packages, "\n")+"\n" {
-		return errors.New("qw/pak.lst não representa os PK3 instalados; reexecute o bootstrap x86QW no mesmo destino")
+		return errors.New("qw/pak.lst does not match the installed PK3s; run the x86QW bootstrap again on the same target")
 	}
 	return nil
 }
@@ -376,7 +376,7 @@ func VerifyPlaySupport(root string, games []Game) error {
 		return err
 	}
 	if len(issues) > 0 {
-		return fmt.Errorf("Suporte de execução incompleto (%s). Execute update, upgrade ou repair antes de jogar ou hospedar.", strings.Join(issues, "; "))
+		return fmt.Errorf("Incomplete run support (%s). Run update, upgrade or repair before you play or host.", strings.Join(issues, "; "))
 	}
 	return nil
 }
@@ -399,7 +399,7 @@ func HostRuntimes(root string) ([]Runtime, error) {
 		}
 	}
 	if spec == nil {
-		return nil, fmt.Errorf("A abertura automática não é suportada neste sistema: %s.", runtime.GOOS)
+		return nil, fmt.Errorf("Automatic launch is not supported on this system: %s.", runtime.GOOS)
 	}
 	var found []Runtime
 	for _, channel := range catalog.Channels {
@@ -418,14 +418,14 @@ func HostRuntimes(root string) ([]Runtime, error) {
 				return nil, err
 			}
 			if action != "" {
-				return nil, fmt.Errorf("O runtime macOS requer reparo antes da execução: %s. Execute update.", bundle)
+				return nil, fmt.Errorf("The macOS runtime needs a repair before it runs: %s. Run update.", bundle)
 			}
 			executable = filepath.Join(bundle, "Contents", "MacOS", "ezQuake")
 		}
 		found = append(found, Runtime{Label: "ezQuake " + channel + " " + rec.Get("selection"), Channel: channel, Path: executable, BinarySHA: rec.Get("binary_sha256")})
 	}
 	if len(found) == 0 {
-		return nil, errors.New("Nenhum ezQuake gerenciado para este sistema está instalado. Execute install primeiro.")
+		return nil, errors.New("No managed ezQuake for this system is installed. Run install first.")
 	}
 	return found, nil
 }

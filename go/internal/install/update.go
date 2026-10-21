@@ -57,24 +57,24 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 	for _, row := range planned.Operations {
 		id, known := labels[row.Item]
 		switch {
-		case row.Kind == "Cliente":
+		case row.Kind == "Client":
 			spec, channel, ok := clientRowTarget(row.Item)
 			if !ok {
-				return nil, fmt.Errorf("cliente desconhecido no plano: %s", row.Item)
+				return nil, fmt.Errorf("unknown client in the plan: %s", row.Item)
 			}
 			clients = append(clients, clientStep{spec, channel, row.Action})
-		case row.Kind == "Componente" && row.Action == "Atualizar" && known:
+		case row.Kind == "Component" && row.Action == "Update" && known:
 			outdated = append(outdated, id)
-		case row.Kind == "Componente" && row.Action == "Adicionar" && known:
+		case row.Kind == "Component" && row.Action == "Add" && known:
 			missing = append(missing, id)
-		case row.Kind == "CLI" && row.Action == "Atualizar":
+		case row.Kind == "CLI" && row.Action == "Update":
 			pkg, ok, err := in.Catalog.CLIPackage(in.GOOS, in.GOARCH)
 			if err != nil || !ok {
-				return nil, fmt.Errorf("pacote da CLI x86QW indisponível: %v", err)
+				return nil, fmt.Errorf("x86QW CLI package unavailable: %v", err)
 			}
 			cliPackage = &pkg
 		default:
-			return nil, fmt.Errorf("esta versão ainda não aplica %q (%s)", row.Item, row.Action)
+			return nil, fmt.Errorf("this version cannot apply %q (%s) yet", row.Item, row.Action)
 		}
 	}
 	result := &Result{}
@@ -86,7 +86,7 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 	}
 	current, err := state.Read(in.Root)
 	if err != nil {
-		return nil, fmt.Errorf("estado da instalação ilegível: %w", err)
+		return nil, fmt.Errorf("unreadable installation state: %w", err)
 	}
 	held, err := lock.Acquire(in.Root, command)
 	if err != nil {
@@ -109,7 +109,7 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 	defer tx.Close()
 	fail := func(err error) (*Result, error) {
 		if undoErr := tx.Rollback(); undoErr != nil {
-			return nil, fmt.Errorf("%w; rollback incompleto: %v", err, undoErr)
+			return nil, fmt.Errorf("%w; incomplete rollback: %v", err, undoErr)
 		}
 		return nil, err
 	}
@@ -117,9 +117,9 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 	for _, step := range clients {
 		var err error
 		switch step.action {
-		case "Reparar":
+		case "Repair":
 			err = tx.RepairNightly(step.spec)
-		default: // Atualizar or Restaurar reinstall the catalog release.
+		default: // Update or Restore reinstall the catalog release.
 			_, err = tx.InstallClient(ctx, in.Catalog, step.spec, step.channel)
 		}
 		if err != nil {
@@ -140,7 +140,7 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 	}
 	for name, digest := range paks {
 		if actual, _ := fileSHA256(filepath.Join(in.Root, name)); actual != digest {
-			return fail(fmt.Errorf("o PAK registrado %s foi alterado durante a atualização", name))
+			return fail(fmt.Errorf("the recorded PAK %s changed during the update", name))
 		}
 	}
 	payload, err := stateDocument(in, current)
@@ -151,16 +151,16 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 		return fail(err)
 	}
 	if _, err := Verify(in.Root); err != nil {
-		return fail(fmt.Errorf("verificação após a atualização falhou: %w", err))
+		return fail(fmt.Errorf("verification after the update failed: %w", err))
 	}
 	if cliPackage != nil {
 		// Last: the content is already committed and verified.
 		artifact, err := fetchPackage(ctx, tx, "cli", *cliPackage)
 		if err != nil {
-			return nil, fmt.Errorf("conteúdo atualizado, mas a CLI não pôde ser baixada: %w", err)
+			return nil, fmt.Errorf("content updated, but the CLI could not be downloaded: %w", err)
 		}
 		if _, err := cli.Install(in.Root, artifact, cliPackage.Version); err != nil {
-			return nil, fmt.Errorf("conteúdo atualizado, mas a CLI não pôde ser substituída: %w", err)
+			return nil, fmt.Errorf("content updated, but the CLI could not be replaced: %w", err)
 		}
 		result.CLIVersion = cliPackage.Version
 	}
@@ -244,7 +244,7 @@ func fetchPackage(ctx context.Context, tx *Transaction, id string, pkg catalog.P
 	cached := filepath.Join(root, "components", pkg.Filename)
 	if regular(cached) {
 		if !download.Cached(cached, pin) {
-			return "", fmt.Errorf("o pacote %s em cache é inválido; execute cleanup e tente novamente", pkg.Package)
+			return "", fmt.Errorf("the cached package %s is invalid; run cleanup and try again", pkg.Package)
 		}
 		if report := tx.observer().bytes(id); report != nil {
 			report(pkg.Size)
@@ -253,7 +253,7 @@ func fetchPackage(ctx context.Context, tx *Transaction, id string, pkg catalog.P
 	}
 	temporary := filepath.Join(tx.Stage, pkg.Package+".download")
 	if err := download.Fetch(ctx, pin, temporary, download.Options{Deadline: 30 * time.Minute, Progress: tx.observer().bytes(id)}); err != nil {
-		return "", fmt.Errorf("download de %s falhou: %w", pkg.Package, err)
+		return "", fmt.Errorf("download of %s failed: %w", pkg.Package, err)
 	}
 	if err := os.MkdirAll(filepath.Dir(cached), 0o755); err != nil {
 		return "", err
@@ -262,7 +262,7 @@ func fetchPackage(ctx context.Context, tx *Transaction, id string, pkg catalog.P
 		return "", err
 	}
 	if !download.Cached(cached, pin) {
-		return "", fmt.Errorf("o pacote %s falhou na verificação após a cópia", pkg.Package)
+		return "", fmt.Errorf("package %s failed verification after the copy", pkg.Package)
 	}
 	return cached, nil
 }
@@ -274,17 +274,17 @@ const cacheMarker = ".x86qw-cache"
 func prepareCache(root string) error {
 	if info, err := os.Lstat(root); err == nil {
 		if !info.IsDir() {
-			return fmt.Errorf("o caminho reservado ao cache não é um diretório: %s", root)
+			return fmt.Errorf("the path reserved for the cache is not a folder: %s", root)
 		}
 		if marker, err := os.ReadFile(filepath.Join(root, cacheMarker)); err == nil {
 			if string(marker) != "x86qw-cache-v1\n" {
-				return fmt.Errorf("marcador do cache inválido: %s", root)
+				return fmt.Errorf("invalid cache marker: %s", root)
 			}
 			return nil
 		}
 		entries, _ := os.ReadDir(root)
 		if len(entries) > 0 && !download.AdoptableCache(root) {
-			return fmt.Errorf("o diretório de cache contém arquivos que não pertencem ao instalador e foi preservado: %s", root)
+			return fmt.Errorf("the cache folder holds files that do not belong to the installer and was kept: %s", root)
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -329,7 +329,7 @@ func refuseConfigMigrations(root string, batch []string) error {
 			needs = true
 		}
 		if needs {
-			return fmt.Errorf("a configuração pessoal %s usa um formato antigo que esta versão não migra; reinstale o x86QW", config)
+			return fmt.Errorf("the personal settings %s use an old format this version does not migrate; reinstall x86QW", config)
 		}
 	}
 	return nil

@@ -33,13 +33,13 @@ func OpenArguments(target, item string) ([]string, error) {
 	if strings.HasPrefix(strings.ToLower(item), "qw://") {
 		address := "qw://" + item[len("qw://"):]
 		if !qwURL.MatchString(address) || strings.Contains(address, "@") && !strings.HasSuffix(address, "/qtvplay") {
-			return nil, cliargs.Usagef("endereço QuakeWorld inválido: %q", item)
+			return nil, cliargs.Usagef("invalid QuakeWorld address: %q", item)
 		}
 		if _, port, found := strings.Cut(strings.SplitN(address[len("qw://"):], "/", 2)[0], ":"); found && len(port) > 0 {
 			var number int
 			fmt.Sscanf(port, "%d", &number)
 			if number < 1 || number > 65535 {
-				return nil, cliargs.Usagef("porta inválida: %q", item)
+				return nil, cliargs.Usagef("invalid port: %q", item)
 			}
 		}
 		return []string{"+qwurl", address}, nil
@@ -48,7 +48,7 @@ func OpenArguments(target, item string) ([]string, error) {
 	if strings.HasPrefix(strings.ToLower(item), "file://") {
 		parsed, err := url.Parse(item)
 		if err != nil || (parsed.Host != "" && parsed.Host != "localhost") {
-			return nil, cliargs.Usagef("arquivo inválido: %q", item)
+			return nil, cliargs.Usagef("invalid file: %q", item)
 		}
 		path = parsed.Path
 		if len(path) > 2 && path[0] == '/' && path[2] == ':' {
@@ -62,14 +62,14 @@ func OpenArguments(target, item string) ([]string, error) {
 		known = known || extension == candidate
 	}
 	if !known {
-		return nil, cliargs.Usagef("x86qw open abre endereços qw:// e demos .mvd ou .qwd, não %q", item)
+		return nil, cliargs.Usagef("x86qw open opens qw:// addresses and .mvd or .qwd demos, not %q", item)
 	}
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("demo não encontrada: %s", path)
+		return nil, fmt.Errorf("demo not found: %s", path)
 	}
 	if info.Size() > 512<<20 {
-		return nil, fmt.Errorf("demo grande demais (mais de 512 MiB): %s", path)
+		return nil, fmt.Errorf("demo too large (over 512 MiB): %s", path)
 	}
 	payload, err := os.ReadFile(path)
 	if err != nil {

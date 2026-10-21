@@ -56,7 +56,7 @@ type HTTPError struct {
 	RetryAfter time.Duration
 }
 
-func (e *HTTPError) Error() string { return fmt.Sprintf("HTTP %d em %s", e.Status, e.URL) }
+func (e *HTTPError) Error() string { return fmt.Sprintf("HTTP %d at %s", e.Status, e.URL) }
 
 func transientStatus(status int) bool {
 	switch status {
@@ -70,12 +70,12 @@ func transientStatus(status int) bool {
 func ValidateURL(raw string) (*url.URL, error) {
 	for _, r := range raw {
 		if r <= 0x20 || r == 0x7f {
-			return nil, fmt.Errorf("URL com caractere inválido: %q", raw)
+			return nil, fmt.Errorf("URL with an invalid character: %q", raw)
 		}
 	}
 	parsed, err := url.Parse(raw)
 	if err != nil || !strings.EqualFold(parsed.Scheme, "https") || parsed.Hostname() == "" || parsed.User != nil || parsed.Fragment != "" {
-		return nil, fmt.Errorf("URL fora da política HTTPS: %q", raw)
+		return nil, fmt.Errorf("URL outside the HTTPS policy: %q", raw)
 	}
 	return parsed, nil
 }
@@ -100,7 +100,7 @@ func client(ctx context.Context, options Options) *http.Client {
 	return &http.Client{
 		CheckRedirect: func(request *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
-				return errors.New("redirecionamentos demais")
+				return errors.New("too many redirects")
 			}
 			if _, err := ValidateURL(request.URL.String()); err != nil {
 				return err
@@ -115,7 +115,7 @@ func client(ctx context.Context, options Options) *http.Client {
 // policy failures and an exhausted deadline stop.
 func Fetch(ctx context.Context, artifact Artifact, destination string, options Options) error {
 	if artifact.Size <= 0 || artifact.Size > maxArtifactBytes || len(artifact.SHA256) != 64 {
-		return fmt.Errorf("artefato sem tamanho ou SHA-256 válidos")
+		return fmt.Errorf("artifact without a valid size or SHA-256")
 	}
 	if options.Deadline == 0 {
 		options.Deadline = 10 * time.Minute
@@ -145,7 +145,7 @@ func Fetch(ctx context.Context, artifact Artifact, destination string, options O
 			return err
 		}
 	}
-	return fmt.Errorf("todos os mirrors falharam: %w", last)
+	return fmt.Errorf("every mirror failed: %w", last)
 }
 
 func fetchMirror(ctx context.Context, httpClient *http.Client, raw string, artifact Artifact, destination string, attempts int, progress func(int64)) error {
@@ -168,7 +168,7 @@ func fetchMirror(ctx context.Context, httpClient *http.Client, raw string, artif
 		}
 		deadline, ok := ctx.Deadline()
 		if ok && time.Until(deadline) < wait {
-			return fmt.Errorf("orçamento de tentativas esgotado: %w", err)
+			return fmt.Errorf("retry budget exhausted: %w", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -201,7 +201,7 @@ func fetchOnce(ctx context.Context, httpClient *http.Client, raw string, artifac
 		return retryAfter(response.Header.Get("Retry-After")), &HTTPError{Status: response.StatusCode, URL: raw}
 	}
 	if response.ContentLength >= 0 && response.ContentLength != artifact.Size {
-		return 0, &IntegrityError{fmt.Sprintf("tamanho anunciado %d difere de %d: %s", response.ContentLength, artifact.Size, raw)}
+		return 0, &IntegrityError{fmt.Sprintf("announced size %d differs from %d: %s", response.ContentLength, artifact.Size, raw)}
 	}
 	if err := os.MkdirAll(filepath.Dir(destination), 0o700); err != nil {
 		return 0, err
@@ -224,16 +224,16 @@ func fetchOnce(ctx context.Context, httpClient *http.Client, raw string, artifac
 	case copyErr != nil:
 		return 0, &transientError{copyErr}
 	case written < artifact.Size:
-		return 0, &transientError{fmt.Errorf("corpo truncado (%d de %d bytes): %s", written, artifact.Size, raw)}
+		return 0, &transientError{fmt.Errorf("truncated body (%d of %d bytes): %s", written, artifact.Size, raw)}
 	case written > artifact.Size:
-		return 0, &IntegrityError{fmt.Sprintf("corpo excede %d bytes: %s", artifact.Size, raw)}
+		return 0, &IntegrityError{fmt.Sprintf("body exceeds %d bytes: %s", artifact.Size, raw)}
 	case syncErr != nil:
 		return 0, syncErr
 	case closeErr != nil:
 		return 0, closeErr
 	}
 	if hex.EncodeToString(hash.Sum(nil)) != artifact.SHA256 {
-		return 0, &IntegrityError{fmt.Sprintf("SHA-256 divergente: %s", raw)}
+		return 0, &IntegrityError{fmt.Sprintf("SHA-256 mismatch: %s", raw)}
 	}
 	if err := os.Chmod(temporary.Name(), 0o644); err != nil {
 		return 0, err

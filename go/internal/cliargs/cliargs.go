@@ -31,7 +31,7 @@ func IsUsage(err error) bool {
 }
 
 // ErrHelp is what Parse returns when the command line asks for help.
-var ErrHelp = errors.New("ajuda pedida")
+var ErrHelp = errors.New("help requested")
 
 type flagSpec struct {
 	names    []string
@@ -82,10 +82,10 @@ func (p *Parser) Int(target *int, minimum, maximum int, meta, help string, names
 	p.Value(func(value string) error {
 		parsed, err := strconv.Atoi(strings.TrimSpace(value))
 		if err != nil {
-			return Usagef("deve ser um número inteiro")
+			return Usagef("must be a whole number")
 		}
 		if parsed < minimum || parsed > maximum {
-			return Usagef("deve estar entre %d e %d", minimum, maximum)
+			return Usagef("must be between %d and %d", minimum, maximum)
 		}
 		*target = parsed
 		return nil
@@ -101,7 +101,7 @@ func (p *Parser) Choice(target *string, choices []string, help string, names ...
 				return nil
 			}
 		}
-		return Usagef("escolha inválida: '%s' (use %s)", value, strings.Join(choices, ", "))
+		return Usagef("invalid choice: '%s' (use %s)", value, strings.Join(choices, ", "))
 	}, strings.Join(choices, "|"), help, names...)
 }
 
@@ -156,13 +156,13 @@ func (p *Parser) Parse(args []string) error {
 		name, inline, hasInline := strings.Cut(arg, "=")
 		spec, ok := p.specs[name]
 		if !ok {
-			return Usagef("opção desconhecida: %s", arg)
+			return Usagef("unknown option: %s", arg)
 		}
 		value := ""
 		switch {
 		case spec.meta == "":
 			if hasInline {
-				return Usagef("%s não recebe valor", name)
+				return Usagef("%s takes no value", name)
 			}
 		case spec.optional != "":
 			value = spec.optional
@@ -176,7 +176,7 @@ func (p *Parser) Parse(args []string) error {
 			value = inline
 		default:
 			if index+1 >= len(args) {
-				return Usagef("%s precisa de um valor", name)
+				return Usagef("%s needs a value", name)
 			}
 			index++
 			value = args[index]
@@ -187,7 +187,7 @@ func (p *Parser) Parse(args []string) error {
 			}
 			for _, other := range group {
 				if other != name && p.Given(other) && !contains(spec.names, other) {
-					return Usagef("%s não pode ser usado com %s", name, other)
+					return Usagef("%s cannot be used with %s", name, other)
 				}
 			}
 		}
@@ -244,7 +244,7 @@ func (p *Parser) Adopt(fs *flag.FlagSet) {
 		name := "--" + f.Name
 		set := func(value string) error {
 			if err := fs.Set(f.Name, value); err != nil {
-				return Usagef("valor inválido: %q", value)
+				return Usagef("invalid value: %q", value)
 			}
 			return nil
 		}
@@ -252,7 +252,7 @@ func (p *Parser) Adopt(fs *flag.FlagSet) {
 			p.add(&flagSpec{names: []string{name}, help: f.Usage, apply: func(string) error { return set("true") }})
 			return
 		}
-		meta := "VALOR"
+		meta := "VALUE"
 		if kind, _ := flag.UnquoteUsage(f); kind == "int" || kind == "float" {
 			meta = "N"
 		}

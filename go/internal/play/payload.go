@@ -19,11 +19,11 @@ func Payload(settings [][2]string, startup []string) ([]byte, error) {
 	}
 	for _, command := range startup {
 		if command == "" {
-			return nil, errors.New("Configuração efêmera KTX contém comando inválido.")
+			return nil, errors.New("The ephemeral KTX configuration has an invalid command.")
 		}
 		for _, r := range command {
 			if r < 32 || r > 127 {
-				return nil, errors.New("Configuração efêmera KTX contém comando inválido.")
+				return nil, errors.New("The ephemeral KTX configuration has an invalid command.")
 			}
 		}
 		buffer.WriteString(command + "\n")

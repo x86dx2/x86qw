@@ -50,44 +50,44 @@ func PreparePackage(artifact string, pkg catalog.Package, stage string) (*Prepar
 	id := pkg.Package
 	plan, err := archive.Open(artifact, archive.DefaultLimits)
 	if err != nil {
-		return nil, fmt.Errorf("pacote %s: %w", id, err)
+		return nil, fmt.Errorf("package %s: %w", id, err)
 	}
 	root := filepath.Join(stage, "package-"+id)
 	err = plan.Extract(root)
 	plan.Close()
 	if err != nil {
-		return nil, fmt.Errorf("pacote %s: %w", id, err)
+		return nil, fmt.Errorf("package %s: %w", id, err)
 	}
 	payload, err := os.ReadFile(filepath.Join(root, "_x86qw", "component.json"))
 	if err != nil {
-		return nil, fmt.Errorf("metadados internos inválidos no pacote %s", id)
+		return nil, fmt.Errorf("invalid internal metadata in package %s", id)
 	}
 	var manifest packageManifest
 	if err := json.Unmarshal(payload, &manifest); err != nil {
-		return nil, fmt.Errorf("metadados internos inválidos no pacote %s", id)
+		return nil, fmt.Errorf("invalid internal metadata in package %s", id)
 	}
 	revision := manifest.SourceRevision
 	if pkg.SourceRevision == "" {
 		revision = manifest.SourceCommit
 	}
 	if manifest.Format != 1 || manifest.Project != "x86qw" || manifest.Package != id || revision != pkg.Revision() || manifest.Members == nil {
-		return nil, fmt.Errorf("identidade interna inválida no pacote %s", id)
+		return nil, fmt.Errorf("invalid internal identity in package %s", id)
 	}
 	version := manifest.Version
 	if version == "" && len(revision) >= 12 {
 		version = revision[:12]
 	}
 	if version != pkg.Version {
-		return nil, fmt.Errorf("versão interna inválida no pacote %s", id)
+		return nil, fmt.Errorf("invalid internal version in package %s", id)
 	}
 	expected := map[string]bool{}
 	for _, member := range manifest.Members {
 		if !strings.HasPrefix(member.Path, "payload/") && !strings.HasPrefix(member.Path, "defaults/") {
-			return nil, fmt.Errorf("destino interno inválido no pacote %s: %s", id, member.Path)
+			return nil, fmt.Errorf("invalid internal destination in package %s: %s", id, member.Path)
 		}
 		digest, err := fileSHA256(filepath.Join(root, filepath.FromSlash(member.Path)))
 		if err != nil || digest != member.SHA256 {
-			return nil, fmt.Errorf("arquivo interno inválido no pacote %s: %s", id, member.Path)
+			return nil, fmt.Errorf("invalid internal file in package %s: %s", id, member.Path)
 		}
 		expected[member.Path] = true
 	}
@@ -102,7 +102,7 @@ func PreparePackage(artifact string, pkg catalog.Package, stage string) (*Prepar
 			return nil
 		}
 		if !expected[relative] {
-			return fmt.Errorf("o conteúdo do pacote %s diverge do inventário interno", id)
+			return fmt.Errorf("the contents of package %s differ from its internal inventory", id)
 		}
 		actual++
 		return nil
@@ -111,11 +111,11 @@ func PreparePackage(artifact string, pkg catalog.Package, stage string) (*Prepar
 		return nil, err
 	}
 	if actual != len(expected) {
-		return nil, fmt.Errorf("o conteúdo do pacote %s diverge do inventário interno", id)
+		return nil, fmt.Errorf("the contents of package %s differ from its internal inventory", id)
 	}
 	managed := filepath.Join(root, "payload")
 	if info, err := os.Stat(managed); err != nil || !info.IsDir() {
-		return nil, fmt.Errorf("o pacote %s não contém payload instalável", id)
+		return nil, fmt.Errorf("package %s has no installable payload", id)
 	}
 	prepared := &Prepared{Managed: managed}
 	defaultsRoot := filepath.Join(root, "defaults")
@@ -152,7 +152,7 @@ func HostVariant() (string, error) {
 	case "windows/amd64":
 		return "windows-x64", nil
 	}
-	return "", fmt.Errorf("plataforma %s/%s sem servidores x86QW", runtime.GOOS, runtime.GOARCH)
+	return "", fmt.Errorf("platform %s/%s has no x86QW servers", runtime.GOOS, runtime.GOARCH)
 }
 
 // NormalizePlatform keeps only this host's executable of a multi-platform
@@ -169,12 +169,12 @@ func NormalizePlatform(component catalog.Component, managed, variant string) err
 		}
 	}
 	if matches != 1 {
-		return fmt.Errorf("o pacote %s não contém exatamente um executável para %s", component.ID, variant)
+		return fmt.Errorf("package %s does not hold exactly one executable for %s", component.ID, variant)
 	}
 	for _, file := range files {
 		source := filepath.Join(managed, filepath.FromSlash(file.Destination))
 		if info, err := os.Lstat(source); err != nil || !info.Mode().IsRegular() {
-			return fmt.Errorf("executável de plataforma ausente no pacote %s: %s", component.ID, file.Destination)
+			return fmt.Errorf("platform executable missing from package %s: %s", component.ID, file.Destination)
 		}
 		if file.Platform != variant {
 			if err := os.Remove(source); err != nil {
@@ -184,7 +184,7 @@ func NormalizePlatform(component catalog.Component, managed, variant string) err
 		}
 		destination := filepath.Join(managed, filepath.FromSlash(file.InstallDestination))
 		if _, err := os.Lstat(destination); err == nil {
-			return fmt.Errorf("o pacote %s possui destino operacional duplicado: %s", component.ID, file.InstallDestination)
+			return fmt.Errorf("package %s has a duplicate operational destination: %s", component.ID, file.InstallDestination)
 		}
 		if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 			return err
@@ -209,7 +209,7 @@ func ValidateManagedPath(value string) error {
 		return err
 	}
 	if value == "ezquake/configs/config.cfg" || value == "ezquake/configs/preset.cfg" {
-		return fmt.Errorf("configuração pessoal não pode ser gerenciada: %s", value)
+		return fmt.Errorf("personal settings cannot be managed: %s", value)
 	}
 	parts := strings.Split(value, "/")
 	switch {
@@ -217,7 +217,7 @@ func ValidateManagedPath(value string) error {
 		if len(parts) == 4 && parts[1] == "maps" && parts[2] == "ctf" && strings.EqualFold(path.Ext(value), ".ent") {
 			return nil
 		}
-		return fmt.Errorf("caminho inesperado no inventário gerenciado: %s", value)
+		return fmt.Errorf("unexpected path in the managed inventory: %s", value)
 	case value == "mvdsv" || value == "mvdsv.exe":
 		return nil
 	case len(parts) >= 3 && parts[0] == "docs" && parts[1] == "licenses":
@@ -231,7 +231,7 @@ func ValidateManagedPath(value string) error {
 	case "ezquake", "qw", "arena", "prox", "fortress", "td2":
 		return nil
 	}
-	return fmt.Errorf("caminho inesperado no inventário gerenciado: %s", value)
+	return fmt.Errorf("unexpected path in the managed inventory: %s", value)
 }
 
 // regularFiles lists files below root as sorted POSIX relative paths.
@@ -242,7 +242,7 @@ func regularFiles(root string) ([]string, error) {
 			return err
 		}
 		if entry.Type()&fs.ModeSymlink != 0 {
-			return fmt.Errorf("symlink não suportado: %s", name)
+			return fmt.Errorf("unsupported symlink: %s", name)
 		}
 		if entry.Type().IsRegular() {
 			relative, _ := filepath.Rel(root, name)

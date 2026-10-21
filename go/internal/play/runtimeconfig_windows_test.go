@@ -22,7 +22,7 @@ func TestRuntimeConfigLifecycleWindows(t *testing.T) {
 		t.Fatal(err)
 	}
 	if data, _ := os.ReadFile(config.config); string(data) != string(payload) {
-		t.Fatal("cfg publicado diverge do payload")
+		t.Fatal("published cfg differs from the payload")
 	}
 	t.Setenv("X86QW_TEST_CHILD", "sleep")
 	executable, _ := os.Executable()
@@ -31,7 +31,7 @@ func TestRuntimeConfigLifecycleWindows(t *testing.T) {
 		t.Fatal(err)
 	}
 	if exited, _ := process.ExitsWithin(300 * time.Millisecond); exited {
-		t.Fatal("processo saiu cedo")
+		t.Fatal("process exited early")
 	}
 	if err := config.Transfer(process.Pid); err != nil {
 		t.Fatal(err)
@@ -40,19 +40,19 @@ func TestRuntimeConfigLifecycleWindows(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(config.config); err != nil {
-		t.Fatal("cfg removido com controlador vivo")
+		t.Fatal("cfg removed while its controller lives")
 	}
 	process.Kill()
 	if exited, _ := process.ExitsWithin(5 * time.Second); !exited {
-		t.Fatal("processo não encerrou")
+		t.Fatal("process did not stop")
 	}
 	if err := Recover(target); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(config.config); !os.IsNotExist(err) {
-		t.Fatal("cfg do controlador morto não foi removido")
+		t.Fatal("the dead controller's cfg was not removed")
 	}
 	if _, err := os.Stat(config.journal); !os.IsNotExist(err) {
-		t.Fatal("journal do controlador morto não foi removido")
+		t.Fatal("the dead controller's journal was not removed")
 	}
 }

@@ -131,4 +131,4 @@ func IsPrivateFile(path string, info os.FileInfo) bool {
 }
 
 // Guidance tells the user how to make a rejected secret file private.
-func Guidance() string { return "proteja a DACL para o usuário atual e LOCAL SYSTEM" }
+func Guidance() string { return "protect the DACL for the current user and LOCAL SYSTEM" }

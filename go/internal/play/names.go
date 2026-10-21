@@ -23,11 +23,11 @@ var groupID = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 func parseNames(payload []byte, profile, label string) ([]string, error) {
 	var document map[string]any
 	if err := json.Unmarshal(payload, &document); err != nil {
-		return nil, fmt.Errorf("Catálogo de nomes Frogbot inválido: %s", label)
+		return nil, fmt.Errorf("Invalid Frogbot name catalog: %s", label)
 	}
 	if format, _ := document["format"].(float64); format != 1 || document["game"] != "ktx" || document["profile"] != profile ||
 		document["prefix"] != "/" || document["color"] != "quake-high-bit" {
-		return nil, fmt.Errorf("Catálogo de nomes Frogbot inválido: %s", label)
+		return nil, fmt.Errorf("Invalid Frogbot name catalog: %s", label)
 	}
 	var raw []any
 	if profile == "personal" {
@@ -39,15 +39,15 @@ func parseNames(payload []byte, profile, label string) ([]string, error) {
 		case hasNames && document["characters"] == nil:
 			raw = names
 		default:
-			return nil, fmt.Errorf("Lista pessoal de nomes Frogbot inválida: %s", label)
+			return nil, fmt.Errorf("Invalid personal Frogbot name list: %s", label)
 		}
 	} else {
 		if document["theme"] != profile || document["randomize"] != true {
-			return nil, fmt.Errorf("Catálogo de nomes Frogbot inválido: %s", label)
+			return nil, fmt.Errorf("Invalid Frogbot name catalog: %s", label)
 		}
 		groups, _ := document["groups"].([]any)
 		if len(groups) == 0 {
-			return nil, fmt.Errorf("Catálogo de nomes Frogbot vazio: %s", label)
+			return nil, fmt.Errorf("Empty Frogbot name catalog: %s", label)
 		}
 		seen := map[string]bool{}
 		for _, item := range groups {
@@ -55,7 +55,7 @@ func parseNames(payload []byte, profile, label string) ([]string, error) {
 			id, _ := group["id"].(string)
 			characters, _ := group["characters"].([]any)
 			if !groupID.MatchString(id) || seen[id] || len(characters) == 0 {
-				return nil, fmt.Errorf("Grupo de nomes Frogbot inválido: %s", label)
+				return nil, fmt.Errorf("Invalid Frogbot name group: %s", label)
 			}
 			seen[id] = true
 			raw = append(raw, characters...)
@@ -68,22 +68,22 @@ func parseNames(payload []byte, profile, label string) ([]string, error) {
 		switch item := value.(type) {
 		case string:
 			if profile != "personal" {
-				return nil, fmt.Errorf("Identidade Frogbot inválida: %s", label)
+				return nil, fmt.Errorf("Invalid Frogbot identity: %s", label)
 			}
 			name = item
 		case map[string]any:
 			if len(item) != 1 {
-				return nil, fmt.Errorf("Identidade Frogbot inválida: %s", label)
+				return nil, fmt.Errorf("Invalid Frogbot identity: %s", label)
 			}
 			name, _ = item["name"].(string)
 		default:
-			return nil, fmt.Errorf("Identidade Frogbot inválida: %s", label)
+			return nil, fmt.Errorf("Invalid Frogbot identity: %s", label)
 		}
 		if !frogbotName.MatchString(name) {
-			return nil, fmt.Errorf("Nome Frogbot inválido em %s: use de 1 a 13 caracteres ASCII.", label)
+			return nil, fmt.Errorf("Invalid Frogbot name in %s: use 1 to 13 ASCII characters.", label)
 		}
 		if folded[strings.ToLower(name)] {
-			return nil, fmt.Errorf("Lista de nomes Frogbot contém duplicatas: %s", label)
+			return nil, fmt.Errorf("Frogbot name list has duplicates: %s", label)
 		}
 		folded[strings.ToLower(name)] = true
 		names = append(names, name)
@@ -119,25 +119,25 @@ func ResolveNames(root string, game Game, o Options, mode *Mode) (Options, error
 		pool = shuffle(pool)
 	case "personal":
 		if game.BotNamesPersonalConfig == "" {
-			return o, fmt.Errorf("%s não declara uma lista pessoal de bots.", game.Label)
+			return o, fmt.Errorf("%s declares no personal bot list.", game.Label)
 		}
 		path := filepath.Join(root, filepath.FromSlash(game.BotNamesPersonalConfig))
 		if !regularFile(path) {
-			return o, fmt.Errorf("Lista pessoal de nomes Frogbot ausente ou insegura: %s. Execute repair ou edite o arquivo criado pelo bootstrap.", path)
+			return o, fmt.Errorf("Personal Frogbot name list missing or unsafe: %s. Run repair or edit the file the bootstrap created.", path)
 		}
 		payload, readErr := os.ReadFile(path)
 		if readErr != nil {
-			return o, fmt.Errorf("Lista pessoal de nomes Frogbot inválida: %s", path)
+			return o, fmt.Errorf("Invalid personal Frogbot name list: %s", path)
 		}
 		pool, err = parseNames(payload, "personal", path)
 	default:
-		return o, fmt.Errorf("Perfil de nomes Frogbot desconhecido: %s", o.BotNamesProfile)
+		return o, fmt.Errorf("Unknown Frogbot name profile: %s", o.BotNamesProfile)
 	}
 	if err != nil {
 		return o, err
 	}
 	if len(pool) < count {
-		return o, fmt.Errorf("O perfil %s possui %d nome(s), mas este lançamento pode criar %d Frogbot(s).", o.BotNamesProfile, len(pool), count)
+		return o, fmt.Errorf("Profile %s has %d name(s), but this launch can create %d Frogbot(s).", o.BotNamesProfile, len(pool), count)
 	}
 	o.BotNamePool = pool
 	return o, nil

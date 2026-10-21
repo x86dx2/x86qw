@@ -20,5 +20,5 @@ func digest(reader io.Reader) (string, error) {
 }
 
 func mismatch(path string) error {
-	return fmt.Errorf("Alvo de execução mudou após a validação: %s", path)
+	return fmt.Errorf("Launch target changed after validation: %s", path)
 }

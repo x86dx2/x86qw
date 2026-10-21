@@ -62,11 +62,11 @@ func Fetch(ctx context.Context, client *http.Client) ([]any, error) {
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Hub respondeu HTTP %d", response.StatusCode)
+		return nil, fmt.Errorf("Hub answered HTTP %d", response.StatusCode)
 	}
 	payload, err := io.ReadAll(io.LimitReader(response.Body, maxBytes+1))
 	if err != nil || len(payload) > maxBytes {
-		return nil, errors.New("resposta do Hub inválida ou grande demais")
+		return nil, errors.New("invalid or oversized Hub response")
 	}
 	var rows []any
 	if err := json.Unmarshal(payload, &rows); err != nil {
@@ -190,7 +190,7 @@ func Project(rows []any) ([]Server, error) {
 		seen[address] = true
 	}
 	if len(servers) == 0 {
-		return nil, errors.New("Nenhum servidor ativo reconhecido foi retornado pelo Hub.")
+		return nil, errors.New("The Hub returned no recognized active server.")
 	}
 	sort.Slice(servers, func(a, b int) bool { return servers[a].Address < servers[b].Address })
 	if len(servers) > maxServers {
@@ -215,7 +215,7 @@ func Servers(ctx context.Context, root string) ([]Server, error) {
 			return nil, err
 		}
 		if len(rows) == 0 {
-			return nil, errors.New("Hub indisponível e não há favoritos ou recentes locais.")
+			return nil, errors.New("Hub unavailable and there are no local favorites or recents.")
 		}
 	}
 	return Project(rows)
