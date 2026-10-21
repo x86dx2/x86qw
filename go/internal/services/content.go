@@ -15,7 +15,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/privfs"
 )
 
-const temporaryHeader = "// x86QW: configuração efêmera removida ao encerrar.\n"
+const temporaryHeader = "// x86QW: temporary configuration, removed when the session stops.\n"
 
 // TemporaryConfig is one ephemeral server cfg.
 type TemporaryConfig struct {
@@ -28,7 +28,7 @@ type TemporaryConfig struct {
 // ".cfg", 0600), journaled before it is written.
 func WriteTemporaryConfig(dir, prefix string, lines [][]byte, journal *Journal) (*TemporaryConfig, error) {
 	if info, err := os.Lstat(dir); err != nil || !info.IsDir() {
-		return nil, errorf("Diretório de configuração ausente ou inseguro: %s", dir)
+		return nil, errorf("Configuration folder missing or unsafe: %s", dir)
 	}
 	var payload bytes.Buffer
 	payload.WriteString(temporaryHeader)
@@ -45,13 +45,13 @@ func WriteTemporaryConfig(dir, prefix string, lines [][]byte, journal *Journal) 
 			continue
 		}
 		if err != nil {
-			return nil, errorf("Não foi possível criar a configuração efêmera com acesso privado.")
+			return nil, errorf("Could not create the temporary configuration with private access.")
 		}
 		file = created
 		break
 	}
 	if file == nil {
-		return nil, errorf("Não foi possível criar a configuração efêmera com acesso privado.")
+		return nil, errorf("Could not create the temporary configuration with private access.")
 	}
 	identity, err := identityOfFile(file)
 	if err != nil {
@@ -92,14 +92,14 @@ type Materialized struct {
 // PK3s, so members are published as files for the session and removed later.
 func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, error) {
 	if info, err := os.Lstat(pk3); err != nil || !info.Mode().IsRegular() {
-		return nil, errorf("Pacote %s ausente ou inseguro: %s", label, pk3)
+		return nil, errorf("%s package missing or unsafe: %s", label, pk3)
 	}
 	if info, err := os.Lstat(root); err != nil || !info.IsDir() {
-		return nil, errorf("Diretório de %s ausente ou inseguro: %s", label, root)
+		return nil, errorf("%s folder missing or unsafe: %s", label, root)
 	}
 	plan, err := archive.Open(pk3, archive.DefaultLimits)
 	if err != nil {
-		return nil, errorf("Não foi possível preparar a carga de %s para o MVDSV: %v", label, err)
+		return nil, errorf("Could not prepare the %s payload for MVDSV: %v", label, err)
 	}
 	defer plan.Close()
 	scratch, err := os.MkdirTemp("", "x86qw-pk3-")
@@ -109,7 +109,7 @@ func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, e
 	defer os.RemoveAll(scratch)
 	extracted := filepath.Join(scratch, "payload")
 	if err := plan.Extract(extracted); err != nil {
-		return nil, errorf("Não foi possível preparar a carga de %s para o MVDSV: %v", label, err)
+		return nil, errorf("Could not prepare the %s payload for MVDSV: %v", label, err)
 	}
 	result := &Materialized{}
 	fail := func(err error) (*Materialized, error) {
@@ -133,7 +133,7 @@ func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, e
 		if info, err := os.Lstat(destination); err == nil {
 			current, _, hashErr := fileSHA256(destination)
 			if !info.Mode().IsRegular() || hashErr != nil || current != digest {
-				return nil, errorf("Arquivo local conflita com a carga dedicada de %s: %s", label, destination)
+				return nil, errorf("A local file conflicts with the dedicated %s payload: %s", label, destination)
 			}
 			existed = true
 		}
@@ -184,7 +184,7 @@ func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, e
 		identity, err := copyPrivate(member.source, temporary, member.digest, member.size)
 		if err != nil {
 			os.Remove(temporary)
-			return fail(errorf("Conteúdo divergente no pacote %s: %s", label, member.name))
+			return fail(errorf("Mismatched content in the %s package: %s", label, member.name))
 		}
 		entry := &MaterializedFile{Path: member.destination, ExpectedHash: member.digest, Origin: origin,
 			CreatedBySession: true, Identity: identity, Size: member.size}
@@ -196,7 +196,7 @@ func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, e
 		}
 		if err := os.Link(temporary, member.destination); err != nil {
 			os.Remove(temporary)
-			return fail(errorf("Arquivo surgiu durante a preparação e foi preservado: %s", member.destination))
+			return fail(errorf("A file appeared during preparation and was kept: %s", member.destination))
 		}
 		result.Files = append(result.Files, entry)
 		os.Remove(temporary)
@@ -229,7 +229,7 @@ func copyPrivate(source, destination, digest string, size int64) ([2]int64, erro
 		return [2]int64{}, err
 	}
 	if copied != size || hex.EncodeToString(hash.Sum(nil)) != digest {
-		return [2]int64{}, errors.New("conteúdo divergente")
+		return [2]int64{}, errors.New("mismatched content")
 	}
 	return identity, nil
 }
@@ -259,13 +259,13 @@ func (m *Materialized) Cleanup(warn func(string)) {
 			continue
 		}
 		if !cleanupMaterializedFile(entry) && warn != nil {
-			warn("Arquivo materializado alterado durante a sessão foi preservado: " + entry.Path)
+			warn("A published file changed during the session and was kept: " + entry.Path)
 		}
 	}
 	for index := len(m.Directories) - 1; index >= 0; index-- {
 		directory := m.Directories[index]
 		if !cleanupDirectory(directory.Path, directory.Identity) && warn != nil {
-			warn("Diretório materializado alterado ou não removível com segurança foi preservado: " + directory.Path)
+			warn("A published folder that changed or cannot be removed safely was kept: " + directory.Path)
 		}
 	}
 }
@@ -275,20 +275,20 @@ func (m *Materialized) Cleanup(warn func(string)) {
 func ReadPasswordFile(path, label string) (string, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
-		return "", errorf("Não foi possível ler o arquivo de %s.", label)
+		return "", errorf("Could not read the %s file.", label)
 	}
 	if !info.Mode().IsRegular() {
-		return "", errorf("O arquivo de %s precisa ser regular e não pode ser symlink.", label)
+		return "", errorf("The %s file must be a regular file, not a symlink.", label)
 	}
 	if info.Size() > 4096 {
-		return "", errorf("O arquivo de %s excede o limite de 4096 bytes.", label)
+		return "", errorf("The %s file is over the 4096-byte limit.", label)
 	}
 	if !privfs.IsPrivateFile(path, info) {
-		return "", errorf("Permissões inseguras no arquivo de %s; %s.", label, privfs.Guidance())
+		return "", errorf("Unsafe permissions on the %s file; %s.", label, privfs.Guidance())
 	}
 	payload, err := os.ReadFile(path)
 	if err != nil {
-		return "", errorf("Não foi possível ler o arquivo de %s.", label)
+		return "", errorf("Could not read the %s file.", label)
 	}
 	value := string(payload)
 	if strings.HasSuffix(value, "\r\n") {
@@ -297,7 +297,7 @@ func ReadPasswordFile(path, label string) (string, error) {
 		value = value[:len(value)-1]
 	}
 	if strings.ContainsAny(value, "\r\n") {
-		return "", errorf("O arquivo de %s deve conter uma única linha.", label)
+		return "", errorf("The %s file must hold a single line.", label)
 	}
 	if value != "" {
 		if _, err := SafeText(value, label, 4096); err != nil {

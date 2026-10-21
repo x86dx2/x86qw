@@ -47,14 +47,14 @@ func TestParseAndRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if state.Profile != "essential" || len(state.RecordedComponents) != 2 {
-		t.Fatalf("estado inesperado: %+v", state)
+		t.Fatalf("unexpected state: %+v", state)
 	}
 	encoded, err := MarshalDocument(state.document)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(encoded, payload) {
-		t.Fatalf("serialização diverge do documento lido:\n%s", encoded)
+		t.Fatalf("serialization differs from the document read:\n%s", encoded)
 	}
 }
 
@@ -71,7 +71,7 @@ func TestRejectsInvalidStates(t *testing.T) {
 	for name, payload := range cases {
 		t.Run(name, func(t *testing.T) {
 			if _, err := Parse([]byte(payload)); err == nil || !errors.As(err, new(*Error)) {
-				t.Fatalf("estado inválido aceito: %v", err)
+				t.Fatalf("invalid state accepted: %v", err)
 			}
 		})
 	}
@@ -81,7 +81,7 @@ func TestInstalledAppliesLegacyMigration(t *testing.T) {
 	state := &State{RecordedComponents: []string{"nquake-bootstrap", "nquake-sounds", "ktx", "nquake-ktx"}}
 	got := strings.Join(state.Installed(), ",")
 	if got != "x86qw-client-bootstrap,ktx" {
-		t.Fatalf("migração legada: %s", got)
+		t.Fatalf("legacy migration: %s", got)
 	}
 }
 
@@ -91,7 +91,7 @@ func TestRealInstallation(t *testing.T) {
 	root := filepath.Join(home, "Games", "x86qw")
 	payload, err := os.ReadFile(filepath.Join(root, Path))
 	if err != nil {
-		t.Skip("sem instalação local")
+		t.Skip("no local installation")
 	}
 	state, err := Read(root)
 	if err != nil {
@@ -99,6 +99,6 @@ func TestRealInstallation(t *testing.T) {
 	}
 	encoded, _ := MarshalDocument(state.document)
 	if !bytes.Equal(encoded, payload) {
-		t.Fatal("round-trip da instalação real diverge")
+		t.Fatal("round-trip of the real installation differs")
 	}
 }

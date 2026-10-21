@@ -16,17 +16,17 @@ import (
 // Human `status` and `status --stop`.
 
 var statusParameterLabels = [][2]string{
-	{"game", "Jogo"}, {"mode", "Modo"}, {"map", "Mapa"}, {"bots", "Bots"}, {"bot_skill", "Habilidade"},
-	{"bot_names", "Nomes"}, {"bot_team", "Equipe"}, {"bot_weapon", "Arma"}, {"bot_health", "Vida"},
-	{"ctf_hook", "Gancho CTF"}, {"ctf_runes", "Runas CTF"}, {"race_style", "Estilo Race"},
-	{"race_scoring", "Pontuação Race"}, {"hostname", "Nome"}, {"bind", "Bind"}, {"port", "Porta"},
-	{"maxclients", "Clientes"}, {"mvd", "Gravação MVD"}, {"memory", "Memória"}, {"secrets", "Segredos"},
-	{"protocol", "Protocolo"}, {"http", "HTTP"}, {"upstream", "Upstream"}, {"upstream_secret", "Segredo upstream"},
+	{"game", "Game"}, {"mode", "Mode"}, {"map", "Map"}, {"bots", "Bots"}, {"bot_skill", "Skill"},
+	{"bot_names", "Names"}, {"bot_team", "Team"}, {"bot_weapon", "Weapon"}, {"bot_health", "Health"},
+	{"ctf_hook", "CTF hook"}, {"ctf_runes", "CTF runes"}, {"race_style", "Race style"},
+	{"race_scoring", "Race scoring"}, {"hostname", "Hostname"}, {"bind", "Bind"}, {"port", "Port"},
+	{"maxclients", "Clients"}, {"mvd", "MVD recording"}, {"memory", "Memory"}, {"secrets", "Secrets"},
+	{"protocol", "Protocol"}, {"http", "HTTP"}, {"upstream", "Upstream"}, {"upstream_secret", "Upstream secret"},
 }
 
 var sessionStatusLabels = map[string]string{
-	"starting": "inicializando", "running": "ativa", "stopping": "encerrando",
-	"interrupted": "interrompida", "clean": "finalizada",
+	"starting": "starting", "running": "running", "stopping": "stopping",
+	"interrupted": "interrupted", "clean": "finished",
 }
 
 func statusValue(value any) string {
@@ -59,8 +59,8 @@ func statusValue(value any) string {
 
 func processStatusLabel(status string) string {
 	labels := map[string]string{
-		"alive": "ativo", "dead": "encerrado",
-		"identity_mismatch": "PID reutilizado; processo preservado", "inconclusive": "identidade inconclusiva",
+		"alive": "running", "dead": "stopped",
+		"identity_mismatch": "PID reused; process left alone", "inconclusive": "identity inconclusive",
 	}
 	if label, ok := labels[status]; ok {
 		return label
@@ -90,43 +90,43 @@ func (c *Console) row(label string, value any) {
 }
 
 func printSession(c *Console, target string, data map[string]any, ownsLock bool) {
-	c.Section(fmt.Sprintf("Sessão %v", data["session_id"]))
+	c.Section(fmt.Sprintf("Session %v", data["session_id"]))
 	status := fmt.Sprint(data["status"])
 	if label, ok := sessionStatusLabels[status]; ok {
-		c.row("Estado", label)
+		c.row("State", label)
 	} else {
-		c.row("Estado", data["status"])
+		c.row("State", data["status"])
 	}
-	c.row("Lock", map[bool]string{true: "ativo", false: "ausente"}[ownsLock])
-	c.row("Iniciada", data["created_at"])
+	c.row("Lock", map[bool]string{true: "held", false: "absent"}[ownsLock])
+	c.row("Started", data["created_at"])
 	if background, _ := data["background"].(bool); background {
-		c.row("Execução", "segundo plano")
+		c.row("Runs in", "background")
 	} else {
-		c.row("Execução", "primeiro plano")
+		c.row("Runs in", "foreground")
 	}
 	if log, ok := data["background_log"].(string); ok && log != "" {
 		c.row("Log", log)
 	}
 	if controller, ok := data["controller"].(map[string]any); ok {
-		c.row("Controlador", fmt.Sprintf("PID %v · %s", controller["pid"], processStatusLabel(controllerProbe(data))))
-		c.row("Comando", controller["command"])
+		c.row("Controller", fmt.Sprintf("PID %v · %s", controller["pid"], processStatusLabel(controllerProbe(data))))
+		c.row("Command", controller["command"])
 	} else {
-		c.row("Controlador", "identidade não registrada")
+		c.row("Controller", "identity not recorded")
 	}
 	processes, _ := data["processes"].([]any)
 	if len(processes) == 0 {
-		c.Info("Nenhum processo foi registrado; a stack pode ainda estar inicializando.")
+		c.Info("No process was recorded; the stack may still be starting.")
 		return
 	}
 	for _, item := range processes {
 		entry, _ := item.(map[string]any)
 		labelValue, ok := entry["label"]
 		if !ok {
-			labelValue = "Serviço"
+			labelValue = "Service"
 		}
 		label := statusValue(labelValue)
 		fmt.Fprintf(c.Out, "\n  %s\n", c.paint(label, "1;36"))
-		c.row("Estado", processStatusLabel(processProbe(entry)))
+		c.row("State", processStatusLabel(processProbe(entry)))
 		c.row("PID", entry["pid"])
 		if runtime, ok := entry["runtime"]; ok {
 			c.row("Runtime", runtime)
@@ -136,10 +136,10 @@ func printSession(c *Console, target string, data map[string]any, ownsLock bool)
 		address, okAddress := entry["address"].(string)
 		port, okPort := intField(entry["port"])
 		if okAddress && okPort {
-			c.row("Endpoint local", Endpoint(address, port))
+			c.row("Local endpoint", Endpoint(address, port))
 		}
 		if executable, ok := entry["executable"].(string); ok && executable != "" {
-			c.row("Executável", statusExecutable(target, executable))
+			c.row("Executable", statusExecutable(target, executable))
 		}
 		parameters, _ := entry["parameters"].(map[string]any)
 		displayed := false
@@ -150,7 +150,7 @@ func printSession(c *Console, target string, data map[string]any, ownsLock bool)
 			}
 		}
 		if !displayed {
-			c.row("Parâmetros", "não registrados nesta sessão")
+			c.row("Parameters", "not recorded in this session")
 		}
 	}
 }
@@ -158,7 +158,7 @@ func printSession(c *Console, target string, data map[string]any, ownsLock bool)
 // ShowStatus prints the active services; it reports whether a service
 // controller is confirmed alive.
 func ShowStatus(c *Console, target string) (bool, error) {
-	c.Banner("visualizar serviços ativos", target)
+	c.Banner("view running services", target)
 	lockPath := filepath.Join(target, ".x86qw", "sessions", "active.lock")
 	var owner *lock.Owner
 	active := false
@@ -167,15 +167,15 @@ func ShowStatus(c *Console, target string) (bool, error) {
 			return false, errorf("%v", err)
 		}
 		probe := lock.Probe(owner.ControllerPID, owner.ControllerStartToken, owner.ControllerExecutable)
-		c.Section("Operação ativa")
-		kind := "serviços"
+		c.Section("Active operation")
+		kind := "services"
 		if owner.OperationKind == "maintenance" {
-			kind = "manutenção"
+			kind = "maintenance"
 		}
-		c.row("Tipo", kind)
-		c.row("Comando", owner.Command)
-		c.row("Sessão", owner.SessionID)
-		c.row("Controlador", fmt.Sprintf("PID %d · %s", owner.ControllerPID, processStatusLabel(probe)))
+		c.row("Kind", kind)
+		c.row("Command", owner.Command)
+		c.row("Session", owner.SessionID)
+		c.row("Controller", fmt.Sprintf("PID %d · %s", owner.ControllerPID, processStatusLabel(probe)))
 		active = owner.OperationKind != "maintenance" && probe == "alive"
 	}
 	paths, err := SessionJournalPaths(target, "")
@@ -195,17 +195,17 @@ func ShowStatus(c *Console, target string) (bool, error) {
 	}
 	hint := func() {
 		if active {
-			c.Info("Para encerrar: x86qw status --stop.")
+			c.Info("To stop it: x86qw status --stop.")
 		}
 	}
 	if len(pending) == 0 {
 		switch {
 		case owner != nil && owner.OperationKind == "service":
-			c.Info("A stack está inicializando; nenhum processo foi registrado ainda.")
+			c.Info("The stack is starting; no process was recorded yet.")
 		case owner != nil:
-			c.Info("Não há serviços registrados durante esta operação de manutenção.")
+			c.Info("No services are recorded during this maintenance operation.")
 		default:
-			c.Success("Nenhum serviço x86QW está ativo nesta instalação.")
+			c.Success("No x86QW service is running in this installation.")
 		}
 		hint()
 		return active, nil
@@ -217,7 +217,7 @@ func ShowStatus(c *Console, target string) (bool, error) {
 	for _, item := range pending {
 		ownsLock := owner != nil && fmt.Sprint(item.data["session_id"]) == lockSession
 		if !ownsLock {
-			c.Warning(fmt.Sprintf("Sessão sem lock ativo preservada para inspeção: %v", item.data["session_id"]))
+			c.Warning(fmt.Sprintf("Session without an active lock, kept for inspection: %v", item.data["session_id"]))
 		}
 		printSession(c, target, item.data, ownsLock)
 	}
@@ -230,24 +230,24 @@ func ShowStatus(c *Console, target string) (bool, error) {
 func RequestStop(target string, timeout time.Duration) error {
 	lockPath := filepath.Join(target, ".x86qw", "sessions", "active.lock")
 	if _, err := os.Lstat(lockPath); err != nil {
-		return errorf("Nenhuma stack de serviços x86QW está ativa.")
+		return errorf("No x86QW service stack is running.")
 	}
 	owner, err := lock.ReadOwner(lockPath)
 	if err != nil {
 		return errorf("%v", err)
 	}
 	if owner.OperationKind != "" && owner.OperationKind != "service" {
-		return errorf("A operação ativa é %s, não uma stack de serviços.", owner.Command)
+		return errorf("The active operation is %s, not a service stack.", owner.Command)
 	}
 	if lock.Probe(owner.ControllerPID, owner.ControllerStartToken, owner.ControllerExecutable) != "alive" {
-		return errorf("O controlador ativo não pôde ser confirmado; nenhum processo foi encerrado.")
+		return errorf("The active controller could not be confirmed; no process was stopped.")
 	}
 	paths, err := SessionJournalPaths(target, owner.SessionID)
 	if err != nil {
 		return err
 	}
 	if len(paths) != 1 {
-		return errorf("O journal da stack ativa não está disponível; nenhum processo foi encerrado.")
+		return errorf("The active stack's journal is not available; no process was stopped.")
 	}
 	journal, err := LoadJournal(paths[0])
 	if err != nil {
@@ -258,7 +258,7 @@ func RequestStop(target string, timeout time.Duration) error {
 	executable, _ := controller["executable"].(string)
 	if controller == nil || pid != owner.ControllerPID || controller["creation_token"] != owner.ControllerStartToken ||
 		realpath(executable) != realpath(owner.ControllerExecutable) {
-		return errorf("Lock e journal não identificam o mesmo controlador; nada foi encerrado.")
+		return errorf("The lock and the journal do not name the same controller; nothing was stopped.")
 	}
 	request := filepath.Join(filepath.Dir(paths[0]), "stop.request")
 	payload, err := pyjson.Dumps(map[string]any{
@@ -286,11 +286,11 @@ func RequestStop(target string, timeout time.Duration) error {
 			return errorf("%v", err)
 		}
 		if current.SessionID != owner.SessionID {
-			return errorf("O lock mudou de proprietário durante o encerramento.")
+			return errorf("The lock changed owner while stopping.")
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	return errorf("A stack recebeu o pedido, mas não concluiu o encerramento dentro do limite.")
+	return errorf("The stack got the request but did not finish stopping in time.")
 }
 
 func realpath(path string) string {
@@ -315,28 +315,28 @@ func publishStopRequest(request string, payload []byte) ([2]int64, error) {
 			continue
 		}
 		if err != nil {
-			return [2]int64{}, errorf("Não foi possível criar o pedido privado de encerramento.")
+			return [2]int64{}, errorf("Could not create the private stop request.")
 		}
 		file = created
 	}
 	if file == nil {
-		return [2]int64{}, errorf("Não foi possível criar o pedido privado de encerramento.")
+		return [2]int64{}, errorf("Could not create the private stop request.")
 	}
 	defer os.Remove(temporary)
 	identity, err := identityOfFile(file)
 	if err != nil {
 		file.Close()
-		return [2]int64{}, errorf("Não foi possível criar o pedido privado de encerramento.")
+		return [2]int64{}, errorf("Could not create the private stop request.")
 	}
 	_, writeErr := file.Write(payload)
 	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
-		return [2]int64{}, errorf("Não foi possível publicar o pedido privado de encerramento.")
+		return [2]int64{}, errorf("Could not publish the private stop request.")
 	}
 	if err := os.Link(temporary, request); err != nil {
 		if errors.Is(err, os.ErrExist) {
-			return [2]int64{}, errorf("Já existe um pedido de encerramento para esta stack.")
+			return [2]int64{}, errorf("A stop request for this stack already exists.")
 		}
-		return [2]int64{}, errorf("Não foi possível publicar o pedido privado de encerramento.")
+		return [2]int64{}, errorf("Could not publish the private stop request.")
 	}
 	return identity, nil
 }

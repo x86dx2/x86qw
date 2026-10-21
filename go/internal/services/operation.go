@@ -55,14 +55,14 @@ func (op *Operation) passwordFields() []passwordField {
 	case "host":
 		o := op.Host
 		return []passwordField{
-			{&o.Password, &o.PromptPassword, &o.PasswordFile, "senha de jogador", "password"},
-			{&o.SpectatorPassword, &o.PromptSpectatorPassword, &o.SpectatorPasswordFile, "senha de espectador", "spectator_password"},
-			{&o.RconPassword, &o.PromptRconPassword, &o.RconPasswordFile, "senha RCON", "rcon_password"},
-			{&o.QtvPassword, &o.PromptQtvPassword, &o.QtvPasswordFile, "senha QTV", "qtv_password"},
+			{&o.Password, &o.PromptPassword, &o.PasswordFile, "player password", "password"},
+			{&o.SpectatorPassword, &o.PromptSpectatorPassword, &o.SpectatorPasswordFile, "spectator password", "spectator_password"},
+			{&o.RconPassword, &o.PromptRconPassword, &o.RconPasswordFile, "RCON password", "rcon_password"},
+			{&o.QtvPassword, &o.PromptQtvPassword, &o.QtvPasswordFile, "QTV password", "qtv_password"},
 		}
 	case "qtv":
 		o := op.Qtv
-		return []passwordField{{&o.QtvPassword, &o.PromptQtvPassword, &o.QtvPasswordFile, "senha QTV", "qtv_password"}}
+		return []passwordField{{&o.QtvPassword, &o.PromptQtvPassword, &o.QtvPasswordFile, "QTV password", "qtv_password"}}
 	}
 	return nil
 }
@@ -81,13 +81,13 @@ func (op *Operation) resolvePasswords() error {
 			// Without echo only a terminal can answer.
 			input, ok := op.Stdin.(*os.File)
 			if !ok || !term.IsTerminal(int(input.Fd())) {
-				return errorf("A %s precisa de um terminal; use o arquivo de senha.", field.label)
+				return errorf("The %s needs a terminal; use the password file.", field.label)
 			}
 			fmt.Fprintf(op.Console.Err, "%s: ", strings.ToUpper(field.label[:1])+field.label[1:])
 			raw, err := term.ReadPassword(int(input.Fd()))
 			fmt.Fprintln(op.Console.Err)
 			if err != nil {
-				return errorf("Não foi possível ler a %s sem eco.", field.label)
+				return errorf("Could not read the %s without echo.", field.label)
 			}
 			if len(raw) > 0 {
 				if _, err := SafeText(string(raw), field.label, 4096); err != nil {
@@ -105,29 +105,29 @@ func (op *Operation) warnExternalBind() {
 	c := op.Console
 	warnQtv := func(address, password string, upstream bool) {
 		if IsExternalBind(address) {
-			c.Warning("A interface HTTP/QTV será exposta à rede. A senha de upstream não autentica o acesso HTTP.")
+			c.Warning("The HTTP/QTV interface will be exposed to the network. The upstream password does not protect HTTP access.")
 		}
 		if upstream && password == "" {
-			c.Warning("Upstream QTV sem segredo configurado.")
+			c.Warning("QTV upstream without a secret.")
 		}
 	}
 	switch op.Action {
 	case "host":
 		o := op.Host
 		if IsExternalBind(o.Bind) && o.Password == "" && o.SpectatorPassword == "" && o.RconPassword == "" {
-			c.Warning("Bind externo sem senhas de jogador, espectador ou RCON; o servidor ficará acessível pela rede.")
+			c.Warning("External bind without player, spectator or RCON passwords; the server will be reachable from the network.")
 		}
 		if o.WithQTV {
 			warnQtv(o.QtvBind, o.QtvPassword, true)
 		}
 		if o.WithProxy && IsExternalBind(o.ProxyBind) {
-			c.Warning("QWFWD está ligado a uma interface externa.")
+			c.Warning("QWFWD is bound to an external interface.")
 		}
 	case "qtv":
 		warnQtv(op.Qtv.Bind, op.Qtv.QtvPassword, op.Qtv.Upstream != "")
 	case "proxy":
 		if IsExternalBind(op.Proxy.ProxyBind) {
-			c.Warning("QWFWD está ligado a uma interface externa.")
+			c.Warning("QWFWD is bound to an external interface.")
 		}
 	}
 }
@@ -137,7 +137,7 @@ var backgroundSecretFields = []string{"password", "spectator_password", "rcon_pa
 // readBackgroundRequest reads the background controller's private request
 // (its secrets) from stdin.
 func (op *Operation) readBackgroundRequest() error {
-	invalid := errorf("O controlador em segundo plano não recebeu uma configuração privada válida.")
+	invalid := errorf("The background controller did not get a valid private configuration.")
 	payload, err := io.ReadAll(io.LimitReader(op.Stdin, 65537))
 	if err != nil || len(payload) > 65536 {
 		return invalid
@@ -196,13 +196,13 @@ func (op *Operation) Run() (code int) {
 		var cleanupErrors []string
 		if journal != nil {
 			if err := journal.SetStatus("stopping"); err != nil {
-				cleanupErrors = append(cleanupErrors, "journal em stopping: "+err.Error())
+				cleanupErrors = append(cleanupErrors, "the journal's stopping state: "+err.Error())
 			}
 		}
 		cleanupOK := true
 		if err := cleanupSession(journal, temporary, materialized, c); err != nil {
 			cleanupOK = false
-			cleanupErrors = append(cleanupErrors, "conteúdo efêmero: "+err.Error())
+			cleanupErrors = append(cleanupErrors, "temporary content: "+err.Error())
 		}
 		if journal != nil {
 			status := "clean"
@@ -210,19 +210,19 @@ func (op *Operation) Run() (code int) {
 				status = "interrupted"
 			}
 			if err := journal.SetStatus(status); err != nil {
-				cleanupErrors = append(cleanupErrors, "estado final do journal: "+err.Error())
+				cleanupErrors = append(cleanupErrors, "the journal's final state: "+err.Error())
 			}
 		}
 		if held != nil {
 			if err := held.Release(); err != nil {
-				cleanupErrors = append(cleanupErrors, "lock da instalação: "+err.Error())
+				cleanupErrors = append(cleanupErrors, "the installation lock: "+err.Error())
 			}
 		}
 		for _, message := range cleanupErrors {
-			c.Warning("Falha durante a finalização de " + message)
+			c.Warning("Cleanup failed for " + message)
 		}
 		if len(cleanupErrors) > 0 && code == 0 {
-			c.Error("A sessão terminou com falha crítica de finalização.")
+			c.Error("The session ended with a critical failure while finishing.")
 			code = 1
 		}
 	}()
@@ -240,7 +240,7 @@ func (op *Operation) Run() (code int) {
 		if err != nil {
 			return fail(errorf("%s", err.Error()))
 		}
-		c.Success(fmt.Sprintf("Preset de hospedagem gravado: %v", saved["name"]))
+		c.Success(fmt.Sprintf("Host preset saved: %v", saved["name"]))
 		return 0
 	}
 	var hosted *Hosted
@@ -263,7 +263,7 @@ func (op *Operation) Run() (code int) {
 	}
 	if common.BackgroundChild {
 		if common.BackgroundLog == "" {
-			return fail(errorf("Controlador em segundo plano sem log privado."))
+			return fail(errorf("Background controller without a private log."))
 		}
 		log, err := activateBackgroundLog(target, common.BackgroundLog)
 		if err != nil {
@@ -285,7 +285,7 @@ func (op *Operation) Run() (code int) {
 	var specs []*Spec
 	switch op.Action {
 	case "proxy":
-		c.Banner("iniciar QWFWD", target)
+		c.Banner("start QWFWD", target)
 		spec, err := ProxySpec(target, op.Proxy.ProxyBind, op.Proxy.ProxyPort)
 		if err != nil {
 			return fail(err)
@@ -296,7 +296,7 @@ func (op *Operation) Run() (code int) {
 		c.Info(fmt.Sprintf("Proxy local: %s:%d/UDP", op.Proxy.ProxyBind, op.Proxy.ProxyPort))
 		specs = []*Spec{spec}
 	case "qtv":
-		c.Banner("iniciar QTV", target)
+		c.Banner("start QTV", target)
 		if err := newJournal(); err != nil {
 			return fail(err)
 		}
@@ -308,14 +308,14 @@ func (op *Operation) Run() (code int) {
 		c.Info(fmt.Sprintf("QTV HTTP: http://%s/", Endpoint(o.Bind, o.Port)))
 		specs = []*Spec{spec}
 	default:
-		c.Banner("hospedar jogo com MVDSV", target)
+		c.Banner("host a game with MVDSV", target)
 		o := op.Host
 		hostname := o.Hostname
 		if hostname == "" {
 			hostname = "x86QW - " + hosted.Game.Label
 		}
-		for _, item := range [][2]string{{o.Password, "senha de jogador"}, {o.SpectatorPassword, "senha de espectador"},
-			{o.RconPassword, "senha RCON"}, {o.QtvPassword, "senha QTV"}} {
+		for _, item := range [][2]string{{o.Password, "player password"}, {o.SpectatorPassword, "spectator password"},
+			{o.RconPassword, "RCON password"}, {o.QtvPassword, "QTV password"}} {
 			if item[0] != "" {
 				if _, err := SafeText(item[0], item[1], 96); err != nil {
 					return fail(err)
@@ -356,9 +356,9 @@ func (op *Operation) Run() (code int) {
 		if hosted.Mode != nil {
 			label += " · " + hosted.Mode.Label
 		}
-		c.Info(fmt.Sprintf("Servidor: connect %s:%d · %s em %s", o.Bind, o.Port, label, hosted.Map))
+		c.Info(fmt.Sprintf("Server: connect %s:%d · %s on %s", o.Bind, o.Port, label, hosted.Map))
 		for index, instance := range o.Instances {
-			c.Info(fmt.Sprintf("Servidor #%d: connect %s:%d · %s em %s", index+2, o.Bind, instance.Port, instance.Mode, instance.Map))
+			c.Info(fmt.Sprintf("Server #%d: connect %s:%d · %s on %s", index+2, o.Bind, instance.Port, instance.Mode, instance.Map))
 		}
 		if o.WithQTV {
 			c.Info(fmt.Sprintf("QTV HTTP: http://%s/", Endpoint(o.QtvBind, o.QtvPort)))
@@ -381,7 +381,7 @@ func (op *Operation) instanceSpec(target string, instance Instance, number int, 
 	o.KtxOptions.FillBots = instance.Bots
 	hosted, err := SelectHosted(target, &o)
 	if err != nil {
-		return nil, errorf("Servidor #%d: %s", number, err.Error())
+		return nil, errorf("Server #%d: %s", number, err.Error())
 	}
 	spec, err := HostSpec(target, &o, hosted, session, journal)
 	if err != nil {
@@ -403,11 +403,11 @@ func capitalize(message string) string {
 func validateTarget(target string) error {
 	info, err := os.Lstat(target)
 	if err != nil || !info.IsDir() {
-		return errorf("Diretório de destino não existe: %s", target)
+		return errorf("Target folder does not exist: %s", target)
 	}
 	control := filepath.Join(target, ".x86qw")
 	if info, err := os.Lstat(control); err != nil || !info.IsDir() {
-		return errorf("Instalação x86QW não encontrada em %s.", target)
+		return errorf("No x86QW installation found in %s.", target)
 	}
 	return nil
 }
@@ -420,8 +420,8 @@ func cleanupSession(journal *Journal, temporary []*TemporaryConfig, materialized
 			continue
 		}
 		if !cleanupSensitive(config.Path, config.Identity) {
-			c.Warning("Temporário sensível substituído foi preservado: " + config.Path)
-			failure = errorf("Temporário sensível sem identidade original confirmável foi preservado: %s", config.Path)
+			c.Warning("A replaced sensitive temporary file was kept: " + config.Path)
+			failure = errorf("A sensitive temporary file whose original identity cannot be confirmed was kept: %s", config.Path)
 			break
 		}
 	}
@@ -452,7 +452,7 @@ func activateBackgroundLog(target, relative string) (*os.File, error) {
 	parts := strings.Split(relative, "/")
 	if len(parts) != 3 || parts[0] != ".x86qw" || parts[1] != "logs" || !strings.HasPrefix(parts[2], "service-") ||
 		filepath.Ext(parts[2]) != ".log" || strings.ContainsAny(parts[2], `\`) {
-		return nil, errorf("Caminho interno do log em segundo plano é inválido.")
+		return nil, errorf("The background log's internal path is invalid.")
 	}
 	directory := filepath.Join(target, ".x86qw", "logs")
 	if err := ensurePrivateDirectory(directory); err != nil {
@@ -460,11 +460,11 @@ func activateBackgroundLog(target, relative string) (*os.File, error) {
 	}
 	path := filepath.Join(directory, parts[2])
 	if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
-		return nil, errorf("Log em segundo plano ausente ou inseguro: %s", path)
+		return nil, errorf("Background log missing or unsafe: %s", path)
 	}
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
 	if err != nil {
-		return nil, errorf("Log em segundo plano não pôde ser protegido: %s", path)
+		return nil, errorf("Could not protect the background log: %s", path)
 	}
 	return file, nil
 }
@@ -539,13 +539,13 @@ func (op *Operation) launchBackground(hosted *Hosted) int {
 	secrets := op.secrets()
 	request, err := pyjson.Dumps(map[string]any{"format": 1, "project": "x86qw", "secrets": secrets}, -1)
 	if err != nil {
-		c.Error("Não foi possível preparar o controlador em segundo plano: " + err.Error())
+		c.Error("Could not prepare the background controller: " + err.Error())
 		return 1
 	}
 	request += "\n"
 	executable, err := os.Executable()
 	if err != nil {
-		c.Error("Não foi possível criar o controlador em segundo plano: " + err.Error())
+		c.Error("Could not create the background controller: " + err.Error())
 		return 1
 	}
 	process, err := spawnBackgroundController(executable, arguments, []byte(request))
@@ -567,15 +567,15 @@ func (op *Operation) launchBackground(hosted *Hosted) int {
 			if detail != "" {
 				detail = "\n" + detail
 			}
-			c.Error(fmt.Sprintf("O controlador em segundo plano encerrou com código %d.%s", code, detail))
+			c.Error(fmt.Sprintf("The background controller exited with code %d.%s", code, detail))
 			return 1
 		default:
 		}
 		if owner, err := lock.ReadOwner(lockPath); err == nil && owner.ControllerPID == process.Process.Pid {
 			if paths, err := SessionJournalPaths(target, owner.SessionID); err == nil && len(paths) == 1 {
 				if data, err := LoadJournal(paths[0]); err == nil && data["status"] == "running" {
-					c.Success("Stack iniciada em segundo plano; veja com x86qw status.")
-					c.Info(fmt.Sprintf("Controlador: PID %d", process.Process.Pid))
+					c.Success("Stack started in the background; see it with x86qw status.")
+					c.Info(fmt.Sprintf("Controller: PID %d", process.Process.Pid))
 					c.Info("Log: " + logRelative)
 					return 0
 				}
@@ -583,8 +583,8 @@ func (op *Operation) launchBackground(hosted *Hosted) int {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	c.Warning("A stack continua inicializando em segundo plano; use status para acompanhar.")
-	c.Info(fmt.Sprintf("Controlador: PID %d", process.Process.Pid))
+	c.Warning("The stack is still starting in the background; follow it with status.")
+	c.Info(fmt.Sprintf("Controller: PID %d", process.Process.Pid))
 	return 0
 }
 
@@ -607,7 +607,7 @@ func backgroundLogTail(path string, secrets map[string]any) string {
 	rendered := strings.Join(lines, "\n")
 	for _, secret := range secrets {
 		if text, _ := secret.(string); text != "" {
-			rendered = strings.ReplaceAll(rendered, text, "[REDIGIDO]")
+			rendered = strings.ReplaceAll(rendered, text, "[REDACTED]")
 		}
 	}
 	return rendered

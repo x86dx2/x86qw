@@ -32,7 +32,7 @@ func serialize(target, sessions string, fn func() error) error {
 	}
 	descriptor, err := windows.SecurityDescriptorFromString("O:" + user + "D:P(A;;GA;;;" + user + ")(A;;GA;;;S-1-5-18)")
 	if err != nil {
-		return fmt.Errorf("não foi possível proteger o mutex da instalação: %w", err)
+		return fmt.Errorf("could not protect the installation mutex: %w", err)
 	}
 	attributes := &windows.SecurityAttributes{Length: uint32(unsafe.Sizeof(windows.SecurityAttributes{})), SecurityDescriptor: descriptor}
 	name, err := windows.UTF16PtrFromString(mutexName(target))
@@ -41,12 +41,12 @@ func serialize(target, sessions string, fn func() error) error {
 	}
 	handle, err := windows.CreateMutex(attributes, false, name)
 	if handle == 0 {
-		return fmt.Errorf("não foi possível abrir o mutex da instalação: %w", err)
+		return fmt.Errorf("could not open the installation mutex: %w", err)
 	}
 	defer windows.CloseHandle(handle)
 	event, err := windows.WaitForSingleObject(handle, windows.INFINITE)
 	if err != nil || (event != windows.WAIT_OBJECT_0 && event != windows.WAIT_ABANDONED) {
-		return fmt.Errorf("não foi possível aguardar o mutex da instalação: %v", err)
+		return fmt.Errorf("could not wait for the installation mutex: %v", err)
 	}
 	defer windows.ReleaseMutex(handle)
 	return fn()

@@ -59,7 +59,7 @@ func ensurePrivateDirectory(dir string) error {
 	}
 	info, err := os.Lstat(dir)
 	if err != nil || !info.IsDir() {
-		return errorf("Diretório de serviço ausente ou inseguro: %s", dir)
+		return errorf("Service folder missing or unsafe: %s", dir)
 	}
 	return privfs.Ensure(dir, info)
 }
@@ -76,7 +76,7 @@ func NewJournal(target string, owner *lock.Owner, background bool, backgroundLog
 	journal := &Journal{Target: target, SessionID: owner.SessionID}
 	journal.Directory = filepath.Join(sessions, owner.SessionID)
 	if err := privfs.Mkdir(journal.Directory); err != nil {
-		return nil, errorf("Diretório exclusivo da sessão não pôde ser criado: %s", journal.Directory)
+		return nil, errorf("Could not create the session's own folder: %s", journal.Directory)
 	}
 	journal.Path = filepath.Join(journal.Directory, "session.json")
 	var log any
@@ -106,7 +106,7 @@ func (j *Journal) write() error {
 		err = atomicfile.Write(j.Path, []byte(text+"\n"), 0o600)
 	}
 	if err != nil {
-		return errorf("O journal privado da sessão não pôde ser gravado.")
+		return errorf("Could not write the session's private journal.")
 	}
 	return nil
 }
@@ -118,7 +118,7 @@ func (j *Journal) Relative(absolute string) (string, error) {
 	root := fspath.Resolve(j.Target)
 	relative, err := filepath.Rel(root, name)
 	if err != nil || !fspath.Inside(name, root) {
-		return "", errorf("O journal recusou um caminho fora da instalação.")
+		return "", errorf("The journal refused a path outside the installation.")
 	}
 	return filepath.ToSlash(relative), nil
 }
@@ -138,7 +138,7 @@ func (j *Journal) list(key string) []any {
 func (j *Journal) RecordProcess(spec *Spec, pid int) error {
 	identity, status := lock.Identity(pid)
 	if status != "alive" {
-		return errorf("Não foi possível registrar a identidade do processo %s.", spec.Label)
+		return errorf("Could not record the identity of the %s process.", spec.Label)
 	}
 	var address, port any
 	if spec.StartupRcon != nil {
@@ -277,16 +277,16 @@ func (j *Journal) ConsumeStopRequest() (bool, error) {
 		return false, nil
 	}
 	if err != nil || !info.Mode().IsRegular() || info.Size() > maxStopRequestBytes {
-		return false, errorf("Pedido de encerramento inválido preservado para inspeção: %s", request)
+		return false, errorf("Invalid stop request kept for inspection: %s", request)
 	}
 	payload, err := os.ReadFile(request)
 	var document map[string]any
 	if err != nil || json.Unmarshal(payload, &document) != nil || len(document) != 4 ||
 		document["format"] != float64(1) || document["project"] != "x86qw" || document["session_id"] != j.SessionID {
-		return false, errorf("Pedido de encerramento inválido preservado para inspeção: %s", request)
+		return false, errorf("Invalid stop request kept for inspection: %s", request)
 	}
 	if _, ok := document["requested_at"].(string); !ok {
-		return false, errorf("Pedido de encerramento inválido preservado para inspeção: %s", request)
+		return false, errorf("Invalid stop request kept for inspection: %s", request)
 	}
 	return true, os.Remove(request)
 }
@@ -307,7 +307,7 @@ func JournalPath(target string, relative any) (string, bool) {
 
 // LoadJournal validates a session.json like load_session_journal.
 func LoadJournal(file string) (map[string]any, error) {
-	invalid := errorf("Journal de sessão inválido preservado para inspeção: %s", filepath.Dir(file))
+	invalid := errorf("Invalid session journal kept for inspection: %s", filepath.Dir(file))
 	info, err := os.Lstat(file)
 	if err != nil || !info.Mode().IsRegular() || info.Size() > maxJournalBytes {
 		return nil, invalid
@@ -406,7 +406,7 @@ func SessionJournalPaths(target, sessionID string) ([]string, error) {
 		return nil, nil
 	}
 	if err != nil || !info.IsDir() {
-		return nil, errorf("Diretório de sessões ausente ou inseguro: %s", sessions)
+		return nil, errorf("Sessions folder missing or unsafe: %s", sessions)
 	}
 	var directories []string
 	if sessionID != "" {
@@ -432,7 +432,7 @@ func SessionJournalPaths(target, sessionID string) ([]string, error) {
 		if removeIncompleteInitialSession(dir) {
 			continue
 		}
-		return nil, errorf("Journal de sessão inválido preservado para inspeção: %s", dir)
+		return nil, errorf("Invalid session journal kept for inspection: %s", dir)
 	}
 	return paths, nil
 }
@@ -480,25 +480,25 @@ func AssertRecoveryConfirmable(target string) error {
 		probe := controllerProbe(data)
 		if probe == "alive" {
 			controller := data["controller"].(map[string]any)
-			return errorf("O controlador registrado no journal continua ativo; recuperação bloqueada.\nSessão: %v\nControlador: PID %v", data["session_id"], controller["pid"])
+			return errorf("The controller recorded in the journal is still running; recovery blocked.\nSession: %v\nController: PID %v", data["session_id"], controller["pid"])
 		}
 		if probe == "inconclusive" {
-			return errorf("Não foi possível confirmar o controlador do journal; lock, processos e arquivos foram preservados em %s.", filepath.Dir(file))
+			return errorf("Could not confirm the journal's controller; the lock, processes and files were kept in %s.", filepath.Dir(file))
 		}
 		processes, _ := data["processes"].([]any)
 		for _, entry := range processes {
 			status := processProbe(entry)
 			if status == "inconclusive" {
-				label := "processo"
+				label := "a process"
 				if record, ok := entry.(map[string]any); ok {
 					if text, ok := record["label"].(string); ok {
 						label = text
 					}
 				}
-				return errorf("Não foi possível confirmar a identidade de %s na sessão abandonada; lock, journal e arquivos foram preservados em %s.", label, filepath.Dir(file))
+				return errorf("Could not confirm the identity of %s in the abandoned session; the lock, journal and files were kept in %s.", label, filepath.Dir(file))
 			}
 			if probe == "" && status == "alive" {
-				return errorf("Journal legado possui processo vivo e não prova que seu controlador terminou; processos e arquivos foram preservados em %s.", filepath.Dir(file))
+				return errorf("A legacy journal has a live process and does not prove its controller ended; the processes and files were kept in %s.", filepath.Dir(file))
 			}
 		}
 	}
@@ -525,7 +525,7 @@ func RecoverSessions(target string, warn func(string)) error {
 func reconcileJournal(target, file string, warn func(string)) error {
 	data, err := LoadJournal(file)
 	if err != nil {
-		warn(fmt.Sprintf("Journal de sessão inválido preservado para inspeção: %s", filepath.Dir(file)))
+		warn(fmt.Sprintf("Invalid session journal kept for inspection: %s", filepath.Dir(file)))
 		return nil
 	}
 	if data["status"] == "clean" {
@@ -533,10 +533,10 @@ func reconcileJournal(target, file string, warn func(string)) error {
 	}
 	probe := controllerProbe(data)
 	if probe == "alive" {
-		return errorf("O controlador da sessão %v continua ativo; recuperação bloqueada.", data["session_id"])
+		return errorf("The controller of session %v is still running; recovery blocked.", data["session_id"])
 	}
 	if probe == "inconclusive" {
-		return errorf("O controlador da sessão %v está inconclusivo; estado preservado.", data["session_id"])
+		return errorf("The controller of session %v is inconclusive; its state was kept.", data["session_id"])
 	}
 	data["status"] = "interrupted"
 	actions, _ := data["recovery_actions"].([]any)
@@ -544,14 +544,14 @@ func reconcileJournal(target, file string, warn func(string)) error {
 	if probe == "" {
 		for _, entry := range processes {
 			if status := processProbe(entry); status == "alive" || status == "inconclusive" {
-				return errorf("Journal legado não prova que seu controlador terminou; processos e arquivos foram preservados em %s.", filepath.Dir(file))
+				return errorf("A legacy journal does not prove its controller ended; the processes and files were kept in %s.", filepath.Dir(file))
 			}
 		}
 	}
 	for index := len(processes) - 1; index >= 0; index-- {
 		entry, ok := processes[index].(map[string]any)
 		if processProbe(processes[index]) == "inconclusive" {
-			return errorf("Processo possivelmente ativo não pôde ser confirmado; journal preservado: %s", filepath.Dir(file))
+			return errorf("A possibly running process could not be confirmed; journal kept: %s", filepath.Dir(file))
 		}
 		if !ok {
 			continue
@@ -590,8 +590,8 @@ func reconcileJournal(target, file string, warn func(string)) error {
 					continue
 				}
 				entry["modified_during_session"] = true
-				warn("Temporário sensível substituído foi preservado: " + candidate)
-				return errorf("Temporário sensível sem identidade original confirmável foi preservado: %s", candidate)
+				warn("A replaced sensitive temporary file was kept: " + candidate)
+				return errorf("A sensitive temporary file whose original identity cannot be confirmed was kept: %s", candidate)
 			}
 			expected, _ := entry["expected_hash"].(string)
 			size, sizeOK := intField(entry["expected_size"])
@@ -602,7 +602,7 @@ func reconcileJournal(target, file string, warn func(string)) error {
 				}
 			}
 			entry["modified_during_session"] = true
-			warn("Arquivo de sessão alterado foi preservado: " + candidate)
+			warn("A changed session file was kept: " + candidate)
 		}
 	}
 	directories, _ := data["created_directories"].([]any)
@@ -624,7 +624,7 @@ func reconcileJournal(target, file string, warn func(string)) error {
 		if hasIdentity && cleanupDirectory(candidate, identity) {
 			continue
 		}
-		warn("Diretório de sessão sem identidade confirmável foi preservado: " + candidate)
+		warn("A session folder whose identity cannot be confirmed was kept: " + candidate)
 	}
 	data["status"] = "clean"
 	data["recovered_at"] = isoNow()
@@ -633,7 +633,7 @@ func reconcileJournal(target, file string, warn func(string)) error {
 		err = atomicfile.Write(file, []byte(text+"\n"), 0o600)
 	}
 	if err != nil {
-		return errorf("O journal privado de recuperação não pôde ser gravado.")
+		return errorf("Could not write the private recovery journal.")
 	}
 	return nil
 }

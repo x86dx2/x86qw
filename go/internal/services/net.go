@@ -33,7 +33,7 @@ func IsUsage(err error) bool { return cliargs.IsUsage(err) }
 func BindAddress(value string) (string, error) {
 	address, err := netip.ParseAddr(value)
 	if err != nil {
-		return "", usagef("use um endereço IPv4 ou IPv6 literal")
+		return "", usagef("use a literal IPv4 or IPv6 address")
 	}
 	return address.String(), nil
 }
@@ -48,7 +48,7 @@ func SafeText(value, label string, maximum int) (string, error) {
 		}
 	}
 	if invalid {
-		return "", errorf("%s contém caracteres inválidos ou excede %d caracteres.", label, maximum)
+		return "", errorf("%s has invalid characters or is longer than %d characters.", label, maximum)
 	}
 	return value, nil
 }
@@ -62,41 +62,41 @@ func ParseNetworkEndpoint(value string) (string, error) {
 		}
 	}
 	if bad {
-		return "", usagef("use host:porta ou [IPv6]:porta")
+		return "", usagef("use host:port or [IPv6]:port")
 	}
 	var host, portText, normalized string
 	if strings.HasPrefix(value, "[") {
 		closing := strings.Index(value, "]")
 		if closing < 0 || closing+1 >= len(value) || value[closing+1] != ':' {
-			return "", usagef("use [IPv6]:porta")
+			return "", usagef("use [IPv6]:port")
 		}
 		host, portText = value[1:closing], value[closing+2:]
 		address, err := netip.ParseAddr(host)
 		if err != nil || !address.Is6() {
-			return "", usagef("endereço IPv6 inválido")
+			return "", usagef("invalid IPv6 address")
 		}
 		normalized = "[" + address.String() + "]"
 	} else {
 		if strings.Count(value, ":") != 1 {
-			return "", usagef("IPv6 deve usar [IPv6]:porta")
+			return "", usagef("IPv6 must use [IPv6]:port")
 		}
 		host, portText, _ = strings.Cut(value, ":")
 		if host == "" {
-			return "", usagef("host ausente")
+			return "", usagef("missing host")
 		}
 		if address, err := netip.ParseAddr(host); err == nil && address.Is4() {
 			normalized = address.String()
 		} else {
 			if len(host) > 253 || strings.HasSuffix(host, ".") {
-				return "", usagef("hostname inválido")
+				return "", usagef("invalid hostname")
 			}
 			for _, label := range strings.Split(host, ".") {
 				if label == "" || len(label) > 63 || strings.HasPrefix(label, "-") || strings.HasSuffix(label, "-") {
-					return "", usagef("hostname inválido")
+					return "", usagef("invalid hostname")
 				}
 				for _, r := range label {
 					if r > 127 || !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-') {
-						return "", usagef("hostname inválido")
+						return "", usagef("invalid hostname")
 					}
 				}
 			}
@@ -105,10 +105,10 @@ func ParseNetworkEndpoint(value string) (string, error) {
 	}
 	port, err := strconv.Atoi(strings.TrimSpace(portText))
 	if err != nil {
-		return "", usagef("porta inválida")
+		return "", usagef("invalid port")
 	}
 	if port < 1 || port > 65535 {
-		return "", usagef("porta deve estar entre 1 e 65535")
+		return "", usagef("port must be between 1 and 65535")
 	}
 	return fmt.Sprintf("%s:%d", normalized, port), nil
 }
