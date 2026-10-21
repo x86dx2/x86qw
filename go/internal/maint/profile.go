@@ -19,7 +19,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/pyjson"
 )
 
-// Ported from x86qw_runtime/profiles.py.
+// Profiles back up and restore the personal configuration files.
 
 var (
 	profileFiles = []string{"ezquake/configs/config.cfg", "ezquake/configs/preset.cfg", "qtv/qtv.cfg", "qwfwd/qwfwd.cfg"}
@@ -31,7 +31,8 @@ var (
 const profileNotice = "Modo owner-only: perfil user-owned. Sem upload automático. " +
 	"Este zip contém só configurações pessoais, sem cache, demos ou bytes gerenciados.\n"
 
-// IsUserProfilePath mirrors profiles.is_user_profile_path.
+// IsUserProfilePath reports whether relative is a personal configuration
+// file a profile backup keeps.
 func IsUserProfilePath(relative string) bool {
 	if relative == "" || strings.Contains(relative, `\`) || strings.HasPrefix(relative, "/") {
 		return false
@@ -73,7 +74,8 @@ type DataReport struct {
 	Profile, Cache, Personal []string
 }
 
-// ClassifyInstallData mirrors profiles.classify_install_data.
+// ClassifyInstallData sorts an installation's own files into profile,
+// cache and personal data.
 func ClassifyInstallData(target string) DataReport {
 	var report DataReport
 	for _, name := range profileFiles {
@@ -135,7 +137,7 @@ func lessCodepoints(a, b string) bool {
 	return len(ra) < len(rb)
 }
 
-// RenderProfile mirrors render_profile_report.
+// RenderProfile is the classification as `x86qw profile` prints it.
 func RenderProfile(report DataReport) string {
 	lines := []string{"x86QW · perfil", ""}
 	for _, group := range []struct {

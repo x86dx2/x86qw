@@ -13,7 +13,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// Distribution manifest and tree checks (maintenance/tools/sync_distribution.py).
+// Distribution manifest and tree checks.
 
 // GitLFSPointerPrefix starts every unhydrated Git LFS pointer.
 var GitLFSPointerPrefix = []byte("version https://git-lfs.github.com/spec/v1\n")
@@ -32,7 +32,7 @@ var allowedUnmanaged = []string{
 	"game-data/id1/pak0.pak", "game-data/id1/pak1.pak",
 }
 
-// LoadManifest mirrors load_manifest.
+// LoadManifest loads and validates dist/manifest.json.
 func LoadManifest(path string) (*Object, error) {
 	if !exists(path) {
 		manifest := pyjson.NewObject()
@@ -88,7 +88,8 @@ func validateManifestSizes(value any) error {
 	return nil
 }
 
-// IsGitLFSPointer mirrors is_git_lfs_pointer.
+// IsGitLFSPointer reports whether path holds a Git LFS pointer instead of
+// the file.
 func IsGitLFSPointer(path string) bool {
 	file, err := os.Open(path)
 	if err != nil {
@@ -100,7 +101,8 @@ func IsGitLFSPointer(path string) bool {
 	return bytes.Equal(head[:n], GitLFSPointerPrefix)
 }
 
-// ConsumedComponent mirrors consumed_component for the canonical inventories.
+// ConsumedComponent is the component of the canonical inventories that
+// consumes a distribution path.
 func (p *Project) ConsumedComponent(path string) (string, error) {
 	component, err := p.ComponentForDistributionPath(path)
 	if err != nil {
@@ -160,7 +162,7 @@ func (p *Project) ConsumedComponent(path string) (string, error) {
 	return "", nil
 }
 
-// distributionFiles mirrors the `actual` set of verify_distribution.
+// distributionFiles are the files actually in the distribution tree.
 func distributionFiles(root string) (map[string]bool, error) {
 	files, err := rglobFiles(root)
 	if err != nil {
@@ -178,7 +180,8 @@ func distributionFiles(root string) (map[string]bool, error) {
 	return actual, nil
 }
 
-// VerifyDistribution mirrors verify_distribution and returns the number of
+// VerifyDistribution checks the tree against the manifest and returns the
+// number of
 // manifest files checked.
 func (p *Project) VerifyDistribution(root string, manifest *Object) (int, error) {
 	files := manifest.Value("files").(*Object)
@@ -275,7 +278,8 @@ func (p *Project) VerifyDistribution(root string, manifest *Object) (int, error)
 	return checked, nil
 }
 
-// resolve mirrors Path.resolve() (non-strict).
+// resolve makes path absolute and follows the links in the part of it that
+// exists.
 func resolve(path string) string {
 	absolute, _ := filepath.Abs(path)
 	if resolved, err := filepath.EvalSymlinks(absolute); err == nil {

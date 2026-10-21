@@ -17,8 +17,8 @@ type Session struct {
 	Status    string `json:"status"`
 }
 
-// Status mirrors manager.py _json_status_data: a read-only snapshot that
-// never loads catalogs.
+// Status is what `status --json` reports: a read-only snapshot that never
+// loads catalogs.
 type Status struct {
 	Installation string    `json:"installation"`
 	Project      string    `json:"project"`

@@ -14,14 +14,15 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// manage.py add: reviewed distribution-change definitions.
+// x86qw-content add: reviewed distribution-change definitions.
 
 var (
 	safeIdentifier = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.+-]*$`)
 	safeConsumer   = regexp.MustCompile(`^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9_.+-]*$`)
 )
 
-// safeRelative mirrors manage.safe_relative.
+// safeRelative checks a definition's relative path, optionally under
+// prefixDir.
 func safeRelative(value any, prefixDir string) (string, error) {
 	portable, err := ValidatePortableRelativePath(value, "caminho")
 	if err != nil {
@@ -39,7 +40,8 @@ func safeRelative(value any, prefixDir string) (string, error) {
 
 func semanticIdentity(value string) string { return Casefold(norm.NFC.String(value)) }
 
-// validateDestinationTree mirrors manage.validate_destination_tree.
+// validateDestinationTree refuses a destination that differs only in case or
+// Unicode form from a path already in dist.
 func (p *Project) validateDestinationTree(destination string) error {
 	relative := strings.Split(strings.TrimPrefix(destination, "dist/"), "/")
 	existing := map[string]string{}
@@ -76,7 +78,8 @@ func (p *Project) validateDestinationTree(destination string) error {
 	return nil
 }
 
-// validateLocalSourcePath mirrors manage.validate_local_source_path.
+// validateLocalSourcePath resolves a local source path, which must stay
+// under base.
 func validateLocalSourcePath(base string, value any) (string, error) {
 	portable, err := ValidatePortableRelativePath(value, "source local")
 	if err != nil {
@@ -113,7 +116,8 @@ type filePlan struct {
 	mode        os.FileMode
 }
 
-// validateDefinitionFile mirrors manage.validate_definition_file.
+// validateDefinitionFile checks one file entry of a definition and plans
+// it.
 func validateDefinitionFile(raw any, base string) (*filePlan, error) {
 	entry, ok := raw.(*Object)
 	if !ok {
@@ -263,7 +267,8 @@ func applyReferenceTransition(releases *Object, proposed any) (referenceTransiti
 	return result, true, nil
 }
 
-// referenceAssetURL mirrors manage.reference_asset_url.
+// referenceAssetURL is the raw URL of a file of the reference repository
+// at revision.
 func referenceAssetURL(repository, revision, upstreamPath string) (string, error) {
 	parsed, err := validateHTTPSURL(repository, "repository da referencia nQuake")
 	if err != nil {
@@ -278,7 +283,8 @@ func referenceAssetURL(repository, revision, upstreamPath string) (string, error
 	return "https://raw.githubusercontent.com/" + parts[0] + "/" + parts[1] + "/" + revision + "/" + quotePath(upstreamPath), nil
 }
 
-// upsertComponent mirrors manage.upsert_component.
+// upsertComponent adds a component, or replaces it when replace is set,
+// keeping the list sorted by id.
 func upsertComponent(catalog *Object, component *Object, replace bool) error {
 	entries, ok := catalog.Value("components").([]any)
 	identifier, idOK := component.Value("id").(string)
@@ -311,7 +317,8 @@ func upsertComponent(catalog *Object, component *Object, replace bool) error {
 	return nil
 }
 
-// preserveProfileFingerprints mirrors manage.preserve_profile_fingerprints.
+// preserveProfileFingerprints appends each profile's current fingerprint
+// to its history when it is not there yet.
 func preserveProfileFingerprints(catalog *Object) error {
 	profiles, profilesOK := catalog.Value("profiles").(*Object)
 	history, historyOK := catalog.Value("profile_history").(*Object)
@@ -349,7 +356,7 @@ func addToProfiles(staged *Object, identifier string, profiles []string) error {
 	return nil
 }
 
-// validateDistributionChange mirrors manage.validate_distribution_change.
+// validateDistributionChange checks a whole definition and plans its files.
 func (p *Project) validateDistributionChange(definition *Object, definitionPath string) ([]*filePlan, error) {
 	if !pyjson.EqInt(definition.Value("format"), 1) || !pyjson.Eq(definition.Value("project"), "x86qw") || !pyjson.Eq(definition.Value("kind"), "distribution-change") {
 		return nil, managerError("a definicao precisa ser x86qw/distribution-change formato 1")
@@ -796,7 +803,8 @@ func identityRepr(pkg *Object) string {
 	return "(" + strings.Join(parts, ", ") + ")"
 }
 
-// fetchDefinitionFile mirrors manage.fetch_definition_file.
+// fetchDefinitionFile downloads or copies one planned file and returns its
+// size and digest.
 func (p *Project) fetchDefinitionFile(plan *filePlan, destination string) (int64, string, error) {
 	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 		return 0, "", err
@@ -834,14 +842,14 @@ func (p *Project) fetchDefinitionFile(plan *filePlan, destination string) (int64
 	return size, digest, nil
 }
 
-// AddOptions mirrors manage.py add flags.
+// AddOptions are the flags of `x86qw-content add`.
 type AddOptions struct {
 	DryRun  bool
 	Yes     bool
 	Confirm Confirm
 }
 
-// Add mirrors manage.py add.
+// Add is `x86qw-content add`.
 func (p *Project) Add(out io.Writer, definitionPath string, options AddOptions) error {
 	definitionPath, err := filepath.Abs(definitionPath)
 	if err != nil {

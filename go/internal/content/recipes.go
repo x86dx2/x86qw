@@ -10,9 +10,9 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// Mirror recipes (maintenance/tools/validate_recipes.py).
+// Mirror recipes (maintenance/recipes).
 
-// ValidateRecipe mirrors validate_recipe and returns the review status.
+// ValidateRecipe checks a recipe and returns its review status.
 func (p *Project) ValidateRecipe(value any, label string) (string, error) {
 	recipe, ok := value.(*Object)
 	if !ok {
@@ -62,8 +62,8 @@ func (p *Project) ValidateRecipe(value any, label string) (string, error) {
 	return status, nil
 }
 
-// RecipePaths mirrors recipe_paths: every *.json outside a "sources" part,
-// ordered like sorted(Path).
+// RecipePaths lists every *.json outside a "sources" folder, sorted
+// component by component.
 func RecipePaths(root string) ([]string, error) {
 	var paths [][]string
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {

@@ -12,13 +12,14 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// Mirror publication (manage.py publish/commit and publish_gitlab_packages.py).
+// Mirror publication: x86qw-content publish and commit.
 
 const githubAPIMaxBytes = 4 * 1024 * 1024
 
 var githubRepositoryPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
 
-// githubAPIHeaders mirrors manage.github_api_headers.
+// githubHeaders are the GitHub API headers, with the token from GH_TOKEN or
+// GITHUB_TOKEN.
 func (p *Project) githubHeaders() (map[string]string, error) {
 	headers := map[string]string{
 		"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": userAgent,
@@ -41,7 +42,7 @@ func (p *Project) githubHeaders() (map[string]string, error) {
 	return headers, nil
 }
 
-// githubAPIObject mirrors manage.github_api_object (nil on 404).
+// githubAPIObject fetches a GitHub API object (nil on 404).
 func (p *Project) githubAPIObject(repository, endpoint, label string) (*Object, error) {
 	parts := strings.Split(repository, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || parts[0] == "." || parts[0] == ".." ||
@@ -113,7 +114,7 @@ func (p *Project) assetFingerprint(remote *Object, artifact mirrorArtifact) (boo
 	return found && pyjson.EqInt(size, gotSize) && gotDigest == digest, nil
 }
 
-// PublishGitHub mirrors manage.publish_github.
+// PublishGitHub uploads the catalog's artifacts to their GitHub releases.
 func (p *Project) PublishGitHub(out io.Writer, catalog *Object, dryRun bool) error {
 	type key struct{ repository, tag string }
 	groups := map[key][]mirrorArtifact{}
@@ -261,7 +262,8 @@ func (p *Project) PublishGitHub(out io.Writer, catalog *Object, dryRun bool) err
 	return nil
 }
 
-// LocalArtifact mirrors publish_gitlab_packages.local_artifact.
+// LocalArtifact is a package's built artifact, checked against the
+// catalog.
 func (p *Project) LocalArtifact(pkg *Object) (string, error) {
 	filename := pyjson.Repr(pkg.Value("filename"))
 	var path string
@@ -300,7 +302,8 @@ func (p *Project) LocalArtifact(pkg *Object) (string, error) {
 	return path, nil
 }
 
-// PublishGitLab mirrors publish_gitlab_packages.py --publish --register.
+// PublishGitLab uploads the artifacts to the GitLab package registry and
+// records the mirror URLs in the catalog.
 func (p *Project) PublishGitLab(out io.Writer, catalogPath string) error {
 	catalog, err := LoadJSONObject(catalogPath)
 	if err != nil {
@@ -385,7 +388,7 @@ func (p *Project) uploadGitLab(path, url string) error {
 	return p.Put(url, headers, payload)
 }
 
-// Publish mirrors manage.py publish.
+// Publish is `x86qw-content publish`.
 func (p *Project) Publish(out io.Writer, githubOnly, gitlabOnly, dryRun bool) error {
 	catalog, err := LoadJSONObject(p.Path(CatalogPath))
 	if err != nil {
@@ -414,7 +417,7 @@ func (p *Project) Publish(out io.Writer, githubOnly, gitlabOnly, dryRun bool) er
 	return nil
 }
 
-// Commit mirrors manage.py commit.
+// Commit is `x86qw-content commit`.
 func (p *Project) Commit(out io.Writer, message string, push bool) error {
 	status, err := p.command(nil, "git", "status", "--porcelain")
 	if err != nil {

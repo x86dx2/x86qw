@@ -90,7 +90,8 @@ func terminateProcess(pid int, timeout time.Duration) (bool, error) {
 	return err == nil && event == windows.WAIT_OBJECT_0, nil
 }
 
-// terminateRecordedProcess mirrors sessions.terminate_recorded_process.
+// terminateRecordedProcess ends a journaled process once it is confirmed to
+// be the one recorded.
 func terminateRecordedProcess(entry map[string]any) (string, error) {
 	pid, _ := intField(entry["pid"])
 	switch processProbe(entry) {

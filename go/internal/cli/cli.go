@@ -51,8 +51,8 @@ func BinaryName() string {
 	return "x86qw"
 }
 
-// Receipt renders .x86qw/cli/receipt exactly like the Python installer
-// (sorted keys, indent 2, trailing newline).
+// Receipt renders .x86qw/cli/receipt: sorted keys, indent 2, trailing
+// newline.
 func Receipt(version string) []byte {
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)

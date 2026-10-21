@@ -63,7 +63,7 @@ var (
 	baseDist    [dCodes]int
 )
 
-// ct mirrors ct_data: fc is Freq/Code and dl is Dad/Len (C unions).
+// ct is zlib's ct_data: fc is Freq/Code and dl is Dad/Len (C unions).
 type ct struct{ fc, dl uint16 }
 
 type staticDesc struct {

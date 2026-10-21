@@ -1,6 +1,5 @@
-// Package download fetches pinned artifacts with the policy of
-// x86qw_runtime/io/downloader.py: HTTPS on every hop, exact size and
-// SHA-256, a total deadline, bounded retries and mirror fallback.
+// Package download fetches pinned artifacts: HTTPS on every hop, exact
+// size and SHA-256, a total deadline, bounded retries and mirror fallback.
 package download
 
 import (
@@ -280,7 +279,7 @@ func AdoptableCache(root string) bool {
 	return true
 }
 
-// CacheDir is the Python installer's download cache, shared with it;
+// CacheDir is the download cache, which also keeps the TUF metadata;
 // X86QW_CACHE_DIR overrides it.
 func CacheDir() (string, error) {
 	if dir := os.Getenv(CacheEnv); dir != "" {

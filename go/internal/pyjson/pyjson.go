@@ -14,8 +14,8 @@ import (
 	"strings"
 )
 
-// Dumps renders value. indent < 0 means Python's default single-line form
-// (", " and ": " separators).
+// Dumps renders value. indent < 0 means the single-line form, with ", " and
+// ": " separators.
 func Dumps(value any, indent int) (string, error) {
 	var builder strings.Builder
 	if err := write(&builder, value, indent, 0); err != nil {
@@ -171,7 +171,7 @@ func writeMap(b *strings.Builder, items map[string]any, indent, depth int) error
 	return nil
 }
 
-// lessCodepoints orders like Python string comparison.
+// lessCodepoints orders strings by code point.
 func lessCodepoints(a, b string) bool {
 	ra, rb := []rune(a), []rune(b)
 	for index := 0; index < len(ra) && index < len(rb); index++ {

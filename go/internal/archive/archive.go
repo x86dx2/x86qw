@@ -1,5 +1,5 @@
-// Package archive safely extracts ZIP archives with the same limits and path
-// rules as x86qw_runtime/io/archive.py.
+// Package archive safely extracts ZIP archives: bounded sizes and member
+// counts, portable relative paths, and CRC and size checked while streaming.
 package archive
 
 import (
@@ -33,7 +33,7 @@ type Limits struct {
 	MaxCompressionRatio float64
 }
 
-// DefaultLimits mirrors ArchiveLimits().
+// DefaultLimits are the extraction limits unless a caller sets its own.
 var DefaultLimits = Limits{
 	MaxMembers:          4096,
 	MaxSourceSize:       512 << 20,
@@ -295,8 +295,8 @@ func validateName(name string, isDir bool, limits Limits) (string, []string, str
 
 // Extract writes every member below a new directory created atomically at
 // destination (which must not exist), verifying CRC and size while streaming.
-// Files are 0644 except the listed executables (0755), like archive.py's
-// executable_members; ZIP mode bits are ignored.
+// Files are 0644 except the listed executables (0755); ZIP mode bits are
+// ignored.
 func (p *Plan) Extract(destination string, executables ...string) error {
 	wanted := map[string]bool{}
 	for _, name := range executables {

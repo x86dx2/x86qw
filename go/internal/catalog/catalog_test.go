@@ -23,7 +23,7 @@ func TestEmbeddedInventoryMatchesMaintenance(t *testing.T) {
 	}
 }
 
-func TestProfilesResolveLikePython(t *testing.T) {
+func TestProfilesResolveToTheirComponents(t *testing.T) {
 	inventory, err := LoadInventory()
 	if err != nil {
 		t.Fatal(err)

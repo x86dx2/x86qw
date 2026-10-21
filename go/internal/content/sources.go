@@ -19,7 +19,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// Component payload resolution (maintenance/tools/component_sources.py).
+// Component payload resolution: which files go into each package.
 
 // Payload is (upstream source, package member, bytes, override metadata).
 type Payload struct {
@@ -29,7 +29,7 @@ type Payload struct {
 	Overrides []*Object
 }
 
-// SourceContext mirrors ComponentSourceContext.
+// SourceContext is what package payloads are resolved from.
 type SourceContext struct {
 	Distribution  string
 	Catalog       *Object
@@ -48,7 +48,7 @@ func sha256Hex(payload []byte) string {
 
 func meta(pairs ...any) *Object { return object(pairs...) }
 
-// LoadSourceContext mirrors load_source_context. The consumed nQuake files
+// LoadSourceContext loads the source context. The consumed nQuake files
 // live in one tree laid out like the nQuake repository; each one must come
 // from the revision its owner pins (the revision in its manifest URL).
 func LoadSourceContext(distribution string, catalog, releases *Object) (*SourceContext, error) {
@@ -176,7 +176,8 @@ func sortedKeys[V any](values map[string]V) []string {
 	return keys
 }
 
-// RewriteZipMembers mirrors rewrite_zip_members.
+// RewriteZipMembers rebuilds a ZIP with some members replaced and others
+// added.
 func RewriteZipMembers(payload []byte, replacements map[string][]byte, additions map[string]bool) ([]byte, error) {
 	for name := range additions {
 		if _, ok := replacements[name]; !ok {
@@ -1151,7 +1152,7 @@ func (c *SourceContext) applyProjectArchiveOverrides(component *Object, payloads
 	return updated, nil
 }
 
-// ResolveComponentPayloads mirrors resolve_component_payloads.
+// ResolveComponentPayloads resolves the files of one component's package.
 func (c *SourceContext) ResolveComponentPayloads(identifier string) (*Object, string, []Payload, error) {
 	component := c.Components[identifier]
 	if component == nil {

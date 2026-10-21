@@ -17,7 +17,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 )
 
-// Ported from manager.py uninstall, purge and remove_empty_metadata_transaction.
+// Uninstall and purge remove what x86QW installed.
 
 var legacyComponents = []string{"clan-arena", "nquake-bootstrap", "nquake-ktx", "nquake-sounds"}
 
@@ -335,7 +335,7 @@ func Purge(target string) (*Report, error) {
 		report.info("Nenhum cache do instalador foi encontrado em %s.", root)
 	}
 	report.success("Remoção total concluída; nenhum dado gerenciado pelo x86QW foi preservado.")
-	// Like the Python CLI, the directory is reported once the lock is gone.
+	// The directory is reported once the lock is gone.
 	if held != nil {
 		if err := held.Release(); err != nil {
 			return nil, err

@@ -132,7 +132,8 @@ func (c *Catalog) ComponentPackage(id string, namespaces []string) (Package, err
 }
 
 // ClientReleases lists ezQuake packages for one platform and channel,
-// newest first, using the same filename and ordering rules as manager.py.
+// newest first: stable by numeric version, nightly by its dated version.
+// Each must carry the archive name its channel expects.
 func (c *Catalog) ClientReleases(spec ClientSpec, channel string) ([]Package, error) {
 	var releases []Package
 	seen := map[string]bool{}
@@ -182,7 +183,8 @@ func stableKeyLess(a, b string) bool {
 	return false
 }
 
-// ReleaseIsNewer compares client versions like manager.py release_is_newer.
+// ReleaseIsNewer reports whether candidate is a newer client release than
+// installed: SemVer for stable, the dated version string for nightly.
 func ReleaseIsNewer(candidate, installed, channel string) bool {
 	if channel == "stable" {
 		result, err := semver.CompareStrings(candidate, installed)
