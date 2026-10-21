@@ -45,8 +45,7 @@ type packageManifest struct {
 }
 
 // PreparePackage extracts a component ZIP into stage and checks it against
-// its internal manifest and the catalog entry (manager.py
-// prepare_component_package).
+// its internal manifest and the catalog entry.
 func PreparePackage(artifact string, pkg catalog.Package, stage string) (*Prepared, error) {
 	id := pkg.Package
 	plan, err := archive.Open(artifact, archive.DefaultLimits)
@@ -157,8 +156,7 @@ func HostVariant() (string, error) {
 }
 
 // NormalizePlatform keeps only this host's executable of a multi-platform
-// component and moves it to its install path (manager.py
-// normalize_component_platform_payload).
+// component and moves it to its install path.
 func NormalizePlatform(component catalog.Component, managed, variant string) error {
 	files := component.PlatformFiles()
 	if len(files) == 0 {
@@ -204,7 +202,8 @@ func NormalizePlatform(component catalog.Component, managed, variant string) err
 	return nil
 }
 
-// ValidateManagedPath enforces manager.py validate_managed_path.
+// ValidateManagedPath refuses a managed path that is not a safe relative
+// path inside the installation.
 func ValidateManagedPath(value string) error {
 	if err := receipt.SafeRelative(value); err != nil {
 		return err

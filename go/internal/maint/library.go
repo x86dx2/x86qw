@@ -1,5 +1,5 @@
-// Package maint ports the maintenance commands of the Python CLI:
-// library, profile, ui, changes, cleanup, uninstall/purge, migrate, repair.
+// Package maint holds the maintenance commands: library, profile, ui,
+// changes, cleanup, uninstall/purge and migrate.
 package maint
 
 import (
@@ -18,7 +18,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/pyjson"
 )
 
-// Ported from x86qw_runtime/library.py.
+// The library keeps favorite and recent servers in qw/x86qw-library.json.
 
 const (
 	LibraryPath  = "qw/x86qw-library.json"
@@ -234,7 +234,7 @@ func RemoveFavorite(target, address string) error {
 	return writeLibrary(target, library)
 }
 
-// RenderLibrary mirrors render_library_report.
+// RenderLibrary is the library as `x86qw library` prints it.
 func RenderLibrary(library *Library) string {
 	lines := []string{"x86QW · biblioteca", ""}
 	for _, group := range []struct {

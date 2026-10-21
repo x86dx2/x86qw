@@ -14,7 +14,8 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// VerifyArtifact mirrors build_package.verify_artifact for a recipe package.
+// VerifyArtifact checks a recipe package's built artifact against its
+// catalog entry.
 func VerifyArtifact(path string, pkg *Object) error {
 	if isSymlink(path) || !isFile(path) {
 		return fmt.Errorf("artifact must be a regular file: %s", path)
@@ -97,7 +98,7 @@ func verifyTarGz(path string, expected []string) error {
 	return nil
 }
 
-// RecipeArtifactPath mirrors the artifact location used by manage.py build.
+// RecipeArtifactPath is where `build` puts a recipe package's artifact.
 func (p *Project) RecipeArtifactPath(pkg *Object) string {
 	repr := func(key string) string { return pyjson.Repr(pkg.Value(key)) }
 	coordinates := repr("platform") + "-" + repr("architecture")
@@ -107,7 +108,7 @@ func (p *Project) RecipeArtifactPath(pkg *Object) string {
 	return filepath.Join(p.Path(DistDir), repr("component"), repr("version"), repr("channel"), coordinates, repr("filename"))
 }
 
-// Build mirrors manage.py build [--register] [--project-ref SHA].
+// Build is `x86qw-content build [--register] [--project-ref SHA]`.
 func (p *Project) Build(out io.Writer, register bool, projectRef string, now time.Time) error {
 	recipes, err := RecipePaths(p.Path(RecipesDir))
 	if err != nil {

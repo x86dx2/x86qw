@@ -18,9 +18,9 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// manage.py update and its workspace machinery.
+// x86qw-content update and its workspace machinery.
 
-// ManagerError mirrors ManagerError (printed as "[ERRO] ...").
+// ManagerError is an operational failure (printed as "[ERRO] ...").
 type ManagerError struct{ msg string }
 
 func (e *ManagerError) Error() string { return e.msg }
@@ -37,7 +37,7 @@ var expectedStableMembers = map[string][]string{
 
 func utcNow() string { return time.Now().UTC().Format("2006-01-02T15:04:05Z") }
 
-// WriteManifest mirrors sync_distribution.write_manifest.
+// WriteManifest writes dist/manifest.json with a fresh capture time.
 func WriteManifest(path string, manifest *Object) error {
 	manifest.Set("captured_at", utcNow())
 	payload, err := pyjson.EncodeFile(manifest, true)
@@ -59,7 +59,8 @@ func WriteManifest(path string, manifest *Object) error {
 	return os.Rename(file.Name(), path)
 }
 
-// EZQuakeRuntimeCoordinates mirrors ezquake_runtime_coordinates.
+// EZQuakeRuntimeCoordinates are the channel, version and variant of an
+// ezQuake asset.
 func EZQuakeRuntimeCoordinates(asset Asset) (channel, version, variant string, ok bool) {
 	if asset.Component != "ezquake" {
 		return
@@ -76,7 +77,8 @@ func EZQuakeRuntimeCoordinates(asset Asset) (channel, version, variant string, o
 	return channel, version, variant, true
 }
 
-// UpdateInventoryLines mirrors update_inventory_lines.
+// UpdateInventoryLines are the lines an update prints about the
+// inventories it changes.
 func (p *Project) UpdateInventoryLines(results []UpdateResult, assets []Asset, releases, catalog *Object) ([]string, error) {
 	var lines []string
 	packages, ok := catalog.Value("packages").([]any)
@@ -203,7 +205,7 @@ func MoveReferenceRelease(release *Object, revision string) {
 	}
 }
 
-// copyTree mirrors manage.copy_tree: hard links when possible.
+// copyTree copies a tree, with hard links when possible.
 func copyTree(source, destination string) error {
 	return filepath.WalkDir(source, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -254,7 +256,7 @@ func copyFile(source, destination string) error {
 	return os.WriteFile(destination, payload, info.Mode().Perm())
 }
 
-// prepareWorkspace mirrors manage.prepare_workspace.
+// prepareWorkspace creates the workspace an update stages its changes in.
 func (p *Project) prepareWorkspace() (string, error) {
 	parent := p.Path("maintenance/build")
 	if err := os.MkdirAll(parent, 0o755); err != nil {
@@ -281,7 +283,8 @@ func (p *Project) prepareWorkspace() (string, error) {
 	return work, nil
 }
 
-// applyWorkspace mirrors manage.apply_workspace (all-or-nothing rename).
+// applyWorkspace moves the staged workspace into place (all-or-nothing
+// rename).
 func (p *Project) applyWorkspace(work string, includeComponents bool) error {
 	targets := [][2]string{{filepath.Join(work, "dist"), p.Path(DistDir)}, {filepath.Join(work, "recipes"), p.Path(RecipesDir)}}
 	if includeComponents {
@@ -339,7 +342,8 @@ func (p *Project) requireCleanWorktree() error {
 // Confirm asks the operator unless --yes (manage.confirm).
 type Confirm func(message string) error
 
-// downloadAsset mirrors sync_distribution.download_asset.
+// downloadAsset fetches one asset into root, or reuses a copy with the same
+// digest.
 func (p *Project) downloadAsset(root string, asset Asset, known *Object, reuse string) (*Object, bool, error) {
 	if asset.ExpectedSize <= 0 || asset.ExpectedSize > MaxArtifactBytes || !sha256Pattern.MatchString(asset.ExpectedSHA256) {
 		return nil, false, fmt.Errorf("distribution asset requires reviewed size and SHA-256 before download: %s", asset.Path)
@@ -420,7 +424,8 @@ func removeEmptyDirectories(root string) {
 	}
 }
 
-// syncCandidate mirrors manage.sync_candidate.
+// syncCandidate brings a candidate distribution to the assets and returns
+// its manifest.
 func (p *Project) syncCandidate(out io.Writer, candidate string, assets []Asset, workers int) (*Object, error) {
 	manifestPath := filepath.Join(candidate, "manifest.json")
 	manifest, err := LoadManifest(manifestPath)
@@ -530,7 +535,7 @@ func objectMap(object *Object) map[string]bool {
 	return result
 }
 
-// validateStaged mirrors manage.validate_staged.
+// validateStaged validates the staged workspace as a project.
 func (p *Project) validateStaged(work string) (*Project, error) {
 	staged := p.Staged(filepath.Join(work, "components.json"), filepath.Join(work, "component-releases.json"))
 	components, err := staged.Components()
@@ -588,7 +593,7 @@ func (p *Project) validateStaged(work string) (*Project, error) {
 	return staged, nil
 }
 
-// UpdateOptions mirrors manage.py update flags.
+// UpdateOptions are the flags of `x86qw-content update`.
 type UpdateOptions struct {
 	Workers int
 	DryRun  bool
@@ -890,8 +895,8 @@ func (p *Project) Update(out io.Writer, options UpdateOptions) error {
 	return nil
 }
 
-// buildIntoWorkspace mirrors build_packages + core + register_packages on
-// a staged workspace.
+// buildIntoWorkspace builds the component and core packages and registers
+// them, all in a staged workspace.
 func (p *Project) buildIntoWorkspace(work string) error {
 	manifest, err := p.BuildPackages(filepath.Join(work, "dist"), filepath.Join(work, "packages"), BuildOptions{})
 	if err != nil {
@@ -970,7 +975,8 @@ func (p *Project) ezquakeSourceRevision(asset Asset) (string, error) {
 
 var githubReleasePattern = regexp.MustCompile(`^https://github\.com/([^/]+/[^/]+)/releases/download/([^/]+)/([^/]+)$`)
 
-// GitHubReleaseCoordinates mirrors manage.github_release_coordinates.
+// GitHubReleaseCoordinates are the repository and tag of a release asset
+// URL.
 func GitHubReleaseCoordinates(url, filename string) (string, string, error) {
 	match := githubReleasePattern.FindStringSubmatch(url)
 	if match == nil || match[3] != filename {
@@ -979,7 +985,7 @@ func GitHubReleaseCoordinates(url, filename string) (string, string, error) {
 	return match[1], match[2], nil
 }
 
-// ArtifactURL mirrors publish_gitlab_packages.artifact_url.
+// ArtifactURL is the GitLab package registry URL of a package.
 func ArtifactURL(pkg *Object) string {
 	name := pyjson.Repr(getOr(pkg, "package", pkg.Value("component")))
 	return "https://gitlab.com/api/v4/projects/" + gitlabProjectID + "/packages/generic/" +

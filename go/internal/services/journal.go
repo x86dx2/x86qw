@@ -21,7 +21,8 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/pyjson"
 )
 
-// Session journal compatible with x86qw_runtime/supervisor/sessions.py.
+// The session journal records the controller and every supervised process,
+// so status, stop and recovery work from any later run.
 
 const (
 	maxJournalBytes     = 2 << 20
@@ -461,7 +462,8 @@ func removeIncompleteInitialSession(dir string) bool {
 	return os.Remove(dir) == nil
 }
 
-// AssertRecoveryConfirmable mirrors assert_recovery_processes_confirmable.
+// AssertRecoveryConfirmable refuses to go on while a journal's processes
+// cannot be confirmed dead or ours.
 func AssertRecoveryConfirmable(target string) error {
 	paths, err := SessionJournalPaths(target, "")
 	if err != nil {

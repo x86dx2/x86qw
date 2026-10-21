@@ -8,7 +8,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// Component release inventory (maintenance/tools/component_releases.py).
+// Component release inventory: maintenance/inventory/releases.json.
 
 var (
 	releaseVersion        = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$`)
@@ -30,7 +30,7 @@ func persistentURL(value any, label string) error {
 	return nil
 }
 
-// getOr mirrors dict.get(key, default).
+// getOr is object[key], or fallback when it is absent.
 func getOr(object *Object, key string, fallback any) any {
 	if object.Has(key) {
 		return object.Value(key)
@@ -38,7 +38,8 @@ func getOr(object *Object, key string, fallback any) any {
 	return fallback
 }
 
-// Releases mirrors load_releases(RELEASES, COMPONENTS).
+// Releases loads and validates the release inventory against the
+// components.
 func (p *Project) Releases() (*Object, error) {
 	if !p.releasesDone {
 		p.releasesDone = true
@@ -67,7 +68,7 @@ func (p *Project) loadReleases(path string) (*Object, error) {
 	return value.(*Object), nil
 }
 
-// ValidateReleases mirrors validate_releases.
+// ValidateReleases checks a release inventory document.
 func ValidateReleases(value any, componentIDs, namespaces map[string]bool) error {
 	releases, ok := value.(*Object)
 	if !ok || !pyjson.EqInt(releases.Value("format"), 1) || !pyjson.Eq(releases.Value("project"), "x86qw") {
@@ -455,7 +456,8 @@ func validateArchiveEdits(release *Object, strategy, identifier string) error {
 	return nil
 }
 
-// ComponentForArtifactPath mirrors component_for_artifact_path.
+// ComponentForArtifactPath is the component whose release holds an
+// artifact path.
 func ComponentForArtifactPath(releases *Object, path string) (string, error) {
 	components, _ := releases.Value("components").(*Object)
 	var matches []string

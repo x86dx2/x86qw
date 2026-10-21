@@ -38,7 +38,8 @@ func BindAddress(value string) (string, error) {
 	return address.String(), nil
 }
 
-// SafeText mirrors services.safe_text.
+// SafeText refuses text that is empty, longer than maximum, or carries
+// quotes, backslashes, semicolons or line breaks.
 func SafeText(value, label string, maximum int) (string, error) {
 	invalid := value == "" || len([]rune(value)) > maximum || strings.ContainsAny(value, "\\\";\r\n")
 	for _, r := range value {

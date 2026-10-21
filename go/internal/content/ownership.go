@@ -10,7 +10,7 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// Release ownership facts (maintenance/tools/release_ownership.py).
+// Release ownership facts: which files each package owns.
 
 var (
 	ownershipLicenses  = setOf("MIT", "NOASSERTION")
@@ -181,7 +181,7 @@ func validateOwnershipEntry(value any, depth int, seen map[string]bool) (*Object
 	), nil
 }
 
-// ValidateOwnership mirrors release_ownership.validate_document.
+// ValidateOwnership checks an ownership document.
 func ValidateOwnership(value any) (*Object, error) {
 	raw, ok := value.(*Object)
 	if !ok || !sameKeys(raw.Keys(), "format", "project", "artifacts") {
@@ -219,7 +219,8 @@ func ValidateOwnership(value any) (*Object, error) {
 	return object("format", pyjson.Number("1"), "project", "x86qw", "artifacts", sorted), nil
 }
 
-// MergeOwnership mirrors release_ownership.merge_documents.
+// MergeOwnership merges ownership documents, refusing a path two packages
+// claim.
 func MergeOwnership(documents ...*Object) (*Object, error) {
 	combined := map[string]*Object{}
 	var order []string
@@ -249,7 +250,7 @@ func MergeOwnership(documents ...*Object) (*Object, error) {
 	return ValidateOwnership(object("format", pyjson.Number("1"), "project", "x86qw", "artifacts", artifacts))
 }
 
-// WriteOwnership mirrors release_ownership.write_document.
+// WriteOwnership writes an ownership document.
 func WriteOwnership(path string, document *Object) error {
 	normalized, err := ValidateOwnership(document)
 	if err != nil {

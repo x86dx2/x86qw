@@ -38,9 +38,9 @@ type Result struct {
 	CLIVersion string // set when the native CLI was replaced
 }
 
-// Apply runs a plan computed by plan.Update/plan.Upgrade. Only component
-// rows are supported; client, system and legacy rows are left to the Python
-// CLI so this never writes something it cannot reproduce byte for byte.
+// Apply runs a plan computed by plan.Update/plan.Upgrade: ezQuake clients,
+// components and the CLI. Any other row (system, legacy layouts) is
+// refused, so this never writes something it cannot reproduce byte for byte.
 func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Plan) (*Result, error) {
 	var outdated, missing []string
 	var cliPackage *catalog.Package
@@ -113,7 +113,7 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 		}
 		return nil, err
 	}
-	// Clients first, like manager.py update(): update_runtime per runtime.
+	// Clients first, one runtime at a time.
 	for _, step := range clients {
 		var err error
 		switch step.action {
@@ -295,9 +295,9 @@ func prepareCache(root string) error {
 	return atomicfile.Write(filepath.Join(root, cacheMarker), []byte("x86qw-cache-v1\n"), 0o600)
 }
 
-// refuseConfigMigrations stops when the Python installer would also rewrite
-// personal configs (texture limit, saved aliases, Pro-X base); those
-// migrations are not ported yet.
+// refuseConfigMigrations stops when an update would also have to rewrite
+// personal configs (texture limit, saved aliases, Pro-X base), which this
+// version does not do.
 func refuseConfigMigrations(root string, batch []string) error {
 	configs, _ := filepath.Glob(filepath.Join(root, "*", "configs", "config.cfg"))
 	aliases := map[string]bool{}
@@ -335,7 +335,7 @@ func refuseConfigMigrations(root string, batch []string) error {
 	return nil
 }
 
-// stateDocument builds state.json like manager.py write_install_state.
+// stateDocument builds the new state.json after an update.
 func stateDocument(in plan.Input, current *state.State) ([]byte, error) {
 	var recorded []string
 	for _, id := range in.Inventory.IDs() {

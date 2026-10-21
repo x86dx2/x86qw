@@ -8,7 +8,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// Public package catalog validation (maintenance/tools/validate_catalog.py).
+// Public package catalog validation.
 
 var (
 	sha256Pattern        = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -41,7 +41,7 @@ func inSet(value any, set map[string]bool) bool {
 	return ok && set[text]
 }
 
-// sizeWithin mirrors isinstance/type(size) is int, 0 < size <= MAX.
+// sizeWithin reports whether value is an integer with 0 < size <= MAX.
 func sizeWithin(value any, exact bool) bool {
 	if exact && !pyjson.IsExactInt(value) || !exact && !pyjson.IsInstanceInt(value) {
 		return false
@@ -59,7 +59,7 @@ func nonEmptyText(value any) bool {
 // PackageIdentity is (component, package, version, channel, platform, architecture).
 type PackageIdentity [6]string
 
-// ValidatePackage mirrors validate_catalog.validate_package.
+// ValidatePackage checks one catalog package and returns its identity.
 func (p *Project) ValidatePackage(value any, label string, requireReviewed bool) (PackageIdentity, error) {
 	var identity PackageIdentity
 	pkg, ok := value.(*Object)
@@ -217,7 +217,7 @@ func (p *Project) ValidatePackage(value any, label string, requireReviewed bool)
 	}, nil
 }
 
-// ValidateCatalog mirrors validate_catalog.validate_catalog and returns the
+// ValidateCatalog checks the whole catalog and returns the
 // package count.
 func (p *Project) ValidateCatalog(value any) (int, error) {
 	catalog, ok := value.(*Object)

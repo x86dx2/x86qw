@@ -7,7 +7,7 @@ import (
 )
 
 // VerifyOptions tunes the repository hygiene checks that complement the
-// data checks of manage.py verify.
+// data checks of x86qw-content verify.
 type VerifyOptions struct {
 	// SkipGit disables the Git LFS and committed-diff checks. They are
 	// skipped automatically when the root is not a Git work tree.
@@ -22,8 +22,8 @@ var misplacedRootPaths = []string{
 	"installer", "inventory", "recipes", "tools", "tests",
 }
 
-// Verify mirrors manage.py verify --no-tests and then runs check_lfs and
-// check_committed_diff. Progress lines go to out.
+// Verify runs the data checks, then the Git LFS and committed-diff checks.
+// Progress lines go to out.
 func (p *Project) Verify(out io.Writer, options VerifyOptions) error {
 	catalog, err := LoadJSONObject(p.Path(CatalogPath))
 	if err != nil {

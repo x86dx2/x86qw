@@ -10,8 +10,7 @@ import (
 	"strings"
 )
 
-// Repository hygiene checks (maintenance/tools/check_lfs.py and
-// maintenance/tools/check_committed_diff.py).
+// Repository hygiene checks: Git LFS and whitespace in the committed diff.
 
 const maxDirectBinary = 1024 * 1024
 
@@ -38,7 +37,7 @@ func git(root string, stdin []byte, arguments ...string) ([]byte, error) {
 	return output, nil
 }
 
-// CheckLFS mirrors check_lfs.main: every LFS-tracked file must be
+// CheckLFS requires every LFS-tracked file to be
 // materialized and no tracked binary above 1 MiB may bypass LFS. It returns
 // the number of LFS objects and one message per problem.
 func CheckLFS(root string) (int, []string, error) {
@@ -124,7 +123,8 @@ func checkedSHA(value any, label string) (string, error) {
 	return text, nil
 }
 
-// CommittedDiffCommand mirrors check_committed_diff.committed_diff_command.
+// CommittedDiffCommand is the git command that checks the diff a CI event
+// introduces.
 func CommittedDiffCommand(eventName string, event *Object) ([]string, error) {
 	switch eventName {
 	case "pull_request":

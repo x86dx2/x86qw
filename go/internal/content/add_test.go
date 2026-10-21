@@ -12,8 +12,8 @@ import (
 )
 
 // TestAddDryRun validates distribution-change definitions offline; each
-// must be accepted or rejected exactly as the retired manage.py add did
-// (testdata/add-dry-run.json).
+// must be accepted or rejected exactly as testdata/add-dry-run.json
+// records.
 func TestAddDryRun(t *testing.T) {
 	root := repoRoot(t)
 	requireHydrated(t, root)

@@ -13,11 +13,9 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/zdeflate"
 )
 
-// Deterministic ZIP layout written exactly like CPython's zipfile for
-// ZipInfo(name, (2020, 1, 1, 0, 0, 0)) with ZIP_DEFLATED and
-// external_attr 0o100644 << 16, written with writestr() to a seekable
-// stream: no data descriptor, no extra fields, version 2.0, created on
-// Unix, DOS timestamp 2020-01-01 00:00:00.
+// Deterministic ZIP layout, the one the published packages have: deflated
+// members with Unix mode 0644, no data descriptor, no extra fields, version
+// 2.0, created on Unix, DOS timestamp 2020-01-01 00:00:00.
 
 const (
 	zipDOSDate      = (2020-1980)<<9 | 1<<5 | 1
@@ -99,7 +97,7 @@ func BuildZip(entries []ZipEntry) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// BuildZipMembers mirrors component_sources.build_zip_members: members
+// BuildZipMembers builds a package from members
 // sorted by name, then validated as a canonical archive.
 func BuildZipMembers(files map[string][]byte) ([]byte, error) {
 	if len(files) == 0 {
@@ -124,7 +122,7 @@ func BuildZipMembers(files map[string][]byte) ([]byte, error) {
 	return payload, nil
 }
 
-// ReadZipMembers mirrors read_zip_members: a safe, duplicate-free member map.
+// ReadZipMembers reads a ZIP into a safe, duplicate-free member map.
 func ReadZipMembers(payload []byte, label string) (map[string][]byte, error) {
 	dir, err := os.MkdirTemp("", "x86qw-zip-")
 	if err != nil {

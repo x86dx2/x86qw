@@ -19,8 +19,8 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/download"
 )
 
-// LFS materialization from GitHub's media endpoint, like
-// maintenance/tools/materialize_lfs.py: CI may have no LFS quota while the
+// LFS materialization from GitHub's media endpoint: CI may have no LFS
+// quota while the
 // commit's bytes stay public, so every object is fetched and verified
 // against its committed pointer.
 

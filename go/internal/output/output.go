@@ -1,5 +1,4 @@
-// Package output renders the stable JSON envelope shared with the Python CLI
-// (x86qw_runtime/contracts/output.py).
+// Package output renders the stable JSON envelope of every --json command.
 package output
 
 import (
@@ -26,7 +25,8 @@ type Error struct {
 
 // Envelope is the single JSON document a command emits.
 type Envelope struct {
-	// Fields are declared in key order: the Python CLI emits sorted keys.
+	// Fields are declared in sorted key order, so the envelope's keys stay
+	// sorted.
 	Command       string  `json:"command"`
 	Data          any     `json:"data"`
 	DryRun        bool    `json:"dry_run"`

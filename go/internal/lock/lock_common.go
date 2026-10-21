@@ -1,7 +1,6 @@
 // Package lock takes the per-installation operation lock
-// (.x86qw/sessions/active.lock) in the exact format 3 that
-// x86qw_runtime/session_control.py writes, reads and reclaims, so the Go and
-// Python CLIs exclude each other and recover each other's stale locks.
+// (.x86qw/sessions/active.lock), format 3: one owner at a time, and a lock
+// whose owner is gone is reclaimed.
 package lock
 
 import (
@@ -48,7 +47,7 @@ var serviceCommands = map[string]bool{"host": true, "proxy": true, "qtv": true}
 // Acquire takes the lock for command on target, reclaiming a lock whose
 // controller is provably gone and refusing when it is alive or unknown.
 func Acquire(target, command string) (*Lock, error) {
-	// Path.resolve(strict=False) in Python: follow symlinks when present.
+	// Follow symlinks where the path exists.
 	target = Resolve(target)
 	// Like InstallationLock.acquire: a missing installation is created 0700.
 	if _, err := os.Lstat(target); errors.Is(err, os.ErrNotExist) {
@@ -186,7 +185,8 @@ func newSessionID() string {
 	return time.Now().UTC().Format("20060102T150405Z") + "-" + hex.EncodeToString(suffix)
 }
 
-// ProcessIdentity mirrors platform/processes.py ProcessIdentity.
+// ProcessIdentity tells one process apart from a later one with the same
+// PID.
 type ProcessIdentity struct {
 	PID        int
 	Token      string
@@ -230,7 +230,7 @@ func Probe(pid int, token, executable string) string {
 	return "alive"
 }
 
-// Resolve returns the canonical installation path Python records.
+// Resolve returns the canonical installation path the lock records.
 func Resolve(target string) string {
 	absolute, err := filepath.Abs(target)
 	if err != nil {

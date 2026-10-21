@@ -11,14 +11,15 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// splitURL mirrors urllib.parse.SplitResult.
+// splitURL is a URL split into its five parts.
 type splitURL struct {
 	Scheme, Netloc, Path, Query, Fragment string
 }
 
 const schemeChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-."
 
-// urlsplit mirrors urllib.parse.urlsplit for already control-free input.
+// urlsplit splits a URL already free of control characters into scheme,
+// netloc, path, query and fragment.
 func urlsplit(url string) (splitURL, error) {
 	var result splitURL
 	if index := strings.Index(url, ":"); index > 0 && url[0] < utf8.RuneSelf && isASCIIAlpha(url[0]) {
@@ -173,7 +174,8 @@ func cutLast(value, separator string) (string, string, bool) {
 	return value[:index], value[index+len(separator):], true
 }
 
-// Hostname mirrors SplitResult.hostname ("" for None).
+// Hostname is the lowercased host without user info or port, "" when
+// there is none.
 func (u splitURL) Hostname() string {
 	_, _, host, _, _ := u.hostinfo()
 	return strings.ToLower(host)
@@ -196,12 +198,13 @@ func (u splitURL) port() error {
 	return nil
 }
 
-// policyError mirrors DownloadPolicyError.
+// policyError is a URL the download policy refuses.
 type policyError struct{ msg string }
 
 func (e *policyError) Error() string { return e.msg }
 
-// validateHTTPSURL mirrors x86qw_runtime.io.downloader.validate_https_url.
+// validateHTTPSURL checks a URL against the download policy: HTTPS, a host,
+// no credentials, query, fragment, spaces or control characters.
 func validateHTTPSURL(value any, label string) (splitURL, error) {
 	url, ok := value.(string)
 	if !ok || url == "" {
@@ -226,7 +229,7 @@ func validateHTTPSURL(value any, label string) (splitURL, error) {
 	return parsed, nil
 }
 
-// unquote mirrors urllib.parse.unquote (UTF-8, errors="replace").
+// unquote decodes percent escapes as UTF-8, replacing invalid sequences.
 func unquote(value string) string {
 	if !strings.Contains(value, "%") {
 		return value
@@ -245,7 +248,7 @@ func unquote(value string) string {
 	return strings.ToValidUTF8(string(raw), "�")
 }
 
-// safeURLForLog mirrors safe_url_for_log: scheme and host only.
+// safeURLForLog keeps only a URL's scheme and host, for logs.
 func safeURLForLog(value string) string {
 	for _, r := range value {
 		if r <= 32 || r == 127 {

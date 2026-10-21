@@ -7,7 +7,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// Public product facts (maintenance/tools/product_catalog.py).
+// Public product facts: site/public/api/v1/product.json.
 
 func object(pairs ...any) *Object {
 	result := pyjson.NewObject()
@@ -17,7 +17,7 @@ func object(pairs ...any) *Object {
 	return result
 }
 
-// field mirrors mapping[key] (KeyError when missing).
+// field is source[key], or an error naming the missing key.
 func field(source *Object, key string) (any, error) {
 	if source == nil {
 		return nil, fmt.Errorf("KeyError: %s", pyRepr(key))
@@ -41,7 +41,8 @@ func project(source *Object, keys ...string) (*Object, error) {
 	return result, nil
 }
 
-// BuildProductCatalog mirrors build_product_catalog.
+// BuildProductCatalog builds product.json from the inventories and the
+// catalog.
 func (p *Project) BuildProductCatalog() (*Object, error) {
 	publicValue, err := ReadJSON(p.Path(CatalogPath))
 	if err != nil {
@@ -158,7 +159,7 @@ func orEmpty(values []any) []any {
 	return values
 }
 
-// EncodedProductCatalog mirrors encoded_product_catalog.
+// EncodedProductCatalog is product.json as it is written.
 func (p *Project) EncodedProductCatalog() ([]byte, error) {
 	catalog, err := p.BuildProductCatalog()
 	if err != nil {

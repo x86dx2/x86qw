@@ -24,7 +24,7 @@ const (
 
 var (
 	pakMapName = regexp.MustCompile(`^maps/([A-Za-z0-9][A-Za-z0-9_.-]{0,63})\.bsp$`)
-	// Python's \s on str also matches \v, \x1c-\x1f, \x85 and \xa0.
+	// Whitespace also covers \v, \x1c-\x1f, \x85 and \xa0.
 	pyspace          = `[\t\n\v\f\r \x{1c}-\x{1f}\x{85}\x{a0}]`
 	ktxCommandEntry  = regexp.MustCompile(`(?m)^` + pyspace + `*\{` + pyspace + `*"([A-Za-z0-9_]+)"` + pyspace + `*,`)
 	ktxUsermode      = regexp.MustCompile(`/resources/example-configs/ktx/configs/usermodes/([^/]+)/default\.cfg$`)
@@ -62,7 +62,8 @@ func pyStrip(value string) string { return strings.TrimFunc(value, pyIsSpace) }
 
 func pyLStrip(value string) string { return strings.TrimLeftFunc(value, pyIsSpace) }
 
-// pySplitlines mirrors str.splitlines() for latin-1 text.
+// pySplitlines splits at \n, \r, \r\n, \v, \f, \x1c-\x1e, \x85, U+2028 and
+// U+2029.
 func pySplitlines(value string) []string {
 	var lines []string
 	runes := []rune(value)
@@ -86,7 +87,7 @@ func pySplitlines(value string) []string {
 	return lines
 }
 
-// pySplit mirrors str.split() with no arguments.
+// pySplit splits at runs of whitespace (pyIsSpace), dropping empty fields.
 func pySplit(value string) []string { return strings.FieldsFunc(value, pyIsSpace) }
 
 type tarMember struct {
@@ -284,7 +285,8 @@ func readKTXSource(path string) (*ktxAssets, error) {
 	return assets, nil
 }
 
-// ValidateKTXModeCatalog mirrors validate_ktx_mode_catalog; modeCatalog nil
+// ValidateKTXModeCatalog checks the KTX mode catalog against KTX's sources;
+// modeCatalog nil
 // reads the shipped catalog.
 func (p *Project) ValidateKTXModeCatalog(componentCatalog *Object, modeCatalog any) error {
 	catalogPath := p.Path(ktxModesPath)

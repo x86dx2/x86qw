@@ -12,7 +12,8 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// Upstream and preserved-source registry (maintenance/tools/upstreams.py).
+// Upstream and preserved-source registry
+// (maintenance/inventory/upstreams.json).
 
 var (
 	upstreamID        = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
@@ -34,7 +35,7 @@ func persistentUpstreamURL(value any, label, identifier string) error {
 	return nil
 }
 
-// Upstreams mirrors load_upstreams(UPSTREAMS).
+// Upstreams loads and validates the upstream registry.
 func (p *Project) Upstreams() (*Object, error) {
 	if !p.upstreamsDone {
 		p.upstreamsDone = true
@@ -51,7 +52,7 @@ func (p *Project) Upstreams() (*Object, error) {
 	return p.upstreams, p.upstreamsErr
 }
 
-// ValidateUpstreams mirrors validate_upstreams.
+// ValidateUpstreams checks an upstream registry document.
 func ValidateUpstreams(value any) error {
 	registry, ok := value.(*Object)
 	if !ok || !pyjson.EqInt(registry.Value("format"), 1) || !pyjson.Eq(registry.Value("project"), "x86qw") {
@@ -136,7 +137,8 @@ func fileSHA256(path string) (string, error) {
 	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
-// VerifyPreservedSources mirrors verify_preserved_sources.
+// VerifyPreservedSources checks every preserved source in the distribution
+// and returns how many there are.
 func (p *Project) VerifyPreservedSources(registry *Object, distribution string) (int, error) {
 	verified := 0
 	for _, entry := range objects(registry.Value("upstreams")) {
@@ -174,7 +176,7 @@ func (p *Project) VerifyPreservedSources(registry *Object, distribution string) 
 	return verified, nil
 }
 
-// SourceOwner mirrors source_owner.
+// SourceOwner is the upstream that owns a preserved source, "" when none.
 func SourceOwner(registry *Object, relative string) string {
 	for _, entry := range objects(registry.Value("upstreams")) {
 		source, _ := entry.Value("source").(*Object)

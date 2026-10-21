@@ -5,7 +5,7 @@ package play
 import "golang.org/x/sys/windows"
 
 // fileIdentity is the (st_dev, st_ino) pair the journal records: the volume
-// serial number and the NTFS file index, as Python's os.stat reports them.
+// serial number and the NTFS file index.
 func fileIdentity(path string) (uint64, uint64, error) {
 	name, err := windows.UTF16PtrFromString(path)
 	if err != nil {

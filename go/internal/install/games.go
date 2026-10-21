@@ -22,7 +22,7 @@ import (
 //go:embed games.json
 var GamesJSON []byte
 
-// playSupportVersion mirrors PLAY_SUPPORT_VERSION in gameplay.py.
+// playSupportVersion is the version of the play-support files.
 const playSupportVersion = "8"
 
 // Game is one entry of games.json: what installs it, what play and host
@@ -101,8 +101,8 @@ func AvailableGames(root string, games []Game) []Game {
 	return available
 }
 
-// InstalledComponent mirrors installed_component_for_game: the game's
-// component, else a recorded legacy component, else "".
+// InstalledComponent is the game's component, else a recorded legacy
+// component, else "".
 func InstalledComponent(root string, game Game) string {
 	if hasRecord(root, game.Component) {
 		return game.Component
@@ -117,8 +117,8 @@ func InstalledComponent(root string, game Game) string {
 
 var numericVersion = regexp.MustCompile(`^\d+(?:\.\d+)+`)
 
-// InstalledVersion mirrors installed_game_version: the numeric prefix of
-// the component receipt's selection, else the catalog version.
+// InstalledVersion is the numeric prefix of the component receipt's
+// selection, else the catalog version.
 func InstalledVersion(root string, game Game) string {
 	component := InstalledComponent(root, game)
 	if component == "" {
