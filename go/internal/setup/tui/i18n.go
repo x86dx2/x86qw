@@ -95,7 +95,8 @@ var texts = map[string][2]string{
 
 	// done
 	"done.title": {"Pronto para jogar", "Ready to play"}, "done.host": {"Servidor pronto", "Server ready"},
-	"go.play": {"Jogar agora", "Play now"}, "go.play.d": {"monta a partida e abre o ezQuake", "sets up a match and opens ezQuake"},
+	"done.path": {"x86qw funciona num terminal novo · neste: %s", "x86qw works in a new terminal · in this one: %s"},
+	"go.play":   {"Jogar agora", "Play now"}, "go.play.d": {"monta a partida e abre o ezQuake", "sets up a match and opens ezQuake"},
 	"go.srv": {"Subir servidor", "Start server"}, "go.srv.d": {"inicia as instâncias, o QTV e o QWFWD", "starts the instances, QTV and QWFWD"},
 	"go.find": {"Encontrar partida", "Find a match"}, "go.find.d": {"servidores públicos com jogadores agora", "public servers with players now"},
 	"go.quit": {"Sair", "Quit"}, "go.quit.d": {"volta ao terminal", "back to the terminal"},

@@ -59,7 +59,7 @@ func publishCLI(target string, link bool, out io.Writer) error {
 	case err != nil:
 		return err
 	case command != "" && runtime.GOOS == "windows":
-		fmt.Fprintf(out, "x86QW shortcuts created in the Start Menu and on the Desktop (%s).\n", command)
+		fmt.Fprintf(out, "x86QW shortcuts created in the Start Menu and on the Desktop (%s); the x86qw command works in a new terminal.\n", command)
 	case command != "":
 		fmt.Fprintf(out, "x86qw command available at %s\n", command)
 	}

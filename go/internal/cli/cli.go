@@ -196,10 +196,15 @@ func readExecutable(source string) ([]byte, error) {
 
 // LinkUserCommand points ~/.local/bin/x86qw at root/x86qw.sh. An existing
 // link to another target or a regular file is refused.
-// On Windows it creates the Start Menu and Desktop shortcuts instead.
+// On Windows it creates the Start Menu and Desktop shortcuts instead and
+// puts root, where x86qw.cmd lives, on the user PATH.
 func LinkUserCommand(root, home string) (string, error) {
 	if runtime.GOOS == "windows" {
-		return InstallShortcuts(root)
+		shortcut, err := InstallShortcuts(root)
+		if err != nil {
+			return "", err
+		}
+		return shortcut, AddUserPath(root)
 	}
 	command := filepath.Join(home, ".local", "bin", "x86qw")
 	launcher := filepath.Join(root, "x86qw.sh")

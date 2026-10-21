@@ -30,6 +30,11 @@ try {
   Write-Host "OK Download verified"
   & $Binary setup @BootstrapArguments
   $global:LASTEXITCODE = $LASTEXITCODE
+  # Setup puts x86qw on the user PATH, which new terminals see; when this
+  # script runs in the user's own session (irm ... | iex), it sees it too.
+  foreach ($Entry in ([Environment]::GetEnvironmentVariable("Path", "User") -split ";")) {
+    if ($Entry -and (($env:Path -split ";") -notcontains $Entry)) { $env:Path += ";$Entry" }
+  }
 } finally {
   Remove-Item -Recurse -Force $Work -ErrorAction SilentlyContinue
 }
