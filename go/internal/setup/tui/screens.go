@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"github.com/charmbracelet/x/ansi"
 	"math"
 	"runtime"
 	"strings"
@@ -12,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/x86dx2/x86qw/go/internal/setup"
 )
@@ -28,12 +28,23 @@ var bigDigits = func() map[rune][]string {
 	return out
 }()
 
+// Sizes of the screens' parts.
+const (
+	logoFullRows    = 31 // the full logo shows from this many rows
+	logoCompactRows = 24 // the compact one from this many
+	routeRows       = 52 // the setup shows the route from this many
+	labelWidth      = 13 // the labels of an open section
+	digitsWidth     = 26 // the big percentage
+	sparkColumns    = 18 // the speed history, one column per ~0.6 s
+	sparkSamples    = 600
+)
+
 // body builds the page of the current screen.
 func (m *Model) body(width int) *page {
 	p := newPage(m.theme, m.glyphs, width)
 	if m.err != nil {
-		p.title("Erro")
-		p.lead(m.err.Error())
+		p.title(m.t("err.title"))
+		p.lead(m.explain(m.err))
 		return p
 	}
 	if m.catalog == nil {
@@ -74,9 +85,9 @@ func (m *Model) logo(p *page) {
 	}
 	var art string
 	switch {
-	case m.h >= 31:
+	case m.h >= logoFullRows:
 		art = logoFull
-	case m.h >= 24:
+	case m.h >= logoCompactRows:
 		art = logoCompact
 	default:
 		return
@@ -184,7 +195,7 @@ func (m *Model) sectionRows() []reviewRow {
 	if !o.Intent.WantsClient() {
 		contents = "MVDSV · KTX"
 	}
-	rows = append(rows, reviewRow{"comps", m.t("sec.comps"), fmt.Sprintf("%s · %d %s · %s", contents, len(selected), m.t("d.itemsN"), size(m.totalBytes()))})
+	rows = append(rows, reviewRow{"comps", m.t("sec.comps"), fmt.Sprintf("%s · %d %s · %s", contents, len(selected), m.t("d.itemsN"), m.size(m.totalBytes()))})
 	if o.Intent.WantsClient() {
 		keys := strings.ToUpper(o.Keys.Preset)
 		if o.Keys.Preset == "custom" {
@@ -235,17 +246,40 @@ func (m *Model) confirmLabel() string {
 	return m.t("rev.confirm")
 }
 
+// totalBytes is what Install downloads: everything for a new folder; for
+// an installation, the components it gains (and the updates, from Update).
 func (m *Model) totalBytes() int64 {
-	// ezQuake comes with every installation, a server's too.
-	total := m.catalog.CoreSize + m.catalog.ClientSize[platform()]
-	for _, id := range setup.Selected(m.catalog, m.opts) {
-		for _, component := range m.catalog.Components {
-			if component.ID == id {
-				total += component.Size
+	var total int64
+	have := map[string]bool{}
+	if m.existing != nil {
+		for _, id := range m.existing.Installed {
+			have[id] = true
+		}
+		if m.opts.Upgrade {
+			for _, update := range m.existing.Updates {
+				have[update.ID] = true
+				total += m.componentSize(update.ID)
 			}
+		}
+	} else {
+		// ezQuake comes with every installation, a server's too.
+		total = m.catalog.CoreSize + m.catalog.ClientSize[platform()]
+	}
+	for _, id := range setup.Selected(m.catalog, m.opts) {
+		if !have[id] {
+			total += m.componentSize(id)
 		}
 	}
 	return total
+}
+
+func (m *Model) componentSize(id string) int64 {
+	for _, component := range m.catalog.Components {
+		if component.ID == id {
+			return component.Size
+		}
+	}
+	return 0
 }
 
 // primary draws the screen's main action: brand coloured when it can run,
@@ -282,10 +316,10 @@ func (m *Model) details(id string) [][2]string {
 	if id == "h.solo" {
 		qtv, qwfwd := m.opts.Server.QTVPort, m.opts.Server.QWFWDPort
 		if qtv == 0 {
-			qtv = 28000
+			qtv = setup.DefaultQTVPort
 		}
 		if qwfwd == 0 {
-			qwfwd = 30000
+			qwfwd = setup.DefaultQWFWDPort
 		}
 		return [][2]string{{"QTV", fmt.Sprintf("TCP %d · %s", qtv, m.t("qtv.d"))}, {"QWFWD", fmt.Sprintf("UDP %d · %s", qwfwd, m.t("qwfwd.d"))}}
 	}
@@ -296,7 +330,7 @@ func (m *Model) details(id string) [][2]string {
 		for _, sel := range setup.Selected(m.catalog, o) {
 			for _, component := range m.catalog.Components {
 				if component.ID == sel {
-					names = append(names, component.Label)
+					names = append(names, m.label("component", component.ID, component.Label))
 				}
 			}
 		}
@@ -308,7 +342,7 @@ func (m *Model) details(id string) [][2]string {
 		return [][2]string{
 			{m.t("d.bundle"), pack},
 			{m.t("d.items"), strings.Join(names, " · ")},
-			{m.t("d.size"), fmt.Sprintf("%s %s · %s %s", size(total), m.t("rev.download"), size(total*108/100), m.t("rev.disk"))},
+			{m.t("d.size"), fmt.Sprintf("%s %s · %s %s", m.size(total), m.t("rev.download"), m.size(setup.OnDisk(total)), m.t("rev.disk"))},
 		}
 	case "config":
 		k := o.Keys
@@ -327,7 +361,7 @@ func (m *Model) details(id string) [][2]string {
 		if o.Video.Width > 0 {
 			resolution = fmt.Sprintf("%d×%d", o.Video.Width, o.Video.Height)
 		}
-		experience := m.t("rs." + o.Experience)
+		experience := m.ruleset(o.Experience)
 		return [][2]string{
 			{m.t("nick"), o.Nick},
 			{m.t("tab.keys"), keys},
@@ -366,7 +400,7 @@ func (m *Model) details(id string) [][2]string {
 		}
 		slots := sv.Slots
 		if slots == 0 {
-			slots = 16
+			slots = setup.DefaultSlots
 		}
 		access += fmt.Sprintf(" · %d %s", slots, m.t("access.slots.n"))
 		if !sv.NoRecord {
@@ -384,7 +418,7 @@ func (m *Model) details(id string) [][2]string {
 			passwords = strings.Join(locked, " · ")
 		}
 		return append(rows, [2]string{m.t("tab.access"), access}, [2]string{m.t("access.passwords"), passwords},
-			[2]string{m.t("tab.services"), strings.Join(services, " · ")}, [2]string{"rcon", sv.Rcon})
+			[2]string{m.t("tab.services"), strings.Join(services, " · ")}, [2]string{m.t("rcon"), sv.Rcon})
 	case "integ":
 		in := o.Integration
 		mark := func(on bool, key string) string {
@@ -422,7 +456,7 @@ func (m *Model) details(id string) [][2]string {
 // the section in focus open with everything in it. Install and the
 // preflight live in the dock under it.
 func (m *Model) setupPage(p *page) {
-	if m.h >= 52 {
+	if m.h >= routeRows {
 		m.route(p)
 	}
 	p.title(m.t("conf.title"))
@@ -479,19 +513,19 @@ func (m *Model) openSection(p *page, row reviewRow, first bool) {
 		}
 	}
 	pairs := m.details(row.id)
-	labelWidth := 0 // sections without labels use the whole width
+	width := 0 // sections without labels use the whole width
 	for _, pair := range pairs {
 		if pair[0] != "" {
-			labelWidth = 13
+			width = labelWidth
 		}
 	}
 	for _, pair := range pairs {
-		for n, line := range wrapSegments(pair[1], p.width-labelWidth-6) {
+		for n, line := range wrapSegments(pair[1], p.width-width-6) {
 			key := ""
 			if n == 0 {
 				key = strings.ToLower(pair[0])
 			}
-			y := p.add(indent + p.st(t.Gray).Render(padRight(key, labelWidth)) + p.st(t.Text2).Render(line))
+			y := p.add(indent + p.st(t.Gray).Render(padRight(key, width)) + p.st(t.Text2).Render(line))
 			p.hits = append(p.hits, hit{y: y, x0: 0, x1: p.width, id: "row:" + row.id})
 		}
 	}
@@ -509,7 +543,7 @@ func (m *Model) dock(width int) *page {
 		return nil
 	}
 	switch m.screen {
-	case scMatch, scHost:
+	case scMatch, scHost, scServers:
 		return m.gameDock(width)
 	case scConfigure:
 	default:
@@ -540,13 +574,13 @@ func (m *Model) dock(width int) *page {
 			glyph, style, value := m.spinner(), p.st(t.Brand), p.st(t.Dim).Render(m.t("net.detecting"))
 			switch check.State {
 			case setup.CheckOK:
-				glyph, style, value = m.glyphs.Ok, p.st(t.Success), p.st(t.Gray).Render(shortPath(check.Value))
+				glyph, style, value = m.glyphs.Ok, p.st(t.Success), p.st(t.Gray).Render(shortPath(m.in(check.Says.Value)))
 			case setup.CheckWarning:
-				glyph, style, value = m.glyphs.Warn, p.st(t.Warning), p.st(t.Warning).Render(check.Value)
+				glyph, style, value = m.glyphs.Warn, p.st(t.Warning), p.st(t.Warning).Render(m.in(check.Says.Value))
 			case setup.CheckFailed:
-				glyph, style, value = m.glyphs.Fail, p.st(t.Error), p.st(t.Error).Render(check.Value)
+				glyph, style, value = m.glyphs.Fail, p.st(t.Error), p.st(t.Error).Render(m.in(check.Says.Value))
 			}
-			left := p.st(t.Base).Render("  ") + style.Bold(true).Render(glyph) + p.st(t.Text2).Render("  "+check.Title)
+			left := p.st(t.Base).Render("  ") + style.Bold(true).Render(glyph) + p.st(t.Text2).Render("  "+m.in(check.Says.Title))
 			if room := width - lipgloss.Width(left) - 6; lipgloss.Width(value) > room {
 				value = ansi.Truncate(value, room, m.glyphs.Ellipsis)
 			}
@@ -561,7 +595,7 @@ func (m *Model) dock(width int) *page {
 			default:
 				continue
 			}
-			text := strings.TrimSpace(check.Detail + " " + check.Fix)
+			text := strings.TrimSpace(m.in(check.Says.Detail) + " " + m.in(check.Says.Fix))
 			for n, line := range strings.Split(lipgloss.Wrap(text, width-9, " "), "\n") {
 				// Notes hang under the check's title.
 				lead := "       "
@@ -572,12 +606,22 @@ func (m *Model) dock(width int) *page {
 			}
 		}
 	}
+	if m.confirmErr != nil {
+		// Why Install refused stays until the choices change.
+		for n, line := range strings.Split(lipgloss.Wrap(m.explain(m.confirmErr), width-9, " "), "\n") {
+			lead := "       "
+			if n == 0 {
+				lead = "  " + m.glyphs.Fail + "  "
+			}
+			p.add(p.st(t.Error).Render(lead + line))
+		}
+	}
 	p.gap(1)
 	rows := m.confirmRows()
 	enabled := !m.preOn || (m.preDone && m.preflightOutcome() != setup.CheckFailed)
 	right := ""
 	if enabled {
-		right = size(m.totalBytes()) + "  ↵"
+		right = m.size(m.totalBytes()) + "  ↵"
 	}
 	m.primary(p, rows[len(rows)-1], m.focus == len(rows)-1, enabled, m.preOn && !m.preDone, right)
 	return p
@@ -589,10 +633,10 @@ func (m *Model) activateConfirm(id string) tea.Cmd {
 		switch {
 		case !m.preOn:
 			if err := m.opts.Validate(); err != nil {
-				m.say(err.Error())
+				m.confirmErr = err
 				return nil
 			}
-			return m.startPreflight()
+			return m.startPreflight(true)
 		case m.preDone && m.preflightOutcome() != setup.CheckFailed:
 			return m.startInstall()
 		}
@@ -611,17 +655,20 @@ func (m *Model) installPage(p *page) {
 	if pr.Total > 0 {
 		fraction = float64(pr.Done) / float64(pr.Total)
 	}
-	if !pr.Finished {
+	switch {
+	case pr.Finished:
+		fraction = 1 // also when there was nothing to download
+	default:
 		// The bytes arrive before the files are placed and verified.
 		fraction = min(fraction, 0.99)
 	}
 	// Big percentage on the left, figures on the right.
 	digits := bigNumber(int(fraction*100+0.0001), m.glyphs)
 	stats := []string{
-		p.st(t.Text).Bold(true).Render(size(pr.Done)) + p.st(t.Gray).Render(" "+m.t("inst.of")+" "+size(pr.Total)),
+		p.st(t.Text).Bold(true).Render(m.size(pr.Done)) + p.st(t.Gray).Render(" "+m.t("inst.of")+" "+m.size(pr.Total)),
 		p.st(t.Text).Render(duration(pr.ETA)) + p.st(t.Gray).Render(" "+m.t("inst.left")),
 		m.filesLine(p, pr),
-		sparkline(m, pr) + p.st(t.Text2).Render(fmt.Sprintf("  %.1f MB/s", pr.Speed/1048576)),
+		sparkline(m, pr) + p.st(t.Text2).Render("  "+m.size(int64(pr.Speed))+"/s"),
 	}
 	switch {
 	case pr.Paused && pr.Holding:
@@ -634,7 +681,7 @@ func (m *Model) installPage(p *page) {
 		digitStyle = p.st(t.Success)
 	}
 	for index := range 4 {
-		left := p.st(t.Base).Render("  ") + digitStyle.Render(padRight(digits[index], 26))
+		left := p.st(t.Base).Render("  ") + digitStyle.Render(padRight(digits[index], digitsWidth))
 		p.add(left + p.st(t.Base).Render("  ") + stats[index])
 	}
 	p.gap(1)
@@ -661,7 +708,7 @@ func (m *Model) installPage(p *page) {
 		}
 		for _, line := range log {
 			mark := p.st(t.Success).Render("+")
-			detail := p.st(t.Dim).Render(size(line.Size))
+			detail := p.st(t.Dim).Render(m.size(line.Size))
 			if line.Kind == '=' {
 				mark, detail = p.st(t.Gray).Render("="), p.st(t.Dim).Render(m.t("unchanged"))
 			}
@@ -700,7 +747,7 @@ func (m *Model) installPage(p *page) {
 		if done {
 			laneColor = Blend(t.Success, t.Base, 0.35)
 		}
-		left := p.st(t.Base).Render("  ") + mark + p.st(t.Base).Render("  ") + p.st(labelColor).Render(padRight(lane.Label, 26))
+		left := p.st(t.Base).Render("  ") + mark + p.st(t.Base).Render("  ") + p.st(labelColor).Render(padRight(m.label("component", lane.ID, lane.Label), 26))
 		right := bar(t, m.glyphs, 16, frac, laneColor) + p.st(t.Gray).Render(fmt.Sprintf("  %3d%%", int(frac*100))) + p.st(t.Base).Render("  ")
 		p.add(spread(left, right, p.width, t.Base))
 	}
@@ -733,7 +780,7 @@ func (m *Model) filesLine(p *page, pr setup.Progress) string {
 func (m *Model) installFailure(p *page, err error) {
 	t := m.theme
 	p.add(p.st(t.Error).Bold(true).Render("  " + m.glyphs.Fail + "  " + m.t("inst.failed")))
-	for _, line := range strings.Split(lipgloss.Wrap(err.Error(), p.width-7, " "), "\n") {
+	for _, line := range strings.Split(lipgloss.Wrap(m.explain(err), p.width-7, " "), "\n") {
 		p.add(p.st(t.Text2).Render("     " + line))
 	}
 	p.gap(1)
@@ -774,15 +821,14 @@ func sparkline(m *Model, pr setup.Progress) string {
 func (m *Model) speedHistory(speed float64) []float64 {
 	if speed > 0 && !m.progress.Paused {
 		m.speeds = append(m.speeds, speed)
-		if len(m.speeds) > 600 {
-			m.speeds = m.speeds[len(m.speeds)-600:]
+		if len(m.speeds) > sparkSamples {
+			m.speeds = m.speeds[len(m.speeds)-sparkSamples:]
 		}
 	}
 	speeds := m.speeds
-	// One column per ~0.6 s, 18 columns.
 	var out []float64
-	step := 18
-	for index := len(speeds) - 18*step; index < len(speeds); index += step {
+	step := sparkColumns
+	for index := len(speeds) - sparkColumns*step; index < len(speeds); index += step {
 		if index < 0 {
 			continue
 		}
@@ -793,7 +839,7 @@ func (m *Model) speedHistory(speed float64) []float64 {
 		}
 		out = append(out, sum/float64(max(1, n)))
 	}
-	for len(out) < 18 {
+	for len(out) < sparkColumns {
 		out = append([]float64{0}, out...)
 	}
 	return out
@@ -854,31 +900,22 @@ func (m *Model) doneRows() []doneRow {
 
 func (m *Model) donePage(p *page) {
 	t := m.theme
-	m.route(p)
+	if !m.fromPanel {
+		m.route(p)
+	}
 	title := m.t("done.title")
 	if !m.opts.Intent.WantsClient() {
 		title = m.t("done.host")
 	}
 	p.add(p.st(t.Success).Bold(true).Render(m.glyphs.Ok+"  ") + p.st(t.Text).Bold(true).Render(title))
-	p.add(p.st(t.Gray).Render("   " + fmt.Sprintf("%s · %s · %s", size(m.progress.Total), duration(time.Since(m.instAt).Round(time.Second)), shortPath(m.opts.Target))))
+	downloaded := m.size(m.progress.Total)
+	if m.progress.Total == 0 {
+		downloaded = m.t("done.nothing")
+	}
+	p.add(p.st(t.Gray).Render("   " + fmt.Sprintf("%s · %s · %s", downloaded, duration(time.Since(m.instAt).Round(time.Second)), shortPath(m.opts.Target))))
 	p.gap(1)
 	for index, row := range m.doneRows() {
-		focused, hovered := index == m.focus, m.hover == "row:"+row.id
-		bg := p.rowBG(focused, hovered)
-		if index == 0 && focused {
-			bg = Blend(t.Base, t.Brand, 0.28)
-		}
-		base := lipgloss.NewStyle().Background(bg)
-		label := base.Foreground(t.Text2)
-		if focused {
-			label = base.Foreground(t.Text).Bold(true)
-		}
-		chevron := base.Foreground(t.Dim).Render(m.glyphs.Chevron)
-		if index == 0 {
-			chevron = base.Foreground(t.Brand).Render(m.glyphs.Chevron)
-		}
-		left := base.Render("  ") + chevron + base.Render(" ") + label.Render(row.label)
-		p.band(spread(left, base.Foreground(t.Gray).Render(row.desc)+base.Render("  "), p.width, bg), bg, "row:"+row.id)
+		m.actionRow(p, row.id, row.label, row.desc, index == m.focus, index == 0)
 	}
 	if m.opts.Intent.WantsServer() {
 		p.gap(1)
@@ -891,15 +928,19 @@ func (m *Model) donePage(p *page) {
 		if m.opts.Server.QTVPort != 0 {
 			p.add(spread(p.st(t.Text2).Render("  QTV"), p.st(t.Text).Render(fmt.Sprintf("%s:%d", host, m.opts.Server.QTVPort))+p.st(t.Gray).Render("  TCP  "), p.width, t.Base))
 		}
-		p.add(spread(p.st(t.Text2).Render("  rcon"), p.st(t.Text).Render(m.opts.Server.Rcon)+p.st(t.Base).Render("       "), p.width, t.Base))
-		p.add(p.st(t.Gray).Render("  " + m.t("ports.open")))
+		p.add(spread(p.st(t.Text2).Render("  "+m.t("rcon")), p.st(t.Text).Render(m.opts.Server.Rcon)+p.st(t.Base).Render("       "), p.width, t.Base))
+		if m.opts.Server.Local {
+			p.add(p.st(t.Gray).Render("  " + m.t("local.only")))
+		} else {
+			p.add(p.st(t.Gray).Render("  " + m.t("ports.open")))
+		}
 		p.lead("  " + m.t("srv.together"))
 	}
-	if warnings := m.progress.Warnings; len(warnings) > 0 {
+	if warnings := m.progress.Notes; len(warnings) > 0 {
 		p.gap(1)
 		p.rule(m.t("done.notes"))
 		for _, warning := range warnings {
-			for n, line := range strings.Split(lipgloss.Wrap(warning, p.width-6, " "), "\n") {
+			for n, line := range strings.Split(lipgloss.Wrap(m.in(warning), p.width-6, " "), "\n") {
 				lead := "    "
 				if n == 0 {
 					lead = "  " + m.glyphs.Warn + " "
@@ -910,34 +951,52 @@ func (m *Model) donePage(p *page) {
 	}
 }
 
-func (m *Model) connectHost() string {
-	if m.opts.Server.Hostname != "" {
-		return m.opts.Server.Hostname
+// actionRow draws a row that does something: home, the final screen and
+// the panel's sub-views share it. primary rows carry the brand.
+func (m *Model) actionRow(p *page, id, label, desc string, focused, primary bool) {
+	t := m.theme
+	bg := p.rowBG(focused, m.hover == "row:"+id)
+	if primary && focused {
+		bg = Blend(t.Base, t.Brand, 0.28)
 	}
-	if m.network != nil && m.network.PublicV4.IsValid() {
+	base := lipgloss.NewStyle().Background(bg)
+	text := base.Foreground(t.Text2)
+	if focused {
+		text = base.Foreground(t.Text).Bold(true)
+	}
+	chevron := base.Foreground(t.Dim).Render(m.glyphs.Chevron)
+	if primary {
+		chevron = base.Foreground(t.Brand).Render(m.glyphs.Chevron)
+	}
+	left := base.Render("  ") + chevron + base.Render(" ") + text.Render(label)
+	p.band(spread(left, base.Foreground(t.Gray).Render(desc)+base.Render("  "), p.width, bg), bg, "row:"+id)
+}
+
+// connectHost is where players reach the server: this machine for a
+// local one, else the hostname or the public address.
+func (m *Model) connectHost() string {
+	switch {
+	case m.opts.Server.Local:
+		return "127.0.0.1"
+	case m.opts.Server.Hostname != "":
+		return m.opts.Server.Hostname
+	case m.network != nil && m.network.PublicV4.IsValid():
 		return m.network.PublicV4.String()
 	}
 	return "localhost"
 }
 
+// activateDone opens the app screen a row names, or quits.
 func (m *Model) activateDone(id string) tea.Cmd {
-	target := m.opts.Target
-	switch {
-	case id == "quit":
+	switch id {
+	case "quit":
 		return tea.Quit
-	case m.cfg.Demo && id == "find":
-		m.openModal("servers")
-	case m.cfg.Demo:
-		m.say(m.t("would." + id))
-	case id == "play":
-		m.next = []string{"play", "--target", target}
-	case id == "server":
-		m.next = setup.HostCommand(target, m.opts)
-	case id == "find":
-		m.next = []string{"hub", "--target", target}
-	}
-	if m.next != nil {
-		return tea.Quit
+	case "play":
+		return m.openScreen(scMatch)
+	case "server":
+		return m.openScreen(scHost)
+	case "find":
+		return m.openScreen(scServers)
 	}
 	return nil
 }
@@ -961,7 +1020,7 @@ func (m *Model) panelRows() []reviewRow {
 		{"play", m.t("h.play"), m.homeSummary("play")},
 		{"servers", m.t("h.servers"), m.homeSummary("servers")},
 		{"host", m.t("h.host"), m.homeSummary("host")},
-		{"update", m.t("m.update"), fmt.Sprintf("%d %s", len(m.existing.Updates), m.t("m.update.d"))},
+		{"update", m.t("m.update"), ""},
 		{"change", m.t("m.change"), m.t("m.change.d")},
 		{"repair", m.t("m.repair"), m.t("m.repair.d")},
 		{"tools", m.t("h.tools"), m.t("h.tools.d")},
@@ -975,7 +1034,7 @@ func (m *Model) homeSummary(id string) string {
 	switch id {
 	case "play":
 		if g.catalog != nil && g.catalog.Last != nil {
-			return m.matchTitle() + " · " + m.t("rs."+g.match.Ruleset)
+			return m.matchTitle() + " · " + m.ruleset(g.match.Ruleset)
 		}
 		return m.t("h.play.d")
 	case "servers":
@@ -994,14 +1053,12 @@ func (m *Model) homeSummary(id string) string {
 		switch {
 		case !m.serverInstalled():
 			return m.t("h.host.none")
+		case g.stack != nil && g.stack.Status == "starting":
+			return m.t("host.starting")
+		case g.stack != nil && g.stack.Status == "stopping":
+			return m.t("host.stopping")
 		case g.stack != nil:
-			running := 0
-			for _, process := range g.stack.Processes {
-				if strings.HasPrefix(process.Label, "MVDSV") {
-					running++
-				}
-			}
-			return fmt.Sprintf(m.t("h.host.on"), running)
+			return fmt.Sprintf(m.t("h.host.on"), m.instancesUp())
 		}
 		return fmt.Sprintf(m.t("h.host.off"), len(m.opts.Server.Instances))
 	}
@@ -1013,19 +1070,27 @@ func (m *Model) panelPage(p *page) {
 	m.logo(p)
 	e := m.existing
 	p.title(m.t("home.title"))
-	p.add(p.st(t.Gray).Render(fmt.Sprintf("%s · %d %s · CLI %s", shortPath(e.Target), e.Components, m.t("rev.items"), e.CLIVersion)))
+	facts := fmt.Sprintf(m.t("home.facts"), shortPath(e.Target), e.Components)
+	if e.CLIVersion != "" {
+		facts += " · CLI " + e.CLIVersion
+	}
+	p.add(p.st(t.Gray).Render(facts))
 	p.gap(1)
 	switch m.panelView {
 	case "update":
 		for _, u := range e.Updates {
 			note := ""
-			if u.Note != "" {
-				note = p.st(t.Gray).Render("  " + u.Note)
+			if !u.Note.IsZero() {
+				note = p.st(t.Gray).Render("  " + m.in(u.Note))
 			}
-			left := p.st(t.Text2).Render("  "+u.Label) + note
-			right := p.st(t.Dim).Render(u.From+"  → ") + p.st(t.Success).Render(u.To) + p.st(t.Base).Render("  ")
+			left := p.st(t.Text2).Render("  "+m.label("component", u.ID, u.Label)) + note
+			right := p.st(t.Dim).Render(m.in(u.From)+"  → ") + p.st(t.Success).Render(u.To) + p.st(t.Base).Render("  ")
 			if lipgloss.Width(left)+lipgloss.Width(right)+2 > p.width {
 				right = p.st(t.Dim).Render("→ ") + p.st(t.Success).Render(u.To) + p.st(t.Base).Render("  ")
+			}
+			// The versions always show; the name gives way.
+			if room := p.width - lipgloss.Width(right) - 2; lipgloss.Width(left) > room {
+				left = ansi.Truncate(left, room, m.glyphs.Ellipsis)
 			}
 			p.add(spread(left, right, p.width, t.Base))
 		}
@@ -1063,35 +1128,49 @@ func (m *Model) panelPage(p *page) {
 			count = base.Foreground(t.Brand).Bold(true).Render(fmt.Sprintf(" %d", len(e.Updates)))
 		}
 		left := base.Render("  ") + base.Foreground(t.Dim).Render(m.glyphs.Chevron) + base.Render(" ") + label.Render(row.label) + count
-		right := base.Foreground(t.Gray).Render(row.summary) + base.Render("  ")
+		summary := row.summary
 		if row.id == "update" {
-			note := m.t("m.update.d")
-			if len(e.Updates) == 0 {
-				note = m.t("m.uptodate")
-			}
-			right = base.Foreground(t.Gray).Render(note) + base.Render("  ")
+			summary = m.updateNote()
 		}
+		right := base.Foreground(t.Gray).Render(summary) + base.Render("  ")
 		p.band(spread(left, right, p.width, bg), bg, "row:"+row.id)
 	}
 }
 
+// updateNote is what home says about the updates.
+func (m *Model) updateNote() string {
+	switch {
+	case m.existing.UpdatesErr != nil:
+		return m.t("m.updates.off")
+	case len(m.existing.Updates) == 0:
+		return m.t("m.uptodate")
+	}
+	return m.t("m.update.d")
+}
+
 func (m *Model) panelKey(key string) tea.Cmd {
+	if m.removed {
+		// Nothing is left to act on: only the way out.
+		if key == "esc" {
+			return m.quit(key)
+		}
+		return nil
+	}
 	rows := m.panelRows()
+	if listNav(key, &m.focus, len(rows)) {
+		return nil
+	}
 	switch key {
-	case "up", "k":
-		m.focus = (m.focus + len(rows) - 1) % len(rows)
-	case "down", "j", "tab":
-		m.focus = (m.focus + 1) % len(rows)
 	case "enter", "space", " ", "right":
 		return m.activatePanel(rows[m.focus].id)
 	case "esc", "left", "backspace":
-		if m.removed {
-			return tea.Quit
-		}
 		if m.panelView != "" {
-			m.panelView, m.focus, m.report, m.panelErr = "", 0, nil, nil
-		} else if m.armedFor("quit") {
-			return tea.Quit
+			back := m.panelView
+			m.panelView, m.report, m.panelErr = "", nil, nil
+			delete(m.tops, scPanel) // home keeps its own place, not the sub-view's
+			m.focusRow(back)
+		} else if key == "esc" {
+			return m.quit(key)
 		}
 	}
 	return nil
@@ -1119,7 +1198,7 @@ func (m *Model) panelResult(p *page) {
 	case m.busy:
 		p.add(p.st(t.Brand).Render("  "+m.spinner()) + p.st(t.Text2).Render("  "+m.t("remove.running")))
 	case m.panelErr != nil:
-		p.add(p.st(t.Error).Bold(true).Render("  " + m.glyphs.Fail + "  " + m.panelErr.Error()))
+		p.add(p.st(t.Error).Bold(true).Render("  " + m.glyphs.Fail + "  " + m.explain(m.panelErr)))
 	case m.removed:
 		p.add(p.st(t.Success).Bold(true).Render("  " + m.glyphs.Ok + "  " + fmt.Sprintf(m.t("removed"), shortPath(m.existing.Target))))
 		p.gap(1)
@@ -1136,8 +1215,12 @@ func (m *Model) panelResult(p *page) {
 }
 
 func (m *Model) activatePanel(id string) tea.Cmd {
-	if m.panelView == "" && id == "update" && len(m.existing.Updates) == 0 {
-		m.say(m.t("m.uptodate"))
+	if m.panelView == "" && id == "update" && (len(m.existing.Updates) == 0 || m.existing.UpdatesErr != nil) {
+		m.say(m.updateNote())
+		return nil
+	}
+	if id == "change" && m.catalog.Unavailable != nil {
+		m.say(m.t("m.change.off"))
 		return nil
 	}
 	if m.panelView == "" && (id == "update" || id == "repair" || id == "remove") {
@@ -1154,9 +1237,12 @@ func (m *Model) activatePanel(id string) tea.Cmd {
 	case "tools":
 		m.openModal("tools")
 	case "change":
-		m.screen, m.focus, m.fromPanel, m.preOn = scConfigure, 0, true, false
+		m.openSetup(scPanel, "change")
 	case "apply":
-		return m.startPreflight()
+		// Update applies every new version, from home and back to it.
+		m.openSetup(scPanel, "update")
+		m.opts.Upgrade = true
+		return m.startPreflight(true)
 	case "verify":
 		if !m.busy {
 			return m.runPanel(false)
@@ -1169,20 +1255,6 @@ func (m *Model) activatePanel(id string) tea.Cmd {
 		}
 	}
 	return nil
-}
-
-func size(b int64) string {
-	switch {
-	case b >= 1e9:
-		return fmt.Sprintf("%.2f GB", float64(b)/1e9)
-	case b >= 1e8:
-		return fmt.Sprintf("%.0f MB", float64(b)/1e6)
-	case b >= 1e6:
-		return fmt.Sprintf("%.1f MB", float64(b)/1e6)
-	case b >= 1e3:
-		return fmt.Sprintf("%.0f KB", float64(b)/1e3)
-	}
-	return fmt.Sprintf("%d B", b)
 }
 
 func duration(d time.Duration) string {
@@ -1247,6 +1319,15 @@ func wrapSegments(value string, width int) []string {
 		out = append(out, strings.Split(lipgloss.Wrap(l, width, " "), "\n")...)
 	}
 	return out
+}
+
+// ruleset names a client ruleset; one this version does not know shows
+// by its own name.
+func (m *Model) ruleset(key string) string {
+	if _, ok := texts["rs."+key]; ok {
+		return m.t("rs." + key)
+	}
+	return key
 }
 
 // num formats a decimal the way the interface language writes it.

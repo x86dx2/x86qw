@@ -30,6 +30,10 @@ func (m *Model) openModal(kind string) {
 	m.modal.field["hostname"].Accept = func(r rune) bool {
 		return r == '.' || r == '-' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
 	}
+	// The game's console reads these between quotes.
+	for _, name := range []string{"srv.name", "rcon", "password", "spectator"} {
+		m.modal.field[name].Accept = setup.NameRune
+	}
 	if picker(kind) {
 		add("filter", "", 30)
 	}
@@ -70,12 +74,51 @@ func (m *Model) closeModal(keep bool) tea.Cmd {
 		return m.takePending()
 	}
 	cmd := m.fieldChanged()
+	if m.modal.kind == "server" {
+		// A server that cannot start keeps its dialog open, on the tab
+		// where the problem is.
+		if err := m.opts.Server.Validate(); err != nil {
+			if tab, ok := serverTab(setup.FieldOf(err)); ok {
+				m.modal.tab, m.modal.focus = tab, 0
+				return cmd
+			}
+		}
+	}
 	changed := !reflect.DeepEqual(m.opts, m.modal.before)
 	m.modal = nil
+	if changed {
+		m.confirmErr = nil
+	}
 	if changed && m.screen == scConfigure && m.preOn {
-		return tea.Batch(cmd, m.startPreflight())
+		return tea.Batch(cmd, m.startPreflight(false))
 	}
 	return cmd
+}
+
+// serverTab is the server dialog's tab that holds a choice.
+func serverTab(field string) (int, bool) {
+	switch field {
+	case "server.name", "server.instances", "server.ports":
+		return 0, true
+	case "server.slots", "server.password":
+		return 1, true
+	case "server.rcon", "server.qtv", "server.qwfwd":
+		return 3, true
+	}
+	return 0, false
+}
+
+// serverProblem is the row under a server tab: why the server cannot
+// start, when the problem is on that tab, else an empty line that keeps
+// the dialog's height.
+func (m *Model) serverProblem(tab int) formRow {
+	row := formRow{kind: rowInfo, tone: "error"}
+	if err := m.opts.Server.Validate(); err != nil {
+		if owner, ok := serverTab(setup.FieldOf(err)); ok && owner == tab {
+			row.value = m.explain(err)
+		}
+	}
+	return row
 }
 
 // cloneOptions copies o without sharing its lists.
@@ -95,12 +138,14 @@ func (m *Model) fieldChanged() tea.Cmd {
 	m.opts.Server.Name = f["srv.name"].String()
 	m.opts.Server.Rcon = f["rcon"].String()
 	m.opts.Server.Password, m.opts.Server.Spectators = f["password"].String(), f["spectator"].String()
-	m.opts.Target = f["folder"].String()
+	if m.existing == nil {
+		m.opts.Target = setup.ExpandHome(f["folder"].String())
+	}
 	host := strings.ToLower(f["hostname"].String())
 	if host != m.opts.Server.Hostname {
 		m.opts.Server.Hostname, m.dns, m.dnsPending = host, nil, host
 		if host != "" {
-			return tea.Tick(600*time.Millisecond, func(time.Time) tea.Msg { return dnsDebounceMsg(host) })
+			return tea.Tick(dnsDebounce, func(time.Time) tea.Msg { return dnsDebounceMsg(host) })
 		}
 	}
 	return nil
@@ -130,8 +175,6 @@ func (m *Model) modalTitle() string {
 		return m.t("sec.folder")
 	case "recipe":
 		return m.t("sec.recipe")
-	case "servers":
-		return m.t("servers")
 	case "tools":
 		return m.t("h.tools")
 	case "solo":
@@ -214,6 +257,18 @@ func (m *Model) modalNav(key string) tea.Cmd {
 			row.step(delta)
 		case len(tabs) > 1:
 			m.modal.tab, m.modal.focus = (m.modal.tab+delta+len(tabs))%len(tabs), 0
+		}
+	case "shift+left", "shift+right":
+		// Numbers go by ten.
+		delta := 1
+		if row.coarse {
+			delta = 10
+		}
+		if key == "shift+left" {
+			delta = -delta
+		}
+		if row.step != nil {
+			row.step(delta)
 		}
 	case "space", " ":
 		// Space changes the row in focus.
@@ -304,16 +359,26 @@ func (m *Model) clickRow(id string) tea.Cmd {
 			m.focus = index
 		}
 	case scDone:
+		// Rows: the first click focuses, the second acts.
 		for index, row := range m.doneRows() {
 			if row.id == id {
-				m.focus = index
+				if m.focus != index {
+					m.focus = index
+					return nil
+				}
 				return m.activateDone(id)
 			}
 		}
 	case scPanel:
+		if m.removed || m.busy {
+			return nil
+		}
 		for index, row := range m.panelRows() {
 			if row.id == id {
-				m.focus = index
+				if m.focus != index {
+					m.focus = index
+					return nil
+				}
 				return m.activatePanel(id)
 			}
 		}
@@ -328,7 +393,7 @@ func (m *Model) bindKey(action, key string) {
 		key = name
 	}
 	if len([]rune(key)) != 1 && !strings.HasSuffix(key, "arrow") && key != "space" {
-		m.say(key + "?")
+		m.say(fmt.Sprintf(m.t("key.unknown"), key))
 		return
 	}
 	k := &m.opts.Keys
@@ -360,24 +425,20 @@ func (m *Model) modalRows() []formRow {
 		case 0:
 			return m.keyRows()
 		case 1:
-			sens := []float64{}
-			for v := 0.5; v <= 10.001; v += 0.1 {
-				sens = append(sens, v)
-			}
 			dpis := []int{400, 800, 1000, 1200, 1600, 2400, 3200}
 			return []formRow{
 				{id: "sens", kind: rowStepper, label: m.t("sens"), value: m.num(o.Mouse.Sensitivity), step: func(d int) {
 					o.Mouse.Sensitivity = clampF(o.Mouse.Sensitivity+float64(d)*0.1, 0.5, 10)
 				}},
 				{id: "dpi", kind: rowStepper, label: m.t("dpi"), value: fmt.Sprint(o.Mouse.DPI), step: func(d int) { o.Mouse.DPI = cycleInt(dpis, o.Mouse.DPI, d) }},
-				{id: "cm", kind: rowInfo, label: m.t("cm360"), value: m.num(o.Mouse.CentimetersPer360()) + " cm", tone: "dim"},
+				{id: "cm", kind: rowInfo, label: m.t("cm360"), value: m.num(o.Mouse.CentimetersPer360()) + " " + m.t("unit.cm"), tone: "dim"},
 				{id: "invert", kind: rowToggle, label: m.t("invert"), on: o.Mouse.Invert, desc: map[bool]string{false: "m_pitch 0.022", true: "m_pitch -0.022"}[o.Mouse.Invert], activate: func() { o.Mouse.Invert = !o.Mouse.Invert }},
 			}
 		case 2:
 			var rows []formRow
 			for _, key := range setup.RulesetKeys {
 				key := key
-				rows = append(rows, formRow{id: "rs." + key, kind: rowRadio, label: m.t("rs." + key), desc: m.t("rs." + key + ".d"), on: o.Experience == key, activate: func() { o.Experience = key }})
+				rows = append(rows, formRow{id: "rs." + key, kind: rowRadio, label: m.ruleset(key), desc: m.t("rs." + key + ".d"), on: o.Experience == key, activate: func() { o.Experience = key }})
 			}
 			return rows
 		default:
@@ -406,33 +467,30 @@ func (m *Model) modalRows() []formRow {
 	case "server":
 		switch m.modal.tab {
 		case 0:
-			return m.serverGeneralRows()
+			return append(m.serverGeneralRows(), m.serverProblem(0))
 		case 1:
-			return m.accessRows()
+			return append(m.accessRows(), m.serverProblem(1))
 		case 2:
 			return m.networkRows()
 		default:
 			s := &o.Server
 			rows := []formRow{
-				{id: "qtv", kind: rowToggle, label: "QTV", on: s.QTVPort != 0, desc: m.t("qtv.d"), activate: func() { s.QTVPort = toggledPort(s.QTVPort, 28000) }},
+				{id: "qtv", kind: rowToggle, label: "QTV", on: s.QTVPort != 0, desc: m.t("qtv.d"), activate: func() { s.QTVPort = toggledPort(s.QTVPort, setup.DefaultQTVPort) }},
 			}
 			if s.QTVPort != 0 {
-				rows = append(rows, formRow{id: "qtvport", kind: rowStepper, label: "    TCP", value: fmt.Sprint(s.QTVPort), step: func(d int) { s.QTVPort = clampI(s.QTVPort+d, 1025, 65535) }})
+				rows = append(rows, formRow{id: "qtvport", kind: rowStepper, coarse: true, label: "    " + m.t("port.tcp"), value: fmt.Sprint(s.QTVPort), step: func(d int) { s.QTVPort = clampI(s.QTVPort+d, 1025, 65535) }})
 			}
-			rows = append(rows, formRow{id: "qwfwd", kind: rowToggle, label: "QWFWD", on: s.QWFWDPort != 0, desc: m.t("qwfwd.d"), activate: func() { s.QWFWDPort = toggledPort(s.QWFWDPort, 30000) }})
+			rows = append(rows, formRow{id: "qwfwd", kind: rowToggle, label: "QWFWD", on: s.QWFWDPort != 0, desc: m.t("qwfwd.d"), activate: func() { s.QWFWDPort = toggledPort(s.QWFWDPort, setup.DefaultQWFWDPort) }})
 			if s.QWFWDPort != 0 {
-				rows = append(rows, formRow{id: "qwfwdport", kind: rowStepper, label: "    UDP", value: fmt.Sprint(s.QWFWDPort), step: func(d int) { s.QWFWDPort = clampI(s.QWFWDPort+d, 1025, 65535) }})
+				rows = append(rows, formRow{id: "qwfwdport", kind: rowStepper, coarse: true, label: "    " + m.t("port.udp"), value: fmt.Sprint(s.QWFWDPort), step: func(d int) { s.QWFWDPort = clampI(s.QWFWDPort+d, 1025, 65535) }})
 			}
-			rows = append(rows,
+			return append(rows,
 				formRow{id: "rcon", kind: rowText, label: m.t("rcon"), field: m.modal.field["rcon"]},
 				formRow{id: "rcon.new", kind: rowAction, label: m.t("rcon.new"), activate: func() {
 					m.modal.field["rcon"].Set(setup.Password(14))
 					m.fieldChanged()
-				}})
-			if err := o.Validate(); err != nil && o.Intent.WantsServer() {
-				rows = append(rows, formRow{id: "err", kind: rowInfo, label: "", value: err.Error(), tone: "error"})
-			}
-			return rows
+				}},
+				m.serverProblem(3))
 		}
 	case "integ":
 		in := &o.Integration
@@ -458,14 +516,18 @@ func (m *Model) modalRows() []formRow {
 		}
 		return rows
 	case "folder":
+		if m.existing != nil {
+			// The installation lives where it is; the setup changes it there.
+			return []formRow{
+				{kind: rowInfo, label: m.t("sec.folder"), value: shortPath(m.existing.Target)},
+				{kind: rowInfo, label: "", value: m.t("folder.locked"), tone: "dim"},
+			}
+		}
 		return []formRow{
 			{id: "folder", kind: rowText, label: m.t("sec.folder"), field: m.modal.field["folder"], desc: m.t("folder.d")},
-			{id: "state", kind: rowInfo, label: "", value: m.t("folder.state"), tone: "ok"},
 		}
 	case "recipe":
 		return m.recipeRows()
-	case "servers":
-		return m.serverListRows()
 	}
 	return nil
 }
@@ -491,9 +553,10 @@ func (m *Model) compRows() []formRow {
 	rows = append(rows, formRow{kind: rowHeading, label: m.t("comps.items")})
 	for _, component := range m.catalog.Components {
 		component := component
+		label := m.label("component", component.ID, component.Label)
 		if component.Kind == "server" {
 			if o.Intent.WantsServer() && selected[component.ID] {
-				rows = append(rows, formRow{id: component.ID, kind: rowInfo, label: component.Label, value: m.t("needed.host") + "  " + size(component.Size), tone: "dim"})
+				rows = append(rows, formRow{id: component.ID, kind: rowInfo, label: label, value: m.t("needed.host") + "  " + m.size(component.Size), tone: "dim"})
 			}
 			continue
 		}
@@ -501,15 +564,15 @@ func (m *Model) compRows() []formRow {
 			continue
 		}
 		if component.ID == "x86qw-client-bootstrap" {
-			rows = append(rows, formRow{id: component.ID, kind: rowInfo, label: component.Label, value: m.t("always") + "  " + size(component.Size), tone: "dim"})
+			rows = append(rows, formRow{id: component.ID, kind: rowInfo, label: label, value: m.t("always") + "  " + m.size(component.Size), tone: "dim"})
 			continue
 		}
 		if m.existing != nil && contains(m.existing.Installed, component.ID) {
 			// The setup adds to an installation; removing is uninstalling.
-			rows = append(rows, formRow{id: component.ID, kind: rowInfo, label: component.Label, value: m.t("installed") + "  " + size(component.Size), tone: "dim"})
+			rows = append(rows, formRow{id: component.ID, kind: rowInfo, label: label, value: m.t("installed") + "  " + m.size(component.Size), tone: "dim"})
 			continue
 		}
-		rows = append(rows, formRow{id: component.ID, kind: rowToggle, label: component.Label, desc: size(component.Size), on: selected[component.ID], activate: func() {
+		rows = append(rows, formRow{id: component.ID, kind: rowToggle, label: label, desc: m.size(component.Size), on: selected[component.ID], activate: func() {
 			if o.Content != "custom" {
 				o.Components, o.Content = m.clientSelection(), "custom"
 			}
@@ -553,7 +616,7 @@ func (m *Model) keyRows() []formRow {
 		actions := [][3]string{{"fwd", "a.fwd", o.Keys.Forward}, {"back", "a.back", o.Keys.Back}, {"left", "a.left", o.Keys.Left}, {"right", "a.right", o.Keys.Right}, {"jump", "a.jump", o.Keys.Jump}}
 		for _, action := range actions {
 			action := action
-			value := keyLabel(action[2])
+			value := m.keyName(action[2])
 			if m.modal.capture == action[0] {
 				value = m.t("press.key") + "…"
 			}
@@ -600,12 +663,20 @@ func (m *Model) keyboard() []string {
 	if bound["space"] {
 		space = lipgloss.NewStyle().Background(Blend(t.Base, t.Brand, 0.42)).Foreground(t.Text).Bold(true)
 	}
-	lines = append(lines, t.Style(t.Base).Render(strings.Repeat(" ", 13))+space.Render(fmt.Sprintf("%-19s", "        space")))
+	lines = append(lines, t.Style(t.Base).Render(strings.Repeat(" ", 13))+space.Render(fmt.Sprintf("%-19s", "        "+m.t("key.space"))))
 	legend := []string{}
 	for _, pair := range [][2]string{{o.Forward, "a.fwd"}, {o.Back, "a.back"}, {o.Left, "a.left"}, {o.Right, "a.right"}, {o.Jump, "a.jump"}} {
-		legend = append(legend, t.Style(t.Text2).Bold(true).Render(keyLabel(pair[0]))+t.Style(t.Gray).Render(" "+m.t(pair[1])))
+		legend = append(legend, t.Style(t.Text2).Bold(true).Render(m.keyName(pair[0]))+t.Style(t.Gray).Render(" "+m.t(pair[1])))
 	}
 	return append([]string{""}, append(lines, "", t.Style(t.Base).Render("    ")+strings.Join(legend, t.Style(t.Dim).Render("  ·  ")))...)
+}
+
+// keyName is a bound key as the interface names it.
+func (m *Model) keyName(name string) string {
+	if name == "space" {
+		return m.t("key.space")
+	}
+	return keyLabel(name)
 }
 
 func keyLabel(name string) string {
@@ -628,7 +699,7 @@ func (m *Model) serverGeneralRows() []formRow {
 	s := &m.opts.Server
 	rows := []formRow{
 		{id: "srv.name", kind: rowText, label: m.t("srv.name"), field: m.modal.field["srv.name"]},
-		{id: "base", kind: rowStepper, label: m.t("srv.base"), value: fmt.Sprint(s.BasePort), step: func(d int) { s.BasePort = clampI(s.BasePort+d, 1025, 65000) }},
+		{id: "base", kind: rowStepper, coarse: true, label: m.t("srv.base"), value: fmt.Sprint(s.BasePort), step: func(d int) { s.BasePort = clampI(s.BasePort+d, 1025, 65000) }},
 		{kind: rowHeading, label: m.t("srv.inst")},
 	}
 	for index := range s.Instances {
@@ -636,7 +707,7 @@ func (m *Model) serverGeneralRows() []formRow {
 		instance := &s.Instances[index]
 		mode := m.mode(instance.Mode)
 		rows = append(rows,
-			formRow{id: fmt.Sprintf("mode%d", index), kind: rowStepper, label: fmt.Sprintf("#%d  UDP %d", index+1, s.BasePort+index), value: mode.Label, step: func(d int) {
+			formRow{id: fmt.Sprintf("mode%d", index), kind: rowStepper, label: fmt.Sprintf("#%d  %s %d", index+1, m.t("port.udp"), s.BasePort+index), value: mode.Label, step: func(d int) {
 				next := m.catalog.Modes[(m.modeIndex(instance.Mode)+d+len(m.catalog.Modes))%len(m.catalog.Modes)]
 				instance.Mode, instance.Map = next.ID, next.DefaultMap
 			}},
@@ -649,7 +720,7 @@ func (m *Model) serverGeneralRows() []formRow {
 			rows = append(rows, formRow{id: fmt.Sprintf("bots%d", index), kind: rowInfo, label: "   " + m.t("bots"), value: m.t("bots.none"), tone: "dim"})
 		}
 	}
-	if len(s.Instances) < 8 {
+	if len(s.Instances) < setup.MaxInstances {
 		rows = append(rows, formRow{id: "add", kind: rowAction, label: m.t("srv.add"), activate: func() {
 			s.Instances = append(s.Instances, setup.Instance{Mode: "ffa", Map: "dm6", Bots: true})
 		}})
@@ -741,7 +812,7 @@ func (m *Model) networkRows() []formRow {
 	}
 	rows = append(rows, formRow{kind: rowHeading, label: m.t("connect.as")})
 	for _, port := range m.opts.Server.Ports() {
-		rows = append(rows, formRow{kind: rowInfo, label: "UDP", value: fmt.Sprintf("%s:%d", m.connectHost(), port)})
+		rows = append(rows, formRow{kind: rowInfo, label: m.t("port.udp"), value: fmt.Sprintf("%s:%d", m.connectHost(), port)})
 	}
 	return rows
 }
@@ -763,9 +834,9 @@ func (m *Model) recipeRows() []formRow {
 		}
 	}
 	lines = append(lines, style.Render(strings.Repeat(" ", width)))
-	label := "JSON"
+	label := m.t("recipe.json")
 	if m.modal.json {
-		label = "shell"
+		label = m.t("recipe.shell")
 	}
 	return []formRow{
 		{kind: rowInfo, label: "", value: m.t("recipe.d"), tone: "dim"},
@@ -775,31 +846,11 @@ func (m *Model) recipeRows() []formRow {
 	}
 }
 
-var sampleServers = [][5]string{
-	{"qw.foppa.dk:27501", "FOPPA Duel #1", "dm6", "duel", "21"},
-	{"br.x86.com.br:27500", "x86QW Brasil FFA", "dm4", "ffa", "9"},
-	{"de.quakeworld.nu:28501", "QW.nu 4on4 Frankfurt", "dm3", "4on4", "38"},
-	{"qw.irc.ax:27500", "irc.ax KTX", "aerowalk", "duel", "44"},
-	{"nl.qwsv.net:27600", "QWSV CTF", "e2m2", "ctf", "52"},
-	{"us.troopers.fi:27502", "Troopers 2on2 NY", "dm6", "2on2", "131"},
-}
-
-func (m *Model) serverListRows() []formRow {
-	rows := []formRow{{kind: rowInfo, label: "", value: m.t("sample"), tone: "warn"}}
-	for _, server := range sampleServers {
-		server := server
-		rows = append(rows, formRow{id: server[0], kind: rowAction, label: server[1], desc: fmt.Sprintf("%s · %s · %s ms", server[3], server[2], server[4]), activate: func() {
-			m.say(m.t("would.connect") + " qw://" + server[0])
-		}})
-	}
-	return rows
-}
-
 // modalView frames the open dialog: title and close mark on the top edge,
 // tabs, then the rows; long dialogs scroll with the focus.
 func (m *Model) modalView() ([]string, []hit, *[2]int) {
 	t := m.theme
-	width := max(60, min(m.w-8, 84))
+	width := max(minWidth, min(m.w-8, modalWidth))
 	inner := width - 4
 	p := newPage(t, m.glyphs, inner)
 	p.gap(1)
@@ -964,19 +1015,22 @@ func homeDir() string {
 	return home
 }
 
+// modalWidth is the widest a dialog grows.
+const modalWidth = 84
+
 // accessRows decide who reaches the server and how many play.
 func (m *Model) accessRows() []formRow {
 	s := &m.opts.Server
 	slots := s.Slots
 	if slots == 0 {
-		slots = 16
+		slots = setup.DefaultSlots
 	}
 	return []formRow{
 		{kind: rowHeading, label: m.t("access.who")},
 		{id: "public", kind: rowRadio, label: m.t("access.public"), desc: m.t("access.public.d"), on: !s.Local, activate: func() { s.Local = false }},
 		{id: "local", kind: rowRadio, label: m.t("access.local"), desc: m.t("access.local.d"), on: s.Local, activate: func() { s.Local = true }},
 		{kind: rowHeading, label: m.t("access.match")},
-		{id: "slots", kind: rowStepper, label: m.t("access.slots"), value: fmt.Sprint(slots), step: func(d int) { s.Slots = cycleInt(setup.SlotChoices, slots, d) }},
+		{id: "slots", kind: rowStepper, coarse: true, label: m.t("access.slots"), value: fmt.Sprint(slots), step: func(d int) { s.Slots = clampI(slots+d, setup.MinSlots, setup.MaxSlots) }},
 		{id: "record", kind: rowToggle, label: m.t("access.record"), desc: m.t("access.record.d"), on: !s.NoRecord, activate: func() { s.NoRecord = !s.NoRecord }},
 		{kind: rowHeading, label: m.t("access.passwords")},
 		{id: "password", kind: rowText, label: m.t("access.password"), field: m.modal.field["password"], desc: m.t("access.open")},

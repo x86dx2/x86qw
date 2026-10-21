@@ -3,7 +3,9 @@ package tui
 import (
 	"context"
 	"errors"
-	"slices"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +19,7 @@ func space() tea.Msg { return tea.KeyPressMsg(tea.Key{Code: tea.KeySpace, Text: 
 
 func started(t *testing.T, existing bool) *Model {
 	t.Helper()
-	m := New(Config{Backend: &setup.Demo{ExistingInstall: existing, Speed: 50}, Target: "/tmp/x86qw", Lang: PT, Theme: "dark"})
+	m := New(Config{Backend: &setup.Demo{ExistingInstall: existing, Speed: 50}, Target: shortTarget(t), Lang: PT, Theme: "dark"})
 	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
 	drive(m, run(m.Init())...)
 	return m
@@ -119,8 +121,47 @@ func TestPanelNavigation(t *testing.T) {
 	}
 }
 
+// shortTarget is a folder that does not exist yet, short enough for a
+// server (a macOS temp dir is too deep for MVDSV).
+func shortTarget(t *testing.T) string {
+	t.Helper()
+	base := "/tmp"
+	if runtime.GOOS == "windows" {
+		base = ""
+	}
+	dir, err := os.MkdirTemp(base, "x86qw-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	return filepath.Join(dir, "x86qw")
+}
+
+// busyPort is the demo with something holding UDP 27500: whatever the
+// machine's ports, the preflight warns while the server starts there.
+type busyPort struct{ *setup.Demo }
+
+func (b busyPort) Preflight(ctx context.Context, options setup.Options) <-chan setup.Check {
+	out := make(chan setup.Check)
+	go func() {
+		defer close(out)
+		for check := range b.Demo.Preflight(ctx, options) {
+			if check.ID == "ports" && check.State != setup.CheckRunning {
+				check.State, check.Says.Value = setup.CheckOK, setup.Say("ports.free")
+				if options.Server.BasePort == 27500 {
+					check.State, check.Says.Value = setup.CheckWarning, setup.Say("ports.busy")
+				}
+			}
+			out <- check
+		}
+	}()
+	return out
+}
+
 func TestPreflightWarningWaitsAndCorrects(t *testing.T) {
-	m := started(t, false)
+	m := New(Config{Backend: busyPort{&setup.Demo{Speed: 50}}, Target: shortTarget(t), Lang: PT, Theme: "dark"})
+	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
+	drive(m, run(m.Init())...)
 	drive(m, typeText("x86dx2")...)
 	drive(m, key("down"), key("down"), key("enter"), key("i"))
 	if m.screen != scConfigure || !m.preOn || m.preflightOutcome() != setup.CheckWarning {
@@ -139,7 +180,11 @@ func TestPreflightWarningWaitsAndCorrects(t *testing.T) {
 	if m.screen != scConfigure || !m.preDone || m.preflightOutcome() != setup.CheckOK {
 		t.Fatalf("o pré-voo deveria rodar de novo e passar: tela %d, %v", m.screen, m.preflightOutcome())
 	}
-	m.Update(key("enter"))
+	// The checks ran again for the edit: the focus stays where the user is.
+	if m.confirmRows()[m.focus].id != "server" {
+		t.Fatalf("o foco saltou para %s", m.confirmRows()[m.focus].id)
+	}
+	m.Update(key("i"))
 	if m.screen != scInstall {
 		t.Fatalf("enter deveria instalar: %d", m.screen)
 	}
@@ -256,16 +301,22 @@ func TestFailedInstallExplainsAndGoesBack(t *testing.T) {
 	}
 }
 
-func TestDoneHandsTheNextCommandToTheCLI(t *testing.T) {
-	m := New(Config{Backend: &setup.Demo{}, Target: "/x", Lang: PT})
-	m.opts = setup.Defaults(setup.Both, "/x")
-	m.screen = scDone
-	if cmd := m.activateDone("play"); cmd == nil || strings.Join(m.next, " ") != "play --target /x" {
-		t.Fatalf("jogar: %v", m.next)
+// TestDoneOpensTheApp: the last step leads into the installation's app,
+// and esc goes to its home.
+func TestDoneOpensTheApp(t *testing.T) {
+	m := started(t, true)
+	m.opts = setup.Defaults(setup.Both, m.cfg.Target)
+	for id, want := range map[string]screen{"play": scMatch, "server": scHost, "find": scServers} {
+		m.screen = scDone
+		m.activateDone(id)
+		if m.screen != want || m.next != nil {
+			t.Fatalf("%s: tela %d, próximo %v", id, m.screen, m.next)
+		}
 	}
-	m.activateDone("server")
-	if m.next[0] != "host" || !slices.Contains(m.next, "x86qw-1") {
-		t.Fatalf("servidor: %v", m.next)
+	m.screen = scDone
+	drive(m, key("esc"))
+	if m.screen != scPanel {
+		t.Fatalf("esc no fim deveria ir ao início: %d", m.screen)
 	}
 }
 

@@ -33,6 +33,7 @@ type formRow struct {
 	lines       []string
 	activate    func()          // radio pick, toggle, action
 	step        func(delta int) // stepper
+	coarse      bool            // a number: shift+← → steps by ten
 }
 
 func (r formRow) focusable() bool {

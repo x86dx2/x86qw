@@ -1,21 +1,26 @@
 package setup
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 )
 
-// RecipeFlags are the flags Recipe writes; their presence makes `x86qw
-// setup` install without asking.
-var RecipeFlags = []string{"intent", "nick", "content", "keys", "sensitivity", "invert-mouse", "experience", "video", "volume",
+// RecipeFlags are the flags Recipe writes, and --recipe for the file
+// RecipeJSON writes; --intent or --recipe makes `x86qw setup` install
+// without asking.
+var RecipeFlags = []string{"recipe", "intent", "nick", "content", "keys", "sensitivity", "invert-mouse", "experience", "video", "volume",
 	"server-name", "hostname", "servers", "base-port", "qtv", "qwfwd", "local", "slots", "no-record", "integrate"}
 
 // AddRecipeFlags declares the recipe flags on flags and returns how to
 // read them into options once parsed. target is the installation folder.
+// A --recipe file starts the options; the flags given change them.
 func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
+	recipe := flags.String("recipe", "", "receita JSON copiada do instalador: instala sem perguntar")
 	intent := flags.String("intent", "", "play, host ou both: instala sem perguntar")
 	nick := flags.String("nick", "", "seu nick")
 	content := flags.String("content", "", "essential, recommended, complete ou uma lista de componentes")
@@ -36,10 +41,22 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 	slots := flags.Int("slots", 0, "vagas por instância, de 2 a 32")
 	noRecord := flags.Bool("no-record", false, "não grava demos MVD")
 	return func(target string) (Options, error) {
-		o := Defaults(Intent(*intent), target)
 		given := map[string]bool{}
 		flags.Visit(func(f *flag.Flag) { given[f.Name] = true })
-		o.Nick = *nick
+		o := Defaults(Intent(*intent), target)
+		if given["recipe"] {
+			loaded, err := loadRecipe(*recipe, target)
+			if err != nil {
+				return o, err
+			}
+			o = loaded
+			if given["intent"] {
+				o.Intent = Intent(*intent)
+			}
+		}
+		if given["nick"] {
+			o.Nick = *nick
+		}
 		if given["content"] {
 			switch *content {
 			case "essential", "recommended", "complete":
@@ -60,7 +77,9 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 		if given["sensitivity"] {
 			o.Mouse.Sensitivity = *sensitivity
 		}
-		o.Mouse.Invert = *invert
+		if given["invert-mouse"] {
+			o.Mouse.Invert = *invert
+		}
 		if given["experience"] {
 			o.Experience = *experience
 		}
@@ -78,7 +97,9 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 		if given["server-name"] {
 			o.Server.Name = *serverName
 		}
-		o.Server.Hostname = strings.ToLower(*hostname)
+		if given["hostname"] {
+			o.Server.Hostname = strings.ToLower(*hostname)
+		}
 		if given["servers"] {
 			o.Server.Instances = nil
 			for _, item := range splitList(*servers) {
@@ -93,7 +114,12 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 		if given["base-port"] {
 			o.Server.BasePort = *basePort
 		}
-		o.Server.Local, o.Server.NoRecord = *local, *noRecord
+		if given["local"] {
+			o.Server.Local = *local
+		}
+		if given["no-record"] {
+			o.Server.NoRecord = *noRecord
+		}
 		if given["slots"] {
 			o.Server.Slots = *slots
 		}
@@ -134,6 +160,43 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 		}
 		return o, o.Validate()
 	}
+}
+
+// ReadRecipe reads what RecipeJSON wrote. The folder of the machine that
+// wrote it does not come along: Target is empty for the caller to set. A
+// server gets an rcon password of its own; the recipe carries none. The
+// options are validated once Target is set (Options.Validate).
+func ReadRecipe(r io.Reader) (Options, error) {
+	var file recipeFile
+	decoder := json.NewDecoder(io.LimitReader(r, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&file); err != nil {
+		return Options{}, fmt.Errorf("receita JSON inválida: %w", err)
+	}
+	if file.Format != 1 {
+		return Options{}, fmt.Errorf("receita JSON de formato %d desconhecido", file.Format)
+	}
+	o := file.Options
+	o.Target, o.Upgrade = "", false
+	if o.Server.Rcon == "" {
+		o.Server.Rcon = Password(14)
+	}
+	return o, nil
+}
+
+// loadRecipe reads the recipe file at path for an installation at target.
+func loadRecipe(path, target string) (Options, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return Options{}, fmt.Errorf("--recipe: %w", err)
+	}
+	defer file.Close()
+	o, err := ReadRecipe(file)
+	if err != nil {
+		return Options{}, fmt.Errorf("--recipe: %s: %w", path, err)
+	}
+	o.Target = target
+	return o, nil
 }
 
 func parseVideo(value string, video *Video) error {

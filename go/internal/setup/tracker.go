@@ -169,12 +169,12 @@ func (t *tracker) tick(now time.Time) Progress {
 
 // track runs work with the tracker's observer and streams snapshots until
 // it ends; the last one is Finished, or carries the error.
-func track(ctx context.Context, t *tracker, control <-chan bool, work func(ctx context.Context) ([]string, error)) <-chan Progress {
+func track(ctx context.Context, t *tracker, control <-chan bool, work func(ctx context.Context) ([]Text, error)) <-chan Progress {
 	// One slot of buffer lets the last snapshot be left behind when nobody
 	// reads any more.
 	out := make(chan Progress, 1)
 	done := make(chan struct{})
-	var warnings []string
+	var warnings []Text
 	var failure error
 	go func() {
 		defer close(done)
@@ -204,7 +204,10 @@ func track(ctx context.Context, t *tracker, control <-chan bool, work func(ctx c
 		<-done
 		last := t.tick(time.Now())
 		last.Holding, last.Paused, last.Speed, last.ETA = false, false, 0, 0
-		last.Warnings = warnings
+		last.Notes = warnings
+		for _, warning := range warnings {
+			last.Warnings = append(last.Warnings, warning.String())
+		}
 		if failure != nil {
 			last.Err = failure
 		} else {

@@ -19,6 +19,10 @@ type Catalog struct {
 	CoreSize   int64            // the id1 game data, always installed
 	ClientSize map[string]int64 // ezQuake per platform
 	Modes      []Mode
+	// Unavailable is why the published catalog could not be read: the
+	// components come from the inventory, without sizes, and nothing can
+	// be installed until it answers.
+	Unavailable error
 }
 
 // Mode is a KTX game mode a server instance can run.
@@ -42,10 +46,32 @@ const (
 	CheckFailed
 )
 
-// Check is one preflight result.
+// Check is one preflight result: in Portuguese for the command line, and
+// in Says for an interface in any language. A check that starts arrives
+// first as CheckRunning with its title, then again with how it ended.
 type Check struct {
-	ID, Title, Detail, Value, Fix string
-	State                         CheckState
+	ID                        string
+	Title, Detail, Value, Fix string
+	State                     CheckState
+	Says                      CheckText
+}
+
+// CheckText is what a check says, to translate.
+type CheckText struct {
+	Title, Detail, Value, Fix Text
+}
+
+// found is a check as the backend writes it, before check renders the
+// Portuguese the command line prints.
+type found struct {
+	ID                        string
+	Title, Detail, Value, Fix Text
+	State                     CheckState
+}
+
+func (f found) check() Check {
+	return Check{ID: f.ID, Title: f.Title.String(), Detail: f.Detail.String(), Value: f.Value.String(), Fix: f.Fix.String(), State: f.State,
+		Says: CheckText{Title: f.Title, Detail: f.Detail, Value: f.Value, Fix: f.Fix}}
 }
 
 // Lane is one component being installed.
@@ -66,8 +92,11 @@ type Progress struct {
 	Finished, Paused bool
 	// Holding is true once a paused installation has stopped: it pauses
 	// between packages, so Paused can come before Holding.
-	Holding  bool
-	Warnings []string // what the installation preserved or could not do
+	Holding bool
+	// Warnings is what the installation preserved or could not do, in
+	// Portuguese; Notes is the same to translate.
+	Warnings []string
+	Notes    []Text
 	Err      error
 }
 
@@ -86,11 +115,19 @@ type Existing struct {
 	Installed          []string // component IDs; the setup adds, never removes
 	Updates            []Update
 	Options            Options
+	// UpdatesErr is why the updates are unknown: the published catalog did
+	// not answer. The installation still plays and hosts.
+	UpdatesErr error
+	// Note is something the interface says once it opens: the choices
+	// could not be read, so the defaults stand in.
+	Note Text
 }
 
-// Update is one component with a newer version.
+// Update is one component with a newer version. ID is the component, the
+// core package, "client" or "cli".
 type Update struct {
-	ID, Label, From, To, Note string
+	ID, Label, To string
+	From, Note    Text
 }
 
 // Backend is what the interfaces talk to; the demo backend fakes it for
@@ -118,6 +155,8 @@ type Backend interface {
 	Play(ctx context.Context, target string, match Match) error
 	// Servers lists public servers, or the favorites when offline.
 	Servers(ctx context.Context, target string) ([]PublicServer, error)
+	// Favorite pins a server (on) or unpins it.
+	Favorite(ctx context.Context, target, address string, on bool) error
 	// Open connects ezQuake to a qw:// address.
 	Open(ctx context.Context, target, address string) error
 	// Stack reports the running server session, nil when none runs.
