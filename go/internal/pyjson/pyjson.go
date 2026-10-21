@@ -1,8 +1,12 @@
-// Package pyjson encodes values exactly like Python's
-// json.dumps(value, ensure_ascii=False, sort_keys=True[, indent=N]).
+// Package pyjson encodes values the way the x86QW documents are written:
+// sorted keys, no ASCII escaping, ", " and ": " on one line or N-space
+// indent (what Python's json.dumps(ensure_ascii=False, sort_keys=True)
+// writes, which the published files keep).
 package pyjson
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -69,10 +73,36 @@ func write(b *strings.Builder, value any, indent, depth int) error {
 		return writeMap(b, items, indent, depth)
 	case map[string]any:
 		return writeMap(b, v, indent, depth)
+	case json.Number:
+		b.WriteString(v.String())
 	default:
-		return fmt.Errorf("tipo JSON não suportado: %T", value)
+		// Any other value goes through encoding/json first, keeping its
+		// numbers exact.
+		payload, err := json.Marshal(value)
+		if err != nil {
+			return fmt.Errorf("tipo JSON não suportado: %T", value)
+		}
+		decoder := json.NewDecoder(bytes.NewReader(payload))
+		decoder.UseNumber()
+		var generic any
+		if err := decoder.Decode(&generic); err != nil {
+			return err
+		}
+		return write(b, generic, indent, depth)
 	}
 	return nil
+}
+
+// Decode parses JSON keeping numbers as json.Number, so Dumps writes them
+// back unchanged.
+func Decode(payload []byte) (any, error) {
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return nil, err
+	}
+	return value, nil
 }
 
 func newline(b *strings.Builder, indent, depth int) {

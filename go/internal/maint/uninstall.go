@@ -128,17 +128,6 @@ func Uninstall(target string) (*Report, error) {
 	if lexists(filepath.Join(target, filepath.FromSlash(nquakeReceipt))) || legacyLayout(target) {
 		return nil, errors.New("esta instalação usa metadados anteriores ao 1.0 que esta versão não desinstala; reinstale antes")
 	}
-	metadataNames := []string{nquakeInventory, nquakeReceipt, cliReceipt, legacyCLIReceipt, stateRelative}
-	for _, id := range componentRecordIDs(target) {
-		metadataNames = append(metadataNames, componentsRelative+"/"+id+"/receipt", componentsRelative+"/"+id+"/inventory")
-	}
-	for _, spec := range catalog.ClientSpecs {
-		metadataNames = append(metadataNames, spec.Receipt("stable"), spec.Receipt("nightly"))
-	}
-	anyMetadata := false
-	for _, name := range metadataNames {
-		anyMetadata = anyMetadata || lexists(filepath.Join(target, filepath.FromSlash(name)))
-	}
 	held, err := lock.Acquire(target, "uninstall")
 	if err != nil {
 		return nil, err
@@ -149,13 +138,8 @@ func Uninstall(target string) (*Report, error) {
 			held.Release()
 		}
 	}()
-	if !anyMetadata {
-		report.info("Nenhum runtime gerenciado está instalado em %s.", target)
-		for _, path := range cliPaths(target) {
-			os.RemoveAll(path)
-		}
-		return report, nil
-	}
+	// RequireManagedIdentity found the state or a receipt, so there is
+	// always metadata to remove from here on.
 	for _, id := range componentRecordIDs(target) {
 		if _, err := receipt.Load(filepath.Join(target, filepath.FromSlash(componentsRelative), id)); err != nil {
 			return nil, err

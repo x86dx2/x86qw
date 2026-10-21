@@ -7,6 +7,17 @@ import (
 	"testing"
 )
 
+// publicCommandNames lists the commands `x86qw help` shows.
+func publicCommandNames() []string {
+	var names []string
+	for _, group := range groups {
+		for _, cmd := range listed(group) {
+			names = append(names, cmd.name)
+		}
+	}
+	return names
+}
+
 // Every listed command answers --help and `x86qw help NAME` with its
 // usage, and the listing names every one of them.
 func TestEveryCommandHasHelp(t *testing.T) {

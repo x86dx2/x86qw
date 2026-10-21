@@ -10,19 +10,6 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/play"
 )
 
-func TestPyDumpsMatchesPython(t *testing.T) {
-	value := map[string]any{"b": []any{1, "á\n"}, "a": nil, "c": map[string]any{}, "d": true}
-	// json.dumps(value, ensure_ascii=False, sort_keys=True)
-	if got, want := pyDumps(value, false), `{"a": null, "b": [1, "á\n"], "c": {}, "d": true}`; got != want {
-		t.Fatalf("got %s want %s", got, want)
-	}
-	// json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2)
-	want := "{\n  \"a\": null,\n  \"b\": [\n    1,\n    \"á\\n\"\n  ],\n  \"c\": {},\n  \"d\": true\n}"
-	if got := pyDumps(value, true); got != want {
-		t.Fatalf("got %q want %q", got, want)
-	}
-}
-
 func games(t *testing.T) []play.Game {
 	t.Helper()
 	loaded, err := play.LoadGames()

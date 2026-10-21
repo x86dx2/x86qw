@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/lock"
+	"github.com/x86dx2/x86qw/go/internal/pyjson"
 )
 
 // These tests supervise /bin/sleep and /bin/sh stand-ins; no game server is
@@ -67,7 +68,7 @@ func TestSupervisorStopRequest(t *testing.T) {
 		deadline := time.Now().Add(10 * time.Second)
 		for time.Now().Before(deadline) {
 			if data, err := LoadJournal(journal.Path); err == nil && data["status"] == "running" {
-				payload := pyDumps(map[string]any{"format": 1, "project": "x86qw", "session_id": journal.SessionID, "requested_at": isoNow()}, false)
+				payload, _ := pyjson.Dumps(map[string]any{"format": 1, "project": "x86qw", "session_id": journal.SessionID, "requested_at": isoNow()}, -1)
 				publishStopRequest(filepath.Join(journal.Directory, "stop.request"), []byte(payload+"\n"))
 				return
 			}

@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/x86dx2/x86qw/go/internal/play"
 )
 
 // Intent is what the person wants to do with x86QW.
@@ -352,5 +354,5 @@ type recipeFile struct {
 }
 
 // RulesetKeys are the client rulesets `x86qw play` knows, the recommended
-// one first.
-var RulesetKeys = []string{"x86qw", "qcon", "smackdown", "thunderdome", "mtfl", "smackdrive"}
+// one first; play owns the list.
+var RulesetKeys = play.RulesetKeys

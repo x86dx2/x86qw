@@ -25,20 +25,38 @@ var GamesJSON []byte
 // playSupportVersion mirrors PLAY_SUPPORT_VERSION in gameplay.py.
 const playSupportVersion = "8"
 
-// Game is the subset of a local game spec play-support needs.
+// Game is one entry of games.json: what installs it, what play and host
+// pass to ezQuake and MVDSV, and its play-support files.
 type Game struct {
-	ID                  string   `json:"id"`
-	Label               string   `json:"label"`
-	Component           string   `json:"component"`
-	Marker              string   `json:"marker"`
-	Gamecode            string   `json:"gamecode"`
-	PlaySupportGamecode string   `json:"play_support_gamecode"`
-	PersonalConfig      string   `json:"personal_config"`
-	LegacyMarker        string   `json:"legacy_marker"`
-	LegacyComponents    []string `json:"legacy_components"`
-	Description         string   `json:"description"`
-	Version             string   `json:"version"`
+	ID                           string      `json:"id"`
+	Label                        string      `json:"label"`
+	Description                  string      `json:"description"`
+	Component                    string      `json:"component"`
+	Version                      string      `json:"version"`
+	Gamedir                      string      `json:"gamedir"`
+	Gamecode                     string      `json:"gamecode"`
+	Marker                       string      `json:"marker"`
+	PlaySupportGamecode          string      `json:"play_support_gamecode"`
+	PersonalConfig               string      `json:"personal_config"`
+	LegacyMarker                 string      `json:"legacy_marker"`
+	LegacyComponents             []string    `json:"legacy_components"`
+	DefaultMap                   string      `json:"default_map"`
+	SuggestedMaps                []string    `json:"suggested_maps"`
+	PreMapArguments              []string    `json:"pre_map_arguments"`
+	PostMapArguments             []string    `json:"post_map_arguments"`
+	LocalServerSettings          [][2]string `json:"local_server_settings"`
+	LegacyRemoteCapabilities     []string    `json:"legacy_remote_capabilities"`
+	ClientGameArguments          []string    `json:"client_game_arguments"`
+	PreConnectArguments          []string    `json:"pre_connect_arguments"`
+	ClientCompatibilityArguments []string    `json:"client_compatibility_arguments"`
+	ModeCatalog                  string      `json:"mode_catalog"`
+	BotNamesPersonalConfig       string      `json:"bot_names_personal_config"`
+	DedicatedArguments           []string    `json:"dedicated_arguments"`
+	DedicatedSettings            [][2]string `json:"dedicated_settings"`
 }
+
+// UsesModeCatalog reports whether the game is played through KTX modes.
+func (g Game) UsesModeCatalog() bool { return g.ModeCatalog != "" }
 
 // LoadGames parses the embedded games catalog.
 func LoadGames() ([]Game, error) {

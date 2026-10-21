@@ -98,8 +98,13 @@ func (l *Layer) write(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	if runtime.GOOS == "windows" && existed {
-		// A running exe cannot be replaced; move it aside first.
-		os.Rename(path, path+".old")
+		// A running exe cannot be replaced, only renamed: move it aside.
+		// What a previous update moved aside goes first; TidyAside removes
+		// it once that process has ended.
+		os.Remove(path + asideSuffix)
+		if err := os.Rename(path, path+asideSuffix); err != nil {
+			return fmt.Errorf("a CLI em uso não pôde ser substituída: %w", err)
+		}
 	}
 	if err := os.Rename(temporary.Name(), path); err != nil {
 		return err

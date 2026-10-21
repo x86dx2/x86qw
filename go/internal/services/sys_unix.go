@@ -212,4 +212,3 @@ func spawnBackgroundController(executable string, arguments []string, request []
 var _ = lock.Identity
 
 // replaceFile atomically moves temporary over path.
-func replaceFile(temporary, path string) error { return os.Rename(temporary, path) }

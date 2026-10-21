@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -181,13 +180,8 @@ func (s *State) Installed() []string {
 	return result
 }
 
-// Marshal encodes the document the way the Python installer does:
-// json.dumps(indent=2, sort_keys=True, ensure_ascii=False) + "\n".
-func (s *State) Marshal() ([]byte, error) {
-	return MarshalDocument(s.document)
-}
-
-// MarshalDocument validates and encodes a state document.
+// MarshalDocument validates and encodes a state document: two-space
+// indent, sorted keys, no HTML escaping and a final newline.
 func MarshalDocument(document map[string]any) ([]byte, error) {
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
@@ -262,10 +256,4 @@ func (s *State) Migrate(targetVersion string) map[string]any {
 		document["installation_version"] = marker
 	}
 	return document
-}
-
-// IsInvalid reports whether err is a state validation error.
-func IsInvalid(err error) bool {
-	var target *Error
-	return errors.As(err, &target)
 }

@@ -44,8 +44,8 @@ func requireHydrated(t *testing.T, root string) {
 func cloneCheckout(t *testing.T, root string) string {
 	t.Helper()
 	target := filepath.Join(t.TempDir(), "x86qw")
-	if output, err := exec.Command("cp", "-cR", root, target).CombinedOutput(); err != nil {
-		if output, err = exec.Command("cp", "-R", root, target).CombinedOutput(); err != nil {
+	if _, err := exec.Command("cp", "-cR", root, target).CombinedOutput(); err != nil {
+		if output, err := exec.Command("cp", "-R", root, target).CombinedOutput(); err != nil {
 			t.Fatalf("clone: %v: %s", err, output)
 		}
 	}

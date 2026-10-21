@@ -35,3 +35,14 @@ func Publish(root, version string, sameToo, link bool) (string, error) {
 	}
 	return command, nil
 }
+
+// asideSuffix names the Windows executable an update moved aside.
+const asideSuffix = ".old"
+
+// TidyAside removes the executable an earlier update moved aside on
+// Windows, once nothing runs it any more; elsewhere there is none.
+func TidyAside() {
+	if executable, err := os.Executable(); err == nil {
+		os.Remove(executable + asideSuffix)
+	}
+}

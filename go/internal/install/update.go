@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/x86dx2/x86qw/go/internal/atomicfile"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/download"
@@ -291,7 +292,7 @@ func prepareCache(root string) error {
 	if err := privfs.MkdirAll(root); err != nil {
 		return err
 	}
-	return atomicWrite(filepath.Join(root, cacheMarker), []byte("x86qw-cache-v1\n"), 0o600)
+	return atomicfile.Write(filepath.Join(root, cacheMarker), []byte("x86qw-cache-v1\n"), 0o600)
 }
 
 // refuseConfigMigrations stops when the Python installer would also rewrite

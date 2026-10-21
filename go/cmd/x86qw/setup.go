@@ -162,43 +162,31 @@ func runRecipe(backend *setup.Real, options setup.Options, yes bool, stdout, std
 	if proceed, code := confirm("Instalar em "+options.Target+" com esta receita?", recipe, yes, stdout, stderr); !proceed {
 		return code
 	}
-	ctx := context.Background()
-	blocked := false
-	for check := range backend.Preflight(ctx, options) {
-		text := check.Title + "  " + check.Value
-		switch check.State {
-		case setup.CheckFailed:
-			blocked = true
-			con.failure(text + " — " + strings.TrimSpace(check.Detail+" "+check.Fix))
-		case setup.CheckWarning:
-			con.warning(text + " — " + strings.TrimSpace(check.Detail+" "+check.Fix))
-		default:
-			con.success(text)
-		}
-	}
-	if blocked {
-		return output.ExitFailure
-	}
 	// Ctrl+C cancels and waits for the rollback instead of exiting midway.
-	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	announced := map[string]bool{}
-	var last setup.Progress
-	for progress := range backend.Install(ctx, options, nil) {
-		for _, lane := range progress.Lanes {
-			if !announced[lane.ID] && lane.FileCount > 0 && lane.Files >= lane.FileCount {
-				announced[lane.ID] = true
-				con.success(fmt.Sprintf("%s · %d arquivos", lane.Label, lane.Files))
+	last, err := setup.RunRecipe(ctx, backend, options, setup.RecipeReport{
+		Check: func(check setup.Check) {
+			text := check.Title + "  " + check.Value
+			switch check.State {
+			case setup.CheckFailed:
+				con.failure(text + " — " + strings.TrimSpace(check.Detail+" "+check.Fix))
+			case setup.CheckWarning:
+				con.warning(text + " — " + strings.TrimSpace(check.Detail+" "+check.Fix))
+			default:
+				con.success(text)
 			}
-		}
-		last = progress
-	}
+		},
+		Landed: func(lane setup.Lane) { con.success(fmt.Sprintf("%s · %d arquivos", lane.Label, lane.Files)) },
+	})
 	switch {
-	case errors.Is(last.Err, context.Canceled):
+	case errors.Is(err, setup.ErrBlocked):
+		return output.ExitFailure
+	case errors.Is(err, context.Canceled):
 		con.failure("Instalação cancelada; a pasta voltou ao que era.")
 		return output.ExitInterrupted
-	case last.Err != nil:
-		con.failure(last.Err.Error() + " — a pasta voltou ao que era.")
+	case err != nil:
+		con.failure(err.Error() + " — a pasta voltou ao que era.")
 		return output.ExitFailure
 	}
 	for _, warning := range last.Warnings {

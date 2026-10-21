@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/atomicfile"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 )
@@ -194,12 +195,5 @@ func SyncGitignore(target string) error {
 	if err != nil {
 		return err
 	}
-	temporary := filepath.Join(target, ".gitignore.tmp")
-	if err := os.WriteFile(temporary, []byte(payload), 0o644); err != nil {
-		return err
-	}
-	if err := os.Chmod(temporary, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(temporary, filepath.Join(target, ".gitignore"))
+	return atomicfile.Write(filepath.Join(target, ".gitignore"), []byte(payload), 0o644)
 }

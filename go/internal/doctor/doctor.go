@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/fspath"
+	"github.com/x86dx2/x86qw/go/internal/install"
 )
 
 const (
@@ -106,6 +107,9 @@ func installation(target string) (string, string) {
 	}
 	if _, err := os.Stat(target); err != nil {
 		return "fail", "instalação ausente"
+	}
+	if !install.Installed(target) {
+		return "warn", "nenhuma instalação x86QW nesta pasta"
 	}
 	state := filepath.Join(target, ".x86qw", "state.json")
 	if info, err := os.Lstat(state); err != nil || !info.Mode().IsRegular() {

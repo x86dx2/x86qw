@@ -113,20 +113,20 @@ func SelectHosted(target string, o *HostOptions) (*Hosted, error) {
 	if err := install.CheckPaks(target); err != nil {
 		return nil, err
 	}
-	installGames, err := install.LoadGames()
+	games, err := install.LoadGames()
 	if err != nil {
 		return nil, err
 	}
-	available := install.AvailableGames(target, installGames)
+	available := install.AvailableGames(target, games)
 	if len(available) == 0 {
 		return nil, errorf("Nenhum mod gerenciado está instalado. Execute o bootstrap e selecione um jogo.")
 	}
 	if o.Game == "" {
-		return nil, errorf("Informe o jogo a hospedar (ktx, final-arena, pro-x, team-fortress ou td2) ou use --menu.")
-	}
-	games, err := play.LoadGames()
-	if err != nil {
-		return nil, err
+		ids := make([]string, len(available))
+		for index, game := range available {
+			ids[index] = game.ID
+		}
+		return nil, errorf("Informe o jogo a hospedar (%s) ou use --menu.", strings.Join(ids, ", "))
 	}
 	var installed *install.Game
 	for index := range available {
@@ -311,28 +311,18 @@ func HostSpec(target string, o *HostOptions, hosted *Hosted, session *Session, j
 		return nil, err
 	}
 	game := hosted.Game
-	installGames, err := install.LoadGames()
-	if err != nil {
-		return nil, err
-	}
-	for _, candidate := range installGames {
-		if candidate.ID != game.ID {
-			continue
+	if marker := gameMarkerPath(target, game); strings.EqualFold(filepath.Ext(marker), ".pk3") && !session.published[marker] {
+		if session.published == nil {
+			session.published = map[string]bool{}
 		}
-		marker := gameMarkerPath(target, candidate)
-		if strings.EqualFold(filepath.Ext(marker), ".pk3") && !session.published[marker] {
-			if session.published == nil {
-				session.published = map[string]bool{}
-			}
-			session.published[marker] = true
-			gamedir := filepath.Join(target, game.Gamedir)
-			materialized, err := MaterializePK3(marker, gamedir, game.Label, journal)
-			if err != nil {
-				return nil, err
-			}
-			materialized.SuppressAutoexec(gamedir)
-			session.Materialized = append(session.Materialized, materialized)
+		session.published[marker] = true
+		gamedir := filepath.Join(target, game.Gamedir)
+		materialized, err := MaterializePK3(marker, gamedir, game.Label, journal)
+		if err != nil {
+			return nil, err
 		}
+		materialized.SuppressAutoexec(gamedir)
+		session.Materialized = append(session.Materialized, materialized)
 	}
 	hostname := o.Hostname
 	if hostname == "" {

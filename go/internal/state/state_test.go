@@ -2,6 +2,7 @@ package state
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,7 +49,7 @@ func TestParseAndRoundTrip(t *testing.T) {
 	if state.Profile != "essential" || len(state.RecordedComponents) != 2 {
 		t.Fatalf("estado inesperado: %+v", state)
 	}
-	encoded, err := state.Marshal()
+	encoded, err := MarshalDocument(state.document)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +70,7 @@ func TestRejectsInvalidStates(t *testing.T) {
 	}
 	for name, payload := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := Parse([]byte(payload)); err == nil || !IsInvalid(err) {
+			if _, err := Parse([]byte(payload)); err == nil || !errors.As(err, new(*Error)) {
 				t.Fatalf("estado inválido aceito: %v", err)
 			}
 		})
@@ -96,7 +97,7 @@ func TestRealInstallation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	encoded, _ := state.Marshal()
+	encoded, _ := MarshalDocument(state.document)
 	if !bytes.Equal(encoded, payload) {
 		t.Fatal("round-trip da instalação real diverge")
 	}
