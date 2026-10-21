@@ -83,10 +83,14 @@ func setHandlers(root string, links, demos bool) error {
 		errs = append(errs, errors.New("The x86qw.demo type belongs to another installation."))
 		return errors.Join(errs...)
 	}
-	if demos {
+	switch {
+	case demos:
 		errs = append(errs, writeCommand(classes+demoProgID, root, "QuakeWorld demo", false))
-	} else if owned {
+	case owned:
 		errs = append(errs, deleteTree(classes+demoProgID))
+	case exists:
+		// The demo type is another installation's, and so are .mvd and .qwd.
+		return errors.Join(errs...)
 	}
 	for _, extension := range []string{".mvd", ".qwd"} {
 		key, _, err := registry.CreateKey(registry.CURRENT_USER, classes+extension, registry.QUERY_VALUE|registry.SET_VALUE)

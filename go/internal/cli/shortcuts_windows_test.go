@@ -195,3 +195,38 @@ func TestLegacyHandlersAreRewritten(t *testing.T) {
 		t.Fatalf("not rewritten: owned %v, legacy %q", owned, legacyHandlers(root))
 	}
 }
+
+// Turning demos off in one installation leaves .mvd and .qwd to the one
+// whose demo type they open.
+func TestDemosStayWithTheirInstallation(t *testing.T) {
+	const classes = `Software\Classes\`
+	for _, key := range []string{"qw", demoProgID, ".mvd", ".qwd"} {
+		if k, err := registry.OpenKey(registry.CURRENT_USER, classes+key, registry.QUERY_VALUE); err == nil {
+			k.Close()
+			t.Skipf("HKCU\\%s%s already exists on this machine", classes, key)
+		}
+	}
+	t.Cleanup(func() {
+		for _, key := range []string{"qw", demoProgID, ".mvd", ".qwd"} {
+			deleteTree(classes + key)
+		}
+	})
+	root, other := t.TempDir(), t.TempDir()
+	if err := SetHandlers(root, false, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetHandlers(other, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if owned, _ := ownedCommand(classes+demoProgID, root); !owned {
+		t.Fatal("the other installation took the demo type")
+	}
+	for _, extension := range []string{".mvd", ".qwd"} {
+		k, _ := registry.OpenKey(registry.CURRENT_USER, classes+extension, registry.QUERY_VALUE)
+		value, _, _ := k.GetStringValue("")
+		k.Close()
+		if value != demoProgID {
+			t.Fatalf("%s: %q after the other installation turned demos off", extension, value)
+		}
+	}
+}
