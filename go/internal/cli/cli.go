@@ -75,8 +75,7 @@ func Retire(root string) error {
 	binary := legacyPaths(root)[0]
 	if err := os.Remove(binary); err != nil && !errors.Is(err, os.ErrNotExist) {
 		// Windows keeps a running executable, but lets it be renamed.
-		os.Remove(binary + asideSuffix)
-		errs = append(errs, os.Rename(binary, binary+asideSuffix))
+		errs = append(errs, os.Rename(binary, freeAside(binary+asideSuffix)))
 	}
 	if err := os.Remove(filepath.Join(root, "x86qw.sh")); err != nil && !errors.Is(err, os.ErrNotExist) {
 		errs = append(errs, err)
@@ -139,12 +138,11 @@ func (l *Layer) put(path, aside string, data []byte, mode os.FileMode) error {
 	}
 	if runtime.GOOS == "windows" && existed {
 		// A running exe cannot be replaced, only renamed: move it aside.
-		// What a previous update moved aside goes first; TidyAside removes
-		// it once that process has ended.
-		os.Remove(aside)
+		// TidyAside removes it once that process has ended.
 		if err := os.MkdirAll(filepath.Dir(aside), 0o755); err != nil {
 			return err
 		}
+		aside = freeAside(aside)
 		if err := os.Rename(path, aside); err != nil {
 			return fmt.Errorf("the CLI in use could not be replaced: %w", err)
 		}
@@ -317,4 +315,20 @@ func resolvePath(path string) string {
 		return filepath.Join(dir, filepath.Base(path))
 	}
 	return filepath.Clean(path)
+}
+
+// freeAside is where a running executable can move: aside, once what an
+// earlier update moved there is gone; while that one still runs (an app
+// left open across two updates), aside.1, aside.2 and so on.
+func freeAside(aside string) string {
+	for index := 0; ; index++ {
+		candidate := aside
+		if index > 0 {
+			candidate = fmt.Sprintf("%s.%d", aside, index)
+		}
+		os.Remove(candidate)
+		if _, err := os.Lstat(candidate); errors.Is(err, os.ErrNotExist) {
+			return candidate
+		}
+	}
 }

@@ -803,15 +803,20 @@ func (m *Model) filesLine(p *page, pr setup.Progress) string {
 	return done + p.st(t.Gray).Render(fmt.Sprintf(" %s %d %s", m.t("inst.of"), filesTotal(pr), m.t("inst.files")))
 }
 
-// installFailure explains a failed installation: it was rolled back.
+// installFailure explains a failed installation: it was rolled back, or,
+// when only the new CLI failed, the content stays updated.
 func (m *Model) installFailure(p *page, err error) {
 	t := m.theme
-	p.add(p.st(t.Error).Bold(true).Render("  " + m.glyphs.Fail + "  " + m.t("inst.failed")))
+	title, lead := m.t("inst.failed"), m.t("inst.rolled")
+	if setup.ContentUpdated(err) {
+		title, lead = m.t("inst.partial"), m.t("inst.partial.d")
+	}
+	p.add(p.st(t.Error).Bold(true).Render("  " + m.glyphs.Fail + "  " + title))
 	for _, line := range strings.Split(lipgloss.Wrap(m.explain(err), p.width-7, " "), "\n") {
 		p.add(p.st(t.Text2).Render("     " + line))
 	}
 	p.gap(1)
-	p.lead(m.t("inst.rolled"))
+	p.lead(lead)
 }
 
 func filesDone(pr setup.Progress) int {

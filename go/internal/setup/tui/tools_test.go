@@ -1,8 +1,11 @@
 package tui
 
 import (
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/x86dx2/x86qw/go/internal/setup"
 )
 
 func toolNamed(name string) *toolSpec {
@@ -82,5 +85,23 @@ func TestToolReportScrolls(t *testing.T) {
 	}
 	if after := len(strings.Split(m.View().Content, "\n")); after != before {
 		t.Fatalf("the panel moved: %d lines, then %d", before, after)
+	}
+}
+
+// A quiet check that finds new versions shows them without touching the
+// choices on screen.
+func TestQuietCheckShowsNewUpdates(t *testing.T) {
+	m := started(t, true)
+	m.lang = EN
+	before := len(m.existing.Updates)
+	opts := m.opts
+	found := *m.existing
+	found.Updates = append(append([]setup.Update(nil), m.existing.Updates...), setup.Update{ID: "cli", Label: "x86QW CLI", To: "9.9.9"})
+	drive(m, freshMsg{catalog: m.catalog, existing: &found})
+	if len(m.existing.Updates) != before+1 || m.toast != "New versions available" {
+		t.Fatalf("updates %d (was %d), toast %q", len(m.existing.Updates), before, m.toast)
+	}
+	if !reflect.DeepEqual(m.opts, opts) {
+		t.Fatal("the quiet check changed the choices")
 	}
 }

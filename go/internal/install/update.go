@@ -29,6 +29,10 @@ var (
 	tempAlias          = regexp.MustCompile(`(?i)^\s*tempalias\s+([^\s]+)`)
 )
 
+// ErrContentOnly says an update committed the content but could not put
+// the new CLI in place; the next update tries the CLI again.
+var ErrContentOnly = errors.New("the content was updated, the CLI was not")
+
 // Result reports an applied plan.
 type Result struct {
 	Installed  []string
@@ -157,10 +161,10 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 		// Last: the content is already committed and verified.
 		artifact, err := fetchPackage(ctx, tx, "cli", *cliPackage)
 		if err != nil {
-			return nil, fmt.Errorf("content updated, but the CLI could not be downloaded: %w", err)
+			return nil, fmt.Errorf("%w: the new CLI could not be downloaded: %w", ErrContentOnly, err)
 		}
 		if _, err := cli.Install(in.Root, artifact, cliPackage.Version); err != nil {
-			return nil, fmt.Errorf("content updated, but the CLI could not be replaced: %w", err)
+			return nil, fmt.Errorf("%w: the new CLI could not be replaced: %w", ErrContentOnly, err)
 		}
 		result.CLIVersion = cliPackage.Version
 	}
