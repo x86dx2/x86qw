@@ -6,7 +6,7 @@ import (
 )
 
 // ErrBlocked is RunRecipe's answer when a preflight check failed.
-var ErrBlocked = errors.New("o pré-voo encontrou um problema; nada foi instalado")
+var ErrBlocked = errors.New("the preflight found a problem; nothing was installed")
 
 // RecipeReport is what RunRecipe tells as it goes; nil fields are skipped.
 type RecipeReport struct {

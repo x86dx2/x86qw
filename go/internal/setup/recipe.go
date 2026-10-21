@@ -20,26 +20,26 @@ var RecipeFlags = []string{"recipe", "intent", "nick", "content", "keys", "sensi
 // read them into options once parsed. target is the installation folder.
 // A --recipe file starts the options; the flags given change them.
 func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
-	recipe := flags.String("recipe", "", "receita JSON copiada do instalador: instala sem perguntar")
-	intent := flags.String("intent", "", "play, host ou both: instala sem perguntar")
-	nick := flags.String("nick", "", "seu nick")
-	content := flags.String("content", "", "essential, recommended, complete ou uma lista de componentes")
-	keys := flags.String("keys", "", "wasd, esdf, arrows ou cinco teclas: frente,trás,esquerda,direita,pulo")
-	sensitivity := flags.Float64("sensitivity", 0, "sensibilidade do mouse")
-	invert := flags.Bool("invert-mouse", false, "inverte o eixo vertical")
-	experience := flags.String("experience", "", "ruleset do cliente: "+strings.Join(RulesetKeys, ", "))
-	video := flags.String("video", "", "RESOLUÇÃO,MODO,fovN, por exemplo auto,fullscreen,fov110")
-	volume := flags.Int("volume", -1, "volume de 0 a 100")
-	serverName := flags.String("server-name", "", "nome do servidor")
-	hostname := flags.String("hostname", "", "nome DNS público do servidor")
-	servers := flags.String("servers", "", "instâncias MODO:MAPA[+bots] separadas por vírgula")
-	basePort := flags.Int("base-port", 0, "porta UDP da primeira instância")
-	qtv := flags.String("qtv", "", "porta TCP do QTV ou off")
-	qwfwd := flags.String("qwfwd", "", "porta UDP do QWFWD ou off")
-	integrate := flags.String("integrate", "", "shortcuts,path,qw-links,demos ou none")
-	local := flags.Bool("local", false, "o servidor só aceita jogadores desta máquina")
-	slots := flags.Int("slots", 0, "vagas por instância, de 2 a 32")
-	noRecord := flags.Bool("no-record", false, "não grava demos MVD")
+	recipe := flags.String("recipe", "", "recipe JSON copied from the installer: installs without asking")
+	intent := flags.String("intent", "", "play, host or both: installs without asking")
+	nick := flags.String("nick", "", "your nick")
+	content := flags.String("content", "", "essential, recommended, complete or a list of components")
+	keys := flags.String("keys", "", "wasd, esdf, arrows or five keys: forward,back,left,right,jump")
+	sensitivity := flags.Float64("sensitivity", 0, "mouse sensitivity")
+	invert := flags.Bool("invert-mouse", false, "inverts the vertical axis")
+	experience := flags.String("experience", "", "client ruleset: "+strings.Join(RulesetKeys, ", "))
+	video := flags.String("video", "", "RESOLUTION,MODE,fovN, for example auto,fullscreen,fov110")
+	volume := flags.Int("volume", -1, "volume from 0 to 100")
+	serverName := flags.String("server-name", "", "server name")
+	hostname := flags.String("hostname", "", "the server's public DNS name")
+	servers := flags.String("servers", "", "comma-separated MODE:MAP[+bots] instances")
+	basePort := flags.Int("base-port", 0, "UDP port of the first instance")
+	qtv := flags.String("qtv", "", "QTV TCP port or off")
+	qwfwd := flags.String("qwfwd", "", "QWFWD UDP port or off")
+	integrate := flags.String("integrate", "", "shortcuts,path,qw-links,demos or none")
+	local := flags.Bool("local", false, "the server only takes players from this machine")
+	slots := flags.Int("slots", 0, "slots per instance, 2 to 32")
+	noRecord := flags.Bool("no-record", false, "does not record MVD demos")
 	return func(target string) (Options, error) {
 		given := map[string]bool{}
 		flags.Visit(func(f *flag.Flag) { given[f.Name] = true })
@@ -71,7 +71,7 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 			} else if parts := splitList(*keys); len(parts) == 5 {
 				o.Keys = Keys{Preset: "custom", Forward: parts[0], Back: parts[1], Left: parts[2], Right: parts[3], Jump: parts[4]}
 			} else {
-				return o, fmt.Errorf("--keys: use um layout ou cinco teclas, não %q", *keys)
+				return o, fmt.Errorf("--keys: use a layout or five keys, not %q", *keys)
 			}
 		}
 		if given["sensitivity"] {
@@ -90,7 +90,7 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 		}
 		if given["volume"] {
 			if *volume < 0 || *volume > 100 {
-				return o, fmt.Errorf("--volume: de 0 a 100, não %d", *volume)
+				return o, fmt.Errorf("--volume: 0 to 100, not %d", *volume)
 			}
 			o.Volume = *volume
 		}
@@ -106,7 +106,7 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 				bots := strings.HasSuffix(item, "+bots")
 				mode, mapName, ok := strings.Cut(strings.TrimSuffix(item, "+bots"), ":")
 				if !ok || mode == "" || mapName == "" {
-					return o, fmt.Errorf("--servers: %q não é MODO:MAPA", item)
+					return o, fmt.Errorf("--servers: %q is not MODE:MAP", item)
 				}
 				o.Server.Instances = append(o.Server.Instances, Instance{Mode: mode, Map: mapName, Bots: bots})
 			}
@@ -136,7 +136,7 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 			}
 			number, err := strconv.Atoi(port.value)
 			if err != nil {
-				return o, fmt.Errorf("--%s: uma porta ou off, não %q", port.name, port.value)
+				return o, fmt.Errorf("--%s: a port or off, not %q", port.name, port.value)
 			}
 			*port.into = number
 		}
@@ -154,7 +154,7 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 					o.Integration.Demos = true
 				case "none":
 				default:
-					return o, fmt.Errorf("--integrate: %q desconhecido", item)
+					return o, fmt.Errorf("--integrate: unknown %q", item)
 				}
 			}
 		}
@@ -171,10 +171,10 @@ func ReadRecipe(r io.Reader) (Options, error) {
 	decoder := json.NewDecoder(io.LimitReader(r, 1<<20))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&file); err != nil {
-		return Options{}, fmt.Errorf("receita JSON inválida: %w", err)
+		return Options{}, fmt.Errorf("invalid recipe JSON: %w", err)
 	}
 	if file.Format != 1 {
-		return Options{}, fmt.Errorf("receita JSON de formato %d desconhecido", file.Format)
+		return Options{}, fmt.Errorf("recipe JSON of unknown format %d", file.Format)
 	}
 	o := file.Options
 	o.Target, o.Upgrade = "", false
@@ -202,7 +202,7 @@ func loadRecipe(path, target string) (Options, error) {
 func parseVideo(value string, video *Video) error {
 	parts := splitList(value)
 	if len(parts) != 3 || !strings.HasPrefix(parts[2], "fov") {
-		return fmt.Errorf("--video: use RESOLUÇÃO,MODO,fovN, não %q", value)
+		return fmt.Errorf("--video: use RESOLUTION,MODE,fovN, not %q", value)
 	}
 	video.Width, video.Height = 0, 0
 	if parts[0] != "auto" {
@@ -210,7 +210,7 @@ func parseVideo(value string, video *Video) error {
 		w, errW := strconv.Atoi(width)
 		h, errH := strconv.Atoi(height)
 		if !ok || errW != nil || errH != nil {
-			return fmt.Errorf("--video: resolução %q inválida", parts[0])
+			return fmt.Errorf("--video: invalid resolution %q", parts[0])
 		}
 		video.Width, video.Height = w, h
 	}
@@ -218,11 +218,11 @@ func parseVideo(value string, video *Video) error {
 	case "fullscreen", "borderless", "windowed":
 		video.Display = parts[1]
 	default:
-		return fmt.Errorf("--video: modo %q inválido", parts[1])
+		return fmt.Errorf("--video: invalid mode %q", parts[1])
 	}
 	fov, err := strconv.Atoi(strings.TrimPrefix(parts[2], "fov"))
 	if err != nil {
-		return fmt.Errorf("--video: %q inválido", parts[2])
+		return fmt.Errorf("--video: invalid %q", parts[2])
 	}
 	video.FOV = fov
 	return nil

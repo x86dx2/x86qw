@@ -322,14 +322,14 @@ var texts = map[string][2]string{
 	"back.enter":          {"Enter volta ao x86QW…", "Enter returns to x86QW…"},
 }
 
-// T returns the text for key in lang.
+// T returns the text for key in lang: Portuguese for PT, English otherwise.
 func T(lang Lang, key string) string {
 	pair, ok := texts[key]
 	if !ok {
 		return key
 	}
-	if lang == EN {
-		return pair[1]
+	if lang == PT {
+		return pair[0]
 	}
-	return pair[0]
+	return pair[1]
 }

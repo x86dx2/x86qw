@@ -29,7 +29,7 @@ func TestRecipeRoundTrips(t *testing.T) {
 			got.Nick = want.Nick
 		}
 		if !reflect.DeepEqual(got, want) {
-			t.Fatalf("receita não volta igual:\n%+v\n%+v", got, want)
+			t.Fatalf("the recipe does not come back the same:\n%+v\n%+v", got, want)
 		}
 	}
 }

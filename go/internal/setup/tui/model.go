@@ -169,7 +169,7 @@ type modal struct {
 // New builds the installer model.
 func New(cfg Config) *Model {
 	if cfg.Lang == "" {
-		cfg.Lang = PT
+		cfg.Lang = EN
 	}
 	m := &Model{cfg: cfg, glyphs: DetectGlyphs(), lang: cfg.Lang, keepPersonal: true, started: time.Now(), scroll: map[screen]int{}, tops: map[screen]int{}}
 	switch cfg.Theme {
