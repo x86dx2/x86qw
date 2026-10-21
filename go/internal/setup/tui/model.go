@@ -183,6 +183,19 @@ type catalogMsg struct {
 
 // reloadMsg is the installation read again after an install.
 type reloadMsg catalogMsg
+
+// updateCheckMsg asks for a quiet look for new versions; freshMsg is what
+// it found.
+type updateCheckMsg struct{}
+type freshMsg catalogMsg
+
+// checkEvery is how often an open app looks for new versions.
+var checkEvery = 5 * time.Minute
+
+func scheduleCheck() tea.Cmd {
+	return tea.Tick(checkEvery, func(time.Time) tea.Msg { return updateCheckMsg{} })
+}
+
 type checkMsg struct {
 	check setup.Check
 	ok    bool
@@ -212,6 +225,7 @@ func (m *Model) Init() tea.Cmd {
 	backend := m.cfg.Backend
 	cmds := []tea.Cmd{
 		m.loadCatalog(),
+		scheduleCheck(),
 		func() tea.Msg {
 			ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 			defer cancel()
@@ -326,6 +340,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case toolMsg:
 		return m, m.toolDone(msg)
+	case updateCheckMsg:
+		return m, tea.Batch(scheduleCheck(), m.checkUpdates())
+	case freshMsg:
+		m.freshUpdates(msg)
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
 		clear(m.tops)
@@ -1266,4 +1284,34 @@ func (m *Model) preflightOutcome() setup.CheckState {
 		}
 	}
 	return worst
+}
+
+// checkUpdates looks for new versions while the app stays open; an
+// installation running or being changed is left alone.
+func (m *Model) checkUpdates() tea.Cmd {
+	if m.existing == nil || m.screen == scInstall || m.reloading {
+		return nil
+	}
+	backend, target := m.cfg.Backend, m.existing.Target
+	return func() tea.Msg {
+		ctx := context.Background()
+		catalog, err := backend.Catalog(ctx)
+		if err != nil {
+			return freshMsg{err: err}
+		}
+		existing, err := backend.Existing(ctx, target)
+		return freshMsg{catalog, existing, err}
+	}
+}
+
+// freshUpdates takes what a quiet check found: only the updates change,
+// never the choices on screen.
+func (m *Model) freshUpdates(msg freshMsg) {
+	if msg.err != nil || msg.existing == nil || m.existing == nil || m.screen == scInstall {
+		return
+	}
+	if len(msg.existing.Updates) > len(m.existing.Updates) {
+		m.say(m.t("upd.new"))
+	}
+	m.existing.Updates = msg.existing.Updates
 }

@@ -96,3 +96,18 @@ func exists(path string) bool {
 	_, err := os.Lstat(path)
 	return err == nil
 }
+
+// An aside still in use (an app left open across two updates) is never
+// overwritten: the next free name is taken.
+func TestFreeAsideSkipsOneInUse(t *testing.T) {
+	aside := filepath.Join(t.TempDir(), "x86qw.exe.old")
+	if got := freeAside(aside); got != aside {
+		t.Fatalf("free slot: %s", got)
+	}
+	// A folder with something in it cannot be removed, as a running
+	// executable cannot on Windows.
+	os.MkdirAll(filepath.Join(aside, "busy"), 0o755)
+	if got := freeAside(aside); got != aside+".1" {
+		t.Fatalf("busy slot: %s", got)
+	}
+}

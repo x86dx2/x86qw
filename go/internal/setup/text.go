@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/x86dx2/x86qw/go/internal/install"
 )
 
 // The interface languages.
@@ -93,6 +95,10 @@ func (p *Problem) Error() string { return p.Text.String() }
 func problem(field, key string, args ...any) error {
 	return &Problem{Text: Say(key, args...), Field: field}
 }
+
+// ContentUpdated reports a failure that still left the content updated: an
+// update whose new CLI could not be put in place.
+func ContentUpdated(err error) bool { return errors.Is(err, install.ErrContentOnly) }
 
 // Explain renders err in lang: a Problem translated, anything else as it
 // came.

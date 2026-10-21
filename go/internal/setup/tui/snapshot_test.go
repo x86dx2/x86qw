@@ -42,7 +42,7 @@ func run(cmd tea.Cmd) []tea.Msg {
 				out = append(out, run(c)...)
 			}
 			return out
-		case tickMsg, stackPollMsg, nil:
+		case tickMsg, stackPollMsg, updateCheckMsg, nil:
 			return nil
 		}
 		return []tea.Msg{msg}
@@ -137,3 +137,6 @@ func TestSnapshots(t *testing.T) {
 }
 
 func (m *Model) do(f func() tea.Cmd) { f() }
+
+// The quiet update check fires at once in tests, and drive drops it.
+func init() { checkEvery = time.Millisecond }

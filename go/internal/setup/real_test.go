@@ -3,6 +3,7 @@ package setup
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -318,5 +319,43 @@ func TestRealResolve(t *testing.T) {
 		if _, err := play.Resolve(target, refused); err == nil {
 			t.Fatalf("%+v should be refused", refused)
 		}
+	}
+}
+
+// An app left open sees a newer catalog: load asks again once the one it
+// has is older than catalogFresh, and keeps it when asking fails.
+func TestLoadRefreshesAStaleCatalog(t *testing.T) {
+	published, err := os.ReadFile(filepath.Join("..", "..", "..", "site", "public", "api", "v1", "catalog.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(t.TempDir(), "catalog.json")
+	os.WriteFile(file, published, 0o644)
+	r := &Real{CatalogFile: file}
+	if err := r.load(); err != nil {
+		t.Fatal(err)
+	}
+	first := r.current()
+	if r.load(); r.current() != first {
+		t.Fatal("a fresh catalog was read again")
+	}
+	r.loaded = r.loaded.Add(-catalogFresh)
+	if r.load(); r.current() == first {
+		t.Fatal("a stale catalog was kept")
+	}
+	second := r.current()
+	os.Remove(file)
+	r.loaded = r.loaded.Add(-catalogFresh)
+	if err := r.load(); err != nil || r.current() != second {
+		t.Fatalf("a failed refresh dropped the catalog: %v", err)
+	}
+}
+
+func TestContentUpdatedIsTheCLIOnlyFailure(t *testing.T) {
+	if !ContentUpdated(fmt.Errorf("%w: the new CLI could not be replaced: %w", install.ErrContentOnly, os.ErrPermission)) {
+		t.Fatal("a content-only failure was not recognized")
+	}
+	if ContentUpdated(os.ErrPermission) {
+		t.Fatal("any failure counts as content-only")
 	}
 }

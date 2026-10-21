@@ -7,6 +7,7 @@ import (
 
 	"github.com/x86dx2/x86qw/go/internal/buildinfo"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
+	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/plan"
 )
 
@@ -50,5 +51,15 @@ func DefaultTarget() string {
 // this machine.
 func PlanInput(root string, cat *catalog.Catalog, inv *catalog.Inventory) plan.Input {
 	return plan.Input{Root: root, Catalog: cat, Inventory: inv, ClientAction: ClientAction(root),
-		CLIVersion: buildinfo.Version, GOOS: runtime.GOOS, GOARCH: runtime.GOARCH}
+		CLIVersion: planCLI(root), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH}
+}
+
+// planCLI is the CLI an update compares with the catalog: the one root has
+// installed, which an update may have replaced under the CLI still running
+// (an app left open), else the running one.
+func planCLI(root string) string {
+	if installed := cli.InstalledVersion(root); installed != "" {
+		return installed
+	}
+	return buildinfo.Version
 }

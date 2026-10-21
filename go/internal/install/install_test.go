@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/x86dx2/x86qw/go/internal/buildinfo"
+	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 )
 
@@ -106,5 +108,19 @@ func TestPlaySupportOfRealInstallation(t *testing.T) {
 	}
 	if len(issues) != 0 || len(expected) != 4 {
 		t.Fatalf("play-support: %v (%d files)", issues, len(expected))
+	}
+}
+
+// The CLI an update plans from is the one installed: an update may have
+// replaced it under the CLI still running.
+func TestPlanComparesTheInstalledCLI(t *testing.T) {
+	root := t.TempDir()
+	if got := planCLI(root); got != buildinfo.Version {
+		t.Fatalf("no receipt: %q", got)
+	}
+	os.MkdirAll(filepath.Join(root, ".x86qw", "cli"), 0o755)
+	os.WriteFile(filepath.Join(root, ".x86qw", "cli", "receipt"), cli.Receipt("2.5.1"), 0o644)
+	if got := PlanInput(root, nil, nil).CLIVersion; got != "2.5.1" {
+		t.Fatalf("the plan compares %q, not the installed 2.5.1", got)
 	}
 }

@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Publish installs the running executable as root's CLI when version
@@ -44,12 +45,19 @@ func Publish(root, version string, sameToo, link bool) (string, error) {
 // asideSuffix names the Windows executable an update moved aside.
 const asideSuffix = ".old"
 
-// TidyAside removes the executable an earlier update moved aside on
-// Windows, once nothing runs it any more: next to it, or in .x86qw/cli
-// for the CLI at the installation's root. Elsewhere there is none.
+// TidyAside removes the executables earlier updates moved aside on
+// Windows, once nothing runs them any more: next to it, or in .x86qw/cli
+// for the CLI at the installation's root. Elsewhere there are none.
 func TidyAside() {
 	if executable, err := os.Executable(); err == nil {
-		os.Remove(executable + asideSuffix)
-		os.Remove(filepath.Join(filepath.Dir(executable), filepath.FromSlash(cliDir), BinaryName()+asideSuffix))
+		for _, aside := range []string{executable + asideSuffix,
+			filepath.Join(filepath.Dir(executable), filepath.FromSlash(cliDir), BinaryName()+asideSuffix)} {
+			entries, _ := os.ReadDir(filepath.Dir(aside))
+			for _, entry := range entries {
+				if strings.HasPrefix(entry.Name(), filepath.Base(aside)) {
+					os.Remove(filepath.Join(filepath.Dir(aside), entry.Name()))
+				}
+			}
+		}
 	}
 }

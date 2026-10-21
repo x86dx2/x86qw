@@ -50,6 +50,7 @@ type Real struct {
 	inv     *catalog.Inventory
 	roles   map[string]trust.RoleState
 	fetched time.Duration // how long authenticating the catalog took
+	loaded  time.Time     // when it was
 }
 
 var _ Backend = (*Real)(nil)
@@ -58,14 +59,44 @@ const corePackage = "x86qw-core-id1"
 
 // load authenticates the catalog once per run; a failure is tried again
 // the next time.
+// catalogFresh is how long load trusts the catalog it authenticated before
+// asking the repository again, so an app left open sees new releases.
+const catalogFresh = 4 * time.Minute
+
+// load authenticates the catalog, again once it is older than catalogFresh.
+// A refresh that fails keeps the catalog it has, and tries later.
 func (r *Real) load() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.cat != nil {
+	if r.cat != nil && time.Since(r.loaded) < catalogFresh {
 		return nil
 	}
+	err := r.fetch()
+	if err != nil && r.cat != nil {
+		r.loaded = time.Now()
+		return nil
+	}
+	return err
+}
+
+// state is the catalog as last authenticated, read under the lock: load
+// may replace it while the app is open.
+func (r *Real) state() (*catalog.Catalog, map[string]trust.RoleState, time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cat, r.roles, r.fetched
+}
+
+func (r *Real) current() *catalog.Catalog {
+	cat, _, _ := r.state()
+	return cat
+}
+
+// fetch reads and parses the catalog; r.mu is held.
+func (r *Real) fetch() error {
 	started := time.Now()
 	var payload []byte
+	var roles map[string]trust.RoleState
 	if r.CatalogFile != "" {
 		data, err := os.ReadFile(r.CatalogFile)
 		if err != nil {
@@ -77,17 +108,22 @@ func (r *Real) load() error {
 		if err != nil {
 			return err
 		}
-		payload, r.roles = authenticated.Raw, authenticated.Roles
+		payload, roles = authenticated.Raw, authenticated.Roles
 	}
 	cat, err := catalog.Parse(payload)
 	if err != nil {
 		return err
 	}
-	inv, err := catalog.LoadInventory()
-	if err != nil {
-		return err
+	// The inventory is the CLI's own and never changes: what reads it
+	// without the lock reads what the first load wrote.
+	if r.inv == nil {
+		inv, err := catalog.LoadInventory()
+		if err != nil {
+			return err
+		}
+		r.inv = inv
 	}
-	r.cat, r.inv, r.fetched = cat, inv, time.Since(started)
+	r.cat, r.roles, r.fetched, r.loaded = cat, roles, time.Since(started), time.Now()
 	return nil
 }
 
@@ -135,10 +171,11 @@ func (r *Real) Catalog(ctx context.Context) (*Catalog, error) {
 	} else {
 		inv = r.inv
 	}
+	cat := r.current()
 	for _, component := range inv.Components {
 		var size int64
 		if out.Unavailable == nil {
-			pkg, err := r.cat.ComponentPackage(component.ID, inv.ContentNamespaces)
+			pkg, err := cat.ComponentPackage(component.ID, inv.ContentNamespaces)
 			if err != nil {
 				continue // not published for this catalog: nothing to install
 			}
@@ -153,11 +190,11 @@ func (r *Real) Catalog(ctx context.Context) (*Catalog, error) {
 		out.Profiles[name] = append([]string(nil), ids...)
 	}
 	if out.Unavailable == nil {
-		if core, err := r.cat.ComponentPackage(corePackage, []string{"core"}); err == nil {
+		if core, err := cat.ComponentPackage(corePackage, []string{"core"}); err == nil {
 			out.CoreSize = core.Size
 		}
 		for _, spec := range catalog.ClientSpecs {
-			if releases, err := r.cat.ClientReleases(spec, "stable"); err == nil && len(releases) > 0 {
+			if releases, err := cat.ClientReleases(spec, "stable"); err == nil && len(releases) > 0 {
 				out.ClientSize[spec.Platform] = releases[0].Size
 			}
 		}
@@ -176,7 +213,9 @@ func (r *Real) Catalog(ctx context.Context) (*Catalog, error) {
 // or a client receipt. What a rolled-back install leaves in .x86qw is not.
 func Installed(target string) bool { return install.Installed(target) }
 
-func (r *Real) planInput(target string) plan.Input { return install.PlanInput(target, r.cat, r.inv) }
+func (r *Real) planInput(target string) plan.Input {
+	return install.PlanInput(target, r.current(), r.inv)
+}
 
 // Existing describes the installation at target, nil when there is none.
 // It reads the installation alone; the updates need the published
@@ -452,7 +491,8 @@ func (r *Real) checkNetwork(Options) found {
 		check.Fix = Say("net.down.fix")
 		return check
 	}
-	check.Value = Say("net.ms", r.fetched.Milliseconds())
+	_, _, fetched := r.state()
+	check.Value = Say("net.ms", fetched.Milliseconds())
 	check.Detail = Say("net.ok.d")
 	return check
 }
@@ -463,9 +503,10 @@ func (r *Real) checkCatalog(Options) found {
 		check.State, check.Value, check.Detail = CheckFailed, Say("catalog.bad"), Raw(err.Error())
 		return check
 	}
-	check.Value = Say("catalog.count", len(r.cat.Packages))
-	if role, ok := r.roles["timestamp"]; ok {
-		check.Detail = Say("catalog.tuf", r.roles["targets"].Version, Date(role.Expires))
+	cat, roles, _ := r.state()
+	check.Value = Say("catalog.count", len(cat.Packages))
+	if role, ok := roles["timestamp"]; ok {
+		check.Detail = Say("catalog.tuf", roles["targets"].Version, Date(role.Expires))
 	} else {
 		check.Detail = Say("catalog.local")
 	}
@@ -521,7 +562,7 @@ func (r *Real) labels() map[string]string {
 		labels[component.ID] = component.Label
 	}
 	if spec, err := r.spec(); err == nil {
-		if releases, err := r.cat.ClientReleases(spec, "stable"); err == nil && len(releases) > 0 {
+		if releases, err := r.current().ClientReleases(spec, "stable"); err == nil && len(releases) > 0 {
 			labels["client"] = "ezQuake " + releases[0].Version
 		}
 	}
@@ -576,7 +617,7 @@ func (r *Real) Install(ctx context.Context, options Options, control <-chan bool
 	}
 	profile, requested := r.profileFor(selected, options)
 	return track(ctx, newTracker(lanes, labels), control, func(ctx context.Context) ([]Text, error) {
-		result, err := install.Install(ctx, target, r.cat, r.inv, install.InstallOptions{
+		result, err := install.Install(ctx, target, r.current(), r.inv, install.InstallOptions{
 			Platform: r.platform(), Channel: "stable", Profile: profile, Requested: requested,
 		})
 		if err != nil {
@@ -618,7 +659,7 @@ func (r *Real) applyPlan(options Options) (*plan.Plan, error) {
 		if have[id] || slices.ContainsFunc(planned.Operations, func(row plan.Row) bool { return row.Item == labels[id] }) {
 			continue
 		}
-		pkg, err := r.cat.ComponentPackage(id, r.inv.ContentNamespaces)
+		pkg, err := r.current().ComponentPackage(id, r.inv.ContentNamespaces)
 		if err != nil {
 			return nil, err
 		}
