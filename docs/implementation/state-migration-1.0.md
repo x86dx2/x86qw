@@ -1,121 +1,121 @@
-# Migração de estado para 1.0
+# State migration to 1.0
 
-Este documento registra o contrato de migração que pertence ao runtime. Ele
-não publica uma versão nem autoriza a alteração de conteúdo do jogo.
+This document records the migration contract that belongs to the runtime. It
+does not publish a version nor authorize changing game content.
 
-## Caminho suportado
+## Supported path
 
-O destino canônico é `1.0.0`. A fronteira aceita a família `0.7.x`; os
-fixtures públicos `0.7.0` até `0.7.13` são respaldados pelos ZIPs
-exatos das releases públicas correspondentes e trazem a origem da tag, do
-commit, do arquivo, do tamanho e do SHA-256 no `manifest.json`. Cada fixture
-mantém o arquivo ZIP e uma árvore `bundle/` extraída pela fronteira canônica
-de arquivos. O layout legado de metadata continua determinístico e não inclui
-PAKs, runtime instalado ou dados pessoais reais; os smokes escrevem bytes
-temporários de payload somente para comprovar preservação.
+The canonical destination is `1.0.0`. The boundary accepts the `0.7.x` family; the
+public fixtures `0.7.0` through `0.7.13` are backed by the exact ZIPs
+of the corresponding public releases and carry the origin of the tag, the
+commit, the file, the size and the SHA-256 in `manifest.json`. Each fixture
+keeps the ZIP file and a `bundle/` tree extracted by the canonical archive
+boundary. The legacy metadata layout stays deterministic and includes no
+PAKs, installed runtime or real personal data; the smokes write temporary
+payload bytes only to prove preservation.
 
-Não existe release pública x86QW `0.8.x` ou `0.9.x` neste repositório. Esses
-diretórios aparecem somente como fixtures contratuais `prospective`, marcados
-`synthetic-contract-only`, e o plano os bloqueia com `prospective-source`.
-Assim que uma dessas linhas existir, o manifesto e o fixture da tag precisam
-ser adicionados antes de habilitar a migração; uma árvore criada manualmente
-não é evidência de release. A decisão de publicar releases reais 0.8/0.9 ou
-reduzir formalmente o aceite para as versões publicadas é uma aprovação de
-produto, não uma inferência deste código.
+There is no public x86QW `0.8.x` or `0.9.x` release in this repository. Those
+directories appear only as `prospective` contract fixtures, marked
+`synthetic-contract-only`, and the plan blocks them with `prospective-source`.
+As soon as one of those lines exists, the tag's manifest and fixture must
+be added before enabling the migration; a manually created tree
+is not release evidence. The decision to publish real 0.8/0.9 releases or
+formally narrow acceptance to the published versions is a product approval,
+not an inference of this code.
 
-Cada manifesto público declara `source_tag`, `source_commit`, `source_path`,
-`source_version`, `payload_kind`, `layout` e `source_archive` com `url`,
-`path`, `size`, `sha256` e `extracted_path`. O teste compara o arquivo local
-com o digest fechado e valida cada membro materializado contra o `ArchivePlan`;
-nenhuma rede é necessária durante a suíte normal. Os manifestos prospectivos declaram
-a família, `payload_kind: synthetic-contract-only`,
-`public_release_available: false` e o motivo do bloqueio. O teste de
-fixture compara os campos públicos com a tag e o `VERSION` reais do checkout.
+Each public manifest declares `source_tag`, `source_commit`, `source_path`,
+`source_version`, `payload_kind`, `layout` and `source_archive` with `url`,
+`path`, `size`, `sha256` and `extracted_path`. The test compares the local file
+with the closed digest and validates each materialized member against the `ArchivePlan`;
+no network is needed during the normal suite. The prospective manifests declare
+the family, `payload_kind: synthetic-contract-only`,
+`public_release_available: false` and the reason for the block. The fixture
+test compares the public fields with the checkout's real tag and `VERSION`.
 
-## Estado e recibos
+## State and receipts
 
-`x86qw_runtime.state` continua aceitando os formatos persistidos 1 e 2. A
-leitura é pura e limitada; um plano de migração normaliza a semântica de ambos
-os formatos, incluindo IDs legados, fingerprint e aliases históricos. O marcador opcional
-`installation_version` identifica a versão do contrato sem invalidar estados
-históricos que não o possuíam. Booleanos não são aceitos como números de
-formato.
+`x86qw_runtime.state` still accepts the persisted formats 1 and 2. Reading
+is pure and bounded; a migration plan normalizes the semantics of both
+formats, including legacy IDs, fingerprint and historical aliases. The optional marker
+`installation_version` identifies the contract version without invalidating historical
+states that did not have it. Booleans are not accepted as format
+numbers.
 
-`x86qw_runtime.receipts` mantém os codecs históricos e adiciona
-`inspect_receipt`, `receipt_sha256` e `validate_receipt_inventory`. Um arquivo
-é considerado gerenciado apenas quando o recibo, o inventário, a identidade e
-o hash exato do par são válidos. Nome de arquivo isolado nunca prova ownership.
+`x86qw_runtime.receipts` keeps the historical codecs and adds
+`inspect_receipt`, `receipt_sha256` and `validate_receipt_inventory`. A file
+is considered managed only when the receipt, the inventory, the identity and
+the exact hash of the pair are valid. A file name alone never proves ownership.
 
-## Plano e execução
+## Plan and execution
 
-`plan_migration(root, source_version=..., target_version="1.0.0")` não escreve.
-O argumento opcional `source_version` só serve para fixtures sem metadados
-históricos; quando existe um recibo CLI ou marcador de estado válido, ele é
-comparado e qualquer divergência bloqueia o plano. Um marcador de estado
-`1.0.x` continua aceitando o argumento antigo para que o replanejamento
-idempotente de uma instalação já migrada não fique bloqueado.
-O resultado é um `MigrationPlan` com operações, preservações, snapshot e
-conflitos. `MigrationPhase` expõe as fases `preflight`, `stage`, `verify`,
-`commit` e `finalize`. `migrate_installation(..., dry_run=True)` é o atalho para
-obter o mesmo plano.
+`plan_migration(root, source_version=..., target_version="1.0.0")` does not write.
+The optional `source_version` argument only serves fixtures without historical
+metadata; when a valid CLI receipt or state marker exists, it is
+compared and any divergence blocks the plan. A `1.0.x` state marker
+still accepts the old argument so that idempotent replanning of an
+already migrated installation is not blocked.
+The result is a `MigrationPlan` with operations, preservations, snapshot and
+conflicts. `MigrationPhase` exposes the phases `preflight`, `stage`, `verify`,
+`commit` and `finalize`. `migrate_installation(..., dry_run=True)` is the shortcut to
+get the same plan.
 
-Na execução, os bytes são copiados para staging privado, verificados pelo
-tamanho e SHA-256, promovidos por escrita atômica sem substituir um destino
-desconhecido e só depois os nomes legados são recolhidos. Falha ou crash em
-qualquer fase levanta `MigrationExecutionError` e restaura os bytes anteriores
-quando possível. O `MigrationResult` retém a inversa até a verificação final e
-oferece `rollback()`. Um destino com bytes coincidentes, mas sem um journal de
-ownership pendente, continua sendo colisão: bytes iguais não autenticam uma
-execução anterior. A execução não-dry-run recupera o journal pendente sob o
-lock exclusivo antes de reconstruir o plano.
+During execution, the bytes are copied to private staging, verified by
+size and SHA-256, promoted by an atomic write that does not replace an unknown
+destination, and only then are the legacy names collected. A failure or crash in
+any phase raises `MigrationExecutionError` and restores the previous bytes
+when possible. The `MigrationResult` keeps the inverse until the final verification and
+offers `rollback()`. A destination with matching bytes, but without a pending ownership
+journal, is still a collision: equal bytes do not authenticate a
+previous run. A non-dry-run execution recovers the pending journal under the
+exclusive lock before rebuilding the plan.
 
-Commit e limpeza são fronteiras distintas: depois que os destinos foram
-promovidos e os nomes legados finalizados, o journal persiste
-`cleanup-pending`. Uma falha ao remover a árvore privada não reverte bytes já
-commitados nem alega `rolled_back`; a pendência permanece visível para uma
-retomada que só remove staging/backup autenticados. Troca da árvore por
-symlink, diretório ou bytes de outra origem bloqueia essa limpeza e preserva o
-material para inspeção. A retomada usa uma allowlist fechada derivada do
-journal (`journal.json`, os backups declarados e os stages numerados), confere
-hash/tamanho e captura as identidades das folhas e dos diretórios antes de
-remover. Arquivos, diretórios, symlinks ou paths extras nunca são descobertos
-recursivamente nem apagados; uma troca de identidade entre a validação e a
-remoção falha fechado. Se uma falha deixar parte da árvore removida, o journal
-continua sendo aceito para que a próxima tentativa apenas finalize os objetos
-autenticados que ainda existirem.
+Commit and cleanup are distinct boundaries: once the destinations have been
+promoted and the legacy names finalized, the journal persists
+`cleanup-pending`. A failure to remove the private tree neither reverts bytes already
+committed nor claims `rolled_back`; the pending state stays visible for a
+resumption that only removes authenticated staging/backup. Swapping the tree for a
+symlink, a directory or bytes from another origin blocks that cleanup and preserves the
+material for inspection. The resumption uses a closed allowlist derived from the
+journal (`journal.json`, the declared backups and the numbered stages), checks
+hash/size and captures the identities of the leaves and directories before
+removing. Extra files, directories, symlinks or paths are never discovered
+recursively nor deleted; an identity swap between validation and
+removal fails closed. If a failure leaves part of the tree removed, the journal
+is still accepted so that the next attempt only finalizes the authenticated
+objects that still exist.
 
-O layout legado de recibos de componentes (`.x86qw/<id>.receipt` e
-`.inventory`), da CLI (`.x86qw/cli.receipt`) e dos clientes ezQuake
-(`.x86qw/ezquake-<plataforma>-<canal>.receipt`) é convertido para os caminhos
-contextuais. Stable e nightly são operações independentes. O par legado
-`nquake-ktx` é normalizado para `ktx`: a identidade interna do recibo, o
-caminho de inventário `qw/ktx.pk3`, o hash de binding e o destino contextual
-precisam concordar. Um par `nquake-ktx` e `ktx` só é deduplicado quando os bytes
-normalizados são iguais; divergência bloqueia antes da primeira escrita. O par
-agregado legado `.x86qw/nquake.receipt` + `.x86qw/nquake.inventory` não é
-movido, mas é validado (hash, formato, ownership e caminhos portáveis) antes
-de ser preservado; par parcial ou corrompido bloqueia. O componente aposentado
-`nquake-sounds` é retirado do estado ativo, mas seu par validado permanece no
-caminho legado para diagnóstico e disposição explícita;
-`MigrationPlan.retired_components` registra essa condição.
+The legacy layout of component receipts (`.x86qw/<id>.receipt` and
+`.inventory`), of the CLI (`.x86qw/cli.receipt`) and of the ezQuake clients
+(`.x86qw/ezquake-<platform>-<channel>.receipt`) is converted to the contextual
+paths. Stable and nightly are independent operations. The legacy pair
+`nquake-ktx` is normalized to `ktx`: the receipt's internal identity, the
+inventory path `qw/ktx.pk3`, the binding hash and the contextual destination
+must agree. An `nquake-ktx` and `ktx` pair is only deduplicated when the normalized
+bytes are equal; a divergence blocks before the first write. The legacy
+aggregate pair `.x86qw/nquake.receipt` + `.x86qw/nquake.inventory` is not
+moved, but it is validated (hash, format, ownership and portable paths) before
+being preserved; a partial or corrupted pair blocks. The retired component
+`nquake-sounds` is taken out of the active state, but its validated pair stays at the
+legacy path for diagnosis and explicit disposal;
+`MigrationPlan.retired_components` records that condition.
 
-## Preservação e bloqueios
+## Preservation and blocks
 
-O plano nunca toca PAKs, runtimes, configurações pessoais, demos, logs ou
-arquivos sem ownership comprovado. Uma colisão pessoal em qualquer destino
-gerenciado, symlink/reparse point (inclusive a raiz canônica
-`.x86qw/components`), par de metadados parcial, estado corrompido, hash
-divergente ou alteração concorrente bloqueia o plano antes da primeira escrita.
-Não há inferência por nome, remoção automática, downgrade ou limpeza de dados
-pessoais.
+The plan never touches PAKs, runtimes, personal settings, demos, logs or
+files without proven ownership. A personal collision at any managed
+destination, a symlink/reparse point (including the canonical root
+`.x86qw/components`), a partial metadata pair, a corrupted state, a diverging
+hash or a concurrent change blocks the plan before the first write.
+There is no inference by name, automatic removal, downgrade or cleanup of personal
+data.
 
-## Validação executada
+## Validation run
 
-O contrato é exercitado por `maintenance/tests/test_migration_1_0.py`, incluindo
-fixtures públicos byte a byte, stable/nightly coexistentes, perfil customizado, dry-run sem
-escrita, colisão pessoal, symlink, recibo corrompido, disco cheio, crash em
-cada fase, rollback byte a byte, pares legados normalizados, colisão de bytes
-idênticos sem journal, recuperação de crash pela CLI e reexecução idempotente.
+The contract is exercised by `maintenance/tests/test_migration_1_0.py`, including
+byte-for-byte public fixtures, coexisting stable/nightly, a custom profile, a dry-run without
+writes, a personal collision, a symlink, a corrupted receipt, a full disk, a crash in
+each phase, byte-for-byte rollback, normalized legacy pairs, a collision of identical
+bytes without a journal, crash recovery through the CLI and idempotent re-execution.
 
 ```text
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest maintenance.tests.test_migration_1_0
@@ -123,7 +123,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest maintenance.tests.test_migration_m
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest maintenance.tests.test_runtime_state maintenance.tests.test_runtime_receipts
 ```
 
-O comando CLI já adquire o lock de manutenção antes de recuperar journals e
-reconstruir o plano em uma execução real; `--dry-run` continua sem lock e sem
-recuperação. Smokes nativos e fixtures reais de `0.8.x`/`0.9.x` permanecem
-gates separados; não são alegados por este contrato.
+The CLI command already acquires the maintenance lock before recovering journals and
+rebuilding the plan in a real run; `--dry-run` still runs without the lock and without
+recovery. Native smokes and real `0.8.x`/`0.9.x` fixtures remain
+separate gates; this contract does not claim them.

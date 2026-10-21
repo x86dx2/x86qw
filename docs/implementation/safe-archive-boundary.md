@@ -1,232 +1,232 @@
-# Fronteira segura de arquivos — implementação da issue #49
+# Safe archive boundary — implementation of issue #49
 
-**Baseline inicial:** `b833ba45e08a9de644dc7368f82c905522a0a558`
+**Initial baseline:** `b833ba45e08a9de644dc7368f82c905522a0a558`
 
-**Versão pública preservada:** `0.7.1`
+**Preserved public version:** `0.7.1`
 
-**Estado:** implementação, regressão local e matriz CI concluídas; PR 3 não
-publicada
+**State:** implementation, local regression and CI matrix done; PR 3 not
+published
 
-## Problemas confirmados no baseline
+## Problems confirmed in the baseline
 
-Antes da mudança, o mesmo ZIP/PK3 tinha interpretações diferentes:
+Before the change, the same ZIP/PK3 had different interpretations:
 
-- `manager.py` extraía enquanto ainda validava e restaurava modos vindos de
+- `manager.py` extracted while still validating and restored modes coming from
   `external_attr`;
-- `services.py` tinha um validador próprio mais forte, mas ainda extraía por um
-  caminho exclusivo;
-- `gameplay.py` lia mapas, assets KTX e `qwprogs.dat` diretamente;
-- ferramentas de componentes e releases tinham readers próprios;
-- `unzip` e `Expand-Archive` ignoravam o contrato Python nos bootstraps.
+- `services.py` had its own stronger validator, but still extracted through an
+  exclusive path;
+- `gameplay.py` read maps, KTX assets and `qwprogs.dat` directly;
+- component and release tools had their own readers;
+- `unzip` and `Expand-Archive` ignored the Python contract in the bootstraps.
 
-Foram reproduzidas aceitações indevidas de colisão por caixa, colisão Unicode,
-`CON.txt`, membro FIFO, conflito `a` arquivo + `a/b` e barra invertida. O risco
-era falha dependente do sistema, leitura de arquivo semanticamente ambíguo ou
-mutação parcial antes de descobrir o último membro inválido.
+Undue acceptances were reproduced for case collisions, Unicode collisions,
+`CON.txt`, a FIFO member, an `a` file + `a/b` conflict and backslashes. The risk
+was a system-dependent failure, reading a semantically ambiguous archive or a
+partial mutation before discovering the last invalid member.
 
-## Implementação
+## Implementation
 
-O contrato detalhado está no
-[ADR 0002](../adr/0002-fronteira-unica-de-arquivos.md). A mudança cria o
-pacote incremental `x86qw_runtime.io.archive` e migra:
+The detailed contract is in
+[ADR 0002](../adr/0002-fronteira-unica-de-arquivos.md). The change creates the
+incremental package `x86qw_runtime.io.archive` and migrates:
 
-- instalação e verificação de clientes, componentes, dados-base e handoff da
-  CLI;
-- descoberta de mapas, inventário KTX e leitura de gamecode;
-- scan e materialização efêmera de PK3 para MVDSV;
-- readers, rewrites e builders de componentes e releases;
-- validação do zipapp e do bundle externo;
-- testes do site que inspecionam bundles;
-- bootstraps Unix e PowerShell.
+- installation and verification of clients, components, base data and the
+  CLI handoff;
+- map discovery, the KTX inventory and gamecode reading;
+- the scan and ephemeral materialization of PK3 for MVDSV;
+- readers, rewrites and builders of components and releases;
+- validation of the zipapp and the external bundle;
+- site tests that inspect bundles;
+- the Unix and PowerShell bootstraps.
 
-Os builders continuam escrevendo ZIP determinístico com `zipfile` em modo `w`.
-Eles não constituem um reader alternativo: o arquivo produzido precisa passar
-por `scan_archive()`, `validate_installer_bundle()` ou pelo contrato histórico
-versionado equivalente antes de ser aceito. A escrita ocorre em staging sob uma
-raiz explícita, seguida de publicação sem substituição.
+The builders keep writing deterministic ZIPs with `zipfile` in `w` mode.
+They are not an alternative reader: the file produced must pass
+`scan_archive()`, `validate_installer_bundle()` or the equivalent versioned
+historical contract before being accepted. Writing happens in staging under an
+explicit root, followed by publication without replacement.
 
-## Fluxos resultantes
+## Resulting flows
 
-### Leitura sem extração
-
-```text
-fonte regular
-  → cópia limitada para snapshot privado em disco
-  → pre-scan e streaming integral no mesmo snapshot imutável
-  → ArchivePlan ligado à identidade e SHA-256 da fonte
-  → revalidação do plano
-  → leitura limitada do membro solicitado
-```
-
-Um membro hostil não selecionado também encerra o fluxo antes que o conteúdo
-solicitado seja entregue.
-
-### Extração de payload
+### Reading without extraction
 
 ```text
-fonte regular
-  → snapshot privado limitado e revalidação da fonte
-  → scan integral dos bytes imutáveis
-  → destino inexistente
-  → staging irmão privado
-  → extração + CRC/SHA-256 + fsync + modos canônicos
-  → revalidação integral final da fonte
-  → rename exclusivo
-  → confirmação da identidade publicada (commit)
-  → fsync do diretório pai
+regular source
+  → bounded copy to a private on-disk snapshot
+  → pre-scan and full streaming over the same immutable snapshot
+  → ArchivePlan bound to the source's identity and SHA-256
+  → plan revalidation
+  → bounded read of the requested member
 ```
 
-Qualquer falha anterior à promoção deixa o destino ausente e remove somente o
-staging cuja identidade ainda possa ser confirmada. Depois que a identidade do
-staging é confirmada no destino, o commit é irreversível: uma falha tardia
-preserva o diretório publicado e qualquer arquivo pessoal criado nele. Uma
-promoção inconclusiva nunca autoriza percorrer ou remover o nome público.
+A hostile member that was not selected also ends the flow before the requested
+content is delivered.
 
-### Materialização de serviço
+### Payload extraction
+
+```text
+regular source
+  → bounded private snapshot and source revalidation
+  → full scan of the immutable bytes
+  → nonexistent destination
+  → private sibling staging
+  → extraction + CRC/SHA-256 + fsync + canonical modes
+  → final full revalidation of the source
+  → exclusive rename
+  → confirmation of the published identity (commit)
+  → fsync of the parent directory
+```
+
+Any failure before the promotion leaves the destination absent and removes only the
+staging whose identity can still be confirmed. Once the staging's identity is
+confirmed at the destination, the commit is irreversible: a late failure
+preserves the published directory and any personal file created in it. An
+inconclusive promotion never authorizes walking or removing the public name.
+
+### Service materialization
 
 ```text
 PK3
-  → scan integral
-  → extração canônica em staging privado
-  → preflight de todos os conflitos no contexto do MVDSV
-  → cópias atômicas journalizadas
-  → cleanup do staging
+  → full scan
+  → canonical extraction into private staging
+  → preflight of every conflict in the MVDSV context
+  → journaled atomic copies
+  → staging cleanup
 ```
 
-Isso preserva a política histórica de não sobrescrever arquivo pessoal
-diferente sem manter um descompressor dentro de `services.py`.
+This keeps the historical policy of never overwriting a different personal file
+without keeping a decompressor inside `services.py`.
 
-No Windows, a materialização mantém handles dos ancestrais sem compartilhamento
-de remoção, recusa reparse points e registra identidade por volume +
-`FILE_ID_128`. O arquivo é escrito em staging exclusivo, verificado e promovido
-por `MoveFileExW` sem substituição. Cleanup e rollback atuam no mesmo handle
-confirmado com `SetFileInformationByHandle`; não dependem de hardlink nem de
-`DeleteFileW` por caminho. Os testes portáveis usam uma API fake com o mesmo
-contrato, e os casos nativos permanecem obrigatórios no job Windows.
+On Windows, the materialization holds handles to the ancestors without delete
+sharing, refuses reparse points and records identity by volume +
+`FILE_ID_128`. The file is written in exclusive staging, verified and promoted
+by `MoveFileExW` without replacement. Cleanup and rollback act on the same
+handle confirmed with `SetFileInformationByHandle`; they depend neither on a hardlink nor on
+`DeleteFileW` by path. The portable tests use a fake API with the same
+contract, and the native cases remain mandatory in the Windows job.
 
-No POSIX, arquivos criados pela sessão passam por rename exclusivo e atômico
-para uma quarentena no mesmo diretório; não existe uma sequência pública de
-`stat` + `unlink`. O conteúdo é validado novamente pelo descritor aberto e uma
-divergência restaura o nome sem substituir conteúdo concorrente. Linux usa
-`renameat2(RENAME_NOREPLACE)`, macOS usa `renameatx_np(RENAME_EXCL)` e outro
-POSIX sem a primitiva falha fechado. Hashes de cleanup são limitados ao tamanho
-exato registrado no journal; journals legados sem `expected_size` preservam o
-arquivo. A fronteira não promete isolamento contra outro processo já
-comprometido sob o mesmo UID com descritor gravável, `mmap` pré-aberto ou acesso
-direto ao nome aleatório da quarentena, uma exclusão que POSIX não fornece de
-modo portátil.
+On POSIX, files created by the session go through an exclusive, atomic rename
+into a quarantine in the same directory; there is no public sequence of
+`stat` + `unlink`. The content is validated again through the open descriptor, and a
+divergence restores the name without replacing concurrent content. Linux uses
+`renameat2(RENAME_NOREPLACE)`, macOS uses `renameatx_np(RENAME_EXCL)` and any other
+POSIX without the primitive fails closed. Cleanup hashes are bounded to the exact
+size recorded in the journal; legacy journals without `expected_size` keep the
+file. The boundary does not promise isolation from another process already
+compromised under the same UID with a writable descriptor, a pre-opened `mmap` or direct
+access to the quarantine's random name, an exclusion POSIX does not provide
+portably.
 
 ### Bootstrap
 
-Os quatro scripts de bootstrap contêm a mesma projeção Base64 do módulo
-canônico, verificada byte a byte pelo builder e pelos testes. O helper é criado
-em temporário privado e valida o contrato exato do bundle antes de executar
-`x86qw.pyz`; nenhuma chamada a `unzip` ou `Expand-Archive` permanece.
+The four bootstrap scripts hold the same Base64 projection of the canonical
+module, checked byte for byte by the builder and by the tests. The helper is created
+in a private temporary and validates the bundle's exact contract before running
+`x86qw.pyz`; no call to `unzip` or `Expand-Archive` remains.
 
-## Limites e modos
+## Limits and modes
 
-Os limites canônicos são 512 MiB para o arquivo-fonte compactado, 32 MiB para
-os metadados do diretório central, 4.096 membros, 128 MiB por membro, 512 MiB
-no total expandido, profundidade 16, caminho de 240 unidades UTF-16 e razão
-máxima de compressão 500:1. Stored e Deflate são os únicos métodos aceitos.
+The canonical limits are 512 MiB for the compressed source file, 32 MiB for
+the central directory metadata, 4,096 members, 128 MiB per member, 512 MiB
+in total expanded size, depth 16, a path of 240 UTF-16 units and a maximum
+compression ratio of 500:1. Stored and Deflate are the only accepted methods.
 
-Antes de `zipfile` materializar a lista central, um pre-scan estrutural limita
-os bytes dos metadados, percorre cada registro e compara sua contagem real com o
-EOCD. Isso evita tanto alocação sem limite quanto bypass por contagem
-subestimada. Pre-scan e `ZipFile` operam sobre o mesmo snapshot privado; uma
-fonte concorrente não troca os bytes entre as duas etapas e toda leitura da
-fonte é interrompida no teto mais um byte. Caracteres Win32 proibidos e
-atributos DOS de device ou reparse point também são recusados em qualquer
-plataforma.
+Before `zipfile` materializes the central list, a structural pre-scan bounds
+the metadata bytes, walks each record and compares its real count with the
+EOCD. This prevents both unbounded allocation and a bypass through an
+understated count. Pre-scan and `ZipFile` work on the same private snapshot; a
+concurrent source does not swap the bytes between the two steps and every read of the
+source is cut off at the ceiling plus one byte. Forbidden Win32 characters and
+DOS device or reparse point attributes are also refused on every
+platform.
 
-Diretórios e executáveis declarados recebem `0755`; os demais arquivos recebem
-`0644`. Modos do ZIP não são restaurados. Durante staging, diretórios começam
-privados e arquivos são criados exclusivamente com `0600`.
+Declared directories and executables get `0755`; other files get
+`0644`. ZIP modes are not restored. During staging, directories start
+private and files are created exclusively with `0600`.
 
-## Registro da mudança
+## Change record
 
-| Área | Antes | Candidato corretivo |
+| Area | Before | Corrective candidate |
 |---|---|---|
-| Scan | leitores independentes | `scan_archive()` único |
-| Plano | validação implícita e parcial | `ArchivePlan` imutável |
-| Leitura | membro selecionado podia ignorar vizinho hostil | arquivo inteiro validado primeiro |
-| Extração | write durante validação | staging completo antes da promoção |
-| Modos | podiam vir de `external_attr` | somente `0644`/`0755` declarados |
-| Serviços | validador e extração próprios | scan/extract canônicos + materialização journalizada |
-| Serviços Windows | fallback sem cleanup reversível | handles, identidade persistente e unlink exato |
-| Bootstrap | `unzip`/`Expand-Archive` | projeção exata da fronteira canônica |
-| Builders | escrita direta no nome final | snapshot estável, staging sob raiz explícita, validação e hardlink sem substituição |
-| Regressão | proibição por convenção | gate estático de readers/extratores paralelos |
+| Scan | independent readers | a single `scan_archive()` |
+| Plan | implicit, partial validation | immutable `ArchivePlan` |
+| Reading | a selected member could ignore a hostile neighbor | the whole archive validated first |
+| Extraction | write during validation | full staging before promotion |
+| Modes | could come from `external_attr` | only declared `0644`/`0755` |
+| Services | their own validator and extraction | canonical scan/extract + journaled materialization |
+| Windows services | fallback without reversible cleanup | handles, persistent identity and exact unlink |
+| Bootstrap | `unzip`/`Expand-Archive` | exact projection of the canonical boundary |
+| Builders | direct write to the final name | stable snapshot, staging under an explicit root, validation and hardlink without replacement |
+| Regression | prohibition by convention | static gate against parallel readers/extractors |
 
-## Compatibilidade e migração
+## Compatibility and migration
 
-Não existe migração de estado ou de payload. Os 59 ZIP/PK3/PYZ existentes no
-inventário inicial cabem nos novos limites e passam no scan. A estrutura
-instalada, os hashes de arquivos válidos, os comandos e o gameplay são
-preservados.
+There is no state or payload migration. The 59 existing ZIP/PK3/PYZ in the
+initial inventory fit the new limits and pass the scan. The installed
+structure, the hashes of valid files, the commands and the gameplay are
+preserved.
 
-O histórico imutável do instalador mantém seus dois layouts reais: seis membros
-entre `0.1.0` e `0.1.19`, e sete a partir de `0.1.20`. Ambos exigem conjunto
-exato de membros, identidades externas coerentes e identidade interna do
-`x86qw.pyz`; o layout moderno continua obrigatório para bundles novos.
+The installer's immutable history keeps its two real layouts: six members
+between `0.1.0` and `0.1.19`, and seven from `0.1.20` on. Both require the exact
+set of members, coherent external identities and the internal identity of
+`x86qw.pyz`; the modern layout stays mandatory for new bundles.
 
-Os builders escrevem em arquivo privado sob uma raiz de saída explícita,
-rejeitam symlink ou reparse point nos pais gerenciados, validam o snapshot e
-publicam por hardlink sem substituir nome existente. Uma falha posterior à
-criação do link preserva o alvo para inspeção e impede manifesto, registro e
-publicação. O ponteiro `latest` só é criado quando ausente ou aceito quando já
-possui exatamente o valor esperado; promover um valor divergente permanece
-bloqueado até a transação imutável da PR 10.
+The builders write to a private file under an explicit output root,
+reject a symlink or reparse point in the managed parents, validate the snapshot and
+publish by hardlink without replacing an existing name. A failure after the
+link's creation preserves the target for inspection and prevents manifest, registry and
+publication. The `latest` pointer is only created when absent, or accepted when it already
+holds exactly the expected value; promoting a diverging value stays
+blocked until PR 10's immutable transaction.
 
-Arquivos antes tolerados somente por validação incompleta passam a falhar antes
-do primeiro write de extração ou payload visível. Esse é o único contrato
-deliberadamente incompatível.
+Archives previously tolerated only through incomplete validation now fail before
+the first extraction write or visible payload. That is the only deliberately
+incompatible contract.
 
-## Evidência atual
+## Current evidence
 
-Na validação local deste candidato, a suíte de manutenção reportou
-`Ran 695 tests` e `OK (skipped=15)` tanto no Python 3.10 quanto no Python 3.14;
-os cinco testes do site também reportaram `OK`. Dos 15 skips locais, quatorze
-exigem o runner Windows e um é o smoke de rede opt-in. `verify`, Git LFS,
-`git diff --check`, os parsers dos bootstraps e o dry-run do Worker também
-passaram.
+In this candidate's local validation, the maintenance suite reported
+`Ran 695 tests` and `OK (skipped=15)` on both Python 3.10 and Python 3.14;
+the five site tests also reported `OK`. Of the 15 local skips, fourteen
+require the Windows runner and one is the opt-in network smoke. `verify`, Git LFS,
+`git diff --check`, the bootstrap parsers and the Worker dry-run also
+passed.
 
-A execução
+Run
 [#30856293818](https://github.com/x86dx2/x86qw/actions/runs/30856293818)
-repetiu com sucesso:
+successfully repeated:
 
-- testes positivos, negativos e adversariais da fronteira;
-- regressão de instalador, serviços, gameplay, componentes, recipes,
-  launchers e site;
-- scan de todos os arquivos distribuídos;
-- gate estático sem reader/extrator paralelo;
-- `verify`, Git LFS, `git diff --check` e dry-run do Worker;
-- matriz Ubuntu, macOS e Windows com Python 3.10 e 3.13, incluindo os casos
-  nativos Windows.
+- positive, negative and adversarial tests of the boundary;
+- regression of the installer, services, gameplay, components, recipes,
+  launchers and site;
+- a scan of every distributed archive;
+- the static gate without a parallel reader/extractor;
+- `verify`, Git LFS, `git diff --check` and the Worker dry-run;
+- the Ubuntu, macOS and Windows matrix with Python 3.10 and 3.13, including the
+  native Windows cases.
 
-Os sete jobs passaram. Nos dois jobs Windows, os casos nativos aceitaram fontes
-`.exe`/`.cmd`, rejeitaram reparse points e validaram as identidades reais de
-Python 3.10 e 3.13. Essa evidência classifica o contrato de arquivos como
-multiplataforma completo, mas não substitui smoke nativo de ezQuake, MVDSV, QTV
-ou QWFWD.
+All seven jobs passed. In both Windows jobs, the native cases accepted `.exe`/`.cmd`
+sources, rejected reparse points and validated the real identities of
+Python 3.10 and 3.13. This evidence classifies the archive contract as fully
+cross-platform, but does not replace a native smoke of ezQuake, MVDSV, QTV
+or QWFWD.
 
-## Riscos residuais
+## Residual risks
 
-- a DACL privada no Windows foi implementada no candidato da PR 4 conforme o
-  [ADR 0003](../adr/0003-dacl-privada-windows.md) e validada nativamente nos
-  runners Windows com Python 3.10 e 3.13; o smoke de runtime sob conta padrão
-  permanece pendente;
-- trust metadata pertence ao PR 9;
-- promoção transacional de candidato e atualização segura de `latest` pertencem
-  à PR 10; este candidato falha fechado diante de um ponteiro divergente;
-- smokes nativos e evidência do candidato pertencem aos PRs 10 e 11;
-- TAR não é extraído para o filesystem pelos fluxos atuais e permanece fora do
-  contrato desta PR;
-- a sincronização build-time dos bootstraps detecta trocas, não segue symlink e
-  publica por replace atômico, mas a biblioteca padrão não oferece CAS portável
-  sobre um pathname existente; o build exige checkout exclusivo, e essa
-  garantia operacional será formalizada pela promoção imutável da PR 10;
-- `0.7.1` continua sendo a release pública e não recebe esta implementação.
+- the private DACL on Windows was implemented in PR 4's candidate per
+  [ADR 0003](../adr/0003-dacl-privada-windows.md) and validated natively on the
+  Windows runners with Python 3.10 and 3.13; the runtime smoke under a standard account
+  is still pending;
+- trust metadata belongs to PR 9;
+- transactional candidate promotion and a safe `latest` update belong
+  to PR 10; this candidate fails closed when facing a diverging pointer;
+- native smokes and candidate evidence belong to PRs 10 and 11;
+- TAR is not extracted to the filesystem by the current flows and stays out of this
+  PR's contract;
+- the build-time sync of the bootstraps detects swaps, does not follow symlinks and
+  publishes by atomic replace, but the standard library offers no portable CAS
+  over an existing pathname; the build requires an exclusive checkout, and that
+  operational guarantee will be formalized by PR 10's immutable promotion;
+- `0.7.1` remains the public release and does not receive this implementation.
 
-Nenhuma versão, catálogo, bootstrap público implantado ou bundle publicado foi
-alterado por esta nota.
+No version, catalog, deployed public bootstrap or published bundle was
+changed by this note.
