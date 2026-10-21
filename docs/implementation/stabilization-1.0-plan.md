@@ -90,7 +90,7 @@ deliveries that predate the 1.0 journey:
 | PR 2 — bounded downloader | published in `0.7.3` | PR #58, merge `b833ba4`; [download boundary](bounded-download-boundary.md) |
 | PR 3 — single ZIP/PK3/PYZ | published in `0.7.3` | PR #59, merge `b746d57`; [archive boundary](safe-archive-boundary.md) |
 | PR 4 — private Windows DACL | published in `0.7.3` | PR #60, merge `206adc4`; [Windows implementation](windows-private-acl.md) |
-| PR 5 — upstream macOS stable | published in `0.7.3` | PR #61, merge `0009833`, public fix PR #65 `3bbc7a0`; [ADR 0004](../adr/0004-preservar-bundle-upstream-ezquake-stable-macos.md) |
+| PR 5 — upstream macOS stable | published in `0.7.3` | PR #61, merge `0009833`, public fix PR #65 `3bbc7a0`; [ADR 0004](../adr/0004-preserve-upstream-ezquake-stable-macos-bundle.md) |
 | PR 6 — runtime boundaries | integrated in `0.7.3`; auditable track closed as a delivery, without promoting the checkpoint | historical HEAD `29d76a4`, integration `daf5d0c`, publication PR #64 `15eef0b`; [PR 6 evidence](runtime-boundaries-pr6.md) |
 
 The historical closing does not turn the checkpoint's artifacts into code

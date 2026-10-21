@@ -187,7 +187,7 @@ bootstraps keep minimal, isolated projections:
 In PR 4's corrective code, the Windows bootstrap creates its working directory
 with a DACL protected for the current user and `LOCAL SYSTEM` before the first
 write. The decision and the conservative failure behavior are in
-[ADR 0003](0003-dacl-privada-windows.md). The contract was validated in the
+[ADR 0003](0003-private-windows-dacl.md). The contract was validated in the
 Windows jobs with Python 3.10 and 3.13; the runtime smoke under a standard
 account stays separate, and this change has not been published yet.
 
@@ -210,7 +210,7 @@ authorize a new downloader for clients, components or product metadata.
   PR 10;
 - the bootstrap's `curl` is the bounded projection described above;
 - DACL privacy on Windows was incorporated into PR 4's corrective code by
-  [ADR 0003](0003-dacl-privada-windows.md) and validated by the native Windows
+  [ADR 0003](0003-private-windows-dacl.md) and validated by the native Windows
   checks of [issue #47](https://github.com/x86dx2/x86qw/issues/47); running
   the runtimes under a standard account stays in PR 11;
 - portable tests of the boundary do not replace native network or runtime

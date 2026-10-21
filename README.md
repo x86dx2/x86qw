@@ -269,8 +269,8 @@ The CLI inspects ZIP and PK3 files before any extraction, with limits, canonical
 modes and atomic promotion. On Windows, the installation's private state is created
 with a protected DACL, limited to the current user and `LOCAL SYSTEM`; external password
 files are only accepted with that same restriction and are never rewritten.
-See [ADR 0002](docs/adr/0002-fronteira-unica-de-arquivos.md) and
-[ADR 0003](docs/adr/0003-dacl-privada-windows.md).
+See [ADR 0002](docs/adr/0002-single-archive-boundary.md) and
+[ADR 0003](docs/adr/0003-private-windows-dacl.md).
 
 ## Architecture
 
@@ -324,7 +324,7 @@ Windows and Linux stay in preview. See the
 The macOS ezQuake stable keeps the upstream bundle without changing `Info.plist`,
 sandbox, entitlements or signature. It has no Developer ID and no proven
 notarization, so it stays conditional; see
-[ADR 0004](docs/adr/0004-preservar-bundle-upstream-ezquake-stable-macos.md).
+[ADR 0004](docs/adr/0004-preserve-upstream-ezquake-stable-macos-bundle.md).
 
 ## Developing
 

@@ -36,15 +36,15 @@
     {"id": "udp-proxy", "label": "Proxy UDP QuakeWorld"}
   ],
   "capabilities": [
-    {"id": "multiplayer-client", "label": "Cliente multiplayer"},
-    {"id": "local-server", "label": "Servidor local"},
-    {"id": "dedicated-server", "label": "Servidor dedicado"},
+    {"id": "multiplayer-client", "label": "Multiplayer client"},
+    {"id": "local-server", "label": "Local server"},
+    {"id": "dedicated-server", "label": "Dedicated server"},
     {"id": "bots", "label": "Bots"},
-    {"id": "mvd-recording", "label": "Gravação MVD"},
-    {"id": "qtv", "label": "Relay QTV"},
-    {"id": "proxy", "label": "Proxy QWFWD"},
-    {"id": "demo-playback", "label": "Reprodução de demos"},
-    {"id": "server-browser", "label": "Navegador de servidores"}
+    {"id": "mvd-recording", "label": "MVD recording"},
+    {"id": "qtv", "label": "QTV relay"},
+    {"id": "proxy", "label": "QWFWD proxy"},
+    {"id": "demo-playback", "label": "Demo playback"},
+    {"id": "server-browser", "label": "Server browser"}
   ],
   "systems": ["macos", "linux", "windows"],
   "host_systems": {"Darwin": "macos", "Linux": "linux", "Windows": "windows"},

@@ -51,7 +51,7 @@ The rules are:
    manifest;
 7. extraction keeps belonging to the single boundary
    `x86qw_runtime.io.archive`, accepted earlier in
-   [ADR 0002](0002-fronteira-unica-de-arquivos.md); this PR does not create a
+   [ADR 0002](0002-single-archive-boundary.md); this PR does not create a
    parallel scanner nor change its limits;
 8. codes, texts, persisted formats and public behavior stay stable during this
    refactoring. Public changes to SemVer, schemas, exit codes and JSON belong

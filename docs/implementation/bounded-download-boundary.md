@@ -88,7 +88,7 @@ streaming against the already approved plan, runs `flush`/`fsync` and promotes w
 `replace`, breaking the staging hardlink without writing to the live `dist/`. Mode
 `0600` protects that temporary on POSIX. In PR 4's corrective candidate,
 Windows temporaries go through the private boundary of
-[ADR 0003](../adr/0003-dacl-privada-windows.md), validated in the Windows jobs with
+[ADR 0003](../adr/0003-private-windows-dacl.md), validated in the Windows jobs with
 Python 3.10 and 3.13.
 
 A new revision of the nQuake snapshot can only be authorized by the intake itself.
@@ -274,7 +274,7 @@ not yet inventoried. Changes of that kind still require human review and a
 new adversarial case in the gate; the test must not be described as formal proof of the
 absence of any possible communication. External publication operations
 also do not become consumers of the HTTP API because of the scanner. The code
-[ADR 0003](../adr/0003-dacl-privada-windows.md). The native matrix of
+[ADR 0003](../adr/0003-private-windows-dacl.md). The native matrix of
 [issue #47](https://github.com/x86dx2/x86qw/issues/47) proved the control on
 Windows with Python 3.10 and 3.13; it still does not replace native smokes of the
 clients, services, standard account or public transport.

@@ -27,7 +27,7 @@ partial mutation before discovering the last invalid member.
 ## Implementation
 
 The detailed contract is in
-[ADR 0002](../adr/0002-fronteira-unica-de-arquivos.md). The change creates the
+[ADR 0002](../adr/0002-single-archive-boundary.md). The change creates the
 incremental package `x86qw_runtime.io.archive` and migrates:
 
 - installation and verification of clients, components, base data and the
@@ -213,7 +213,7 @@ or QWFWD.
 ## Residual risks
 
 - the private DACL on Windows was implemented in PR 4's candidate per
-  [ADR 0003](../adr/0003-dacl-privada-windows.md) and validated natively on the
+  [ADR 0003](../adr/0003-private-windows-dacl.md) and validated natively on the
   Windows runners with Python 3.10 and 3.13; the runtime smoke under a standard account
   is still pending;
 - trust metadata belongs to PR 9;

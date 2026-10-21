@@ -233,7 +233,7 @@ sensitive configurations use a protected DACL with access only for the current
 user and `LOCAL SYSTEM`. The object is born private, before the first write;
 an inconclusive volume or ACL makes the operation fail closed. External
 password files are only validated and read through the same handle, never
-reconfigured by x86QW. See [ADR 0003](adr/0003-dacl-privada-windows.md).
+reconfigured by x86QW. See [ADR 0003](adr/0003-private-windows-dacl.md).
 
 Non-sensitive temporary files the session created are removed when they still
 match their hash; modified files and pre-existing data are kept and reported.
@@ -273,4 +273,4 @@ When materializing for the dedicated server, the PK3 first goes through that
 extraction and only then is copied atomically, recorded in the journal, into
 MVDSV's context. A different personal file is never overwritten. Personal
 configurations, logs and demos are not treated as managed content. See the
-[file boundary ADR](adr/0002-fronteira-unica-de-arquivos.md).
+[file boundary ADR](adr/0002-single-archive-boundary.md).

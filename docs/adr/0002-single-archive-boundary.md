@@ -224,7 +224,7 @@ scan.
 These stay outside this decision:
 
 - the private DACL policy of staging and Windows temporary files, defined
-  separately in [ADR 0003](0003-dacl-privada-windows.md) and validated natively
+  separately in [ADR 0003](0003-private-windows-dacl.md) and validated natively
   in [issue #47](https://github.com/x86dx2/x86qw/issues/47);
 - authentication, expiration, rollback and freeze of metadata, handled in PR 9
   and [issue #48](https://github.com/x86dx2/x86qw/issues/48);

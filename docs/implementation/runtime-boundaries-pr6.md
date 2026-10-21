@@ -22,7 +22,7 @@ persistence and lifecycle open to parallel implementations.
 PR 6 introduces small, verifiable boundaries in `x86qw_runtime` without
 rewriting the CLI or changing its public behavior. The architectural decision and
 the limits of this range are in
-[ADR 0005](../adr/0005-fronteiras-incrementais-x86qw-runtime.md).
+[ADR 0005](../adr/0005-incremental-x86qw-runtime-boundaries.md).
 
 ## Committed increments
 
