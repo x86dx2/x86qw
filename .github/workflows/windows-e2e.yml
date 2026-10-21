@@ -1,10 +1,17 @@
 name: Windows e2e
 
-# Manual end-to-end check of the Windows path: the served install.ps1, setup,
-# shortcuts, private ACLs, background services and uninstall. It installs
-# the complete profile (about 1 GB).
+# End-to-end check of the Windows path, nightly and on changes to the
+# bootstrap: the served install.ps1, setup, shortcuts, private ACLs,
+# background services and uninstall. It installs the complete profile
+# (about 1 GB).
 on:
+  schedule:
+    - cron: "47 3 * * *"
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "site/public/install.ps1"
+      - "go/cmd/x86qw-release/templates/install.ps1"
 
 permissions:
   contents: read
@@ -96,3 +103,27 @@ jobs:
           if ($left.Count -gt 0) { throw "nao removidos apos a saida: $($left -join ', ')" }
           Write-Host "CLI removida apos a saida; restante: $((Get-ChildItem -Force (Join-Path $inst '.x86qw')).Name -join ', ')"
           exit 0
+
+  report:
+    name: Report a failed night
+    needs: smoke
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const marker = '<!-- x86qw-e2e-alert -->';
+            const { owner, repo } = context.repo;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const body = `${marker}\nThe nightly Windows end-to-end install failed: ${runUrl}`;
+            const { data: open } = await github.rest.issues.listForRepo({ owner, repo, state: 'open', labels: 'P1', per_page: 100 });
+            const existing = open.find((issue) => !issue.pull_request && (issue.body || '').includes(marker));
+            if (existing) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: existing.number, body });
+            } else {
+              await github.rest.issues.create({ owner, repo, title: 'Nightly end-to-end install failed', labels: ['P1'], body });
+            }

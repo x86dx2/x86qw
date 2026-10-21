@@ -9,9 +9,10 @@ on:
 permissions:
   contents: read
 
+# A new push to a PR replaces its run; runs on main always finish.
 concurrency:
   group: validate-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lfs-seed:
@@ -23,11 +24,18 @@ jobs:
         with:
           fetch-depth: 0
           lfs: false
+      # The cache is keyed on the set of LFS objects, not on the commit, so
+      # runs share it; a new object restores the closest set and fetches
+      # only what is missing.
+      - name: Key the LFS cache on its objects
+        id: lfs-key
+        run: echo "key=x86qw-lfs-v4-$(git lfs ls-files --long | sort | sha256sum | cut -c1-32)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         id: lfs-cache
         with:
           path: .git/lfs/objects
-          key: x86qw-lfs-v3-${{ github.event.pull_request.head.sha || github.sha }}
+          key: ${{ steps.lfs-key.outputs.key }}
+          restore-keys: x86qw-lfs-v4-
           enableCrossOsArchive: true
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -51,7 +59,7 @@ jobs:
         if: ${{ steps.lfs-cache.outputs.cache-hit != 'true' }}
         with:
           path: .git/lfs/objects
-          key: x86qw-lfs-v3-${{ github.event.pull_request.head.sha || github.sha }}
+          key: ${{ steps.lfs-key.outputs.key }}
           enableCrossOsArchive: true
       - name: Verify the distribution and repository hygiene
         run: '"$RUNNER_TEMP/x86qw-content" --root "$GITHUB_WORKSPACE" verify'
