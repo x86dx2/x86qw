@@ -1,0 +1,5 @@
+# ai-memory project routing for this repository.
+# Pins the wiki coordinate so captures and queries never depend on the
+# remote-derived name. Canonical coordinate: default / x86qw.
+workspace = "default"
+project = "x86qw"
