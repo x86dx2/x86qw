@@ -39,8 +39,6 @@ type Config struct {
 	// Start opens an installation on one of its screens instead of home:
 	// match, servers or host.
 	Start string
-	// Notice greets the user once the interface is up, as a toast.
-	Notice string
 }
 
 // Result is how the interface ended: the x86qw command to run next, if
@@ -364,11 +362,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.opts = m.existing.Options
 			m.nick.Set(m.opts.Nick)
 			m.screen = scPanel
-			switch {
-			case !m.existing.Note.IsZero():
+			if !m.existing.Note.IsZero() {
 				m.say(m.in(m.existing.Note))
-			case m.cfg.Notice != "":
-				m.say(m.cfg.Notice)
 			}
 			// Home shows the last match, the public servers and the
 			// server's state; the screen asked for opens at once.

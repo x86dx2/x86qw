@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/x86dx2/x86qw/go/internal/fspath"
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/privfs"
 )
@@ -124,16 +125,11 @@ func (j *Journal) write() error {
 
 // Relative renders a path relative to the installation (POSIX).
 func (j *Journal) Relative(absolute string) (string, error) {
-	parent, err := filepath.EvalSymlinks(filepath.Dir(absolute))
-	if err != nil {
-		parent = filepath.Dir(absolute)
-	}
-	root, err := filepath.EvalSymlinks(j.Target)
-	if err != nil {
-		root = j.Target
-	}
-	relative, err := filepath.Rel(root, filepath.Join(parent, filepath.Base(absolute)))
-	if err != nil || relative == ".." || strings.HasPrefix(relative, "../") {
+	// The name itself stays as given; only the folders it is in resolve.
+	name := filepath.Join(fspath.Resolve(filepath.Dir(absolute)), filepath.Base(absolute))
+	root := fspath.Resolve(j.Target)
+	relative, err := filepath.Rel(root, name)
+	if err != nil || !fspath.Inside(name, root) {
 		return "", errorf("O journal recusou um caminho fora da instalação.")
 	}
 	return filepath.ToSlash(relative), nil

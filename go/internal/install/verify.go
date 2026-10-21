@@ -61,7 +61,7 @@ func Verify(root string) (*Report, error) {
 		}
 	}
 	for _, spec := range catalog.ClientSpecs {
-		for _, channel := range []string{"stable", "nightly"} {
+		for _, channel := range catalog.Channels {
 			ok, err := verifyClient(root, spec, channel)
 			if err != nil {
 				return nil, err
@@ -402,7 +402,7 @@ func HostRuntimes(root string) ([]Runtime, error) {
 		return nil, fmt.Errorf("A abertura automática não é suportada neste sistema: %s.", runtime.GOOS)
 	}
 	var found []Runtime
-	for _, channel := range []string{"stable", "nightly"} {
+	for _, channel := range catalog.Channels {
 		rec, err := loadVerifiedClient(root, *spec, channel)
 		if err != nil {
 			return nil, err

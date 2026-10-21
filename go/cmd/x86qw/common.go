@@ -1,69 +1,114 @@
 package main
 
 import (
-	"flag"
+	"bufio"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"golang.org/x/term"
 
 	"github.com/x86dx2/x86qw/go/internal/catalog"
+	"github.com/x86dx2/x86qw/go/internal/cliargs"
+	"github.com/x86dx2/x86qw/go/internal/download"
+	"github.com/x86dx2/x86qw/go/internal/install"
+	"github.com/x86dx2/x86qw/go/internal/output"
 	"github.com/x86dx2/x86qw/go/internal/trust"
 )
 
+// defaultCacheDir keeps the TUF metadata inside the download cache, so
+// X86QW_CACHE_DIR moves both and uninstall --purge removes both.
 func defaultCacheDir() string {
-	dir, err := os.UserCacheDir()
+	dir, err := download.CacheDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(dir, "x86qw", "tuf")
+	return filepath.Join(dir, download.TrustCacheName)
 }
 
-// targetFlags parses [--json] [--target DIR] [DIR] for installation commands.
-func targetFlags(name string, args []string, stderr io.Writer) (target string, asJSON bool, ok bool) {
-	flags := flag.NewFlagSet(name, flag.ContinueOnError)
-	flags.SetOutput(stderr)
-	jsonFlag := flags.Bool("json", false, "saída estruturada")
-	targetFlag := flags.String("target", "", "diretório da instalação")
-	if err := flags.Parse(args); err != nil {
-		return "", false, false
-	}
-	positional := flags.Args()
+// targetFlag declares --target; the installation may also come as the
+// one positional argument.
+func targetFlag(p *cliargs.Parser, target *string) {
+	p.String(target, "DESTINO", "pasta da instalação (padrão: a desta CLI, senão ~/Games/x86qw)", "--target")
+}
+
+func jsonFlag(p *cliargs.Parser, asJSON *bool) {
+	p.Bool(asJSON, "saída JSON numa linha", "--json")
+}
+
+// targetOf is the installation the command acts on: the positional
+// DESTINO or --target (they must agree), else install.DefaultTarget.
+func targetOf(p *cliargs.Parser, flagTarget string) (string, error) {
+	positional := p.Positional()
 	if len(positional) > 1 {
-		fmt.Fprintf(stderr, "x86qw %s: argumentos demais\n", name)
-		return "", false, false
+		return "", cliargs.Usagef("argumentos a mais: %s", strings.Join(positional[1:], " "))
 	}
-	target = *targetFlag
+	target := flagTarget
 	if len(positional) == 1 {
 		if target != "" && filepath.Clean(target) != filepath.Clean(positional[0]) {
-			fmt.Fprintf(stderr, "x86qw %s: --target e o destino posicional divergem\n", name)
-			return "", false, false
+			return "", cliargs.Usagef("--target e o destino posicional divergem")
 		}
 		target = positional[0]
 	}
 	if target == "" {
-		target = defaultTarget()
+		target = install.DefaultTarget()
 	}
-	if absolute, err := filepath.Abs(target); err == nil {
-		target = absolute
-	}
-	return target, *jsonFlag, true
+	return filepath.Abs(expandHome(target))
 }
 
-// defaultTarget is the installation that contains this executable
-// (<root>/x86qw or <root>/.x86qw/cli/x86qw), else the current directory.
-func defaultTarget() string {
-	if executable, err := os.Executable(); err == nil {
-		if resolved, err := filepath.EvalSymlinks(executable); err == nil {
-			dir := filepath.Dir(resolved)
-			for _, candidate := range []string{dir, filepath.Join(dir, "..", "..")} {
-				if _, err := os.Stat(filepath.Join(candidate, ".x86qw")); err == nil {
-					return filepath.Clean(candidate)
-				}
-			}
+// expandHome turns a leading ~ into the home folder.
+func expandHome(path string) string {
+	if path == "~" || strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`) {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, path[1:])
 		}
 	}
-	return "."
+	return path
+}
+
+// stdinIsTerminal is whether someone can answer (replaced by the tests).
+var stdinIsTerminal = func() bool { return isTerminal(os.Stdin) }
+
+// stdin is where answers come from (replaced by the tests).
+var stdin io.Reader = os.Stdin
+
+// isTerminal reports whether file is a terminal (not /dev/null).
+func isTerminal(file *os.File) bool { return term.IsTerminal(int(file.Fd())) }
+
+// writerIsTerminal reports whether w is a terminal.
+func writerIsTerminal(w io.Writer) bool {
+	file, ok := w.(*os.File)
+	return ok && isTerminal(file)
+}
+
+// colorFor is whether to color what goes to w: on a terminal, unless
+// --no-color or NO_COLOR (when set and not empty) say otherwise.
+func colorFor(w io.Writer, noColor bool) bool {
+	return !noColor && os.Getenv("NO_COLOR") == "" && writerIsTerminal(w)
+}
+
+// confirm is the one rule of every command that changes or stops
+// something: --yes goes ahead; on a terminal it asks; without one there
+// is nobody to ask, so it says to repeat with --yes and returns 2. A "no"
+// returns 0: nothing was asked to happen.
+func confirm(question, retry string, yes bool, stdout, stderr io.Writer) (proceed bool, code int) {
+	if yes {
+		return true, output.ExitSuccess
+	}
+	if !stdinIsTerminal() {
+		fmt.Fprintf(stderr, "Sem terminal para confirmar. Repita com --yes: %s --yes\n", retry)
+		return false, output.ExitUsage
+	}
+	fmt.Fprintf(stdout, "%s [s/N] ", question)
+	answer, _ := bufio.NewReader(stdin).ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(answer)) {
+	case "s", "sim", "y", "yes":
+		return true, output.ExitSuccess
+	}
+	fmt.Fprintln(stdout, "Cancelado; nada foi alterado.")
+	return false, output.ExitSuccess
 }
 
 func loadCatalog(catalogFile string) (*catalog.Catalog, error) {
@@ -82,4 +127,9 @@ func loadCatalog(catalogFile string) (*catalog.Catalog, error) {
 		return nil, err
 	}
 	return catalog.Parse(raw)
+}
+
+func catalogFileFlag(p *cliargs.Parser, file *string) {
+	p.String(file, "ARQUIVO", "catálogo local já autenticado (testes)", "--catalog-file")
+	p.Hidden("--catalog-file")
 }

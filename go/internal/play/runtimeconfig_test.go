@@ -31,7 +31,7 @@ func TestRuntimeConfigLifecycleRecovery(t *testing.T) {
 	if err := config.Transfer(process.Pid); err != nil {
 		t.Fatal(err)
 	}
-	if exited, _ := ExitsWithin(process, 500*time.Millisecond); exited {
+	if exited, _ := process.ExitsWithin(500 * time.Millisecond); exited {
 		t.Fatal("processo saiu cedo")
 	}
 	// Alive controller: recovery keeps the cfg.

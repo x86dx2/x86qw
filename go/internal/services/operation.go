@@ -560,7 +560,7 @@ func (op *Operation) launchBackground(hosted *Hosted) int {
 		if owner, err := lock.ReadOwner(lockPath); err == nil && owner.ControllerPID == process.Process.Pid {
 			if paths, err := SessionJournalPaths(target, owner.SessionID); err == nil && len(paths) == 1 {
 				if data, err := LoadJournal(paths[0]); err == nil && data["status"] == "running" {
-					c.Success("Stack iniciada em segundo plano; consulte em Serviços › Visualizar serviços ativos.")
+					c.Success("Stack iniciada em segundo plano; veja com x86qw status.")
 					c.Info(fmt.Sprintf("Controlador: PID %d", process.Process.Pid))
 					c.Info("Log: " + logRelative)
 					return 0

@@ -30,7 +30,7 @@ func TestRuntimeConfigLifecycleWindows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if exited, _ := ExitsWithin(process, 300*time.Millisecond); exited {
+	if exited, _ := process.ExitsWithin(300 * time.Millisecond); exited {
 		t.Fatal("processo saiu cedo")
 	}
 	if err := config.Transfer(process.Pid); err != nil {
@@ -43,7 +43,7 @@ func TestRuntimeConfigLifecycleWindows(t *testing.T) {
 		t.Fatal("cfg removido com controlador vivo")
 	}
 	process.Kill()
-	if exited, _ := ExitsWithin(process, 5*time.Second); !exited {
+	if exited, _ := process.ExitsWithin(5 * time.Second); !exited {
 		t.Fatal("processo não encerrou")
 	}
 	if err := Recover(target); err != nil {

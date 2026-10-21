@@ -36,7 +36,7 @@ func LoadPresets(target string) (map[string]Preset, error) {
 		return nil, err
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
-		return nil, errors.New("host preset path is a symlink")
+		return nil, errors.New("o arquivo de presets é um symlink")
 	}
 	if !info.Mode().IsRegular() {
 		return map[string]Preset{}, nil
@@ -47,18 +47,18 @@ func LoadPresets(target string) (map[string]Preset, error) {
 	}
 	value, err := decodeGeneric(payload)
 	if err != nil {
-		return nil, errors.New("host preset file is not valid JSON")
+		return nil, errors.New("o arquivo de presets não é um JSON válido")
 	}
 	document, ok := value.(map[string]any)
 	if !ok || !isNumber(document["format"], 1) || document["kind"] != "host-presets" {
-		return nil, errors.New("host preset file has an invalid manifest")
+		return nil, errors.New("o arquivo de presets tem um cabeçalho inválido")
 	}
 	if len(document) != 3 {
-		return nil, errors.New("host preset file has extra or missing fields")
+		return nil, errors.New("o arquivo de presets tem campos a mais ou a menos")
 	}
 	raw, ok := document["presets"].([]any)
 	if !ok || len(raw) > maxPresets {
-		return nil, errors.New("host presets are invalid")
+		return nil, errors.New("os presets de hospedagem são inválidos")
 	}
 	presets := map[string]Preset{}
 	for _, item := range raw {
@@ -99,41 +99,41 @@ func intField(value any) (int, bool) {
 func closedPreset(value any) (Preset, error) {
 	raw, ok := value.(map[string]any)
 	if !ok || len(raw) != len(presetFields) {
-		return nil, errors.New("host preset entry is invalid")
+		return nil, errors.New("um preset de hospedagem é inválido")
 	}
 	for _, field := range presetFields {
 		if _, ok := raw[field]; !ok {
-			return nil, errors.New("host preset entry is invalid")
+			return nil, errors.New("um preset de hospedagem é inválido")
 		}
 	}
 	name, ok := raw["name"].(string)
 	if !ok || !presetName.MatchString(name) {
-		return nil, errors.New("host preset name is invalid")
+		return nil, errors.New("o nome de um preset é inválido")
 	}
 	preset := Preset{}
 	for _, field := range []string{"port", "qtv_port", "proxy_port"} {
 		port, ok := intField(raw[field])
 		if !ok || port < 1024 || port > 65535 {
-			return nil, fmt.Errorf("host preset %s is invalid", field)
+			return nil, fmt.Errorf("o campo %s de um preset é inválido", field)
 		}
 		preset[field] = port
 	}
 	maxclients, ok := intField(raw["maxclients"])
 	if !ok || maxclients < 1 || maxclients > 32 {
-		return nil, errors.New("host preset maxclients is invalid")
+		return nil, errors.New("o número de vagas de um preset é inválido")
 	}
 	preset["maxclients"] = maxclients
 	for _, flag := range []string{"no_mvd", "with_qtv", "with_proxy"} {
 		value, ok := raw[flag].(bool)
 		if !ok {
-			return nil, fmt.Errorf("host preset %s is invalid", flag)
+			return nil, fmt.Errorf("o campo %s de um preset é inválido", flag)
 		}
 		preset[flag] = value
 	}
 	for _, field := range []string{"name", "game", "mode", "map", "bind", "hostname", "qtv_bind", "proxy_bind"} {
 		value, ok := raw[field].(string)
 		if !ok {
-			return nil, fmt.Errorf("host preset %s is invalid", field)
+			return nil, fmt.Errorf("o campo %s de um preset é inválido", field)
 		}
 		preset[field] = value
 	}
@@ -148,10 +148,10 @@ func SavePreset(target, name string, options *HostOptions) (Preset, error) {
 	if options.Password != "" || options.SpectatorPassword != "" || options.RconPassword != "" || options.QtvPassword != "" ||
 		options.PromptPassword || options.PromptSpectatorPassword || options.PromptRconPassword || options.PromptQtvPassword ||
 		options.PasswordFile != "" || options.SpectatorPasswordFile != "" || options.RconPasswordFile != "" || options.QtvPasswordFile != "" {
-		return nil, errors.New("host presets cannot store passwords or password sources")
+		return nil, errors.New("presets não guardam senhas nem de onde lê-las")
 	}
 	if !presetName.MatchString(name) {
-		return nil, fmt.Errorf("invalid host preset name: '%s'", name)
+		return nil, fmt.Errorf("nome de preset inválido: '%s'", name)
 	}
 	if options.Game == "" || options.Map == "" {
 		return nil, errors.New("host preset requires game and map")
@@ -168,7 +168,7 @@ func SavePreset(target, name string, options *HostOptions) (Preset, error) {
 	}
 	presets[name] = preset
 	if len(presets) > maxPresets {
-		return nil, errors.New("host presets are full")
+		return nil, errors.New("a lista de presets está cheia")
 	}
 	names := make([]string, 0, len(presets))
 	for key := range presets {
@@ -182,7 +182,7 @@ func SavePreset(target, name string, options *HostOptions) (Preset, error) {
 	payload := pyDumps(map[string]any{"format": 1, "kind": "host-presets", "presets": list}, false) + "\n"
 	destination := filepath.Join(target, filepath.FromSlash(hostPresetsPath))
 	if info, err := os.Lstat(destination); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		return nil, errors.New("host preset path is a symlink")
+		return nil, errors.New("o arquivo de presets é um symlink")
 	}
 	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 		return nil, err

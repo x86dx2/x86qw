@@ -83,7 +83,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $inst = Join-Path $env:RUNNER_TEMP "inst"
-          & "$inst\x86qw.cmd" uninstall
+          & "$inst\x86qw.cmd" uninstall --yes
           if ($LASTEXITCODE -ne 0) { throw "uninstall: $LASTEXITCODE" }
           if (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\x86QW.lnk") { throw "atalho do Menu Iniciar ficou" }
           if (Test-Path "$env:USERPROFILE\Desktop\x86QW.lnk") { throw "atalho da Area de Trabalho ficou" }

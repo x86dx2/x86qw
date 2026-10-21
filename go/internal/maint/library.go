@@ -44,13 +44,13 @@ type Library struct {
 // NormalizeAddress lowercases the host and validates the port.
 func NormalizeAddress(value string) (string, error) {
 	if !addressPattern.MatchString(value) {
-		return "", fmt.Errorf("invalid server address: %s", pyRepr(value))
+		return "", fmt.Errorf("endereço de servidor inválido: %s", pyRepr(value))
 	}
 	cut := strings.LastIndex(value, ":")
 	host, portText := value[:cut], value[cut+1:]
 	port, _ := strconv.Atoi(portText)
 	if port < 1 || port > 65535 {
-		return "", fmt.Errorf("invalid server port: %s", pyRepr(value))
+		return "", fmt.Errorf("porta de servidor inválida: %s", pyRepr(value))
 	}
 	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
 		return fmt.Sprintf("%s:%d", host, port), nil
@@ -84,7 +84,7 @@ func cleanTitle(value, fallback string) string {
 
 func newEntry(address, title, origin string, now time.Time) (LibraryEntry, error) {
 	if !origins[origin] {
-		return LibraryEntry{}, fmt.Errorf("invalid library origin: %s", pyRepr(origin))
+		return LibraryEntry{}, fmt.Errorf("origem inválida na biblioteca: %s", pyRepr(origin))
 	}
 	normalized, err := NormalizeAddress(address)
 	if err != nil {
@@ -100,7 +100,7 @@ func newEntry(address, title, origin string, now time.Time) (LibraryEntry, error
 func LoadLibrary(target string) (*Library, error) {
 	path := filepath.Join(target, filepath.FromSlash(LibraryPath))
 	if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		return nil, errors.New("library path is a symlink")
+		return nil, errors.New("a biblioteca é um symlink")
 	}
 	payload, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -111,13 +111,13 @@ func LoadLibrary(target string) (*Library, error) {
 	}
 	var document map[string]any
 	if err := json.Unmarshal(payload, &document); err != nil {
-		return nil, errors.New("library file is not valid JSON")
+		return nil, errors.New("a biblioteca não é um JSON válido")
 	}
 	if format, _ := document["format"].(float64); format != 1 || document["kind"] != "library" {
-		return nil, errors.New("library file has an invalid manifest")
+		return nil, errors.New("a biblioteca tem um cabeçalho inválido")
 	}
 	if len(document) != 4 || document["favorites"] == nil || document["recents"] == nil {
-		return nil, errors.New("library file has extra or missing fields")
+		return nil, errors.New("a biblioteca tem campos a mais ou a menos")
 	}
 	library := &Library{}
 	if library.Favorites, err = parseEntries(document["favorites"], "favorites", maxFavorites); err != nil {
@@ -132,29 +132,29 @@ func LoadLibrary(target string) (*Library, error) {
 func parseEntries(value any, label string, limit int) ([]LibraryEntry, error) {
 	items, ok := value.([]any)
 	if !ok || len(items) > limit {
-		return nil, fmt.Errorf("library %s is invalid", label)
+		return nil, fmt.Errorf("a lista %s da biblioteca é inválida", label)
 	}
 	seen := map[string]bool{}
 	var entries []LibraryEntry
 	for _, raw := range items {
 		item, ok := raw.(map[string]any)
 		if !ok || len(item) != 4 {
-			return nil, fmt.Errorf("library %s entry is invalid", label)
+			return nil, fmt.Errorf("um item da lista %s da biblioteca é inválido", label)
 		}
 		fields := map[string]string{}
 		for _, key := range []string{"address", "title", "origin", "freshness"} {
 			value, present := item[key]
 			if !present {
-				return nil, fmt.Errorf("library %s entry is invalid", label)
+				return nil, fmt.Errorf("um item da lista %s da biblioteca é inválido", label)
 			}
 			fields[key] = fmt.Sprint(value)
 		}
 		if !strings.HasSuffix(fields["freshness"], "Z") {
-			return nil, errors.New("library freshness is invalid")
+			return nil, errors.New("a data da biblioteca é inválida")
 		}
 		when, err := time.Parse("2006-01-02T15:04:05Z", fields["freshness"])
 		if err != nil {
-			return nil, errors.New("library freshness is invalid")
+			return nil, errors.New("a data da biblioteca é inválida")
 		}
 		entry, err := newEntry(fields["address"], fields["title"], fields["origin"], when)
 		if err != nil {
@@ -180,7 +180,7 @@ func entryMaps(entries []LibraryEntry) []any {
 func writeLibrary(target string, library *Library) error {
 	destination := filepath.Join(target, filepath.FromSlash(LibraryPath))
 	if info, err := os.Lstat(destination); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		return errors.New("library path is a symlink")
+		return errors.New("a biblioteca é um symlink")
 	}
 	encoded, err := pyjson.Dumps(map[string]any{
 		"format": 1, "kind": "library", "favorites": entryMaps(library.Favorites), "recents": entryMaps(library.Recents),
@@ -216,7 +216,7 @@ func AddFavorite(target, address string, now time.Time) error {
 		}
 	}
 	if len(favorites) > maxFavorites {
-		return errors.New("library favorites are full")
+		return errors.New("a lista de favoritos está cheia")
 	}
 	library.Favorites = favorites
 	return writeLibrary(target, library)
@@ -239,7 +239,7 @@ func RemoveFavorite(target, address string) error {
 		}
 	}
 	if len(favorites) == len(library.Favorites) {
-		return fmt.Errorf("favorite not found: %s", normalized)
+		return fmt.Errorf("favorito não encontrado: %s", normalized)
 	}
 	library.Favorites = favorites
 	return writeLibrary(target, library)
@@ -247,11 +247,11 @@ func RemoveFavorite(target, address string) error {
 
 // RenderLibrary mirrors render_library_report.
 func RenderLibrary(library *Library) string {
-	lines := []string{"x86QW library — owner-only", ""}
+	lines := []string{"x86QW · biblioteca", ""}
 	for _, group := range []struct {
 		key     string
 		entries []LibraryEntry
-	}{{"favorites", library.Favorites}, {"recents", library.Recents}} {
+	}{{"favoritos", library.Favorites}, {"recentes", library.Recents}} {
 		lines = append(lines, fmt.Sprintf("%s: %d", group.key, len(group.entries)))
 		for _, item := range group.entries {
 			lines = append(lines, fmt.Sprintf("  %s  %s  %s  %s", item.Address, item.Title, item.Origin, item.Freshness))

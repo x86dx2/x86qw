@@ -136,7 +136,7 @@ func assessRepair(in plan.Input) (*RepairAssessment, error) {
 	}
 	assessment.packageOrder = verifyPackageOrder(root, valid["package-order"]) != nil
 	for _, spec := range catalog.ClientSpecs {
-		for _, channel := range []string{"stable", "nightly"} {
+		for _, channel := range catalog.Channels {
 			runtime := filepath.Join(root, spec.Runtime(channel))
 			receiptPath := filepath.Join(root, filepath.FromSlash(spec.Receipt(channel)))
 			if _, err := os.Lstat(receiptPath); err != nil {

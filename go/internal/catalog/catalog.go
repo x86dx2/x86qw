@@ -221,7 +221,21 @@ func (s ClientSpec) Receipt(channel string) string {
 	return s.NightlyReceipt
 }
 
-// ClientSpecs mirrors PLATFORMS in manager.py, in its iteration order.
+// Channels are the ezQuake release channels, stable first.
+var Channels = []string{"stable", "nightly"}
+
+// Platform is the catalog's name for a GOOS.
+func Platform(goos string) string {
+	switch goos {
+	case "darwin":
+		return "macos"
+	case "windows":
+		return "windows"
+	}
+	return "linux"
+}
+
+// ClientSpecs are the ezQuake builds per platform, in install order.
 var ClientSpecs = []ClientSpec{
 	{"macos", "macOS", "universal", "ezQuake-macOS-universal.zip", "_ezQuake-macOS-universal.zip",
 		"ezQuake Stable.app", "ezQuake Nightly.app", ".x86qw/clients/ezquake/macos/stable.receipt", ".x86qw/clients/ezquake/macos/nightly.receipt"},

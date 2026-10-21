@@ -5,38 +5,43 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/maint"
 	"github.com/x86dx2/x86qw/go/internal/output"
 )
 
-func expandHome(path string) string {
-	if strings.HasPrefix(path, "~") {
-		if home, err := os.UserHomeDir(); err == nil {
-			return home + path[1:]
-		}
-	}
-	return path
+type uiArgs struct{ target, output string }
+
+func (a *uiArgs) parser() *cliargs.Parser {
+	p := cliargs.New()
+	targetFlag(p, &a.target)
+	p.String(&a.output, "ARQUIVO.html", "onde gravar (padrão: um arquivo temporário)", "--output")
+	return p
 }
 
 func runUI(args []string, stdout, stderr io.Writer) int {
-	parsed, ok := parseArgs("ui", args, []string{"--output"}, nil, nil, stderr)
-	if !ok {
-		return output.ExitUsage
+	var a uiArgs
+	p := a.parser()
+	if code, ok := parse("ui", p, args, stdout, stderr); !ok {
+		return code
 	}
-	destination := parsed.values["--output"]
+	target, err := targetOf(p, a.target)
+	if err != nil {
+		return usageFailure("ui", err, stderr)
+	}
+	destination := expandHome(a.output)
 	if destination == "" {
-		file, err := os.CreateTemp("", "x86qw-ui-*.html")
+		// A fresh folder of our own, so the page goes where no one else
+		// can have put anything first.
+		dir, err := os.MkdirTemp("", "x86qw-ui-")
 		if err != nil {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
 			return output.ExitFailure
 		}
-		destination = file.Name()
-		file.Close()
-		os.Remove(destination)
+		destination = filepath.Join(dir, "x86qw.html")
 	}
-	written, err := maint.WriteLocalUI(parsed.target, destination)
+	written, err := maint.WriteLocalUI(target, destination)
 	if err != nil {
 		fmt.Fprintf(stderr, "✗ %v\n", err)
 		return output.ExitFailure
@@ -46,5 +51,7 @@ func runUI(args []string, stdout, stderr io.Writer) int {
 }
 
 func init() {
-	register("ui", 130, "ui                   painel HTML local somente leitura", noName(runUI))
+	register(command{name: "ui", group: "Seus dados", order: 40, synopsis: "[DESTINO]",
+		summary: "gera um painel HTML local, só de leitura",
+		flags:   (&uiArgs{}).parser, run: noName(runUI)})
 }

@@ -2,6 +2,7 @@ package maint
 
 import (
 	"archive/zip"
+	"github.com/x86dx2/x86qw/go/internal/doctor"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -159,7 +160,7 @@ func TestInsideUsesTheOSSeparator(t *testing.T) {
 // exist yet.
 func TestLocalUINeverLandsInsideTheInstallation(t *testing.T) {
 	root := t.TempDir()
-	if _, err := WriteLocalUI(root, filepath.Join(root, "novo", "ui.html")); err == nil || !strings.Contains(err.Error(), "outside") {
+	if _, err := WriteLocalUI(root, filepath.Join(root, "novo", "ui.html")); err == nil || !strings.Contains(err.Error(), "dentro da instalação") {
 		t.Fatalf("snapshot dentro da instalação aceito: %v", err)
 	}
 	if exists(filepath.Join(root, "novo")) {
@@ -173,16 +174,16 @@ func TestBundleDestinationNeverLandsInsideTheInstallation(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	root := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "bundle.zip")
-	if got, err := ResolveBundleDestination(outside, root); err != nil || got != filepath.Join(resolve(filepath.Dir(outside)), "bundle.zip") {
+	if got, err := doctor.BundleDestination(outside, root); err != nil || got != filepath.Join(resolve(filepath.Dir(outside)), "bundle.zip") {
 		t.Fatalf("fora da instalação: %s %v", got, err)
 	}
-	if _, err := ResolveBundleDestination(filepath.Join(root, "sub", "bundle.zip"), root); err == nil {
+	if _, err := doctor.BundleDestination(filepath.Join(root, "sub", "bundle.zip"), root); err == nil {
 		t.Fatal("caminho dentro da instalação aceito")
 	}
 	previous, _ := os.Getwd()
 	defer os.Chdir(previous)
 	os.Chdir(root)
-	if got, err := ResolveBundleDestination("bundle.zip", root); err != nil || got != filepath.Join(resolve(home), "bundle.zip") {
+	if got, err := doctor.BundleDestination("bundle.zip", root); err != nil || got != filepath.Join(resolve(home), "bundle.zip") {
 		t.Fatalf("nome solto dentro da instalação deveria ir para a home: %s %v", got, err)
 	}
 }

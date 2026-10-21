@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/fspath"
 	"github.com/x86dx2/x86qw/go/internal/pyjson"
 )
 
@@ -135,11 +136,11 @@ func lessCodepoints(a, b string) bool {
 
 // RenderProfile mirrors render_profile_report.
 func RenderProfile(report DataReport) string {
-	lines := []string{"x86QW profile — owner-only", ""}
+	lines := []string{"x86QW · perfil", ""}
 	for _, group := range []struct {
 		key   string
 		items []string
-	}{{"profile", report.Profile}, {"cache", report.Cache}, {"personal", report.Personal}} {
+	}{{"configurações", report.Profile}, {"cache", report.Cache}, {"dados pessoais", report.Personal}} {
 		lines = append(lines, fmt.Sprintf("%s: %d", group.key, len(group.items)))
 		for _, item := range group.items {
 			lines = append(lines, "  "+item)
@@ -148,62 +149,16 @@ func RenderProfile(report DataReport) string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
-// ResolveBundleDestination mirrors doctor.resolve_bundle_destination: a
-// bundle is never written inside the installation.
-func ResolveBundleDestination(raw, target string) (string, error) {
-	requested := raw
-	if strings.HasPrefix(requested, "~") {
-		home, _ := os.UserHomeDir()
-		requested = home + requested[1:]
-	}
-	destination, err := filepath.Abs(requested)
-	if err != nil {
-		return "", err
-	}
-	destination = filepath.Join(resolve(filepath.Dir(destination)), filepath.Base(destination))
-	root := resolve(target)
-	if !inside(destination, root) {
-		return destination, nil
-	}
-	if filepath.Dir(raw) != "." {
-		return "", errors.New("o bundle não pode ser gravado dentro da instalação")
-	}
-	home, _ := os.UserHomeDir()
-	fallback := filepath.Join(resolve(home), filepath.Base(raw))
-	if !inside(fallback, root) {
-		return fallback, nil
-	}
-	return "", errors.New("o bundle não pode ser gravado dentro da instalação")
-}
-
-// resolve makes name absolute and follows the links in as much of it as
-// exists. A path that does not exist yet must still compare equal to the
-// same place reached through a link (on macOS, /var is /private/var), or
-// a bundle could be written inside the installation.
-func resolve(name string) string {
-	absolute, _ := filepath.Abs(name)
-	if resolved, err := filepath.EvalSymlinks(absolute); err == nil {
-		return resolved
-	}
-	parent := filepath.Dir(absolute)
-	if parent == absolute {
-		return absolute
-	}
-	return filepath.Join(resolve(parent), filepath.Base(absolute))
-}
-
-// inside reports whether name is root or below it. Rel speaks the OS
-// separator, so on Windows a path outside starts with ..\ (and one on
-// another drive is an error).
-func inside(name, root string) bool {
-	relative, err := filepath.Rel(root, name)
-	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
-}
+// resolve and inside are fspath's, under the names this package uses.
+var (
+	resolve = fspath.Resolve
+	inside  = fspath.Inside
+)
 
 // BackupProfile writes a zip of user-owned profile files.
 func BackupProfile(target, destination string) (string, error) {
 	if _, err := os.Lstat(destination); err == nil {
-		return "", errors.New("profile backup destination already exists")
+		return "", errors.New("já existe um arquivo no destino do backup")
 	}
 	files := ClassifyInstallData(target).Profile
 	var entries []any
@@ -297,7 +252,7 @@ func RestoreProfile(archive, target string) ([]string, error) {
 		return nil, err
 	}
 	if manifest.Kind != "profile" || manifest.Format != 1 {
-		return nil, errors.New("profile backup has an invalid manifest")
+		return nil, errors.New("o backup do perfil tem um manifesto inválido")
 	}
 	planned := map[string]bool{}
 	var order []string
@@ -311,12 +266,12 @@ func RestoreProfile(archive, target string) ([]string, error) {
 			continue
 		}
 		if !planned[name] {
-			return nil, errors.New("profile backup contents diverge from the manifest")
+			return nil, errors.New("o conteúdo do backup do perfil não confere com o manifesto")
 		}
 		extra++
 	}
 	if extra != len(planned) {
-		return nil, errors.New("profile backup contents diverge from the manifest")
+		return nil, errors.New("o conteúdo do backup do perfil não confere com o manifesto")
 	}
 	payloads := map[string][]byte{}
 	for _, item := range manifest.Files {
@@ -340,7 +295,7 @@ func RestoreProfile(archive, target string) ([]string, error) {
 		destination := filepath.Join(target, filepath.FromSlash(relative))
 		if info, err := os.Lstat(destination); err == nil && info.Mode()&os.ModeSymlink != 0 {
 			rollbackProfile(target, originals, missing)
-			return nil, fmt.Errorf("profile destination is a symlink: %s", relative)
+			return nil, fmt.Errorf("o destino do perfil é um symlink: %s", relative)
 		}
 		if data, err := os.ReadFile(destination); err == nil && regular(destination) {
 			originals[relative] = data

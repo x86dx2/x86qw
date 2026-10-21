@@ -12,6 +12,9 @@ const (
 	defaultRuleset           = "x86qw"
 )
 
+// RulesetKeys are the client rulesets, in the order they are offered.
+var RulesetKeys = []string{"x86qw", "qcon", "smackdown", "thunderdome", "mtfl", "smackdrive"}
+
 // Rulesets maps product rulesets to engine rulesets.
 var Rulesets = map[string]string{
 	"x86qw": "default", "qcon": "qcon", "smackdown": "smackdown",

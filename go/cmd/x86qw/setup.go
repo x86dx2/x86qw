@@ -9,177 +9,158 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/buildinfo"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
-	"github.com/x86dx2/x86qw/go/internal/cli"
+	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/output"
 	"github.com/x86dx2/x86qw/go/internal/setup"
-	"github.com/x86dx2/x86qw/go/internal/setup/tui"
 	"github.com/x86dx2/x86qw/go/internal/trust"
 )
 
-// hasInstallation reports whether target already holds an x86QW install.
-func hasInstallation(target string) bool { return setup.Installed(target) }
+// setupArgs are the arguments of setup and install.
+type setupArgs struct {
+	target, profile, platform, channel, release, catalogFile string
+	yes, nonInteractive                                      bool
+	// recipe holds the --intent recipe flags (setup only).
+	recipe     *flag.FlagSet
+	readRecipe func(target string) (setup.Options, error)
+}
 
-// publishCLI installs this executable as the installation's CLI and, with
-// link, links ~/.local/bin/x86qw to its launcher (shortcuts on Windows).
-// It never installs a development build nor an older version over a
-// newer one; the same version is reinstalled, which refreshes the
-// launcher and receipt.
-func publishCLI(target string, link bool, stdout, stderr io.Writer) error {
-	if !cli.Replaces(buildinfo.Version, target, true) {
-		return nil
+func (a *setupArgs) parser(withRecipe bool) *cliargs.Parser {
+	p := cliargs.New()
+	targetFlag(p, &a.target)
+	p.Choice(&a.profile, []string{"essential", "recommended", "complete"}, "instala este perfil sem abrir o app", "--profile")
+	p.Choice(&a.platform, []string{"macos", "linux", "windows"}, "sistema da instalação (padrão: este)", "--platform")
+	p.Choice(&a.channel, []string{"stable", "nightly"}, "canal do ezQuake", "--channel")
+	catalogFileFlag(p, &a.catalogFile)
+	if withRecipe {
+		a.recipe = flag.NewFlagSet("setup", flag.ContinueOnError)
+		a.readRecipe = setup.AddRecipeFlags(a.recipe)
+		p.Adopt(a.recipe)
+		p.Bool(&a.yes, "instala a receita sem perguntar", "--yes")
+	} else {
+		p.String(&a.release, "VERSÃO", "versão do ezQuake (padrão: a do catálogo)", "--release")
+		p.Bool(&a.nonInteractive, "nunca abre o app; exige --profile", "--non-interactive")
 	}
-	executable, err := os.Executable()
+	return p
+}
+
+// parseSetup parses setup or install and resolves the installation.
+func parseSetup(name string, args []string, stdout, stderr io.Writer) (*setupArgs, string, int, bool) {
+	a := &setupArgs{platform: install.HostPlatform(), channel: "stable"}
+	p := a.parser(name == "setup")
+	if code, ok := parse(name, p, args, stdout, stderr); !ok {
+		return nil, "", code, false
+	}
+	root, err := targetOf(p, a.target)
+	if err != nil {
+		return nil, "", usageFailure(name, err, stderr), false
+	}
+	return a, root, output.ExitSuccess, true
+}
+
+// recipeGiven is whether the command line carries an --intent recipe.
+func (a *setupArgs) recipeGiven() bool {
+	given := false
+	if a.recipe != nil {
+		a.recipe.Visit(func(f *flag.Flag) { given = given || f.Name == "intent" || f.Name == "recipe" })
+	}
+	return given
+}
+
+// installProfile installs a profile into a new installation, the work of
+// setup --profile and install --profile.
+func installProfile(root string, a *setupArgs, stdout, stderr io.Writer) error {
+	parsed, err := loadCatalog(a.catalogFile)
 	if err != nil {
 		return err
 	}
-	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
-		executable = resolved
-	}
-	// cli.Install reads the whole executable before writing, so it can
-	// replace the very file that is running.
-	layer, err := cli.Install(target, executable, buildinfo.Version)
+	inventory, err := catalog.LoadInventory()
 	if err != nil {
 		return err
 	}
-	if !link {
-		return nil
-	}
-	home, _ := os.UserHomeDir()
-	command, err := cli.LinkUserCommand(target, home)
+	result, err := install.Install(context.Background(), root, parsed, inventory, install.InstallOptions{
+		Platform: a.platform, Channel: a.channel, Release: a.release, Profile: a.profile,
+	})
 	if err != nil {
-		layer.Rollback()
 		return err
 	}
-	switch {
-	case command != "" && runtime.GOOS == "windows":
-		fmt.Fprintf(stdout, "Atalhos do x86QW criados no Menu Iniciar e na Área de Trabalho (%s).\n", command)
-	case command != "":
-		fmt.Fprintf(stdout, "Comando x86qw disponível em %s\n", command)
+	for _, warning := range result.Warnings {
+		fmt.Fprintf(stderr, "! %s\n", warning)
 	}
+	fmt.Fprintf(stdout, "✓ ezQuake + %d componentes instalados em %s · %d arquivos\n", len(result.Installed), root, result.Files)
 	return nil
 }
 
+// failure reports err, naming a permission problem plainly, and returns 1.
+func failure(root string, err error, stderr io.Writer) int {
+	if errors.Is(err, os.ErrPermission) {
+		fmt.Fprintf(stderr, "✗ sem permissão para escrever em %s\n", root)
+	} else {
+		fmt.Fprintf(stderr, "✗ %v\n", err)
+	}
+	return output.ExitFailure
+}
+
 func runSetup(args []string, stdout, stderr io.Writer) int {
-	flags := flag.NewFlagSet("setup", flag.ContinueOnError)
-	flags.SetOutput(stderr)
-	target := flags.String("target", "", "diretório da instalação")
-	profile := flags.String("profile", "", "essential, recommended ou complete (instalação nova)")
-	platform := flags.String("platform", install.HostPlatform(), "macos, linux ou windows")
-	channel := flags.String("channel", "stable", "canal do ezQuake")
-	catalogFile := flags.String("catalog-file", "", "catálogo local já autenticado (testes)")
-	recipe := setup.AddRecipeFlags(flags)
-	yes := flags.Bool("yes", false, "confirma a receita sem perguntar")
-	if err := flags.Parse(args); err != nil {
-		return output.ExitUsage
+	a, root, code, ok := parseSetup("setup", args, stdout, stderr)
+	if !ok {
+		return code
 	}
-	given := map[string]bool{}
-	flags.Visit(func(f *flag.Flag) { given[f.Name] = true })
-	if *target == "" && len(flags.Args()) == 1 {
-		*target = flags.Args()[0]
-	}
-	if *target == "" {
-		*target = tui.DefaultTarget()
-	}
-	root, _ := filepath.Abs(*target)
-	backend := &setup.Real{Trust: trust.Options{CacheDir: defaultCacheDir()}, CatalogFile: *catalogFile, Platform: *platform}
 	switch {
-	case given["intent"]:
-		// A recipe installs without asking.
-		options, err := recipe(root)
+	case a.recipeGiven():
+		// A recipe installs without the interface.
+		options, err := a.readRecipe(root)
 		if err != nil {
-			fmt.Fprintf(stderr, "x86qw setup: %v\n", err)
-			return output.ExitUsage
+			return usageFailure("setup", err, stderr)
 		}
-		backend.Publish = func(target string) error { return publishCLI(target, false, stdout, stderr) }
-		backend.Integrate = setup.Integrate
-		return runRecipe(backend, options, *yes, stdout, stderr)
-	case *profile == "" && interactive():
-		app := realBackend(*catalogFile, *platform)
-		return runApp(app, root, "", stdout, stderr)
-	}
-	if hasInstallation(root) {
+		backend := &setup.Real{Trust: trust.Options{CacheDir: defaultCacheDir()}, CatalogFile: a.catalogFile, Platform: a.platform,
+			Publish:   func(target string) error { return publishCLI(target, false, io.Discard) },
+			Integrate: setup.Integrate}
+		return runRecipe(backend, options, a.yes, stdout, stderr)
+	case a.profile == "" && interactive():
+		return runApp(realBackend(a.catalogFile, a.platform), root, "", stdout, stderr)
+	case install.Installed(root):
+		// Adopting an installation: this CLI becomes its CLI.
 		held, err := lock.Acquire(root, "install")
 		if err != nil {
-			fmt.Fprintf(stderr, "✗ %v\n", err)
-			return output.ExitFailure
+			return failure(root, err, stderr)
 		}
-		err = publishCLI(root, true, stdout, stderr)
+		err = publishCLI(root, true, stdout)
 		held.Release()
 		if err != nil {
-			fmt.Fprintf(stderr, "✗ %v\n", err)
-			return output.ExitFailure
+			return failure(root, err, stderr)
 		}
 		if _, err := install.Verify(root); err != nil {
 			fmt.Fprintf(stderr, "! CLI nativa instalada, mas a verificação encontrou problemas: %v\n  Execute: x86qw repair\n", err)
 			return output.ExitFailure
 		}
-		fmt.Fprintf(stdout, "✓ Instalação existente em %s agora usa a CLI nativa x86QW %s.\n", root, buildinfo.Version)
+		fmt.Fprintf(stdout, "✓ A instalação em %s agora usa a CLI x86QW %s.\n", root, buildinfo.Version)
 		return output.ExitSuccess
+	case a.profile == "":
+		return usageFailure("setup", cliargs.Usagef("sem terminal, informe --profile ou uma receita (--intent … --yes)"), stderr)
 	}
-	if *profile == "" {
-		// Without a terminal there is nobody to ask: a profile or a recipe.
-		fmt.Fprintln(stderr, "uso: x86qw setup --profile essential|recommended|complete [--target DESTINO]")
-		fmt.Fprintln(stderr, "     x86qw setup --intent play|host|both … --yes (a receita que o instalador copia)")
-		return output.ExitUsage
+	if err := installProfile(root, a, stdout, stderr); err != nil {
+		return failure(root, err, stderr)
 	}
-	parsed, err := loadCatalog(*catalogFile)
-	if err == nil {
-		var inventory *catalog.Inventory
-		if inventory, err = catalog.LoadInventory(); err == nil {
-			var result *install.Result
-			result, err = install.Install(context.Background(), root, parsed, inventory, install.InstallOptions{
-				Platform: *platform, Channel: *channel, Profile: *profile,
-			})
-			if err == nil {
-				for _, warning := range result.Warnings {
-					fmt.Fprintf(stderr, "! %s\n", warning)
-				}
-				fmt.Fprintf(stdout, "✓ ezQuake + %d componentes instalados em %s\n", len(result.Installed), root)
-			}
-		}
-	}
-	if err == nil {
-		err = publishCLI(root, true, stdout, stderr)
-	}
-	if err != nil {
-		if errors.Is(err, os.ErrPermission) {
-			fmt.Fprintf(stderr, "✗ sem permissão para escrever em %s\n", root)
-		} else {
-			fmt.Fprintf(stderr, "✗ %v\n", err)
-		}
-		return output.ExitFailure
+	if err := publishCLI(root, true, stdout); err != nil {
+		return failure(root, err, stderr)
 	}
 	fmt.Fprintln(stdout, "  Jogar agora: x86qw play")
 	return output.ExitSuccess
-}
-
-// interfaceLanguage follows the locale: Portuguese unless it says otherwise.
-func interfaceLanguage() tui.Lang {
-	for _, name := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
-		if value := os.Getenv(name); value != "" && value != "C" && value != "POSIX" {
-			if strings.HasPrefix(strings.ToLower(value), "pt") {
-				return tui.PT
-			}
-			return tui.EN
-		}
-	}
-	return tui.PT
 }
 
 // runRecipe installs options without the interface, printing the
 // preflight, each component as it lands and how to start.
 func runRecipe(backend *setup.Real, options setup.Options, yes bool, stdout, stderr io.Writer) int {
 	con := newConsole(stdout, stderr, false, false)
-	if !yes {
-		fmt.Fprintf(stderr, "Confirme com: %s\n", strings.Join(options.Recipe(), " "))
-		return output.ExitUsage
+	recipe := strings.Join(options.Recipe(), " ")
+	if proceed, code := confirm("Instalar em "+options.Target+" com esta receita?", recipe, yes, stdout, stderr); !proceed {
+		return code
 	}
 	ctx := context.Background()
 	blocked := false
@@ -215,7 +196,7 @@ func runRecipe(backend *setup.Real, options setup.Options, yes bool, stdout, std
 	switch {
 	case errors.Is(last.Err, context.Canceled):
 		con.failure("Instalação cancelada; a pasta voltou ao que era.")
-		return exitInterrupted
+		return output.ExitInterrupted
 	case last.Err != nil:
 		con.failure(last.Err.Error() + " — a pasta voltou ao que era.")
 		return output.ExitFailure
@@ -235,5 +216,10 @@ func runRecipe(backend *setup.Real, options setup.Options, yes bool, stdout, std
 }
 
 func init() {
-	register("setup", 35, "setup                instala ou adota uma instalação e publica a CLI nativa", noName(runSetup))
+	register(command{name: "setup", group: "Instalar e manter", order: 10, synopsis: "[DESTINO]",
+		summary: "instala o x86QW ou adota uma instalação existente",
+		about: "Num terminal, abre o instalador do app. Com --profile, instala sem perguntar; com uma receita (--intent e as outras opções " +
+			"que o instalador copia), instala o que ela diz. Numa instalação existente, passa a usar esta CLI.",
+		flags: func() *cliargs.Parser { return (&setupArgs{}).parser(true) },
+		run:   noName(runSetup)})
 }
