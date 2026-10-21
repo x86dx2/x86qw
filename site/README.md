@@ -1,14 +1,14 @@
-# Site x86QW
+# x86QW site
 
-Todo o portal esta contido neste diretorio:
+The whole portal lives in this directory:
 
-- `public/`: HTML, CSS, JavaScript, fontes, catalogo e arquivos de edge;
-- `wrangler.jsonc`: configuracao do Cloudflare Workers Static Assets;
-- `PRODUCT.md` e `DESIGN.md`: produto e sistema visual;
-- `docs/`: operacao e deploy;
-- `tests/`: contratos semanticos e referencias locais.
+- `public/`: HTML, CSS, JavaScript, fonts, catalog and edge files;
+- `wrangler.jsonc`: the Cloudflare Workers Static Assets configuration;
+- `PRODUCT.md` and `DESIGN.md`: product and visual system;
+- `docs/`: operation and deploy;
+- `tests/`: semantic contracts and local references.
 
-Executar localmente:
+To run it locally:
 
 ```sh
 cd site
@@ -18,5 +18,5 @@ npm test
 npm run dev
 ```
 
-Abra <http://127.0.0.1:8787>. O catalogo consumido pelo instalador fica em
-`public/api/v1/catalog.json` e e publicado na mesma origem do portal.
+Open <http://127.0.0.1:8787>. The catalog the installer reads is
+`public/api/v1/catalog.json`, published on the same origin as the portal.

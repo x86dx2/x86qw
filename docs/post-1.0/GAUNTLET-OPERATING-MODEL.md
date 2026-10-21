@@ -1,77 +1,77 @@
-# Operating model do gauntlet
+# Gauntlet operating model
 
-O gauntlet é o caminho mínimo para uma proposta atravessar evidência,
-segurança e release. Ele não transforma o executor documental em autoridade de
-produto.
+The gauntlet is the minimum path for a proposal to get through evidence,
+security and release. It does not turn the documentation executor into a
+product authority.
 
-## Papéis
+## Roles
 
-| Papel | Responsabilidade | Pode fazer nesta issue |
+| Role | Responsibility | May do in this issue |
 | --- | --- | --- |
-| Maker | prepara diff e evidências | criar/editar os artefatos locais aprovados |
-| Checker | repete checks e aponta falhas | revisão independente posterior |
-| Release owner | decide avanço, hold ou rollback | registrar decisão; não implícita |
-| Custodian | guarda trust/recovery | ausente para produção nesta fotografia |
-| Orchestrator | escolhe escopo e encadeia agentes | receber PLAN_DEVIATION/Evidence Pack |
+| Maker | prepares the diff and the evidence | create/edit the approved local artifacts |
+| Checker | repeats the checks and points out failures | later independent review |
+| Release owner | decides advance, hold or rollback | record the decision; never implicit |
+| Custodian | keeps trust/recovery | missing for production in this snapshot |
+| Orchestrator | picks the scope and chains agents | receive PLAN_DEVIATION/Evidence Pack |
 
-Um mantenedor pode acumular Maker e owner-only operator, mas self-review não é
-Checker independente para trust ou audiência externa.
+One maintainer can hold both Maker and owner-only operator, but self-review is
+not an independent Checker for trust or an external audience.
 
 ## Passes
 
-1. **Intake:** confirmar issue, branch, contrato e allowlist de caminhos.
-2. **Baseline:** registrar status, branch, HEAD, dirty files, limitations e
-   evidência anterior.
-3. **Maker:** alterar somente o escopo; usar labels `VERIFIED FACT`,
+1. **Intake:** confirm the issue, branch, contract and path allowlist.
+2. **Baseline:** record status, branch, HEAD, dirty files, limitations and
+   prior evidence.
+3. **Maker:** change only the scope; use the labels `VERIFIED FACT`,
    `INFERENCE`, `PROPOSAL`, `BLOCKED`.
-4. **Static:** parse JSON, links relativos, `git diff --check`, allowlist e
-   ausência de secrets/URLs não observadas.
-5. **Semantic:** comparar hashes, gates, audiência, dependencies e claims com a
-   baseline.
-6. **Adversarial:** procurar claims de site/CWV/native não comprovados,
-   receipt apontando RC, drift de audiência e campos incompletos.
-7. **Decision:** Checker retorna findings; owner escolhe `advance`/`hold`;
-   executor só corrige findings autorizados.
-8. **Handoff:** Evidence Pack com baseline, changed files, diff summary,
-   tests/results, limitations e deviations.
+4. **Static:** parse JSON, relative links, `git diff --check`, allowlist and
+   absence of secrets/unobserved URLs.
+5. **Semantic:** compare hashes, gates, audience, dependencies and claims with
+   the baseline.
+6. **Adversarial:** look for unproven site/CWV/native claims, a receipt
+   pointing at RC, audience drift and incomplete fields.
+7. **Decision:** the Checker returns findings; the owner chooses
+   `advance`/`hold`; the executor fixes only authorized findings.
+8. **Handoff:** Evidence Pack with baseline, changed files, diff summary,
+   tests/results, limitations and deviations.
 
-## Invariantes do gauntlet
+## Gauntlet invariants
 
-- não criar issue remota para um item do backlog;
-- não publicar código, workflow, release, trust metadata ou deploy nesta
-  materialização; o commit/push da documentação desta branch só ocorre depois
-  de Checker e Finalizer aprovarem o diff;
-- não executar mutation externa autenticada;
-- não elevar E1/E2 a E3/E4 por linguagem;
-- não fechar risco por ausência de dados;
-- não alterar `quake-world/` nem arquivos fora da allowlist.
+- do not create a remote issue for a backlog item;
+- do not publish code, a workflow, a release, trust metadata or a deploy in
+  this materialization; the commit/push of this branch's documentation happens
+  only after the Checker and the Finalizer approve the diff;
+- do not run an authenticated external mutation;
+- do not raise E1/E2 to E3/E4 through wording;
+- do not close a risk for lack of data;
+- do not change `quake-world/` or files outside the allowlist.
 
-## Artefato mínimo por item
+## Minimum artifact per item
 
-Cada item do backlog deve ter title, problem, outcome, scope, non-scope,
+Every backlog item must have title, problem, outcome, scope, non-scope,
 dependencies, acceptance, gates, tests, platform, security, privacy, rollback,
-docs, Maker, Checker, target version e audience. O [backlog.json](backlog.json)
-é a fonte de estrutura; [ISSUE-BACKLOG.md](ISSUE-BACKLOG.md) é a leitura
-humana.
+docs, Maker, Checker, target version and audience. [backlog.json](backlog.json)
+is the source of structure; [ISSUE-BACKLOG.md](ISSUE-BACKLOG.md) is the human
+reading.
 
 ## Rollback
 
-Rollback documental é remover somente o diff desta issue em uma revisão
-autorizada, preservando snapshots históricos. Rollback de produto, workflow,
-release, trust ou site está fora do escopo e exige novo contrato.
+A documentation rollback removes only this issue's diff in an authorized
+revision, keeping the historical snapshots. A rollback of product, workflow,
+release, trust or site is out of scope and needs a new contract.
 
 ## Gauntlet evidence ledger
 
-| Evidência | Nível | Estado | Regra de uso |
+| Evidence | Level | State | Rule of use |
 | --- | --- | --- | --- |
-| HEAD/main e run Validate | E1/E2 | MAIN RED | bloqueia 0A e feature work |
-| focal DNS com relógio controlado | E2 local | hipótese test-only | ainda exige Windows 3.10/3.13 |
-| TUF root/roles autenticadas | E1/E2 | HEALTHY no instante observado | não prova custody/recovery |
-| installer GitHub/GitLab byte equality | E2 | convergente | não é rebuild E4 |
-| candidato final no Apple M3 | E3 | 25/25 | não promove não-M3 |
-| receipt final/public acceptance | E1/E2 | RC1 misturado | não aprova external-public |
-| ownership/SBOM final | E1 | 87/87 NOASSERTION | gate 0C aberto |
-| QWLeague discovery | E1 público | BLOCKED_EXTERNAL | sem scraping, auth ou claim |
+| HEAD/main and Validate run | E1/E2 | MAIN RED | blocks 0A and feature work |
+| focused DNS with a controlled clock | E2 local | test-only hypothesis | still needs Windows 3.10/3.13 |
+| authenticated TUF root/roles | E1/E2 | HEALTHY at the observed moment | does not prove custody/recovery |
+| GitHub/GitLab installer byte equality | E2 | converging | not an E4 rebuild |
+| final candidate on the Apple M3 | E3 | 25/25 | does not promote non-M3 |
+| final receipt/public acceptance | E1/E2 | RC1 mixed in | does not approve external-public |
+| final ownership/SBOM | E1 | 87/87 NOASSERTION | gate 0C open |
+| QWLeague discovery | E1 public | BLOCKED_EXTERNAL | no scraping, auth or claim |
 
-Cada linha conserva commit, digest, run/endpoint, UTC e Checker. A ausência de
-evidência é `BLOCKED`, nunca `PASS`.
+Every row keeps the commit, digest, run/endpoint, UTC and Checker. Missing
+evidence is `BLOCKED`, never `PASS`.

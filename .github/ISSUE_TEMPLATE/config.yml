@@ -1,11 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Instalação
-    url: https://github.com/x86dx2/x86qw#instalação
-    about: Bootstrap, perfis, atualização, verificação e reparo.
-  - name: Guia de hosting
+  - name: Installation
+    url: https://github.com/x86dx2/x86qw#installation
+    about: Bootstrap, profiles, update, verification and repair.
+  - name: Hosting guide
     url: https://github.com/x86dx2/x86qw/blob/main/docs/HOSTING.md
-    about: MVDSV, QTV, QWFWD, rede, senhas e lifecycle.
-  - name: Relatar uma vulnerabilidade
+    about: MVDSV, QTV, QWFWD, network, passwords and lifecycle.
+  - name: Report a vulnerability
     url: https://github.com/x86dx2/x86qw/security/advisories/new
-    about: Use o canal privado para problemas de segurança.
+    about: Use the private channel for security problems.

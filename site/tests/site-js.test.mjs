@@ -54,7 +54,7 @@ test('each install button copies the command for its own shell', async () => {
 
   assert.deepEqual(copied, [...commands.values()].map(({ textContent }) => textContent));
   assert.deepEqual(buttons.map(({ dataset }) => dataset.copyState), ['copied', 'copied']);
-  assert.deepEqual(buttons.map(({ status }) => status.textContent), ['Copiado', 'Copiado']);
+  assert.deepEqual(buttons.map(({ status }) => status.textContent), ['Copied', 'Copied']);
   assert.deepEqual(
     buttons.map(({ textContent }) => textContent),
     [...commands.values()].map(({ textContent }) => textContent),

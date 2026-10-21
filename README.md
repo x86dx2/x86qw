@@ -7,42 +7,42 @@
 
   <br>
 
-  **Uma distribuição moderna, reproduzível e autocontida de QuakeWorld.**<br>
-  Cliente, jogos, servidor dedicado, relay e proxy — instalados por uma única CLI verificável.
+  **A modern, reproducible and self-contained QuakeWorld distribution.**<br>
+  Client, games, dedicated server, relay and proxy — installed by a single verifiable CLI.
 
   [![Release](https://img.shields.io/github/v/release/x86dx2/x86qw?display_name=tag&sort=semver&style=for-the-badge&label=release&color=ef6a57)](https://github.com/x86dx2/x86qw/releases/latest)
   [![Quality gate](https://img.shields.io/github/actions/workflow/status/x86dx2/x86qw/validate.yml?branch=main&style=for-the-badge&label=quality%20gate&color=4767ff)](https://github.com/x86dx2/x86qw/actions/workflows/validate.yml)
   [![Portal](https://img.shields.io/website?url=https%3A%2F%2Fqw.x86.com.br%2F&style=for-the-badge&label=portal&up_message=online&down_message=offline&color=28a890)](https://qw.x86.com.br/)
-  [![Platforms](https://img.shields.io/badge/macOS_·_Linux_·_Windows-catalogued-181b2a?style=for-the-badge)](#compatibilidade)
+  [![Platforms](https://img.shields.io/badge/macOS_·_Linux_·_Windows-catalogued-181b2a?style=for-the-badge)](#compatibility)
 
-  [**Instalar**](#instalação) · [O app](#o-app) · [Comandos](#comandos) · [Hospedar](#hospedar) · [Arquitetura](#arquitetura) · [Contribuir](#contribuindo)
+  [**Install**](#installation) · [The app](#the-app) · [Commands](#commands) · [Hosting](#hosting) · [Architecture](#architecture) · [Contributing](#contributing)
 </div>
 
 ---
 
-## QuakeWorld sem arqueologia
+## QuakeWorld without the archaeology
 
-O x86QW transforma um ecossistema histórico em um produto atual: seleciona versões conhecidas, preserva as origens, aplica customizações isoladas e entrega tudo por um catálogo assinado com tamanho e SHA-256. O resultado é uma instalação organizada, atualizável e capaz de jogar localmente, entrar em servidores ou subir sua própria infraestrutura.
+x86QW turns a historical ecosystem into a current product: it selects known versions, preserves their origins, applies isolated customizations and ships everything through a catalog signed with size and SHA-256. The result is an organized, updatable installation that can play locally, join servers or run your own infrastructure.
 
 <table>
   <tr>
-    <td width="33%" valign="top"><h3>⚡ Entre na partida</h3>ezQuake stable ou nightly, conteúdo curado do nQuake e cinco jogos prontos para a mesma instalação.</td>
-    <td width="33%" valign="top"><h3>🧩 Monte seu perfil</h3>Escolha entre os perfis essencial, recomendado, completo ou uma seleção própria de componentes.</td>
-    <td width="33%" valign="top"><h3>🛡️ Verifique os bytes</h3>Catálogo autenticado por TUF, pacotes imutáveis, recibos locais e reparo explícito sem confundir arquivos pessoais com conteúdo gerenciado.</td>
+    <td width="33%" valign="top"><h3>⚡ Jump into a match</h3>ezQuake stable or nightly, curated nQuake content and five games ready for the same installation.</td>
+    <td width="33%" valign="top"><h3>🧩 Build your profile</h3>Pick the essential, recommended or complete profile, or your own selection of components.</td>
+    <td width="33%" valign="top"><h3>🛡️ Verify the bytes</h3>A TUF-authenticated catalog, immutable packages, local receipts and explicit repair that never mistakes personal files for managed content.</td>
   </tr>
   <tr>
-    <td width="33%" valign="top"><h3>🎯 Domine o KTX</h3>Duel, equipes, CTF, Race, Clan Arena, Wipeout, Frogbots e dezenas de combinações declarativas.</td>
-    <td width="33%" valign="top"><h3>📡 Hospede a arena</h3>MVDSV, QTV e QWFWD na mesma pasta, com várias instâncias por sessão, senhas fora da linha de comando e encerramento coordenado.</td>
-    <td width="33%" valign="top"><h3>♻️ Atualize com controle</h3>Veja o plano antes da mudança. No terminal a CLI pergunta; em automação, <code>--yes</code> confirma e <code>--dry-run</code> só mostra.</td>
+    <td width="33%" valign="top"><h3>🎯 Master KTX</h3>Duel, teams, CTF, Race, Clan Arena, Wipeout, Frogbots and dozens of declarative combinations.</td>
+    <td width="33%" valign="top"><h3>📡 Host the arena</h3>MVDSV, QTV and QWFWD in the same folder, with several instances per session, passwords kept off the command line and a coordinated stop.</td>
+    <td width="33%" valign="top"><h3>♻️ Update under control</h3>See the plan before the change. On a terminal the CLI asks; in automation, <code>--yes</code> confirms and <code>--dry-run</code> only shows.</td>
   </tr>
 </table>
 
-## Instalação
+## Installation
 
 > [!IMPORTANT]
-> O x86QW organiza e distribui software e conteúdo de diferentes origens. Leia [Proveniência e licenças](#proveniência-e-licenças) antes de redistribuir o conjunto.
+> x86QW organizes and distributes software and content from different origins. Read [Provenance and licenses](#provenance-and-licenses) before redistributing the set.
 
-### macOS e Linux
+### macOS and Linux
 
 ```sh
 curl -fsS https://qw.x86.com.br/install.sh | bash
@@ -50,76 +50,76 @@ curl -fsS https://qw.x86.com.br/install.sh | bash
 
 ### Windows
 
-No PowerShell ou no Prompt de Comando:
+In PowerShell or the Command Prompt:
 
 ```powershell
 powershell -c "irm https://qw.x86.com.br/install.ps1 | iex"
 ```
 
-O bootstrap baixa a CLI nativa `x86qw` da release `x86qw-cli-2.4.1` no
-GitHub, confere o tamanho e o SHA-256 fixados no próprio script e executa
-`x86qw setup`. Num terminal, isso abre o instalador do app; ele consulta o
-catálogo TUF público e pergunta o que instalar e onde. Nada além do sistema é
-necessário: macOS e Linux usam `curl`, e o Windows usa o PowerShell incluído.
-No Unix, o corpo do script só roda na última linha, então um download truncado
-falha na análise e não executa nada. No Windows, o bootstrap não encerra a
-sessão do PowerShell; se a instalação falhar, a mensagem e o código ficam em
-`$LASTEXITCODE`.
+The bootstrap downloads the `x86qw` native CLI from the `x86qw-cli-2.4.1` release on
+GitHub, checks the size and SHA-256 pinned in the script itself and runs
+`x86qw setup`. On a terminal, that opens the app's installer; it queries the
+public TUF catalog and asks what to install and where. Nothing beyond the
+system is needed: macOS and Linux use `curl`, and Windows uses the PowerShell it ships with.
+On Unix, the body of the script only runs on its last line, so a truncated
+download fails to parse and runs nothing. On Windows, the bootstrap does not end
+the PowerShell session; if the install fails, the message stays on screen and
+the code in `$LASTEXITCODE`.
 
-A pasta padrão é `~/Games/x86qw`. Na seção **Integração** do instalador você
-escolhe atalhos, o comando no `PATH` e os tipos de arquivo:
+The default folder is `~/Games/x86qw`. In the installer's **Integration**
+section you choose shortcuts, the command on the `PATH` and the file types:
 
-- **Comando no `PATH`:** no macOS e no Linux, um link `~/.local/bin/x86qw`; se
-  essa pasta não estiver no seu `PATH`, use o caminho completo
-  `~/Games/x86qw/x86qw.sh` ou acrescente-a ao shell. No Windows, a pasta da
-  instalação entra no `PATH` do usuário.
-- **Atalhos:** Menu Iniciar e Área de Trabalho no Windows, entrada de menu no
+- **Command on the `PATH`:** on macOS and Linux, a `~/.local/bin/x86qw` link; if
+  that folder is not on your `PATH`, use the full path
+  `~/Games/x86qw/x86qw.sh` or add it to your shell. On Windows, the
+  installation folder joins the user's `PATH`.
+- **Shortcuts:** Start Menu and Desktop on Windows, a menu entry on
   Linux.
-- **Links `qw://` e demos:** abrem servidores e demos `.mvd`/`.qwd` no ezQuake
-  da instalação, pelo comando `x86qw open`.
+- **`qw://` links and demos:** open servers and `.mvd`/`.qwd` demos in the
+  installation's ezQuake, through the `x86qw open` command.
 
-Para preparar a pasta de outro sistema a partir de macOS ou Linux:
+To prepare the folder for another system from macOS or Linux:
 
 ```sh
 curl -fsS https://qw.x86.com.br/install.sh | bash -s -- --platform windows
 ```
 
-Os valores aceitos são `macos`, `linux` e `windows`. Os binários da CLI também
-estão na [release `x86qw-cli-2.4.1`](https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.4.1),
-com `SHA256SUMS` e atestado de proveniência do build
-(`gh attestation verify ARQUIVO --repo x86dx2/x86qw`).
+The accepted values are `macos`, `linux` and `windows`. The CLI binaries are also
+in the [`x86qw-cli-2.4.1` release](https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.4.1),
+with `SHA256SUMS` and a build provenance attestation
+(`gh attestation verify FILE --repo x86dx2/x86qw`).
 
-A audiência continua `owner-only`. Isso não é autorização `external-public`
-nem promessa de suporte para usuários externos.
+The audience is still `owner-only`. That is neither an `external-public`
+authorization nor a promise of support for outside users.
 
-## O que vem no x86QW
+## What comes with x86QW
 
-### Cinco jogos, uma instalação
+### Five games, one installation
 
-| Jogo | Versão | Experiência |
+| Game | Version | Experience |
 |---|:---:|---|
-| **KTX** | 1.47 | Competitivo, equipes, CTF, Race e Frogbots |
-| **Final Arena** | 1.20 | Arsenal e regras próprias em arenas QuakeWorld |
-| **Pro-X** | 1.1 | Conversão completa preservada e harmonizada |
-| **Team Fortress** | 2.9 | Classes, equipes e objetivos clássicos |
-| **Total Destruction 2** | 2.22 | Gameplay expandido com customização x86QW isolada |
+| **KTX** | 1.47 | Competitive play, teams, CTF, Race and Frogbots |
+| **Final Arena** | 1.20 | Its own arsenal and rules in QuakeWorld arenas |
+| **Pro-X** | 1.1 | A full conversion, preserved and harmonized |
+| **Team Fortress** | 2.9 | Classic classes, teams and objectives |
+| **Total Destruction 2** | 2.22 | Expanded gameplay with an isolated x86QW customization |
 
-### Perfis para cada tipo de instalação
+### Profiles for every kind of installation
 
-| Perfil | Conteúdo | Ideal para |
+| Profile | Content | Best for |
 |---|---|---|
-| **Essencial** | Base visual + KTX | Entrar rápido e jogar QuakeWorld competitivo |
-| **Recomendado** | Essencial + mapas, skins, modelos, texturas e documentação | A experiência x86QW equilibrada (padrão do instalador) |
-| **Completo** | Todos os 21 componentes, cinco jogos, MVDSV, QTV e QWFWD | Jogadores, hosts e exploradores do ecossistema |
-| **Personalizado** | Seleção explícita de componentes | Instalações mínimas ou especializadas |
+| **Essential** | Visual base + KTX | Getting in fast and playing competitive QuakeWorld |
+| **Recommended** | Essential + maps, skins, models, textures and documentation | The balanced x86QW experience (the installer's default) |
+| **Complete** | All 21 components, five games, MVDSV, QTV and QWFWD | Players, hosts and explorers of the ecosystem |
+| **Custom** | An explicit selection of components | Minimal or specialized installations |
 
-Quem só joga nunca recebe os programas de servidor, mesmo no perfil completo;
-eles entram quando a instalação também hospeda.
+Players who only play never get the server programs, not even with the complete
+profile; they come in when the installation also hosts.
 
 <details>
-<summary><strong>Modos KTX e opções avançadas</strong></summary>
+<summary><strong>KTX modes and advanced options</strong></summary>
 
-O catálogo cobre 17 usermodes nativos: Duel, 2on2, 3on3, 4on4, 10on10, FFA, CTF, HoonyMode, Blitz 2v2/4v4, 2on2on2, 3on3on3, 4on4on4, XonX, Wipeout, Clan Arena e ThunderWalker ToT. `3on3` identifica duas equipes de três jogadores; `2on2on2`, três equipes de dois. Os aliases `3v3` e `2v2v2` continuam aceitos pela CLI. Também inclui Midair, DMM4, Instagib, LGC, Rocket Arena, Race e Practice.
+The catalog covers 17 native usermodes: Duel, 2on2, 3on3, 4on4, 10on10, FFA, CTF, HoonyMode, Blitz 2v2/4v4, 2on2on2, 3on3on3, 4on4on4, XonX, Wipeout, Clan Arena and ThunderWalker ToT. `3on3` means two teams of three players; `2on2on2`, three teams of two. The CLI still accepts the `3v3` and `2v2v2` aliases. It also includes Midair, DMM4, Instagib, LGC, Rocket Arena, Race and Practice.
 
 ```sh
 x86qw play ktx --mode duel --map dm6 --bots 1 --bot-skill 8 --bot-names x86qw
@@ -128,116 +128,116 @@ x86qw play ktx --mode ctf --ctf-hook smooth --ctf-runes off
 x86qw play ktx --mode race --map slide1 --race-style match --race-scoring formula1
 ```
 
-`x86qw play --help` lista Frogbots, regras de CTF e formatos de Race. A CLI
-valida mapas, combinações e limitações do QVM antes de abrir o cliente. Com
-bots, só entram mapas com rota Frogbot; CTF e Race cruzam os mapas instalados
-com seus ENTs e rotas. Rotas pessoais regulares também são reconhecidas.
+`x86qw play --help` lists Frogbots, CTF rules and Race formats. The CLI
+validates maps, combinations and QVM limits before starting the client. With
+bots, only maps with a Frogbot route are offered; CTF and Race match the installed maps
+against their ENTs and routes. Regular personal routes are recognized too.
 
-Na tela **Jogar** do app, os 24 modos aparecem agrupados (recomendados,
-individuais, equipes, arena/alternativos e treino) e cada opção só aparece
-quando faz sentido: Race pergunta formato, pontuação, pacemaker e
-visibilidade dos corredores; CTF pergunta gancho, runas e spawn; modos
-compatíveis oferecem Frogbots, habilidade e nomes. Há quatro perfis de nome
-(`--bot-names`): `default` (KTX padrão), os nomes originais; `x86qw`, mapas e
-modos da distribuição embaralhados a cada lançamento; `one-piece`, a lista One
-Piece embaralhada; e `personal`, uma lista pessoal editável. Veja o
-[guia de nomes dos Frogbots](docs/FROGBOTS.md).
-Modos de tamanho fixo limitam a seleção às vagas restantes: Duel oferece no
-máximo um bot quando há um jogador humano.
+On the app's **Play** screen, the 24 modes appear grouped (recommended,
+individual, teams, arena/alternatives and training) and each option only shows
+when it makes sense: Race asks for format, scoring, pacemaker and whether the
+racers are visible; CTF asks for hook, runes and spawn; modes that support them
+offer Frogbots, skill and names. There are four name profiles
+(`--bot-names`): `default` (stock KTX), the original names; `x86qw`, the
+distribution's maps and modes, shuffled on every launch; `one-piece`, the One
+Piece list, shuffled; and `personal`, an editable personal list. See the
+[Frogbot names guide](docs/FROGBOTS.md).
+Fixed-size modes limit the selection to the free slots: Duel offers at
+most one bot when there is one human player.
 
-Ao entrar no mapa, o console imprime as teclas do modo ativo. Em Duel, `F5`
-marca ready, `F6` interrompe e `F11` mostra as regras; com Frogbots, `INS`,
-`DEL`, `HOME` e `END` gerenciam bots e habilidade. Os perfis nomeados também
-preservam as cores de camisa, calça e equipe definidas pelo KTX.
-`--bot-skill random` sorteia uma habilidade independente de 1 a 20 sempre que
-um bot entra. `INS` respeita a lotação do modo, `DEL` libera a vaga e
-`HOME`/`END` alteram cumulativamente a habilidade dos próximos bots. Arma, vida
-e interrupção por morte são opções exclusivas do ToT. `F12` fecha diretamente
-o QuakeWorld em todos os cinco jogos.
+On entering the map, the console prints the keys of the active mode. In Duel, `F5`
+marks ready, `F6` breaks and `F11` shows the rules; with Frogbots, `INS`,
+`DEL`, `HOME` and `END` manage bots and skill. The named profiles also
+keep the shirt, pants and team colors KTX sets.
+`--bot-skill random` draws an independent skill from 1 to 20 every time
+a bot joins. `INS` respects the mode's capacity, `DEL` frees the slot and
+`HOME`/`END` change the skill of the next bots cumulatively. Weapon, health
+and break on death are ToT-only options. `F12` quits
+QuakeWorld directly in all five games.
 
 </details>
 
-## O app
+## The app
 
-Depois da instalação, `x86qw` — ou `x86qw.sh` na pasta da instalação, e
-`x86qw.cmd` no Windows — abre o app num terminal. `x86qw --target PASTA` abre
-outra instalação. Sem terminal, `x86qw` só imprime a ajuda.
+After the install, `x86qw` — or `x86qw.sh` in the installation folder, and
+`x86qw.cmd` on Windows — opens the app on a terminal. `x86qw --target FOLDER` opens
+another installation. Without a terminal, `x86qw` only prints the help.
 
-A tela inicial reúne:
+The home screen brings together:
 
-- **Jogar:** jogo, modo, mapa, bots e regras, com a última partida guardada;
-- **Servidores:** a lista pública do QuakeWorld Hub, com favoritos primeiro.
-  Enter entra, `ctrl+f` marca favorito, `ctrl+w` assiste pelo QTV, `ctrl+o`
-  entra como espectador e `ctrl+r` atualiza. Sem o Hub, aparecem os favoritos e
-  recentes locais;
-- **Hospedar:** inicia e encerra o servidor configurado, com suas instâncias,
-  QTV e QWFWD, e mostra o que está rodando;
-- **Atualizar**, **Componentes e configuração**, **Reparar e verificar**,
-  **Ferramentas** (diagnóstico, verificação, upgrade, mudanças, favoritos,
-  perfil, limpeza e o painel HTML) e **Desinstalar**.
+- **Play:** game, mode, map, bots and rules, with the last match remembered;
+- **Servers:** the public list from QuakeWorld Hub, favorites first.
+  Enter joins, `ctrl+f` marks a favorite, `ctrl+w` watches through QTV, `ctrl+o`
+  joins as a spectator and `ctrl+r` refreshes. Without the Hub, the local favorites and
+  recents show;
+- **Host:** starts and stops the configured server, with its instances,
+  QTV and QWFWD, and shows what is running;
+- **Update**, **Components and setup**, **Repair and verify**,
+  **Tools** (diagnosis, verification, upgrade, changes, favorites,
+  profile, cleanup and the HTML panel) and **Uninstall**.
 
-O instalador segue a mesma lógica. Primeiro você diz o que quer — **Jogar**,
-**Hospedar** ou **Jogar e hospedar** —; depois ajusta componentes, sua
-configuração (nick, teclas, mouse, vídeo, som e ruleset), o servidor, a
-integração e a pasta. Um pré-voo confere pasta, disco, catálogo e portas antes
-de escrever qualquer coisa, e cancelar no meio devolve a pasta ao que era.
+The installer follows the same logic. First you say what you want — **Play**,
+**Host** or **Play and host** —; then you adjust components, your
+setup (nick, keys, mouse, video, sound and ruleset), the server, the
+integration and the folder. A preflight checks folder, disk, catalog and ports before
+writing anything, and canceling midway puts the folder back the way it was.
 
-A seção **Receita** mostra o comando e o JSON equivalentes ao que você
-escolheu, sem senhas. Com eles, a mesma instalação se repete sem o app:
+The **Recipe** section shows the command and the JSON equivalent to what you
+chose, without passwords. With them, the same install repeats without the app:
 
 ```sh
-x86qw setup --recipe receita.json --yes
-x86qw setup --intent both --nick jogador --content recommended --servers duel:dm6,4on4:dm3+bots --yes
+x86qw setup --recipe recipe.json --yes
+x86qw setup --intent both --nick player --content recommended --servers duel:dm6,4on4:dm3+bots --yes
 ```
 
-O app segue o idioma do sistema (português ou inglês) e troca de idioma e tema
-pelo canto superior. Em terminais sem glifos Unicode, `X86QW_GLYPHS=ascii`
-força caracteres simples; `X86QW_GLYPHS=unicode` força os completos.
+The app follows the system language (English or Portuguese) and switches language and theme
+from the top corner. On terminals without Unicode glyphs, `X86QW_GLYPHS=ascii`
+forces plain characters; `X86QW_GLYPHS=unicode` forces the full ones.
 
-## Comandos
+## Commands
 
-`x86qw help` lista os comandos por tarefa; `x86qw COMANDO --help` mostra o
-uso e as opções de cada um. As opções podem vir antes ou depois da pasta.
+`x86qw help` lists the commands by task; `x86qw COMMAND --help` shows each
+one's usage and options. Options can come before or after the folder.
 
-| Comando | Faz o quê |
+| Command | What it does |
 |---|---|
-| `play [JOGO]` | Abre uma partida local; sem `--mode` (ou com `--menu`), num terminal, abre a tela Jogar do app; `--channel nightly` usa o ezQuake nightly |
-| `open ENDEREÇO\|DEMO` | Abre um servidor `qw://` (inclusive `qw://N@host:porta/qtvplay`) ou uma demo `.mvd`/`.qwd` no ezQuake |
-| `hub` | Lista os servidores públicos; sem o Hub, usa favoritos e recentes locais |
-| `host [JOGO]` | Hospeda um servidor MVDSV; `--instance` acrescenta servidores à sessão, `--with-qtv` e `--with-proxy` sobem os serviços junto |
-| `qtv` | Inicia o relay QTV de um servidor |
-| `proxy` | Inicia o proxy QWFWD |
-| `status` | Mostra os serviços ativos; `--stop` encerra a stack |
-| `setup` | Instala (pelo app, por `--profile` ou por receita) ou adota uma instalação existente |
-| `install` | Instala ezQuake e um perfil de conteúdo, como `setup --profile` |
-| `update` | Atualiza o ezQuake, os componentes e a CLI instalados |
-| `upgrade` | Como `update`, e acrescenta o que o seu perfil ganhou |
-| `verify` | Confere cada arquivo gerenciado contra o catálogo e os recibos |
-| `repair` | Restaura o que `verify` acusar, sem tocar no que você editou |
-| `uninstall` | Remove a instalação e mantém configurações, PAKs e demos; `--purge` apaga tudo |
-| `library` | Favoritos e recentes; `--add` e `--remove` |
-| `profile` | Mostra configurações, cache e dados pessoais; `--backup` e `--restore` |
-| `changes` | Mostra arquivos novos, alterados ou removidos em relação à instalação |
-| `ui` | Gera um painel HTML local, só de leitura |
-| `cleanup` | Apaga caches; `--downloads` e `--personal-data` vão além |
-| `doctor` | Diagnostica a instalação sem alterar arquivos; `--bundle` gera um zip para compartilhar |
-| `catalog` | Autentica o catálogo público via TUF e mostra as versões dos papéis |
-| `migrate` | Converte metadados de instalações antigas para o formato atual |
-| `version` | Mostra a versão |
+| `play [GAME]` | Starts a local match; without `--mode` (or with `--menu`), on a terminal, opens the app's Play screen; `--channel nightly` uses the nightly ezQuake |
+| `open ADDRESS\|DEMO` | Opens a `qw://` server (including `qw://N@host:port/qtvplay`) or an `.mvd`/`.qwd` demo in ezQuake |
+| `hub` | Lists the public servers; without the Hub, uses the local favorites and recents |
+| `host [GAME]` | Hosts an MVDSV server; `--instance` adds servers to the session, `--with-qtv` and `--with-proxy` start those services with it |
+| `qtv` | Starts a server's QTV relay |
+| `proxy` | Starts the QWFWD proxy |
+| `status` | Shows the running services; `--stop` stops the stack |
+| `setup` | Installs (through the app, `--profile` or a recipe) or adopts an existing installation |
+| `install` | Installs ezQuake and a content profile, like `setup --profile` |
+| `update` | Updates the installed ezQuake, components and CLI |
+| `upgrade` | Like `update`, and adds what your profile gained |
+| `verify` | Checks every managed file against the catalog and the receipts |
+| `repair` | Restores what `verify` reports, without touching what you edited |
+| `uninstall` | Removes the installation and keeps settings, PAKs and demos; `--purge` deletes everything |
+| `library` | Favorites and recents; `--add` and `--remove` |
+| `profile` | Shows settings, cache and personal data; `--backup` and `--restore` |
+| `changes` | Shows files that are new, modified or removed compared with the installation |
+| `ui` | Builds a local, read-only HTML panel |
+| `cleanup` | Deletes caches; `--downloads` and `--personal-data` go further |
+| `doctor` | Diagnoses the installation without changing files; `--bundle` writes a zip to share |
+| `catalog` | Authenticates the public catalog over TUF and shows the role versions |
+| `migrate` | Converts the metadata of old installations to the current format |
+| `version` | Shows the version |
 
-O que altera ou encerra algo — `update`, `upgrade`, `repair`, `uninstall`,
-`status --stop` e as receitas — mostra o que vai fazer e pergunta no terminal.
-Sem terminal, exige `--yes` e sai com código 2 se ele faltar. `--dry-run` só
-mostra o plano. `verify`, `doctor`, `hub`, `catalog`, `version`, `status` e os
-planos de `update`, `upgrade` e `repair` com `--dry-run` aceitam `--json` e
-escrevem um envelope JSON numa linha.
+Whatever changes or stops something — `update`, `upgrade`, `repair`, `uninstall`,
+`status --stop` and recipes — shows what it will do and asks on the terminal.
+Without a terminal, it needs `--yes` and exits with code 2 when it is missing. `--dry-run` only
+shows the plan. `verify`, `doctor`, `hub`, `catalog`, `version`, `status` and the
+`update`, `upgrade` and `repair` plans with `--dry-run` accept `--json` and
+write a JSON envelope on one line.
 
-Sem `--target` nem pasta, cada comando usa a instalação que contém a CLI em
-execução; fora de uma instalação, `~/Games/x86qw`. Os códigos de saída são 0
-(sucesso), 1 (falha), 2 (uso incorreto ou confirmação faltando) e 130
-(interrompido).
+Without `--target` or a folder, each command uses the installation that holds the running
+CLI; outside an installation, `~/Games/x86qw`. The exit codes are 0
+(success), 1 (failure), 2 (wrong usage or missing confirmation) and 130
+(interrupted).
 
-## Hospedar
+## Hosting
 
 ```sh
 x86qw host ktx --mode 4on4 --map dm3
@@ -248,87 +248,87 @@ x86qw qtv --upstream 127.0.0.1:28501
 x86qw status --stop
 ```
 
-Há dois pontos de partida, com padrões diferentes:
+There are two starting points, with different defaults:
 
-- **`x86qw host` direto:** escuta em `127.0.0.1:28501`, QTV em
-  `127.0.0.1:28000` e QWFWD em `127.0.0.1:30000`, e acompanha o terminal. A
-  rede só entra com `--bind` explícito; `--background` destaca a sessão.
-- **O servidor que o instalador monta** (intenção Hospedar ou Jogar e
-  hospedar, ou `setup --intent host`): começa na porta 27500, com uma porta por
-  instância, QTV na 28000 e QWFWD na 30000, e aceita jogadores da rede em todas
-  as interfaces. Escolha **Só nesta máquina** no instalador, ou `--local` na
-  receita, para restringir a `127.0.0.1`. Ele sobe em segundo plano a partir do
-  app ou do comando que o instalador mostra no fim.
+- **`x86qw host` directly:** listens on `127.0.0.1:28501`, QTV on
+  `127.0.0.1:28000` and QWFWD on `127.0.0.1:30000`, and follows the terminal. The
+  network only comes in with an explicit `--bind`; `--background` detaches the session.
+- **The server the installer builds** (the Host or Play and host intent,
+  or `setup --intent host`): starts at port 27500, with one port per
+  instance, QTV on 28000 and QWFWD on 30000, and accepts players from the network on all
+  interfaces. Choose **Only this machine** in the installer, or `--local` in the
+  recipe, to restrict it to `127.0.0.1`. It starts in the background from the
+  app or from the command the installer shows at the end.
 
-Senhas podem vir de prompt sem eco ou de arquivo privado; a CLI não as coloca na
-linha de comando dos processos filhos nem nos logs. Locks e journals impedem
-manutenção concorrente, coordenam o encerramento e permitem recuperação
-conservadora após crash. Veja o [guia de hospedagem](docs/HOSTING.md).
+Passwords can come from a prompt without echo or from a private file; the CLI keeps them out of the
+command line of child processes and out of the logs. Locks and journals prevent
+concurrent maintenance, coordinate the stop and allow a conservative
+recovery after a crash. See the [hosting guide](docs/HOSTING.md).
 
-A CLI inspeciona ZIP e PK3 antes de qualquer extração, com limites, modos
-canônicos e promoção atômica. No Windows, o estado privado da instalação nasce
-com DACL protegida, limitada ao usuário atual e a `LOCAL SYSTEM`; arquivos de
-senha externos só são aceitos com essa mesma restrição e nunca são reescritos.
-Consulte os [ADR 0002](docs/adr/0002-fronteira-unica-de-arquivos.md) e
-[ADR 0003](docs/adr/0003-dacl-privada-windows.md).
+The CLI inspects ZIP and PK3 files before any extraction, with limits, canonical
+modes and atomic promotion. On Windows, the installation's private state is created
+with a protected DACL, limited to the current user and `LOCAL SYSTEM`; external password
+files are only accepted with that same restriction and are never rewritten.
+See [ADR 0002](docs/adr/0002-single-archive-boundary.md) and
+[ADR 0003](docs/adr/0003-private-windows-dacl.md).
 
-## Arquitetura
+## Architecture
 
 <a href="docs/diagrams/x86qw-platform.html">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/architecture-dark.svg">
     <source media="(prefers-color-scheme: light)" srcset=".github/assets/architecture-light.svg">
-    <img alt="Fluxo da plataforma x86QW: fontes fixadas, distribuição, catálogo, instalador e runtimes" src=".github/assets/architecture-dark.svg" width="100%">
+    <img alt="The x86QW platform flow: pinned sources, distribution, catalog, installer and runtimes" src=".github/assets/architecture-dark.svg" width="100%">
   </picture>
 </a>
 
-O repositório é a fonte canônica. `dist/` preserva os inputs; inventários declaram consumidores e dependências; o catálogo projeta os pacotes públicos e é assinado por TUF; a CLI materializa apenas o perfil e a plataforma escolhidos. GitHub Releases é o canal principal dos pacotes e GitLab Generic Packages mantém o mirror de contingência.
+The repository is the canonical source. `dist/` preserves the inputs; inventories declare consumers and dependencies; the catalog projects the public packages and is signed with TUF; the CLI materializes only the chosen profile and platform. GitHub Releases is the main channel for packages and GitLab Generic Packages keeps the fallback mirror.
 
-Todo o código vive em `go/`: a CLI `x86qw` (app, instalação, jogo, hub,
-serviços e manutenção da instalação), `x86qw-content` (verificação,
-atualização, build e publicação do `dist/`) e `x86qw-release` (release da CLI,
-assinatura TUF, montagem do site e monitor). O repositório não contém Python.
+All the code lives in `go/`: the `x86qw` CLI (app, installation, games, hub,
+services and installation maintenance), `x86qw-content` (verification,
+update, build and publication of `dist/`) and `x86qw-release` (CLI release,
+TUF signing, site assembly and monitor). The repository holds no Python.
 
 ```text
-dist/           produto canônico, upstreams preservados e customizações x86QW
-go/             CLI x86qw e ferramentas de manutenção
-maintenance/    inventários, receitas e trust root
-site/           portal, API pública do catálogo e deploy Cloudflare
-docs/           arquitetura, hospedagem, runbooks e decisões
+dist/           canonical product, preserved upstreams and x86QW customizations
+go/             the x86qw CLI and the maintenance tools
+maintenance/    inventories, recipes and the trust root
+site/           portal, public catalog API and Cloudflare deploy
+docs/           architecture, hosting, runbooks and decisions
 ```
 
-[Arquitetura detalhada](docs/architecture.md) · [Diagrama interativo](docs/diagrams/x86qw-platform.html) · [Proveniência](maintenance/docs/provenance.md) · [Roadmap](docs/ROADMAP.md) · [Status](docs/PROJECT-STATUS.md)
+[Detailed architecture](docs/architecture.md) · [Interactive diagram](docs/diagrams/x86qw-platform.html) · [Provenance](maintenance/docs/provenance.md) · [Roadmap](docs/ROADMAP.md) · [Status](docs/PROJECT-STATUS.md)
 
-## Estado do projeto
+## Project status
 
-A CLI atual é a da release `x86qw-cli-2.4.1`, em modo `owner-only`: um usuário,
-o próprio mantenedor, que a usa num Mac Apple M3. Os binários de macOS, Windows
-e Linux estão no catálogo e na release; os testes de CI rodam em Linux e
-Windows, mas não há registro versionado de smoke nativo das versões 2.x, então
-Windows e Linux seguem em preview. Consulte o
-[status operacional](docs/PROJECT-STATUS.md).
+The current CLI is the one from the `x86qw-cli-2.4.1` release, in `owner-only` mode: one user,
+the maintainer, who uses it on an Apple M3 Mac. The macOS, Windows
+and Linux binaries are in the catalog and in the release; the CI tests run on Linux and
+Windows, but there is no versioned record of a native smoke test of the 2.x versions, so
+Windows and Linux stay in preview. See the
+[operational status](docs/PROJECT-STATUS.md).
 
-## Compatibilidade
+## Compatibility
 
-| Componente | macOS | Linux | Windows |
+| Component | macOS | Linux | Windows |
 |---|:---:|:---:|:---:|
-| ezQuake stable + nightly | Universal · condicional/preview | x86-64 · preview | x64 · preview |
+| ezQuake stable + nightly | Universal · conditional/preview | x86-64 · preview | x64 · preview |
 | MVDSV | arm64 · preview | amd64 · preview | x64 · preview |
 | QTV | arm64 · preview | amd64 · preview | x64 · preview |
 | QWFWD | arm64 · preview | amd64 · preview | x64 · preview |
-| CLI `x86qw` | arm64 + amd64 | amd64 + arm64 | x64 |
+| `x86qw` CLI | arm64 + amd64 | amd64 + arm64 | x64 |
 
 > [!NOTE]
-> A CI obrigatória roda os testes Go em Linux (com o race detector, staticcheck e govulncheck) e em Windows, compila a CLI para as cinco plataformas e valida distribuição e site. Um e2e noturno instala de verdade em Linux, macOS e Windows. Isso não equivale a uma validação de uso em cada sistema.
+> The required CI runs the Go tests on Linux (with the race detector, staticcheck and govulncheck) and on Windows, builds the CLI for the five platforms and validates the distribution and the site. A nightly e2e installs for real on Linux, macOS and Windows. That is not the same as validating real use on each system.
 
-O ezQuake stable de macOS preserva o bundle upstream sem alterar `Info.plist`,
-sandbox, entitlements ou assinatura. Ele não tem Developer ID nem notarização
-comprovada, por isso continua condicional; consulte o
-[ADR 0004](docs/adr/0004-preservar-bundle-upstream-ezquake-stable-macos.md).
+The macOS ezQuake stable keeps the upstream bundle without changing `Info.plist`,
+sandbox, entitlements or signature. It has no Developer ID and no proven
+notarization, so it stays conditional; see
+[ADR 0004](docs/adr/0004-preserve-upstream-ezquake-stable-macos-bundle.md).
 
-## Desenvolvendo
+## Developing
 
-Quem clonou o repositório usa as fontes locais:
+Anyone who cloned the repository uses the local sources:
 
 ```sh
 git lfs pull
@@ -336,7 +336,7 @@ go -C go run ./cmd/x86qw help
 go -C go run ./cmd/x86qw play --help
 ```
 
-A validação integral:
+The full validation:
 
 ```sh
 go -C go test ./...
@@ -344,43 +344,43 @@ go -C go run ./cmd/x86qw-content verify
 cd site && npm test && npm run deploy:dry-run
 ```
 
-Para visualizar o portal localmente:
+To view the portal locally:
 
 ```sh
 cd site
 npm run dev
 ```
 
-Abra `http://127.0.0.1:8787`. A configuração versionada de produção não contém
-um diretório de assets: o workflow **Deploy site** monta o site e o publica a
-cada merge que muda `site/public`, e `wrangler deploy` sem `--assets` falha
-fechado. A release da CLI e a operação TUF estão no
-[runbook de release](docs/runbooks/release.md); a manutenção do conteúdo, em
-[maintenance/README.md](maintenance/README.md); a operação do site, em
+Open `http://127.0.0.1:8787`. The versioned production configuration holds no
+assets directory: the **Deploy site** workflow assembles the site and publishes it
+on every merge that changes `site/public`, and `wrangler deploy` without `--assets` fails
+closed. The CLI release and the TUF operation are in the
+[release runbook](docs/runbooks/release.md); content maintenance, in
+[maintenance/README.md](maintenance/README.md); the site's operation, in
 [site/README.md](site/README.md).
 
-## Contribuindo
+## Contributing
 
-Contribuições são bem-vindas quando preservam proveniência, reprodutibilidade e a fronteira entre upstream e customização x86QW. Antes de abrir um PR:
+Contributions are welcome when they preserve provenance, reproducibility and the boundary between upstream and x86QW customization. Before opening a PR:
 
-1. leia o [guia de contribuição](.github/CONTRIBUTING.md);
-2. mantenha cada mudança pequena e rastreável;
-3. execute `go -C go test ./...` e `go -C go run ./cmd/x86qw-content verify`;
-4. explique a origem e o consumidor de qualquer novo arquivo distribuído.
+1. read the [contributing guide](.github/CONTRIBUTING.md);
+2. keep each change small and traceable;
+3. run `go -C go test ./...` and `go -C go run ./cmd/x86qw-content verify`;
+4. explain the origin and the consumer of any new distributed file.
 
-[Reportar um bug](https://github.com/x86dx2/x86qw/issues/new?template=bug-report.yml) · [Propor uma melhoria](https://github.com/x86dx2/x86qw/issues/new?template=feature-request.yml) · [Obter suporte](.github/SUPPORT.md) · [Política de segurança](.github/SECURITY.md)
+[Report a bug](https://github.com/x86dx2/x86qw/issues/new?template=bug-report.yml) · [Suggest an improvement](https://github.com/x86dx2/x86qw/issues/new?template=feature-request.yml) · [Get support](.github/SUPPORT.md) · [Security policy](.github/SECURITY.md)
 
-## Proveniência e licenças
+## Provenance and licenses
 
-x86QW é uma distribuição composta, não uma relicença única de todos os seus componentes. Clientes, engines, mods, ferramentas e conteúdo mantêm suas licenças e termos de origem; customizações próprias ficam separadas dos bytes upstream. Os dados-base registrados são tratados como componente independente.
+x86QW is a composite distribution, not a single relicensing of all its components. Clients, engines, mods, tools and content keep their original licenses and terms; our own customizations stay separate from the upstream bytes. The registered base data is treated as an independent component.
 
-Consulte [proveniência e licenças por componente](maintenance/docs/provenance.md) antes de copiar, publicar ou redistribuir artefatos. QuakeWorld, Quake e marcas relacionadas pertencem aos seus respectivos titulares; este projeto comunitário não é afiliado nem endossado por eles.
+See [provenance and licenses by component](maintenance/docs/provenance.md) before copying, publishing or redistributing artifacts. QuakeWorld, Quake and related marks belong to their respective owners; this community project is neither affiliated with nor endorsed by them.
 
 ---
 
 <div align="center">
   <strong>READY // CONNECT // FRAG</strong><br>
-  <sub>Feito para preservar QuakeWorld — e continuar jogando.</sub><br><br>
+  <sub>Made to preserve QuakeWorld — and keep playing.</sub><br><br>
   <a href="https://qw.x86.com.br/">Portal</a> ·
   <a href="https://github.com/x86dx2/x86qw/releases">Releases</a> ·
   <a href="https://github.com/x86dx2/x86qw/issues">Issues</a>

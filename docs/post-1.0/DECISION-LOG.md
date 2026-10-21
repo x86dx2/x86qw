@@ -1,36 +1,36 @@
 # Decision log
 
-| ID | Decisão | Estado | Evidência/autoridade |
+| ID | Decision | State | Evidence/authority |
 | --- | --- | --- | --- |
-| D-01 | 1.0.0 existe como release owner-only | decidido | release page, receipt, PROJECT-STATUS |
-| D-02 | external-public não está autorizado | decidido | release audience contract |
-| D-03 | main verde é pré-condição; Gate 0A está fechado | decidido | Validate 33135951867, SHA 962fb2b…, 5/5 jobs exigidos |
-| D-04 | falha DNS foi test-only; não há impacto de bytes/runtime observado | decidido | testes determinísticos, 87 testes, 30.000 repetições, matriz verde |
-| D-05 | lease TUF autentica tecnicamente; monitor 6 h saudável na política owner-only de 7 dias | decidido | timestamp v30 expira 2026-09-27T02:15:12Z; monitor atual healthy |
-| D-06 | custódia/recovery TUF de produção são gaps external-public | deferred | drill protegido registrado; custódia independente/RTO ainda não provados |
-| D-07 | aceitação final no M3 é E3 25/25 | decidido | release-evidence do candidato exato |
-| D-08 | igualdade GitHub/GitLab é E2, não E4 | decidido | comparação de bytes; sem rebuild independente |
-| D-09 | receipt final não deve reutilizar aceitação RC1 | accepted_owner_only | receipt histórico separado da evidência final; reabrir somente para external-public |
-| D-10 | cleanup --personal-data precisa decidir cobertura de qw/demos | deferred | contrato versus cobertura observada; reabrir somente se upgrade histórico for prometido |
-| D-11 | QWLeague permanece BLOCKED_EXTERNAL | decidido | sem contrato/autorização oficial verificados |
-| D-12 | nenhuma capacidade 1.1 começa antes de 0A–0E | decidido | Master Plan e stop conditions |
-| D-13 | issue #164 precede a branch documental | concluído | política CONTRIBUTING/ROADMAP |
-| D-14 | esta frente altera apenas documentos aprovados; não altera produto/publicação | concluído | issue #164 e allowlist documental |
-| D-15 | source release-truth foi mesclada; deployment live converge no candidato | concluído | receipt 33136179763; root 200 owner-only; TUF público v30/v29 |
-| D-16 | Gate 0A passou; Gate 0B continua external-only; 0C owner-only convergiu | decidido | main verde; receipt 33136179763; monitor TUF saudável |
-| D-17 | migração pública 0.7.13 exata não é aprovada por inferência do harness | decidido | instalador SHA 11460440… bloqueado; harness injeta metadado histórico |
-| D-18 | timestamp dentro da warning window bloqueia feature work | decidido | stop condition; monitor 6h em 2026-08-15T15:38:22Z |
-| D-19 | fonte e deployment não podem responder versões/audiência incompatíveis | resolvido | product/catalog/site/release-truth convergentes; receipt 33136179763 |
-| D-20 | timestamp owner-only expira no máximo em 7 dias | decidido | emenda ADR 0006; teto 24 h volta antes de catálogo público |
+| D-01 | 1.0.0 exists as an owner-only release | decided | release page, receipt, PROJECT-STATUS |
+| D-02 | external-public is not authorized | decided | release audience contract |
+| D-03 | green main is a precondition; Gate 0A is closed | decided | Validate 33135951867, SHA 962fb2b…, 5/5 required jobs |
+| D-04 | the DNS failure was test-only; no byte/runtime impact was observed | decided | deterministic tests, 87 tests, 30,000 repetitions, green matrix |
+| D-05 | the TUF lease authenticates technically; 6 h monitor healthy under the 7-day owner-only policy | decided | timestamp v30 expires 2026-09-27T02:15:12Z; current monitor healthy |
+| D-06 | production TUF custody/recovery are external-public gaps | deferred | protected drill recorded; independent custody/RTO not yet proven |
+| D-07 | final acceptance on the M3 is E3 25/25 | decided | release-evidence of the exact candidate |
+| D-08 | GitHub/GitLab equality is E2, not E4 | decided | byte comparison; no independent rebuild |
+| D-09 | the final receipt must not reuse the RC1 acceptance | accepted_owner_only | historical receipt kept apart from the final evidence; reopen only for external-public |
+| D-10 | cleanup --personal-data must decide on covering qw/demos | deferred | contract versus observed coverage; reopen only if a historical upgrade is promised |
+| D-11 | QWLeague stays BLOCKED_EXTERNAL | decided | no verified official contract/authorization |
+| D-12 | no 1.1 capability starts before 0A–0E | decided | Master Plan and stop conditions |
+| D-13 | issue #164 comes before the documentation branch | done | CONTRIBUTING/ROADMAP policy |
+| D-14 | this work changes only approved documents; it does not change product/publication | done | issue #164 and documentation allowlist |
+| D-15 | the release-truth source was merged; the live deployment converges on the candidate | done | receipt 33136179763; root 200 owner-only; public TUF v30/v29 |
+| D-16 | Gate 0A passed; Gate 0B stays external-only; 0C owner-only converged | decided | green main; receipt 33136179763; healthy TUF monitor |
+| D-17 | the exact public 0.7.13 migration is not approved by inference from the harness | decided | installer SHA 11460440… blocked; the harness injects historical metadata |
+| D-18 | a timestamp inside the warning window blocks feature work | decided | stop condition; 6h monitor at 2026-08-15T15:38:22Z |
+| D-19 | source and deployment cannot answer incompatible versions/audiences | resolved | product/catalog/site/release-truth converge; receipt 33136179763 |
+| D-20 | the owner-only timestamp expires in 7 days at most | decided | ADR 0006 amendment; the 24 h cap returns before a public catalog |
 
-## Decisões humanas pendentes
+## Pending human decisions
 
-- nomear owner e backup independentes de TUF, custódia e RTO antes de
+- name an independent TUF owner and backup, custody and RTO before
   `external-public`;
-- decidir uma audiência externa e as plataformas que ela abrangerá;
-- resolver o contrato de migração do instalador 0.7.13 sem fixture privilegiado
-  se um upgrade histórico for prometido;
-- decidir a semântica final de cleanup/purge para instalações históricas;
-- revisar e classificar exceções de SBOM/ownership antes de redistribuição ampla;
-- fornecer contrato e autorização oficial antes de qualquer adapter QWLeague;
-- manter `external-public=NO-GO` até EP-0–EP-5 possuírem evidência protegida.
+- decide on an external audience and the platforms it will cover;
+- settle the 0.7.13 installer migration contract without a privileged fixture
+  if a historical upgrade is promised;
+- decide the final cleanup/purge semantics for historical installations;
+- review and classify the SBOM/ownership exceptions before wide redistribution;
+- provide an official contract and authorization before any QWLeague adapter;
+- keep `external-public=NO-GO` until EP-0–EP-5 have protected evidence.

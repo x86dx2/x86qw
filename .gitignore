@@ -1,4 +1,4 @@
-# quake-world/ mantém um .gitignore local gerado pelos inventories instalados.
+# quake-world/ keeps a local .gitignore generated from the installed inventories.
 .artifacts/
 .cache/
 .DS_Store

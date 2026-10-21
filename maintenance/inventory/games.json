@@ -7,7 +7,7 @@
     {
       "id": "ktx",
       "label": "KTX",
-      "description": "QuakeWorld competitivo com o QVM KTX 1.47 derivado e reproduzível do x86QW.",
+      "description": "Competitive QuakeWorld with the KTX 1.47 QVM, built reproducibly by x86QW.",
       "version": "1.47",
       "protocol": "quakeworld",
       "component": "ktx",
@@ -72,7 +72,7 @@
     {
       "id": "final-arena",
       "label": "Final Arena",
-      "description": "Duelos individuais em fila: o vencedor permanece na arena.",
+      "description": "Queued one-on-one duels: the winner stays in the arena.",
       "version": "1.20",
       "protocol": "quakeworld",
       "component": "final-arena",
@@ -151,7 +151,7 @@
     {
       "id": "pro-x",
       "label": "Pro-X",
-      "description": "Rounds e equipes com ready, break e vota\u00e7\u00e3o.",
+      "description": "Rounds and teams with ready, break and votes.",
       "version": "1.1",
       "protocol": "quakeworld",
       "component": "pro-x",
@@ -241,7 +241,7 @@
     {
       "id": "team-fortress",
       "label": "Team Fortress",
-      "description": "Team Fortress cl\u00e1ssico para QuakeWorld.",
+      "description": "Classic Team Fortress for QuakeWorld.",
       "version": "2.9",
       "protocol": "quakeworld",
       "component": "team-fortress",
@@ -319,7 +319,7 @@
     {
       "id": "td2",
       "label": "Total Destruction 2",
-      "description": "Armas, magias, runas e poderes.",
+      "description": "Weapons, spells, runes and powers.",
       "version": "2.22",
       "protocol": "quakeworld",
       "component": "total-destruction-2",

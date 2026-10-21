@@ -1,84 +1,84 @@
-# Baseline da consolidação — 31 de julho de 2026
+# Consolidation baseline — July 31, 2026
 
-Esta nota registra o estado observado antes da consolidação solicitada. Ela não
-substitui o catálogo, os inventários nem os roadmaps.
+This note records the state observed before the requested consolidation. It does not
+replace the catalog, the inventories or the roadmaps.
 
-## Identidade analisada
+## Analyzed identity
 
-- branch sincronizada: `main`;
-- HEAD de origem: `eeea45786401aae166efcd04f5d126faea740da2`;
-- versão corrente do instalador: `0.1.25`;
-- catálogo público: 48 pacotes;
-- BOM: 21 componentes;
-- testes iniciais: 194 testes de manutenção e 3 do site; 1 teste de rede
-  ignorado explicitamente;
-- validação inicial: `PYTHONDONTWRITEBYTECODE=1 ./maintenance/manage.py verify`
-  concluída no macOS arm64.
+- synced branch: `main`;
+- origin HEAD: `eeea45786401aae166efcd04f5d126faea740da2`;
+- current installer version: `0.1.25`;
+- public catalog: 48 packages;
+- BOM: 21 components;
+- initial tests: 194 maintenance tests and 3 site tests; 1 network test
+  explicitly skipped;
+- initial validation: `PYTHONDONTWRITEBYTECODE=1 ./maintenance/manage.py verify`
+  completed on macOS arm64.
 
-## Superfície existente
+## Existing surface
 
-A CLI já oferece `install`, `play`, `host`, `proxy`, `qtv`, `version`, `update`,
-`upgrade`, `components`, `presets`, `hub`, `verify`, `cleanup` e `uninstall`.
-A CLI instalada restringe `install`, `components` e `presets` ao bootstrap.
+The CLI already offers `install`, `play`, `host`, `proxy`, `qtv`, `version`, `update`,
+`upgrade`, `components`, `presets`, `hub`, `verify`, `cleanup` and `uninstall`.
+The installed CLI restricts `install`, `components` and `presets` to the bootstrap.
 
-Os cinco jogos existentes são KTX, Final Arena, Pro-X, Team Fortress e Total
-Destruction 2. Stable e nightly coexistem. MVDSV, QTV e QWFWD já são componentes
-executáveis em primeiro plano; não são trabalho novo desta consolidação.
+The five existing games are KTX, Final Arena, Pro-X, Team Fortress and Total
+Destruction 2. Stable and nightly coexist. MVDSV, QTV and QWFWD are already components
+that run in the foreground; they are not new work of this consolidation.
 
-## Plataformas
+## Platforms
 
-O catálogo distribui o ezQuake para macOS universal, Linux x86-64 e Windows
-x64. Os serviços distribuem macOS arm64, Linux amd64 e Windows x64; macOS Intel
-não possui runtime de serviço.
+The catalog ships ezQuake for universal macOS, Linux x86-64 and Windows
+x64. The services ship macOS arm64, Linux amd64 and Windows x64; macOS Intel
+has no service runtime.
 
-Antes desta tarefa não havia `.github/workflows/`. A suíte completa havia sido
-executada localmente no macOS arm64, incluindo smokes registrados no roadmap.
-Linux e Windows eram declarados e possuíam validações de formato, mas ainda não
-tinham uma matriz contínua real. Testes portáveis em runners não equivalem a
-smoke do runtime nativo.
+Before this task there was no `.github/workflows/`. The full suite had been
+run locally on macOS arm64, including smokes recorded in the roadmap.
+Linux and Windows were declared and had format validations, but did not yet
+have a real continuous matrix. Portable tests on runners are not the same as a
+smoke of the native runtime.
 
-## Acoplamentos e hardcodings confirmados
+## Confirmed couplings and hardcoding
 
-- `manager.py` contém a matriz fixa do ezQuake e detecção de sistemas;
-- `gameplay.py` usa `LOCAL_GAMES`, conjuntos de capacidades legadas e
-  condicionais por nome de jogo;
-- `services.py` usa `RUNTIME_NAMES`, `runtime_variant` e condicionais por KTX e
+- `manager.py` holds the fixed ezQuake matrix and system detection;
+- `gameplay.py` uses `LOCAL_GAMES`, sets of legacy capabilities and
+  conditionals by game name;
+- `services.py` uses `RUNTIME_NAMES`, `runtime_variant` and conditionals for KTX and
   Pro-X;
-- dados de modos KTX já vêm de `modes.json` e servem de padrão declarativo;
-- `play` e `host` chamam `ensure_local_play_support`, podendo criar payload,
-  recibo e configuração pessoal durante execução;
-- a materialização PK3 dedicada usa `Path(info.filename)`, portanto depende da
-  semântica de caminho do host;
-- QTV aceitava upstream como texto genérico e não existia preflight conjunto
-  de portas;
-- senhas eram aceitas somente por argumentos;
-- não existia journal recuperável de sessões interrompidas.
+- KTX mode data already comes from `modes.json` and serves as the declarative pattern;
+- `play` and `host` call `ensure_local_play_support`, which can create a payload,
+  a receipt and personal settings while running;
+- the dedicated PK3 materialization uses `Path(info.filename)`, so it depends on the
+  host's path semantics;
+- QTV accepted the upstream as generic text and there was no joint port
+  preflight;
+- passwords were accepted only as arguments;
+- there was no recoverable journal of interrupted sessions.
 
-## Contradições documentais confirmadas
+## Confirmed documentation contradictions
 
-- o site e o manual ainda diziam “18 componentes”, enquanto o BOM possui 21;
-- a primeira lista do README omitia `host`, `proxy` e `qtv`;
-- o `ROADMAP.md` ainda tratava MVDSV, QTV, QWFWD e o menu KTX como futuros;
-- o roadmap exclusivo apontava para um HEAD anterior e misturava entrega
-  funcional com validação de plataforma;
-- contagens, versão, comandos e plataformas eram repetidos manualmente.
+- the site and the manual still said “18 components”, while the BOM has 21;
+- the README's first list left out `host`, `proxy` and `qtv`;
+- `ROADMAP.md` still treated MVDSV, QTV, QWFWD and the KTX menu as future work;
+- the dedicated roadmap pointed to an earlier HEAD and mixed functional
+  delivery with platform validation;
+- counts, version, commands and platforms were repeated by hand.
 
-## Entregue versus planejado
+## Delivered versus planned
 
-Já entregue: instalador multiplataforma, stable/nightly, cinco jogos, 24 modos
-KTX declarativos, Frogbots, `play`, `host`, MVDSV, QTV HTTP, QWFWD, `hub`,
-update/upgrade por perfil, verificação, limpeza e desinstalação.
+Already delivered: a cross-platform installer, stable/nightly, five games, 24 declarative KTX
+modes, Frogbots, `play`, `host`, MVDSV, QTV HTTP, QWFWD, `hub`,
+update/upgrade by profile, verification, cleanup and uninstall.
 
-Ainda planejado no baseline: CI multiplataforma, hardening completo de arquivos
-e endpoints, senhas fora da linha de comando, preflight/readiness integral,
-journal e recuperação, catálogo declarativo de runtimes/jogos, execução sem
-mutação, reparo explícito, perfis operacionais de host e central de demos.
+Still planned at the baseline: cross-platform CI, full hardening of archives
+and endpoints, passwords off the command line, full preflight/readiness,
+journal and recovery, a declarative catalog of runtimes/games, execution without
+mutation, explicit repair, operational host profiles and a demo center.
 
-## Invariantes desta consolidação
+## Invariants of this consolidation
 
-- preservar `id1/pak0.pak` e `id1/pak1.pak` e a estratégia técnica atual;
-- não incorporar runtime, engine, mod ou mapa novo;
-- preservar as toolchains existentes sem incorporar runtime novo;
-- preservar comandos, recibos, inventários, configurações pessoais e bundles
-  publicados;
-- não publicar nem alterar o bootstrap público sem aprovação separada.
+- preserve `id1/pak0.pak` and `id1/pak1.pak` and the current technical strategy;
+- do not add any new runtime, engine, mod or map;
+- preserve the existing toolchains without adding a new runtime;
+- preserve commands, receipts, inventories, personal settings and published
+  bundles;
+- do not publish or change the public bootstrap without separate approval.

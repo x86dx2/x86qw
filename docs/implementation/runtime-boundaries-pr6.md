@@ -1,80 +1,80 @@
-# Fronteiras incrementais de runtime — evidência da PR 6
+# Incremental runtime boundaries — PR 6 evidence
 
 - **Issue:** [#52](https://github.com/x86dx2/x86qw/issues/52)
-- **Baseline inicial:** `00098330e5833ba2c83c7121272d644c2a204a7b`
-- **HEAD analisado:** `29d76a48721190aad1203d0986a31d839d62070e`
-- **Recorte documentado:** `23194fd..29d76a4`
-- **Versão pública preservada:** `0.7.3`
-- **Estado:** snapshot histórico integrado pela PR #62 na linha pública `0.7.3`; a trilha PR6 permanece pausada para revisão arquitetural final e validação nativa do candidato 1.0
+- **Initial baseline:** `00098330e5833ba2c83c7121272d644c2a204a7b`
+- **Analyzed HEAD:** `29d76a48721190aad1203d0986a31d839d62070e`
+- **Documented range:** `23194fd..29d76a4`
+- **Preserved public version:** `0.7.3`
+- **State:** historical snapshot integrated by PR #62 into the public `0.7.3` line; the PR6 track stays paused for the final architecture review and native validation of the 1.0 candidate
 
-Esta nota registra somente mudanças commitadas na branch histórica
-`agent/runtime-boundaries`. A integração dessa fronteira foi publicada na
-`0.7.3`; a matriz nativa do candidato 1.0 e o trabalho reservado às PRs 7–12
-não são apresentados como entregues nesta nota.
+This note records only changes committed on the historical branch
+`agent/runtime-boundaries`. The integration of that boundary was published in
+`0.7.3`; the native matrix of the 1.0 candidate and the work reserved for PRs 7–12
+are not presented as delivered in this note.
 
-## Problema e risco confirmados
+## Confirmed problem and risk
 
-O runtime instalado dependia de regras distribuídas entre `manager.py`,
-`gameplay.py`, `services.py`, `menu.py` e `maintenance.tools`. Isso aumentava o
-zipapp, criava ciclos, carregava catálogos antes da necessidade e deixava HTTP,
-persistência e lifecycle vulneráveis a implementações paralelas.
+The installed runtime depended on rules spread across `manager.py`,
+`gameplay.py`, `services.py`, `menu.py` and `maintenance.tools`. That grew the
+zipapp, created cycles, loaded catalogs before they were needed and left HTTP,
+persistence and lifecycle open to parallel implementations.
 
-A PR 6 introduz fronteiras pequenas e verificáveis em `x86qw_runtime` sem
-reescrever a CLI nem mudar seu comportamento público. A decisão arquitetural e
-os limites deste recorte estão no
-[ADR 0005](../adr/0005-fronteiras-incrementais-x86qw-runtime.md).
+PR 6 introduces small, verifiable boundaries in `x86qw_runtime` without
+rewriting the CLI or changing its public behavior. The architectural decision and
+the limits of this range are in
+[ADR 0005](../adr/0005-incremental-x86qw-runtime-boundaries.md).
 
-## Incrementos commitados
+## Committed increments
 
-| Commit | Unidade | Resultado observado |
+| Commit | Unit | Observed result |
 |---|---|---|
-| `23194fd` | downloader e erros | downloader limitado passa ao runtime; manutenção vira fachada; entrypoints compartilham erros tipados |
-| `dccd7dc` | catálogos, versão e lazy loading | modelos/loaders passam ao runtime; help/version funcionam sem ler catálogo |
-| `e378bef` | escrita atômica | writers de estado, journals e arquivos convergem em primitivas duráveis |
-| `20298c1` | estado, recibos e migrações | codecs e migração do formato atual saem do manager sem alterar o formato persistido |
-| `853e126` | transações de componentes | preflight, revalidação, aplicação e rollback inverso passam a formar um contrato explícito |
-| `e5d443d` | UI | engine do menu passa ao runtime; `menu.py` permanece como fachada compatível |
-| `bc3a6fb` | barreira de durabilidade | falha após promoção é distinguida de falha ainda reversível |
-| `3e1b6fc` | composição de estado | staging de componentes é retido até o commit do estado pai |
-| `6a60323` | gameplay | modelos, catálogo e planejamento passam ao runtime com golden commands |
-| `54f52a2` | identidade de processo | PID, token de criação e executável passam ao adapter de plataforma |
-| `a30b41f` | readiness | probes de MVDSV, QTV e QWFWD passam ao supervisor runtime |
-| `0966bc1` | grafo de gameplay | dependência de importação entre gameplay e manager é removida |
-| `839d4ef` | clientes | runtime e recibo do cliente passam a uma transação coordenada com o estado pai |
-| `73eb431` | lifecycle | execução, sinais, grupos/Job Object e encerramento passam ao supervisor runtime |
-| `49594cd` | remoção de componentes | payload e metadados gerenciados ganham backup identificado e rollback; remoções legadas do update participam da transação pai |
-| `cf6e959`–`3929c9c` | lock e composição | mutex da instalação passa à plataforma runtime; entrypoints recebem contextos explícitos; `session_control` passa a ser o contrato canônico |
-| `189679d` | componentes gerados | inversos de conteúdo derivado permanecem disponíveis até o resultado do estado pai |
-| `04e5672`–`71ca24c` | composição e Python | composição de desenvolvimento fica fora do runtime; resolvedor Python passa à plataforma canônica; projeção compatível não consumida sai do zipapp |
-| `3b14559`–`1d4fe21` | remoções e defaults | remoções interativas participam do commit do estado e defaults novos são revertidos em falha posterior |
-| `f932f21` | sessões | journal, recuperação após crash e reconciliação passam a `x86qw_runtime.supervisor.sessions`; arquivos materializados passam a `x86qw_runtime.io.managed_files` |
-| `c5a9ae4` | CLI instalada | runtime, recibo e launchers da CLI são publicados como uma geração transacional |
-| `d2e81e5` | PAKs centrais | os dois PAKs preservados passam por promoção e rollback atômicos sem mudar seus bytes ou política |
-| `513ffaa`–`a59452b` | repair e migrações | permissões locais, metadados determinísticos e configurações pessoais retêm inversos até o resultado final |
-| `78310a8`–`422baef` | composição final | inversos de instalação, estado e repair sobrevivem até a verificação final e são descartados somente depois dela |
-| `1fea5ed` | superfície instalada | fachadas de compatibilidade não consumidas deixam o zipapp |
-| `2807ceb` | contrato do zipapp | cada um dos 47 membros recebe origem, consumidor e contrato em manifesto independente, conferido contra o builder e o arquivo gerado |
-| `efc4875` | cleanup | todos os caminhos selecionados pela limpeza formam uma transação; falha posterior restaura a seleção inteira |
-| `d08f727` | uninstall | runtimes, componentes, metadados e geração da CLI são removidos como uma transação; falha restaura o snapshot anterior |
-| `ff249ec`–`0cf2222` | gates e composição | detector de ciclos cobre imports relativos e `from package import module`; UI, HTTP e catálogos passam às fronteiras canônicas e lazy loading é preservado |
-| `7a1dc9b` | gameplay e plataforma | PAKs, configurações runtime/pessoais e fatos de display/host/macOS passam ao runtime, com ownership de rollback identificado |
-| `a2f041f` | mutações residuais | cache, purge e operações restantes do instalador passam por plano/quarantine e revalidação de identidade |
-| `1409607` | supervisor e sessão | autoria de locks, journals, logs, stop requests, grupos e recuperação passa a contratos canônicos resistentes a corridas |
-| `7ab1677` | projeção do zipapp | o builder passa a derivar os membros do manifesto declarativo; uma segunda lista estática deixa de existir |
-| `29d76a4` | finalização de quarantine | arquivos regulares/diretórios usam remoção vinculada à observação; Windows valida o handle nativo; links e tipos especiais são preservados |
+| `23194fd` | downloader and errors | the bounded downloader moves to the runtime; maintenance becomes a facade; entrypoints share typed errors |
+| `dccd7dc` | catalogs, version and lazy loading | models/loaders move to the runtime; help/version work without reading the catalog |
+| `e378bef` | atomic writing | writers of state, journals and files converge on durable primitives |
+| `20298c1` | state, receipts and migrations | codecs and migration of the current format leave the manager without changing the persisted format |
+| `853e126` | component transactions | preflight, revalidation, apply and reverse rollback become an explicit contract |
+| `e5d443d` | UI | the menu engine moves to the runtime; `menu.py` stays as a compatible facade |
+| `bc3a6fb` | durability barrier | a failure after promotion is told apart from a still reversible failure |
+| `3e1b6fc` | state composition | component staging is kept until the parent state's commit |
+| `6a60323` | gameplay | models, catalog and planning move to the runtime with golden commands |
+| `54f52a2` | process identity | PID, creation token and executable move to the platform adapter |
+| `a30b41f` | readiness | MVDSV, QTV and QWFWD probes move to the runtime supervisor |
+| `0966bc1` | gameplay graph | the import dependency between gameplay and manager is removed |
+| `839d4ef` | clients | the client's runtime and receipt move to a transaction coordinated with the parent state |
+| `73eb431` | lifecycle | execution, signals, groups/Job Object and shutdown move to the runtime supervisor |
+| `49594cd` | component removal | managed payload and metadata gain an identified backup and rollback; legacy removals during update join the parent transaction |
+| `cf6e959`–`3929c9c` | lock and composition | the installation mutex moves to the runtime platform; entrypoints receive explicit contexts; `session_control` becomes the canonical contract |
+| `189679d` | generated components | inverses of derived content stay available until the parent state's result |
+| `04e5672`–`71ca24c` | composition and Python | development composition stays out of the runtime; the Python resolver moves to the canonical platform; an unconsumed compatible projection leaves the zipapp |
+| `3b14559`–`1d4fe21` | removals and defaults | interactive removals join the state commit and new defaults are reverted on a later failure |
+| `f932f21` | sessions | journal, crash recovery and reconciliation move to `x86qw_runtime.supervisor.sessions`; materialized files move to `x86qw_runtime.io.managed_files` |
+| `c5a9ae4` | installed CLI | the CLI's runtime, receipt and launchers are published as one transactional generation |
+| `d2e81e5` | central PAKs | the two preserved PAKs go through atomic promotion and rollback without changing their bytes or policy |
+| `513ffaa`–`a59452b` | repair and migrations | local permissions, deterministic metadata and personal settings keep inverses until the final result |
+| `78310a8`–`422baef` | final composition | installation, state and repair inverses survive until the final verification and are discarded only after it |
+| `1fea5ed` | installed surface | unconsumed compatibility facades leave the zipapp |
+| `2807ceb` | zipapp contract | each of the 47 members gets an origin, consumer and contract in an independent manifest, checked against the builder and the generated file |
+| `efc4875` | cleanup | every path selected by the cleanup forms one transaction; a later failure restores the whole selection |
+| `d08f727` | uninstall | runtimes, components, metadata and the CLI generation are removed as one transaction; a failure restores the previous snapshot |
+| `ff249ec`–`0cf2222` | gates and composition | the cycle detector covers relative imports and `from package import module`; UI, HTTP and catalogs move to the canonical boundaries and lazy loading is preserved |
+| `7a1dc9b` | gameplay and platform | PAKs, runtime/personal settings and display/host/macOS facts move to the runtime, with identified rollback ownership |
+| `a2f041f` | residual mutations | cache, purge and the installer's remaining operations go through plan/quarantine and identity revalidation |
+| `1409607` | supervisor and session | authorship of locks, journals, logs, stop requests, groups and recovery moves to race-resistant canonical contracts |
+| `7ab1677` | zipapp projection | the builder derives the members from the declarative manifest; a second static list no longer exists |
+| `29d76a4` | quarantine finalization | regular files/directories use removal bound to the observation; Windows validates the native handle; links and special types are preserved |
 
-O scanner e extrator `x86qw_runtime.io.archive` já pertenciam ao runtime no
-baseline, conforme o ADR 0002. O recorte mantém essa fronteira como única dona
-de ZIP/PK3/PYZ e não altera limites, modos canônicos ou semântica de extração.
+The `x86qw_runtime.io.archive` scanner and extractor already belonged to the runtime in the
+baseline, per ADR 0002. The range keeps that boundary as the sole owner
+of ZIP/PK3/PYZ and does not change limits, canonical modes or extraction semantics.
 
-## Topologia resultante
+## Resulting topology
 
 ```text
 dist/installer/bin/
   manager.py ───────────────┐
   gameplay.py ──────────────┤
   services.py ──────────────┤
-  menu.py (fachada) ────────┤
+  menu.py (facade) ─────────┤
 maintenance/tools/ ─────────┤
 maintenance builders ───────┤
                             v
@@ -92,98 +92,98 @@ maintenance builders ───────┤
                       └── ui
 ```
 
-O runtime não pode importar `maintenance`, `dist` nem fachadas instaladas. O
-builder incorpora os módulos canônicos e projeções necessárias no zipapp, mas
-não `maintenance/`.
+The runtime cannot import `maintenance`, `dist` or installed facades. The
+builder embeds the canonical modules and needed projections in the zipapp, but
+not `maintenance/`.
 
-O zipapp observado em `29d76a4` contém exatamente 56 membros: 44 módulos de
-`x86qw_runtime`, quatro entrypoints/fachadas no topo, duas projeções KTX e seis
-membros gerados. O arquivo
-`maintenance/inventory/installer-runtime-members.json` declara, para cada
-membro, origem, consumidor e contrato. O builder deriva sua projeção desse
-manifesto e o teste de fronteira exige igualdade exata com o ZIP gerado;
-arquivo não declarado ou sem consumidor não pode entrar silenciosamente.
+The zipapp observed at `29d76a4` holds exactly 56 members: 44 modules of
+`x86qw_runtime`, four top-level entrypoints/facades, two KTX projections and six
+generated members. The file
+`maintenance/inventory/installer-runtime-members.json` declares, for each
+member, its origin, consumer and contract. The builder derives its projection from that
+manifest and the boundary test requires exact equality with the generated ZIP;
+an undeclared file, or one without a consumer, cannot slip in.
 
-## Persistência e rollback já cobertos
+## Persistence and rollback already covered
 
-A fronteira `MutationPlan` captura o snapshot observado antes da confirmação,
-revalida-o antes da primeira alteração e aplica etapas em ordem. Uma falha
-reverte etapas concluídas na ordem inversa. Subtransações de componentes,
-clientes, CLI instalada, PAKs, defaults, reparos, migrações, cleanup e uninstall
-mantêm seus backups/staging até o estado pai e a verificação final, o que
-permite rollback composto sem descartar os inversos cedo demais.
+The `MutationPlan` boundary captures the observed snapshot before confirmation,
+revalidates it before the first change and applies steps in order. A failure
+reverts the completed steps in reverse order. Subtransactions of components,
+clients, the installed CLI, PAKs, defaults, repairs, migrations, cleanup and uninstall
+keep their backups/staging until the parent state and the final verification, which
+allows a composite rollback without discarding the inverses too early.
 
-Os writes atômicos usam temporário privado, validação, `flush`, `fsync` e
-`replace`. Uma exceção anterior à promoção preserva o destino antigo. Uma
-exceção posterior à promoção cuja durabilidade não pôde ser comprovada gera um
-erro de commit inconclusivo e preserva os efeitos; não afirma rollback que o
-sistema não pode provar.
+Atomic writes use a private temporary, validation, `flush`, `fsync` and
+`replace`. An exception before the promotion preserves the old destination. An
+exception after the promotion whose durability could not be proven raises an
+inconclusive commit error and preserves the effects; it does not claim a rollback the
+system cannot prove.
 
-## Compatibilidade observada
+## Observed compatibility
 
-- as fachadas antigas reexportam os mesmos símbolos canônicos quando essa
-  identidade faz parte do contrato interno existente;
-- os formatos atuais de estado e recibos permanecem iguais;
-- os comandos de gameplay são comparados com uma fixture golden;
-- `--help`, `--version`, `version`, `play --help` e `host --help` funcionam no
-  zipapp mesmo com catálogos deliberadamente corrompidos;
-- `host --help` e `status --help` executam usando o supervisor incluído no
+- the old facades re-export the same canonical symbols when that
+  identity is part of the existing internal contract;
+- the current state and receipt formats stay the same;
+- gameplay commands are compared with a golden fixture;
+- `--help`, `--version`, `version`, `play --help` and `host --help` work in the
+  zipapp even with deliberately corrupted catalogs;
+- `host --help` and `status --help` run using the supervisor included in the
   zipapp;
-- nenhuma mudança intencional foi feita em gameplay, argumentos públicos,
-  stable/nightly, perfis, componentes ou PAKs.
+- no intentional change was made to gameplay, public arguments,
+  stable/nightly, profiles, components or PAKs.
 
-## Evidência focal já obtida
+## Focused evidence already obtained
 
-Estes resultados foram obtidos durante os incrementos e são registrados como
-evidência parcial, não como validação do HEAD final da PR:
+These results were obtained during the increments and are recorded as
+partial evidence, not as validation of the PR's final HEAD:
 
-| Foco | Resultado registrado |
+| Focus | Recorded result |
 |---|---|
-| manutenção integral após a primeira transação de componentes | 817 testes; 35 skips explícitos; aprovado |
-| transação, componentes e instalador | 298 testes; 1 skip; aprovado |
-| atomicidade, transação e componentes modernos | 161 testes; aprovado |
-| UI e fronteiras runtime | 34 testes; aprovado |
-| gameplay runtime e zipapp autocontido | 5 testes focais e 2 smokes de zipapp; aprovados |
-| regressão moderna após gameplay | 143 testes; aprovado |
-| identidade de processo e CLI autocontida | 5 testes; aprovado |
-| readiness, serviços e gate de rede | 104 testes; 6 skips explícitos; aprovado |
-| HEAD `29d76a4`: regressão integral de manutenção | 1.190 testes; aprovados; 37 skips explícitos de plataforma/rede |
-| HEAD `29d76a4`: site | 5 testes; aprovados |
-| HEAD `29d76a4`: transação, ownership e arquitetura focais | 349 testes; aprovados; 6 skips nativos Windows no macOS |
+| full maintenance after the first component transaction | 817 tests; 35 explicit skips; passed |
+| transaction, components and installer | 298 tests; 1 skip; passed |
+| atomicity, transaction and modern components | 161 tests; passed |
+| UI and runtime boundaries | 34 tests; passed |
+| runtime gameplay and self-contained zipapp | 5 focused tests and 2 zipapp smokes; passed |
+| modern regression after gameplay | 143 tests; passed |
+| process identity and self-contained CLI | 5 tests; passed |
+| readiness, services and network gate | 104 tests; 6 explicit skips; passed |
+| HEAD `29d76a4`: full maintenance regression | 1,190 tests; passed; 37 explicit platform/network skips |
+| HEAD `29d76a4`: site | 5 tests; passed |
+| HEAD `29d76a4`: focused transaction, ownership and architecture | 349 tests; passed; 6 native Windows skips on macOS |
 
-O resultado integral foi reproduzido no HEAD documentado e inclui a igualdade
-dos 56 membros com a projeção derivada do manifesto, ausência de
-`maintenance/` no zipapp, imports sem ciclo, carregamento tardio de catálogos,
-identidade de fachadas, recuperação sem importar `services.py` e execução de
-`host --help`/`status --help` no zipapp. Os testes adversariais exercitam
-rollback de cleanup, uninstall e purge; substituição concorrente de raízes,
-folhas e backups; ownership de locks, journals, logs e stop requests; e
-preservação de caminhos que mudem de identidade. Os skips locais exigem APIs ou
-shells nativos Windows, com um smoke de rede opt-in. A matriz Linux, macOS e
-Windows deve reproduzir o snapshot enviado à PR.
+The full result was reproduced at the documented HEAD and includes the equality
+of the 56 members with the projection derived from the manifest, the absence of
+`maintenance/` in the zipapp, imports without cycles, late loading of catalogs,
+facade identity, recovery without importing `services.py` and running
+`host --help`/`status --help` in the zipapp. The adversarial tests exercise
+rollback of cleanup, uninstall and purge; concurrent replacement of roots,
+leaves and backups; ownership of locks, journals, logs and stop requests; and
+preservation of paths that change identity. The local skips require native Windows
+APIs or shells, plus one opt-in network smoke. The Linux, macOS and
+Windows matrix must reproduce the snapshot sent to the PR.
 
-## Riscos residuais
+## Residual risks
 
-- `manager.py`, `gameplay.py` e `services.py` continuam sendo entrypoints e
-  raízes de composição extensas; novas regras reutilizáveis não podem voltar a
-  ser implementadas neles;
-- logs de execução são append-only e não participam de rollback; o contrato
-  transacional cobre mutações duráveis de payload, metadados e configurações
-  gerenciadas;
-- a finalização de quarantine é a barreira irreversível posterior ao commit;
-  no Windows ela remove pelo handle validado; no POSIX usa descritor, identidade
-  e rename exclusivo para nome privado imprevisível, enquanto links, tipos
-  especiais, falhas ou trocas observadas preservam o conteúdo para inspeção;
-- o POSIX não oferece `unlink`/`rmdir` condicional por inode; o lock da
-  instalação exclui outras operações x86QW, mas não pretende defender contra
-  código hostil executando como o mesmo usuário;
-- a ausência de ciclo e de import inverso precisa permanecer verde depois das
-  próximas extrações;
-- o snapshot final ainda precisa da matriz portável da PR;
-- smokes nativos de clientes e serviços pertencem ao PR 11.
+- `manager.py`, `gameplay.py` and `services.py` are still large entrypoints and
+  composition roots; new reusable rules must not be implemented in them
+  again;
+- execution logs are append-only and take no part in rollback; the
+  transactional contract covers durable mutations of payload, metadata and managed
+  settings;
+- quarantine finalization is the irreversible barrier after the commit;
+  on Windows it removes through the validated handle; on POSIX it uses a descriptor, identity
+  and an exclusive rename to an unpredictable private name, while links, special
+  types, failures or observed swaps preserve the content for inspection;
+- POSIX offers no conditional `unlink`/`rmdir` by inode; the installation
+  lock excludes other x86QW operations, but does not claim to defend against
+  hostile code running as the same user;
+- the absence of cycles and reverse imports must stay green after the
+  next extractions;
+- the final snapshot still needs the PR's portable matrix;
+- native smokes of clients and services belong to PR 11.
 
-Por isso a issue #52 foi encerrada pela PR 62; a revisão e a matriz nativa
-continuam registradas como gates da estabilização 1.0. A `0.7.3`, seus
-artefatos, hashes, tag, catálogo e bootstraps públicos permanecem imutáveis.
-Esta nota não autoriza nem registra a publicação de uma nova versão: o
-checkout corretivo da estabilização 1.0 continua separado da linha pública.
+That is why issue #52 was closed by PR 62; the review and the native matrix
+remain recorded as gates of the 1.0 stabilization. `0.7.3`, its
+artifacts, hashes, tag, catalog and public bootstraps stay immutable.
+This note neither authorizes nor records the publication of a new version: the
+corrective checkout of the 1.0 stabilization stays separate from the public line.

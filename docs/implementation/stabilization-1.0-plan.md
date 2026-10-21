@@ -1,410 +1,410 @@
-# Plano de estabilização `0.7.13 → 1.0`
+# Stabilization plan `0.7.13 → 1.0`
 
-> Política vigente: `owner-only`, conforme o
-> [ADR 0008](../adr/0008-owner-only-release-gates.md). A referência histórica
-> `0.7.13 → 1.0` continua documentada para a futura audiência externa, mas a
-> primeira instalação pode ser limpa e não exige migração. Os gates de soak,
-> migração e operação TUF sustentável abaixo são condicionais a
+> Current policy: `owner-only`, as set by
+> [ADR 0008](../adr/0008-owner-only-release-gates.md). The historical reference
+> `0.7.13 → 1.0` stays documented for the future external audience, but the
+> first installation can be clean and needs no migration. The soak,
+> migration and sustainable TUF operation gates below are conditional on
 > `release_audience=external-public`.
 
-> **Atualização de 2026-08-15:** o gate owner-only foi concluído e a release
-> `x86qw-installer-1.0.0` foi publicada. As seções abaixo preservam o plano e
-> as decisões da fase de preparação; o estado corrente está em
-> [PROJECT-STATUS.md](../PROJECT-STATUS.md) e o fechamento auditável está em
+> **Update of 2026-08-15:** the owner-only gate was completed and the release
+> `x86qw-installer-1.0.0` was published. The sections below preserve the plan and
+> the decisions of the preparation phase; the current state is in
+> [PROJECT-STATUS.md](../PROJECT-STATUS.md) and the auditable closing is in
 > [1.0.0-owner-only-publication-2026-08-15.md](../releases/1.0.0-owner-only-publication-2026-08-15.md).
 
-| Campo | Valor |
+| Field | Value |
 |---|---|
-| Estado | `1.0.0` owner-only publicado e verificado; gates externos estacionados |
-| Baseline pública | release imutável `x86qw-installer-0.7.13`, preparada no commit `04a55aed8711ec5466dc70f0e33a591d92e07ccb` |
-| Base canônica | `origin/main` |
-| Checkpoint auditável | produto `e12ed081b968f820f47200e4be954a4f444056a1`; promoção `31849932133` (tentativa 2 concluída) |
-| Versão alvo | `1.0.0` |
-| Data da auditoria | 2026-08-13, verificações finais em 2026-08-14 UTC |
-| Escopo desta entrega | política owner-only, evidência durável, aceitação limpa, cobertura M3 e gates de promoção; operação externa condicionada |
+| State | `1.0.0` owner-only published and verified; external gates parked |
+| Public baseline | immutable release `x86qw-installer-0.7.13`, prepared at commit `04a55aed8711ec5466dc70f0e33a591d92e07ccb` |
+| Canonical base | `origin/main` |
+| Auditable checkpoint | product `e12ed081b968f820f47200e4be954a4f444056a1`; promotion `31849932133` (attempt 2 completed) |
+| Target version | `1.0.0` |
+| Audit date | 2026-08-13, final checks on 2026-08-14 UTC |
+| Scope of this delivery | owner-only policy, durable evidence, clean acceptance, M3 coverage and promotion gates; external operation conditional |
 
-Este documento registra a sequência aprovada para transformar a baseline pública
-`0.7.13` em uma `1.0` verificável. O estado corrente fica em
-[PROJECT-STATUS.md](../PROJECT-STATUS.md), o índice estratégico em
-[ROADMAP.md](../ROADMAP.md) e o registro de baseline em
-[stabilization-baseline-2026-07-31.md](stabilization-baseline-2026-07-31.md). Este plano não promove o
-checkpoint, não autoriza a publicação e não substitui aprovação humana.
+This document records the approved sequence to turn the public baseline
+`0.7.13` into a verifiable `1.0`. The current state is in
+[PROJECT-STATUS.md](../PROJECT-STATUS.md), the strategic index in
+[ROADMAP.md](../ROADMAP.md) and the baseline record in
+[stabilization-baseline-2026-07-31.md](stabilization-baseline-2026-07-31.md). This plan does not promote the
+checkpoint, does not authorize publication and does not replace human approval.
 
-## 1. Fronteira, autoridade e invariantes
+## 1. Boundary, authority and invariants
 
-`origin/main` é a única linha canônica. A release pública `0.7.13` e todos
-os bundles públicos anteriores permanecem imutáveis. O checkpoint é somente uma
-fonte de consulta para extração seletiva: **checkpoint para extração, nunca
-merge**. Nenhum commit de `codex/stabilize-1.0` será incorporado como unidade.
+`origin/main` is the only canonical line. The public release `0.7.13` and all
+earlier public bundles stay immutable. The checkpoint is only a
+source to consult for selective extraction: **checkpoint for extraction, never
+merge**. No commit of `codex/stabilize-1.0` will be incorporated as a unit.
 
-O checkpoint histórico que originou este plano não autorizava publicação. A
-fotografia de preparação confirmava que `1.0.0-rc.1` era uma prerelease
-pública; essa limitação foi superada pelo workflow protegido de promoção
-owner-only. O fechamento auditável está em
+The historical checkpoint that gave rise to this plan did not authorize publication. The
+preparation snapshot confirmed that `1.0.0-rc.1` was a public
+prerelease; that limitation was overcome by the protected owner-only
+promotion workflow. The auditable closing is in
 [`1.0.0-owner-only-publication-2026-08-15.md`](../releases/1.0.0-owner-only-publication-2026-08-15.md).
-O preflight privado `1.0.0`
-da revisão de produto `f2cadeff3261ce07f7c9490313db1aa69e417fa2` passou `25/25`
-casos no Apple M3 Pro, com `candidate.json` SHA-256
-`c7357159df806b29d8c9eb715152ec6186c5d9edefd3bb5587dbf6c98a0a94c7`; isso
-ainda precisa passar pelo fluxo remoto, handoff assinado e endpoint público
-antes de ser considerado evidência de release. Os commits posteriores desta
-sequência alteraram apenas tooling de release e documentação, não os arquivos
-de produto cobertos por aquele preflight.
+The private `1.0.0` preflight
+of product revision `f2cadeff3261ce07f7c9490313db1aa69e417fa2` passed `25/25`
+cases on the Apple M3 Pro, with `candidate.json` SHA-256
+`c7357159df806b29d8c9eb715152ec6186c5d9edefd3bb5587dbf6c98a0a94c7`; it
+still has to go through the remote flow, the signed handoff and the public endpoint
+before it counts as release evidence. The later commits of this
+sequence changed only release tooling and documentation, not the product
+files covered by that preflight.
 
-As invariantes para todas as fases são:
+The invariants for every phase are:
 
-- uma frente estrutural por vez, vinculada a uma issue e a uma branch;
-- implementação e release são PRs diferentes;
-- bytes upstream, customizações x86QW, metadata de trust e evidência nativa
-  mantêm fronteiras explícitas;
-- compatibilidade declarada nunca é apresentada como execução nativa;
-- artefatos publicados são imutáveis e uma promoção sem evidência falha
-  fechada;
-- TDD RED → GREEN → REFACTOR será exigido nas PRs A–G quando houver mudança
-  testável; esta entrega documental dispensa TDD.
+- one structural front at a time, tied to an issue and a branch;
+- implementation and release are different PRs;
+- upstream bytes, x86QW customizations, trust metadata and native evidence
+  keep explicit boundaries;
+- declared compatibility is never presented as native execution;
+- published artifacts are immutable and a promotion without evidence fails
+  closed;
+- TDD RED → GREEN → REFACTOR will be required in PRs A–G whenever there is a
+  testable change; this documentation delivery is exempt from TDD.
 
-## 2. Auditoria das linhas e dos PRs históricos
+## 2. Audit of the lines and the historical PRs
 
-A auditoria foi feita sobre as refs locais disponíveis em 2026-08-06. Antes de
-qualquer ação futura de limpeza, a ancestralidade deve ser revalidada contra
-`origin/main`; a lista abaixo não é uma autorização para apagar refs.
+The audit was done on the local refs available on 2026-08-06. Before
+any future cleanup action, ancestry must be revalidated against
+`origin/main`; the list below is not an authorization to delete refs.
 
-| Ref | Estado observado | Decisão do plano |
+| Ref | Observed state | Plan decision |
 |---|---|---|
-| `origin/main` | resolver com `git rev-parse origin/main` no snapshot | única linha canônica |
-| `codex/stabilize-1.0` | `30e9d5b`, checkpoint com trabalho de preparação | congelada; extrair símbolos/hunks, nunca fazer merge/cherry-pick |
-| `origin/codex/control-maps` | `362f705`, quatro commits à frente e 105 atrás, quatro commits exclusivos | manter até uma decisão própria; não apagar com a limpeza do checkpoint |
-| `agent/bounded-downloader` | `a60a625`; 0 à frente/86 atrás, integrado pela PR #58 (`b833ba4`) | apagar apenas depois de revalidar ancestralidade e com autorização |
-| `agent/archive-boundary` | `3228865`; 0 à frente/74 atrás, integrado pela PR #59 (`b746d57`) | apagar apenas depois de revalidar ancestralidade e com autorização |
-| `agent/runtime-boundaries` | `e5a90a6`; 0 à frente/10 atrás, extração histórica integrada pela PR #62 e publicada pela PR #64 | apagar apenas depois de revalidar ancestralidade e com autorização |
-| `origin/x86dx2/audit-ezquake-tournament-gameplay` | `6d659d4`; 0 à frente/5 atrás, ancestral de `origin/main` | apagar apenas depois de revalidar ancestralidade e com autorização |
-| `gitlab/main` | `afb4f66` (`0.7.1`) | não sincronizar; função de espelho ainda precisa de decisão |
-| `fix/macos-stable-no-entitlements` | ref remota gone; branch local histórica | não recriar nem tratar como linha canônica |
+| `origin/main` | resolve with `git rev-parse origin/main` at the snapshot | the only canonical line |
+| `codex/stabilize-1.0` | `30e9d5b`, checkpoint with preparation work | frozen; extract symbols/hunks, never merge/cherry-pick |
+| `origin/codex/control-maps` | `362f705`, four commits ahead and 105 behind, four exclusive commits | keep until its own decision; do not delete with the checkpoint cleanup |
+| `agent/bounded-downloader` | `a60a625`; 0 ahead/86 behind, integrated by PR #58 (`b833ba4`) | delete only after revalidating ancestry and with authorization |
+| `agent/archive-boundary` | `3228865`; 0 ahead/74 behind, integrated by PR #59 (`b746d57`) | delete only after revalidating ancestry and with authorization |
+| `agent/runtime-boundaries` | `e5a90a6`; 0 ahead/10 behind, historical extraction integrated by PR #62 and published by PR #64 | delete only after revalidating ancestry and with authorization |
+| `origin/x86dx2/audit-ezquake-tournament-gameplay` | `6d659d4`; 0 ahead/5 behind, ancestor of `origin/main` | delete only after revalidating ancestry and with authorization |
+| `gitlab/main` | `afb4f66` (`0.7.1`) | do not sync; the mirror's role still needs a decision |
+| `fix/macos-stable-no-entitlements` | remote ref gone; historical local branch | do not recreate it or treat it as a canonical line |
 
-As seis frentes históricas de estabilização estão encerradas como entregas de
-código/publicação anteriores à jornada 1.0:
+The six historical stabilization fronts are closed as code/publication
+deliveries that predate the 1.0 journey:
 
-| PR histórica | Resultado encerrado | Evidência de referência |
+| Historical PR | Closed outcome | Reference evidence |
 |---|---|---|
-| PR 1 — bootstrap Python | publicada na `0.7.1` | PR #56, merge `8ba1f90`; [contrato Python](python-runtime-contract-0.7.1.md) |
-| PR 2 — downloader limitado | publicada na `0.7.3` | PR #58, merge `b833ba4`; [fronteira de download](bounded-download-boundary.md) |
-| PR 3 — ZIP/PK3/PYZ único | publicada na `0.7.3` | PR #59, merge `b746d57`; [fronteira de arquivos](safe-archive-boundary.md) |
-| PR 4 — DACL privada Windows | publicada na `0.7.3` | PR #60, merge `206adc4`; [implementação Windows](windows-private-acl.md) |
-| PR 5 — stable macOS upstream | publicada na `0.7.3` | PR #61, merge `0009833`, correção pública PR #65 `3bbc7a0`; [ADR 0004](../adr/0004-preservar-bundle-upstream-ezquake-stable-macos.md) |
-| PR 6 — fronteiras de runtime | integrada na `0.7.3`; trilha auditável encerrada como entrega, sem promover o checkpoint | HEAD histórico `29d76a4`, integração `daf5d0c`, publicação PR #64 `15eef0b`; [evidência da PR 6](runtime-boundaries-pr6.md) |
+| PR 1 — Python bootstrap | published in `0.7.1` | PR #56, merge `8ba1f90`; [Python contract](python-runtime-contract-0.7.1.md) |
+| PR 2 — bounded downloader | published in `0.7.3` | PR #58, merge `b833ba4`; [download boundary](bounded-download-boundary.md) |
+| PR 3 — single ZIP/PK3/PYZ | published in `0.7.3` | PR #59, merge `b746d57`; [archive boundary](safe-archive-boundary.md) |
+| PR 4 — private Windows DACL | published in `0.7.3` | PR #60, merge `206adc4`; [Windows implementation](windows-private-acl.md) |
+| PR 5 — upstream macOS stable | published in `0.7.3` | PR #61, merge `0009833`, public fix PR #65 `3bbc7a0`; [ADR 0004](../adr/0004-preserve-upstream-ezquake-stable-macos-bundle.md) |
+| PR 6 — runtime boundaries | integrated in `0.7.3`; auditable track closed as a delivery, without promoting the checkpoint | historical HEAD `29d76a4`, integration `daf5d0c`, publication PR #64 `15eef0b`; [PR 6 evidence](runtime-boundaries-pr6.md) |
 
-O encerramento histórico não transforma os artefatos do checkpoint em código
-aprovado para `1.0`. Qualquer símbolo restante precisa de uma issue da sequência
-A–G, revisão própria e evidência do candidato exato.
+The historical closing does not turn the checkpoint's artifacts into code
+approved for `1.0`. Any remaining symbol needs an issue in the A–G
+sequence, its own review and evidence from the exact candidate.
 
-As matrizes históricas relevantes permanecem como evidência datada, não como
-gate futuro: PR 3 (`30856293818`), PR 4 (`30866754435`) e PR 5
-(`30871046055`). Elas provam contratos dos seus commits, não smokes nativos do
-candidato `1.0`.
+The relevant historical matrices remain as dated evidence, not as a
+future gate: PR 3 (`30856293818`), PR 4 (`30866754435`) and PR 5
+(`30871046055`). They prove the contracts of their commits, not native smokes of the
+`1.0` candidate.
 
-## 3. Regra de extração do checkpoint
+## 3. Checkpoint extraction rule
 
-A extração é seletiva e feita por símbolo ou hunk, sempre comparando o resultado
-com a baseline `origin/main`. Os arquivos compartilhados entre fases —
+Extraction is selective and done by symbol or hunk, always comparing the result
+with the `origin/main` baseline. The files shared between phases —
 `manager.py`, `maintenance/manage.py`, `build_installer_bundle.py`,
-`release_candidate.py`, `test_ci.py` e
-`maintenance/inventory/installer-runtime-members.json` — não podem ser
-copiados integralmente. Cada hunk deve declarar consumidor, contrato, teste e
-issue de destino.
+`release_candidate.py`, `test_ci.py` and
+`maintenance/inventory/installer-runtime-members.json` — cannot be
+copied whole. Each hunk must declare its consumer, contract, test and
+target issue.
 
-### Extrair quando houver contrato e issue
+### Extract when there is a contract and an issue
 
-- governança, avisos, ownership, Dependabot, lockfile do site, threat model e
-  runbooks na PR B;
-- SemVer, schemas, envelopes JSON, redaction e códigos estáveis na PR C;
-- migração unilateral de fixtures reais `0.7.0–0.7.13` na PR D;
-- ADR, biblioteca e cerimônia de trust aprovados na E1/E2;
-- preparação/verificação de candidato, ownership, SBOM, provenance e mirrors
-  na PR F;
-- executor nativo e evidência M3 na PR G;
-- promoção sem correção funcional na PR H.
+- governance, notices, ownership, Dependabot, the site lockfile, threat model and
+  runbooks in PR B;
+- SemVer, schemas, JSON envelopes, redaction and stable codes in PR C;
+- one-way migration of real `0.7.0–0.7.13` fixtures in PR D;
+- the approved trust ADR, library and ceremony in E1/E2;
+- candidate preparation/verification, ownership, SBOM, provenance and mirrors
+  in PR F;
+- the native executor and M3 evidence in PR G;
+- promotion without functional fixes in PR H.
 
-### Rejeitar nesta jornada
+### Reject in this journey
 
-- gameplay, KTX, downloader, host, supervisor ou correções incidentais sem uma
-  issue própria;
-- workflows com etapas reservadas, rebuild após aprovação ou claims nativos
-  sem evidência;
-- fixtures prospectivas `0.8.x`/`0.9.x` tratadas como releases publicadas;
-- chaves privadas, metadata de produção, chaves/roles de fixture ou o trust que
-  expira em `2026-08-08`;
-- evidência nativa sintética, promoção local como substituta de publicação
-  protegida ou qualquer alteração em bundles já publicados.
+- gameplay, KTX, downloader, host, supervisor or incidental fixes without an
+  issue of their own;
+- workflows with reserved steps, rebuilds after approval or native claims
+  without evidence;
+- prospective `0.8.x`/`0.9.x` fixtures treated as published releases;
+- private keys, production metadata, fixture keys/roles or the trust that
+  expires on `2026-08-08`;
+- synthetic native evidence, local promotion as a substitute for protected
+  publication, or any change to bundles already published.
 
-## 4. Política de plataformas e CI
+## 4. Platform and CI policy
 
-Artefato publicado, suporte e validação são três dimensões diferentes. Um
-registro de plataforma só pode usar os estados abaixo:
+Published artifact, support and validation are three different dimensions. A
+platform record can only use the states below:
 
-| Estado | Regra |
+| State | Rule |
 |---|---|
-| `supported` | exige evidência nativa do candidato exato |
-| `conditional` | mantém o artefato, mas documenta o contrato que ainda falta |
-| `preview` | há disponibilidade/contrato, sem smoke nativo do candidato |
-| `deprecated` | o artefato permanece enquanto a remoção é conduzida |
-| `unavailable` | deriva da ausência de artefato; não é um sinônimo de “não testado” |
+| `supported` | requires native evidence from the exact candidate |
+| `conditional` | keeps the artifact, but documents the contract still missing |
+| `preview` | availability/contract exists, without a native smoke of the candidate |
+| `deprecated` | the artifact stays while its removal is carried out |
+| `unavailable` | derives from the absence of an artifact; it is not a synonym for “not tested” |
 
-Linux, Windows, macOS Intel e nightly começam como `preview`. O artefato
-macOS universal físico é preservado, mas o suporte é projetado separadamente
-para `macos-arm64` e `macos-x64`. A evidência M3 só muda o estado após a PR G:
-serviços podem tornar-se `supported`; o cliente stable continua `conditional`
-se assinatura/notarização ainda for uma limitação. A matriz portátil não é
-smoke nativo.
+Linux, Windows, macOS Intel and nightly start as `preview`. The physical
+universal macOS artifact is preserved, but support is projected separately
+for `macos-arm64` and `macos-x64`. M3 evidence only changes the state after PR G:
+services can become `supported`; the stable client stays `conditional`
+if signing/notarization is still a limitation. The portable matrix is not a
+native smoke.
 
-Os workflows agora existem como gates executáveis: a validação portável é
-separada do runner self-hosted M3, e nenhum job portável afirma execução
-gráfica, de rede ou de Gatekeeper. A promoção exige approval, mirrors,
-evidência durável, aceitação pública para a final e metadata-last; ausência de
-configuração externa falha fechada.
+The workflows now exist as executable gates: portable validation is
+separate from the self-hosted M3 runner, and no portable job claims graphical,
+network or Gatekeeper execution. Promotion requires approval, mirrors,
+durable evidence, public acceptance for the final and metadata-last; missing
+external configuration fails closed.
 
-## 5. Sequência A–H
+## 5. Sequence A–H
 
-Cada fase começa com uma issue, cria sua branch somente depois da issue, fecha
-seu gate de contrato e só então desbloqueia a fase seguinte. Os alvos de versão
-são sugestões de publicação, não versões preparadas nesta entrega.
+Each phase starts with an issue, creates its branch only after the issue, closes
+its contract gate and only then unblocks the next phase. The version targets
+are publication suggestions, not versions prepared in this delivery.
 
-### PR A — verdade de plataforma
+### PR A — platform truth
 
-Criar uma issue própria antes da branch. Separar artefato publicado, suporte e
-validação; conservar o macOS universal físico; classificar Linux, Windows,
-macOS Intel e nightly como `preview`; preservar a CI com os nomes
-`portable-contract / ...`; e registrar a regra de evidência do candidato exato.
-macOS M3 não é promovido antes de G. A baseline estável pública `0.7.13` não é
-reescrita; qualquer correção futura deve ser uma release nova, separada da PR
-de implementação e justificada por um gap P0/P1.
+Create an issue of its own before the branch. Separate published artifact, support and
+validation; keep the physical universal macOS; classify Linux, Windows,
+macOS Intel and nightly as `preview`; keep the CI with the
+`portable-contract / ...` names; and record the exact-candidate evidence rule.
+macOS M3 is not promoted before G. The public stable baseline `0.7.13` is not
+rewritten; any future fix must be a new release, separate from the
+implementation PR and justified by a P0/P1 gap.
 
-**Gate:** catálogo e documentação usam os cinco estados sem misturar presença
-com execução; CI portável permanece intacta; a issue de release da `0.7.4` é
-separada da implementação.
+**Gate:** catalog and documentation use the five states without mixing presence
+with execution; portable CI stays intact; the `0.7.4` release issue is
+separate from the implementation.
 
-### PR B — governança (`issue #55`)
+### PR B — governance (`issue #55`)
 
-Extrair licença, avisos, ownership, Dependabot, lockfile do site, threat model
-e runbooks. Não remover workflows e não misturar trust, promoção ou publicação.
+Extract license, notices, ownership, Dependabot, the site lockfile, threat model
+and runbooks. Do not remove workflows and do not mix in trust, promotion or publication.
 
-**Gate:** cada novo arquivo tem owner e licença; avisos carregam para a
-distribuição moderna; runbooks apontam para uma autoridade única.
+**Gate:** every new file has an owner and a license; notices carry over to the
+modern distribution; runbooks point to a single authority.
 
-### PR C — contratos (`issue #53`, alvo `0.8.0`)
+### PR C — contracts (`issue #53`, target `0.8.0`)
 
-Extrair SemVer, schemas de estado/receipt, envelopes JSON, redaction e códigos
-por símbolo/hunk. Os writers reais devem emitir as versões congeladas. Antes de
-declarar um RC publicável, builders, archives, catálogo, bootstraps e ordenação
-devem aceitar `1.0.0-rc.1`.
+Extract SemVer, state/receipt schemas, JSON envelopes, redaction and codes
+by symbol/hunk. The real writers must emit the frozen versions. Before
+declaring a publishable RC, builders, archives, catalog, bootstraps and ordering
+must accept `1.0.0-rc.1`.
 
-**Gate:** schemas, writers e consumidores concordam; fixtures negativas cobrem
-redaction e códigos; nenhum bootstrap 0.7.x é quebrado.
+**Gate:** schemas, writers and consumers agree; negative fixtures cover
+redaction and codes; no 0.7.x bootstrap breaks.
 
-### PR D — migração (`issue #46`, alvo `0.8.1` ou `0.8.2`, post-public)
+### PR D — migration (`issue #46`, target `0.8.1` or `0.8.2`, post-public)
 
-Atualizar a issue para suportar somente versões realmente publicadas. Usar
-fixtures reais `0.7.0–0.7.13`; remover claims sintéticos
-`0.8.x`/`0.9.x`; garantir
-que o estado migrado satisfaz os schemas congelados em C e que rollback e
-ownership continuam diagnosticáveis.
+Update the issue to support only versions actually published. Use
+real `0.7.0–0.7.13` fixtures; remove synthetic
+`0.8.x`/`0.9.x` claims; ensure
+the migrated state satisfies the schemas frozen in C and that rollback and
+ownership stay diagnosable.
 
-**Gate quando `external-public`:** migração unilateral, preservação de arquivos
-pessoais, recibos coerentes e ausência de versão futura inventada. No modo
-`owner-only`, a issue permanece capacidade futura e não bloqueia a instalação.
+**Gate when `external-public`:** one-way migration, preservation of personal
+files, coherent receipts and no invented future version. In
+`owner-only` mode, the issue stays a future capability and does not block the installation.
 
-### PRs E1/E2 — trust (`issue #48`, alvo `0.9.0`)
+### PRs E1/E2 — trust (`issue #48`, target `0.9.0`)
 
-Manter a issue aberta nas duas PRs. E1 aprova ADR, biblioteca, algoritmo,
-thresholds, custódia, endpoints, expiração, rotação e cerimônia. E2 só
-implementa depois de aprovação e revisão criptográfica externa.
+Keep the issue open across both PRs. E1 approves the ADR, library, algorithm,
+thresholds, custody, endpoints, expiration, rotation and ceremony. E2 only
+implements after approval and an external cryptographic review.
 
-Nunca promover RSA-PSS própria, chaves/roles de fixture ou metadata do
-checkpoint que expira em `2026-08-08`.
+Never promote a home-made RSA-PSS, fixture keys/roles or checkpoint
+metadata that expires on `2026-08-08`.
 
-**Gate:** a chave de produção foi criada em cerimônia aprovada, a revisão
-independente foi registrada e o verificador falha fechado para rollback,
-freeze, equivocation, expiração e root não ancorado.
+**Gate:** the production key was created in an approved ceremony, the independent
+review was recorded and the verifier fails closed on rollback,
+freeze, equivocation, expiration and an unanchored root.
 
-### PR F — candidato imutável (`issue #51`)
+### PR F — immutable candidate (`issue #51`)
 
-Preservar e redesenhar `validate.yml` e `release.yml`. Desacoplar preparação de
-candidato de trust/evidência por imports opcionais: rehearsal pode existir sem
-evidência, mas promoção/publicação 1.0 falha fechada sem evidência M3. Construir
-uma vez, fixar Actions por SHA, conferir ownership/SBOM/provenance/mirrors e
-publicar metadata por último. Corrigir ownership e fontes/licenças do protótipo;
-todo runtime usado pelo smoke deve pertencer ao candidato ou estar vinculado
-por digest imutável.
+Preserve and redesign `validate.yml` and `release.yml`. Decouple candidate
+preparation from trust/evidence through optional imports: a rehearsal can exist without
+evidence, but 1.0 promotion/publication fails closed without M3 evidence. Build
+once, pin Actions by SHA, check ownership/SBOM/provenance/mirrors and
+publish metadata last. Fix the prototype's ownership and sources/licenses;
+every runtime the smoke uses must belong to the candidate or be bound
+by an immutable digest.
 
-**Gate:** bytes, checksums, ownership, SBOM e provenance são idênticos entre
-preparação e promoção; nenhum destino é sobrescrito; trust não é importado
-implicitamente.
+**Gate:** bytes, checksums, ownership, SBOM and provenance are identical between
+preparation and promotion; no destination is overwritten; trust is not imported
+implicitly.
 
-Em `external-public`, o gate final também exige um handoff de operação TUF registrado por
-`.github/workflows/tuf-operation-drill.yml`. O relatório deve estar vinculado ao
-catálogo do candidato, conter contexto de operador/host/SLA e comprovar
-renovação, expiração simulada e recuperação; suas coordenadas entram no recibo
-durável de `1.0.0`.
+In `external-public`, the final gate also requires a TUF operation handoff recorded by
+`.github/workflows/tuf-operation-drill.yml`. The report must be bound to the
+candidate's catalog, hold operator/host/SLA context and prove
+renewal, simulated expiration and recovery; its coordinates go into the
+durable `1.0.0` receipt.
 
-Em `external-public`, o workflow final também consulta a lease pública atual com
-`monitor_public_tuf.py` e janela de seis horas. O drill histórico não substitui
-essa verificação: enquanto a issue de alerta #152 estiver aberta ou a lease
-estiver dentro da janela, a promoção permanece `NO-GO`.
+In `external-public`, the final workflow also checks the current public lease with
+`monitor_public_tuf.py` and a six-hour window. The historical drill does not replace
+that check: while alert issue #152 is open or the lease
+is inside the window, promotion stays `NO-GO`.
 
-O caminho de renovação limitada está preparado em
-`.github/workflows/tuf-timestamp-renewal.yml`: ele consome um artifact TUF já
-verificado, exige `TUF_TIMESTAMP_KEY_B64` no ambiente protegido e produz apenas
-um handoff não publicado com `timestamp.json` renovado. O segundo workflow,
-`.github/workflows/tuf-timestamp-publish.yml`, verifica esse handoff contra o
-TUF de origem e o candidato, publica a geração timestamp-only sob o mesmo
-ambiente protegido, valida o recibo com
-`maintenance/tools/verify_tuf_timestamp_publication.py` e registra a
-verificação pública pós-deploy. A existência dos workflows não prova custódia
-nem saúde pública; sem secret configurada, execução verde e aprovação
-protegida, o gate TUF continua pendente.
+The bounded renewal path is prepared in
+`.github/workflows/tuf-timestamp-renewal.yml`: it consumes an already
+verified TUF artifact, requires `TUF_TIMESTAMP_KEY_B64` in the protected environment and produces only
+an unpublished handoff with a renewed `timestamp.json`. The second workflow,
+`.github/workflows/tuf-timestamp-publish.yml`, verifies that handoff against the
+source TUF and the candidate, publishes the timestamp-only generation under the same
+protected environment, validates the receipt with
+`maintenance/tools/verify_tuf_timestamp_publication.py` and records the
+public post-deploy check. The existence of the workflows proves neither custody
+nor public health; without a configured secret, a green run and protected
+approval, the TUF gate stays pending.
 
-Em `external-public`, o gate final também exige o período de uso do RC por
-`.github/workflows/rc-soak.yml`, despachado na ref do commit exato do candidato.
-O relatório precisa comprovar sete dias completos, observações diárias verdes,
-as cinco condições operacionais e a issue canônica encerrada. `verify-soak`
-confere a procedência do run e o artifact imutável; suas coordenadas entram na
-seção `soak` do recibo durável de `1.0.0`.
+In `external-public`, the final gate also requires the RC usage period through
+`.github/workflows/rc-soak.yml`, dispatched on the ref of the candidate's exact commit.
+The report must prove seven full days, green daily observations,
+the five operational conditions and the canonical issue closed. `verify-soak`
+checks the run's provenance and the immutable artifact; its coordinates go into the
+`soak` section of the durable `1.0.0` receipt.
 
-### PR G — Mac M3/arm64 e RC (`issue #54`; fechamento operacional `#147`)
+### PR G — Mac M3/arm64 and RC (`issue #54`; operational closing `#147`)
 
-O executor `native_macos_harness.py` e o workflow
-`.github/workflows/native-m3.yml` exigem um plano fechado fornecido para o
-candidato exato. O checkpoint não contém evidência assinada de release; no
-candidato exato, executar o
-conjunto completo de clientes, jogos, serviços e lifecycle. Linux, Windows e
-macOS Intel permanecem `not-run`/`preview`, com harnesses não bloqueantes.
+The `native_macos_harness.py` executor and the
+`.github/workflows/native-m3.yml` workflow require a closed plan supplied for the
+exact candidate. The checkpoint holds no signed release evidence; on the
+exact candidate, run the
+full set of clients, games, services and lifecycle. Linux, Windows and
+macOS Intel stay `not-run`/`preview`, with non-blocking harnesses.
 
-O RC público foi produzido e promovido no run `31752738047`. A implementação
-do fechamento desta frente adiciona os casos M3 restantes, a aceitação limpa e
-a evidência durável. A rechecagem local baixou os mesmos bytes pelos endpoints
-públicos e completou o lifecycle; a migração real
-`0.7.13 → 1.0.0-rc.1` fica arquivada como capacidade externa no recibo
+The public RC was produced and promoted in run `31752738047`. The implementation
+that closes this front adds the remaining M3 cases, the clean acceptance and
+the durable evidence. The local recheck downloaded the same bytes through the public
+endpoints and completed the lifecycle; the real migration
+`0.7.13 → 1.0.0-rc.1` is archived as an external capability in the receipt
 [`1.0.0-rc.1-public-acceptance-migration-local-2026-08-14.json`](../releases/1.0.0-rc.1-public-acceptance-migration-local-2026-08-14.json).
-O drill técnico TUF local formato 2 também passou renovação, expiração simulada e
-recuperação, com contexto de operador/host/SLA, versões por role e chaves efêmeras, em
+The local technical TUF drill, format 2, also passed renewal, simulated expiration and
+recovery, with operator/host/SLA context, per-role versions and ephemeral keys, in
 [`1.0.0-tuf-drill-local-2026-08-14.json`](../releases/1.0.0-tuf-drill-local-2026-08-14.json).
-O candidato local `1.0.0-rc.2`, distinto dos bytes do RC público, também passou
-os 25 casos M3 reais no Apple M3 Pro; o recibo unsigned/pending está em
+The local candidate `1.0.0-rc.2`, distinct from the public RC's bytes, also passed
+the 25 real M3 cases on the Apple M3 Pro; the unsigned/pending receipt is in
 [`1.0.0-rc.2-native-preflight-local-2026-08-14.json`](../releases/1.0.0-rc.2-native-preflight-local-2026-08-14.json).
-O handoff/artifact do workflow protegido, a custódia produtiva e a abertura do
-soak continuam pendentes.
+The protected workflow's handoff/artifact, production custody and the opening of the
+soak are still pending.
 
-**Gate owner-only:** implementação fechada; evidência M3 autenticada para um
-novo candidato, instalação limpa e smokes registrados. O período de uso só é
-gate quando `external-public` for declarado.
+**Owner-only gate:** implementation closed; authenticated M3 evidence for a
+new candidate, clean installation and recorded smokes. The usage period is only a
+gate when `external-public` is declared.
 
-### PR H — promoção `1.0.0` (`issue #149`)
+### PR H — `1.0.0` promotion (`issue #149`)
 
-Criar a issue própria depois de o candidato cumprir os gates da audiência
-escolhida. A PR faz apenas promoção/release, sem correção funcional. Exigir
-trust válido, evidência M3, bytes imutáveis, mirrors convergentes e
-documentação coerente.
+Create its own issue after the candidate meets the gates of the chosen
+audience. The PR only does promotion/release, without functional fixes. Require
+valid trust, M3 evidence, immutable bytes, converging mirrors and
+coherent documentation.
 
-**Gate final owner-only:** aprovação registrada, aceitação limpa, evidência M3,
-metadata publicada por último, reversão documentada e nenhum claim de plataforma
-além da evidência existente. **Gate final external-public:** acrescenta soak,
-migração, operação TUF sustentável e handoffs externos.
+**Owner-only final gate:** recorded approval, clean acceptance, M3 evidence,
+metadata published last, documented rollback and no platform claim
+beyond the existing evidence. **External-public final gate:** adds soak,
+migration, sustainable TUF operation and external handoffs.
 
-## 6. Releases intermediárias e dependências
+## 6. Intermediate releases and dependencies
 
-| Marco | Dependência mínima | Tipo de release |
+| Milestone | Minimum dependency | Release type |
 |---|---|---|
-| nova `0.7.x` | somente P0 confirmado | corretiva, PR de release separada |
-| `0.8.x`/`0.9.x` | não são requisito deste ciclo | não criar por inércia documental |
-| `1.0.0-rc.1` | F e G executadas; aceitação pública v2 e evidência operacional registradas | RC público disponível; soak ainda não formalmente aberto |
-| `1.0.0` | H e gates owner-only | publicada; gates external-public estacionados |
+| new `0.7.x` | confirmed P0 only | corrective, separate release PR |
+| `0.8.x`/`0.9.x` | not a requirement of this cycle | do not create out of documentary inertia |
+| `1.0.0-rc.1` | F and G executed; public acceptance v2 and operational evidence recorded | public RC available; soak not yet formally opened |
+| `1.0.0` | H and owner-only gates | published; external-public gates parked |
 
-O RC `1.0.0-rc.1` foi criado, tagueado e publicado; a release final
-`1.0.0` também foi publicada para `owner-only`. A materialização desta
-documentação não altera bytes publicados. Qualquer alteração de produto exige
-novo candidato; o soak volta a ser gate quando a audiência for
-`external-public`. O mirror GitLab da release final foi confirmado no run
+The RC `1.0.0-rc.1` was created, tagged and published; the final release
+`1.0.0` was also published for `owner-only`. Materializing this
+documentation does not change published bytes. Any product change requires a
+new candidate; the soak becomes a gate again when the audience is
+`external-public`. The GitLab mirror of the final release was confirmed in run
 `31849932133`.
 
-## 7. Governança atual e limpeza futura
+## 7. Current governance and future cleanup
 
-As instruções históricas de controle abaixo foram substituídas pelo estado
-operacional da release final owner-only. As ações de limpeza continuam exigindo nova verificação e
-não podem remover evidência:
+The historical control instructions below were superseded by the operational
+state of the owner-only final release. The cleanup actions still require a new check and
+cannot remove evidence:
 
-1. não criar a tag histórica `audit/stabilize-1.0-2026-08-06` nem tratá-la como
-   autoridade;
-2. revalidar ancestralidade e apagar somente refs já integradas, depois de
-   registrar os SHAs e preservar refs ligadas ao RC, à evidência e ao TUF;
-3. manter o backlog operacional nas issues [#143–#152](https://github.com/x86dx2/x86qw/issues/143),
-   com a limpeza de branches em [#150](https://github.com/x86dx2/x86qw/issues/150)
-   e a avaliação de imutabilidade host-level em
+1. do not create the historical tag `audit/stabilize-1.0-2026-08-06` nor treat it as
+   an authority;
+2. revalidate ancestry and delete only refs already integrated, after
+   recording the SHAs and preserving refs tied to the RC, the evidence and TUF;
+3. keep the operational backlog in issues [#143–#152](https://github.com/x86dx2/x86qw/issues/143),
+   with branch cleanup in [#150](https://github.com/x86dx2/x86qw/issues/150)
+   and the host-level immutability assessment in
    [#151](https://github.com/x86dx2/x86qw/issues/151);
-4. manter `codex/control-maps` e os checkpoints históricos fora da linha de
-   release até decisão própria.
+4. keep `codex/control-maps` and the historical checkpoints out of the
+   release line until their own decision.
 
-As issues históricas #68 e #70 foram encerradas por já estarem concluídas; não
-devem voltar a ser usadas como backlog de 1.0.
+The historical issues #68 and #70 were closed because they were already done; they
+must not be used again as a 1.0 backlog.
 
 
 
-## 8. Riscos, rollback e fronteiras de aprovação
+## 8. Risks, rollback and approval boundaries
 
-| Risco | Controle | Evidência exigida |
+| Risk | Control | Required evidence |
 |---|---|---|
-| checkpoint ser tratado como merge | comparação hunk a hunk e base `origin/main` | diff de cada PR e ancestry revalidada |
-| compatibilidade virar suporte | estados separados e evidência do candidato | catálogo, status e smoke correspondentes |
-| trust de fixture chegar à produção | custódia e revisão externa obrigatórias | cerimônia, fingerprints e expiração |
-| rebuild alterar bytes | build once, hashes e promoção sem overwrite | checksums, SBOM, provenance e mirrors |
-| docs divergir do código | status/roadmap/plano têm papéis distintos | `verify`, links e revisão humana |
-| release misturar implementação | PR de release separada | issue, aprovação e changelog |
+| the checkpoint being treated as a merge | hunk-by-hunk comparison and an `origin/main` base | each PR's diff and revalidated ancestry |
+| compatibility turning into support | separate states and candidate evidence | matching catalog, status and smoke |
+| fixture trust reaching production | mandatory custody and external review | ceremony, fingerprints and expiration |
+| a rebuild changing bytes | build once, hashes and promotion without overwrite | checksums, SBOM, provenance and mirrors |
+| docs diverging from the code | status/roadmap/plan have distinct roles | `verify`, links and human review |
+| a release mixing in implementation | separate release PR | issue, approval and changelog |
 
-O rollback de uma fase documental é apenas reverter sua PR antes do merge; não
-se reescrevem bundles nem se apagam evidências. Uma promoção de artefato já
-publicada é imutável e exige procedimento de incidente, não `git revert` de
-bytes. Qualquer ação remota, criptográfica ou destrutiva para fora das fases
-descritas para até obter autorização explícita.
+Rolling back a documentation phase is just reverting its PR before the merge;
+bundles are not rewritten and evidence is not deleted. A promotion of an artifact already
+published is immutable and requires an incident procedure, not a `git revert` of
+bytes. Any remote, cryptographic or destructive action outside the phases
+described stops until explicit authorization is obtained.
 
-## 9. Definição de concluído
+## 9. Definition of done
 
-A jornada só pode ser declarada concluída quando:
+The journey can only be declared done when:
 
-- A–G têm issues, branches, contratos, evidência e gates aprovados;
-- `1.0.0-rc.1` passou a aceitação e os gates exigidos pela audiência escolhida;
-- H promove somente bytes idênticos, mirrors convergentes e metadata coerente;
-- suporte por plataforma corresponde à evidência nativa do candidato;
-- `PROJECT-STATUS.md`, `ROADMAP.md`, README e notas de release apontam para o
-  mesmo estado;
-- em `external-public`, existe artifact protegido de soak, issue encerrada e
-  coordenadas conferidas no recibo durável final;
-- nenhuma alteração funcional é escondida em uma PR de promoção.
+- A–G have approved issues, branches, contracts, evidence and gates;
+- `1.0.0-rc.1` passed the acceptance and the gates required by the chosen audience;
+- H promotes only identical bytes, converging mirrors and coherent metadata;
+- support per platform matches the candidate's native evidence;
+- `PROJECT-STATUS.md`, `ROADMAP.md`, README and release notes point to the
+  same state;
+- in `external-public`, there is a protected soak artifact, a closed issue and
+  coordinates checked in the final durable receipt;
+- no functional change is hidden in a promotion PR.
 
-Para o escopo `owner-only`, a conclusão foi atingida: os contratos locais
-passam, o publisher não recompila, a fixture pública 0.7.13 permanece
-arquivada, a aceitação pública limpa percorreu os endpoints públicos, a
-evidência durável foi publicada, o candidato final foi promovido e a release
-foi verificada no M3. Operação TUF sustentável, soak externo e migração
-histórica permanecem estacionados para `external-public`.
+For the `owner-only` scope, completion was reached: the local contracts
+pass, the publisher does not recompile, the public 0.7.13 fixture stays
+archived, the clean public acceptance went through the public endpoints, the
+durable evidence was published, the final candidate was promoted and the release
+was verified on the M3. Sustainable TUF operation, external soak and historical
+migration stay parked for `external-public`.
 
-## 10. Validação desta materialização
+## 10. Validation of this materialization
 
-O gate da implementação local é executado no worktree; ele não substitui os
-gates remotos e nativos:
+The local implementation gate runs in the worktree; it does not replace the
+remote and native gates:
 
-1. confirmar que a base canônica ainda resolve para
-   `origin/main`; registrar o SHA retornado no relatório da auditoria; se avançar, repetir a
-   auditoria antes de editar;
-2. executar `git diff --check` e revisar os links Markdown locais, resolvendo
-   cada destino a partir do diretório do documento e ignorando somente URLs
-   externas e âncoras;
-3. confirmar a distinção entre baseline pública, checkout local, TUF técnico e
-   operação TUF;
-4. executar `git diff --check`, `manage.py verify --no-tests`, os testes
-   portáveis e os testes nativos com as permissões apropriadas;
-5. revisar o `HEAD` local contra `origin/main`, mantendo separado o
-   trabalho histórico já publicado do candidato atual; registrar os recibos
-   locais de aceitação pública e drill TUF sem tratá-los como handoffs
-   protegidos.
+1. confirm that the canonical base still resolves to
+   `origin/main`; record the returned SHA in the audit report; if it moved, repeat the
+   audit before editing;
+2. run `git diff --check` and review the local Markdown links, resolving
+   each target from the document's directory and ignoring only external URLs
+   and anchors;
+3. confirm the distinction between public baseline, local checkout, technical TUF and
+   TUF operation;
+4. run `git diff --check`, `manage.py verify --no-tests`, the portable
+   tests and the native tests with the appropriate permissions;
+5. review the local `HEAD` against `origin/main`, keeping the historical work already
+   published separate from the current candidate; record the local
+   public acceptance and TUF drill receipts without treating them as protected
+   handoffs.
 
-Esse gate não promove `1.0.0` nem altera a release RC existente. A execução
-nativa M3, a custódia TUF, o catálogo público e o soak continuam dependentes de
-entradas protegidas e não são inferidos localmente.
+That gate does not promote `1.0.0` nor change the existing RC release. Native
+M3 execution, TUF custody, the public catalog and the soak still depend on
+protected inputs and are not inferred locally.

@@ -1,132 +1,134 @@
-# ADR 0006 — Autenticação do catálogo com TUF
+# ADR 0006 — Catalog authentication with TUF
 
-- **Estado:** aprovada e implementada no candidato do hotfix `0.7.5`
-- **Data:** 2026-08-06
+- **Status:** approved and implemented in the `0.7.5` hotfix candidate
+- **Date:** 2026-08-06
 - **Issue:** [#48](https://github.com/x86dx2/x86qw/issues/48)
-- **Baseline analisada:** `3bbc7a01faf8d472c5ccbab9233e05e9abadc379`
-- **Implementação:** E2 mesclada na PR #69; root e metadata de produção entram
-  pelo hotfix `0.7.5`, sob o waiver solo-maintainer do ADR 0007
-- **Emenda owner-only (2026-08-16):** expiração máxima de `timestamp` = 7 dias
-  enquanto a audiência for um mantenedor e `external-public=NO-GO`. O teto de
-  24 horas volta a valer antes de qualquer anúncio de catálogo público.
-- **Emenda owner-only (2026-08-27):** expiração de `snapshot` = 90 dias e de
-  `timestamp` = 30 dias, no mesmo regime owner-only. A emenda anterior deixou as
-  duas roles vencendo no mesmo instante, o que anulava o único fluxo protegido de
-  renovação do projeto: `tuf-timestamp-publish` só pode alterar
-  `metadata/timestamp.json`, e um timestamp renovado continua apontando para um
-  snapshot já vencido. A partir daqui `snapshot` sobrevive ao `timestamp` por
-  construção. Os tetos de 7 dias e 24 horas voltam a valer antes de qualquer
-  anúncio de catálogo público, junto com a separação de custódia da tabela
-  abaixo; o INC-001 de 2026-08-27 é a evidência que motivou a emenda.
+- **Analyzed baseline:** `3bbc7a01faf8d472c5ccbab9233e05e9abadc379`
+- **Implementation:** E2 merged in PR #69; production root and metadata come in
+  through the `0.7.5` hotfix, under ADR 0007's solo-maintainer waiver
+- **Owner-only amendment (2026-08-16):** maximum `timestamp` expiration = 7 days
+  while the audience is one maintainer and `external-public=NO-GO`. The 24-hour
+  ceiling applies again before any public catalog announcement.
+- **Owner-only amendment (2026-08-27):** `snapshot` expiration = 90 days and
+  `timestamp` = 30 days, under the same owner-only regime. The previous
+  amendment left both roles expiring at the same instant, which defeated the
+  project's only protected renewal flow: `tuf-timestamp-publish` can only change
+  `metadata/timestamp.json`, and a renewed timestamp keeps pointing to an
+  already expired snapshot. From here on, `snapshot` outlives `timestamp` by
+  construction. The 7-day and 24-hour ceilings apply again before any public
+  catalog announcement, along with the custody separation in the table below;
+  INC-001 of 2026-08-27 is the evidence that prompted the amendment.
 
-## Contexto
+## Context
 
-O catálogo público atual usa HTTPS, registra tamanho e SHA-256 dos payloads e
-preserva múltiplos mirrors. Esses controles detectam corrupção de um artefato
-depois que o catálogo já foi aceito, mas não autenticam o próprio catálogo. Um
-atacante que controle a origem ou um mirror pode apresentar catálogo e payload
-maliciosos coerentes entre si, repetir metadata antiga ou manter clientes
-congelados numa versão ainda válida para eles.
+The current public catalog uses HTTPS, records size and SHA-256 of the payloads
+and keeps multiple mirrors. These controls detect corruption of an artifact
+after the catalog has already been accepted, but they do not authenticate the
+catalog itself. An attacker who controls the origin or a mirror can present a
+malicious catalog and payload consistent with each other, replay old metadata
+or keep clients frozen on a version still valid for them.
 
-A CLI também possui fallbacks para arquivos em branches `main` mutáveis. Uma
-branch não é uma identidade de release e não pode participar da nova fronteira
-de confiança.
+The CLI also has fallbacks to files on mutable `main` branches. A branch is not
+a release identity and cannot take part in the new trust boundary.
 
-Esta E1 decide somente arquitetura, custódia e operação. Ela não cria chaves,
-metadata, roles de fixture, dependências instaladas, código de verificação,
-workflow, release ou publicação. Em particular, nenhum material do checkpoint
-com expiração em `2026-08-08` é promovido ou usado como raiz de confiança.
+This E1 decides only architecture, custody and operation. It does not create
+keys, metadata, fixture roles, installed dependencies, verification code,
+workflows, releases or publication. In particular, no material from the
+checkpoint expiring on `2026-08-08` is promoted or used as a root of trust.
 
-## Decisão
+## Decision
 
-O x86QW adotará The Update Framework (TUF), conforme a especificação 1.0, com
-consistent snapshots. Não será criado protocolo equivalente nem verificador
-criptográfico próprio.
+x86QW will adopt The Update Framework (TUF), following specification 1.0, with
+consistent snapshots. No equivalent protocol or in-house cryptographic verifier
+will be created.
 
-### Biblioteca e primitivas
+### Library and primitives
 
-- o cliente usará `tuf.ngclient.Updater` de `python-tuf` 7.0.0 para executar o
-  fluxo root → timestamp → snapshot → targets e validar alvos;
-- a preparação e assinatura do repositório usarão as APIs de metadata do
-  `python-tuf` e `securesystemslib[crypto]`, num ambiente isolado de cerimônia;
-- E2 fixará versões e hashes de todas as dependências, registrará licenças e
-  SBOM e empacotará o cliente sem depender de `pip` ou de pacote global no host;
-- todas as roles usarão Ed25519; payloads e referências entre metadata usarão
-  SHA-256;
-- serialização, key IDs, contagem de assinaturas distintas e verificação de
-  threshold pertencem às bibliotecas, não ao código x86QW;
-- RSA-PSS próprio, canonicalização própria e fallback para “hash assinado” fora
-  do TUF são proibidos.
+- the client will use `tuf.ngclient.Updater` from `python-tuf` 7.0.0 to run the
+  root → timestamp → snapshot → targets flow and validate targets;
+- preparing and signing the repository will use the metadata APIs of
+  `python-tuf` and `securesystemslib[crypto]`, in an isolated ceremony
+  environment;
+- E2 will pin versions and hashes of every dependency, record licenses and an
+  SBOM and package the client without depending on `pip` or a global package on
+  the host;
+- every role will use Ed25519; payloads and references between metadata will
+  use SHA-256;
+- serialization, key IDs, counting distinct signatures and threshold
+  verification belong to the libraries, not to x86QW code;
+- in-house RSA-PSS, in-house canonicalization and a fallback to a "signed hash"
+  outside TUF are forbidden.
 
-A versão exata das bibliotecas precisa ser reconfirmada na abertura de E2. Uma
-mudança de major, algoritmo ou formato exige nova aprovação deste ADR.
+The exact library versions must be reconfirmed when E2 opens. A change of
+major version, algorithm or format requires a new approval of this ADR.
 
-### Roles, thresholds e custódia
+### Roles, thresholds and custody
 
-A coluna de alvo público é a política final. A coluna owner-only é o que vale
-enquanto `external-public` for NO-GO, conforme as emendas registradas no topo.
+The public target column is the final policy. The owner-only column is what
+applies while `external-public` is NO-GO, following the amendments recorded at
+the top.
 
-| Role | Chaves autorizadas | Threshold | Custódia | Alvo público | Owner-only em vigor |
+| Role | Authorized keys | Threshold | Custody | Public target | Owner-only in force |
 |---|---:|---:|---|---:|---:|
-| root | 3 | 2 | três custodians distintos; chaves offline e não exportáveis | 365 dias | 365 dias |
-| targets | 3 | 2 | três autoridades de release; uso offline e aprovação humana | 90 dias | 90 dias |
-| snapshot | 2 | 1 | signer online isolado; uma chave ativa e uma reserva selada | 7 dias | 90 dias |
-| timestamp | 2 | 1 | signer online isolado; uma chave ativa e uma reserva selada | 24 horas | 30 dias |
+| root | 3 | 2 | three distinct custodians; offline, non-exportable keys | 365 days | 365 days |
+| targets | 3 | 2 | three release authorities; offline use and human approval | 90 days | 90 days |
+| snapshot | 2 | 1 | isolated online signer; one active key and one sealed spare | 7 days | 90 days |
+| timestamp | 2 | 1 | isolated online signer; one active key and one sealed spare | 24 hours | 30 days |
 
-A expiração de `snapshot` é sempre estritamente maior que a de `timestamp`, nas
-duas colunas. Igualá-las remove a capacidade de recuperar a cadeia pelo fluxo
-protegido, e o teste
-`test_initializes_root_and_generates_refreshable_catalog_repository` trava essa
-ordem.
+The `snapshot` expiration is always strictly greater than the `timestamp` one,
+in both columns. Making them equal removes the ability to recover the chain
+through the protected flow, and the test
+`test_initializes_root_and_generates_refreshable_catalog_repository` locks that
+order.
 
-Cada chave pertence a uma única role. Nenhuma chave privada entra em Git, no
-bundle, em logs, artefatos de CI ou secrets de jobs de pull request. Root e
-targets não ficam em runners nem no provedor que hospeda o repositório. Pessoas
-podem acumular funções somente se continuarem existindo dois custodians humanos
-independentes para qualquer threshold 2-de-3; uma mesma pessoa nunca fornece
-duas assinaturas para o mesmo threshold.
+Each key belongs to a single role. No private key goes into Git, the bundle,
+logs, CI artifacts or secrets of pull request jobs. Root and targets do not
+live on runners nor with the provider hosting the repository. People may hold
+several functions only if two independent human custodians remain for any
+2-of-3 threshold; the same person never provides two signatures for the same
+threshold.
 
-Antes da primeira cerimônia, o owner de segurança deve registrar fora do
-repositório: custodian de cada key ID, meio físico, localização, acesso de
-recuperação e substituto. O repositório recebe somente chaves públicas,
-fingerprints e evidência sem segredo.
+Before the first ceremony, the security owner must record outside the
+repository: the custodian of each key ID, the physical medium, the location,
+recovery access and the substitute. The repository gets only public keys,
+fingerprints and evidence without secrets.
 
-### Janelas operacionais
+### Operational windows
 
-- no modo owner-only, `timestamp` expira em 30 dias e é renovado antes de
-  restarem 7 dias; alerta crítico começa quando restarem 72 horas. A janela de
-  alerta precisa superar com folga o pior intervalo observado entre execuções do
-  monitor, que em 2026-08-27 foi de 10,25 horas; a janela anterior, de 6 horas,
-  era menor que esse intervalo e por isso não avisava. O teto de 24 horas e a
-  renovação no máximo a cada 12 horas voltam a valer antes de autorizar catálogo
-  público, para limitar o freeze da chave online;
-- no modo owner-only, `snapshot` expira em 90 dias. É renovado a cada mudança de
-  targets e, sem mudança, antes de restarem 14 dias. Ele nunca vence antes do
-  `timestamp`, para que a renovação isolada de timestamp seja capaz de recuperar
-  a cadeia sem cerimônia completa;
-- `targets` é renovado a cada promoção e, sem promoção, antes de restarem 30
-  dias;
-- `root` é revisado trimestralmente e renovado antes de restarem 120 dias;
-- a data de expiração sempre é calculada a partir do instante da assinatura,
-  nunca copiada de metadata anterior;
-- um cliente fixa o relógio no início de cada refresh, como exige TUF. Metadata
-  expirada encerra a atualização; conteúdo remoto não é promovido.
+- in owner-only mode, `timestamp` expires in 30 days and is renewed before 7
+  days remain; a critical alert starts when 72 hours remain. The alert window
+  must comfortably exceed the worst interval observed between monitor runs,
+  which on 2026-08-27 was 10.25 hours; the previous 6-hour window was shorter
+  than that interval and therefore did not warn. The 24-hour ceiling and
+  renewal at most every 12 hours apply again before a public catalog is
+  authorized, to bound the online key's freeze;
+- in owner-only mode, `snapshot` expires in 90 days. It is renewed on every
+  targets change and, without a change, before 14 days remain. It never expires
+  before `timestamp`, so that an isolated timestamp renewal can recover the
+  chain without a full ceremony;
+- `targets` is renewed on every promotion and, without a promotion, before 30
+  days remain;
+- `root` is reviewed quarterly and renewed before 120 days remain;
+- the expiration date is always computed from the moment of signing, never
+  copied from earlier metadata;
+- a client pins the clock at the start of each refresh, as TUF requires.
+  Expired metadata ends the update; remote content is not promoted.
 
-Expiração bloqueia instalar, atualizar ou reparar a partir da rede. Ela não
-impede executar uma instalação local já validada e não autoriza voltar a um
-catálogo sem assinatura.
+Expiration blocks installing, updating or repairing from the network. It does
+not prevent running an already validated local installation and does not
+authorize going back to an unsigned catalog.
 
-### Endpoints e objetos assinados
+### Endpoints and signed objects
 
-As origens canônicas serão versionadas sob:
+The canonical origins will be versioned under:
 
 ```text
 https://qw.x86.com.br/api/v1/trust/metadata/
 https://qw.x86.com.br/api/v1/trust/targets/
 ```
 
-Os mirrors aprovados expõem os mesmos caminhos e bytes. O layout é o layout
-TUF de consistent snapshots:
+Approved mirrors expose the same paths and bytes. The layout is TUF's
+consistent snapshot layout:
 
 ```text
 metadata/<N>.root.json
@@ -136,126 +138,128 @@ metadata/<N>.targets.json
 targets/catalog/<sha256>.catalog.json
 ```
 
-Todas as versões de root permanecem disponíveis. `timestamp.json` é o único
-ponteiro mutável de “current”: ele é assinado pela role timestamp e referencia
-por versão, tamanho e hash um snapshot versionado e imutável. Não haverá
-symlink, arquivo `latest` ou ponteiro `current` paralelo na fronteira de trust.
+Every root version stays available. `timestamp.json` is the only mutable
+"current" pointer: it is signed by the timestamp role and references a
+versioned, immutable snapshot by version, size and hash. There will be no
+symlink, `latest` file or parallel `current` pointer in the trust boundary.
 
-O snapshot TUF é assinado pela role snapshot e fixa a versão e o hash de
-`targets.json`. A role targets autentica por tamanho e SHA-256 o catálogo como
-alvo TUF. O campo de domínio `current` que já existe dentro do catálogo continua
-indicando a versão atual do instalador, mas só é consumido depois que o catálogo
-inteiro foi autenticado. Assim, tanto o snapshot quanto a decisão de current
-estão cobertos pela cadeia assinada sem envelope criptográfico inventado pelo
-projeto.
+The TUF snapshot is signed by the snapshot role and pins the version and hash
+of `targets.json`. The targets role authenticates the catalog as a TUF target
+by size and SHA-256. The domain field `current` that already exists inside the
+catalog keeps indicating the installer's current version, but it is only used
+after the whole catalog has been authenticated. So both the snapshot and the
+current decision are covered by the signed chain without a cryptographic
+envelope invented by the project.
 
-URLs de payload registradas no catálogo continuam usando múltiplos mirrors. O
-payload mantém sua verificação atual por tamanho e SHA-256, agora ancorada num
-catálogo autenticado. Um ciclo de refresh usa uma única origem de metadata; se
-ela falhar, o ciclo é descartado antes de tentar outro mirror. Metadata de
-origens diferentes nunca é misturada no mesmo ciclo.
+Payload URLs recorded in the catalog keep using multiple mirrors. The payload
+keeps its current verification by size and SHA-256, now anchored in an
+authenticated catalog. A refresh cycle uses a single metadata origin; if it
+fails, the cycle is discarded before trying another mirror. Metadata from
+different origins is never mixed in the same cycle.
 
-### Estado confiável do cliente
+### Trusted client state
 
-A primeira root pública aprovada é incorporada como bytes no bundle da CLI e
-passada no argumento `bootstrap` de `Updater`; cache gravável nunca é raiz de
-confiança. E2 deve preservar esses bytes como membro declarado do zipapp e
-validar sua identidade durante o build.
+The first approved public root is embedded as bytes in the CLI bundle and
+passed in `Updater`'s `bootstrap` argument; a writable cache is never a root of
+trust. E2 must keep those bytes as a declared member of the zipapp and validate
+their identity during the build.
 
-O cliente persiste em diretório privado as últimas metadata confiáveis. Versões
-menores são rollback e são rejeitadas. Uma mesma versão com bytes diferentes é
-equivocation e também é rejeitada. O cliente não apaga o último estado válido
-quando um refresh falha, mas não usa metadata expirada para uma nova mutação
-remota.
+The client persists the latest trusted metadata in a private directory. Lower
+versions are a rollback and are rejected. The same version with different
+bytes is equivocation and is also rejected. The client does not delete the
+last valid state when a refresh fails, but does not use expired metadata for a
+new remote mutation.
 
-A atualização de root ocorre estritamente de `N` para `N+1`. Cada nova root é
-verificada pelo threshold da root antiga e pelo threshold da nova. Saltos,
-roots não ancoradas e remoção de versões intermediárias falham fechados.
+Root updates go strictly from `N` to `N+1`. Each new root is verified by the
+old root's threshold and by the new one's. Jumps, unanchored roots and removal
+of intermediate versions fail closed.
 
-### Rotação e revogação
+### Rotation and revocation
 
-- rotação planejada de root produz `N+1.root.json` assinado por 2-de-3 da root
-  `N` e 2-de-3 da root `N+1`;
-- toda versão intermediária de root é publicada de modo imutável antes da
-  atualização de `timestamp.json`;
-- trocar targets, snapshot ou timestamp exige uma nova root que remova a chave
-  antiga e autorize a nova;
-- após rotação de snapshot ou timestamp, clientes descartam o cache dessas
-  roles conforme o fluxo TUF, impedindo fast-forward após comprometimento;
-- revogação nunca reduz temporariamente um threshold abaixo da política. Se não
-  houver quorum, publicação para e a recuperação é escalada;
-- comprometimento do threshold de root não possui recuperação silenciosa: exige
-  nova âncora distribuída fora da cadeia afetada e comunicação pública do
-  incidente.
+- a planned root rotation produces `N+1.root.json` signed by 2-of-3 of root `N`
+  and 2-of-3 of root `N+1`;
+- every intermediate root version is published immutably before
+  `timestamp.json` is updated;
+- replacing targets, snapshot or timestamp requires a new root that removes the
+  old key and authorizes the new one;
+- after a snapshot or timestamp rotation, clients discard those roles' cache
+  following the TUF flow, preventing fast-forward after a compromise;
+- revocation never temporarily lowers a threshold below the policy. If there is
+  no quorum, publication stops and recovery is escalated;
+- a compromise of the root threshold has no silent recovery: it requires a new
+  anchor distributed outside the affected chain and public communication of the
+  incident.
 
-O procedimento completo está no
-[runbook de release e TUF](../runbooks/release.md).
+The full procedure is in the
+[release and TUF runbook](../runbooks/release.md).
 
-### Compatibilidade e corte
+### Compatibility and cutover
 
-E2 removerá da CLI autenticada qualquer leitura de
-`raw.githubusercontent.com/.../main` e `gitlab.com/.../raw/main`. Clientes que
-suportam TUF consultam somente endpoints de trust e alvos autenticados.
+E2 will remove from the authenticated CLI any read of
+`raw.githubusercontent.com/.../main` and `gitlab.com/.../raw/main`. Clients
+that support TUF query only trust endpoints and authenticated targets.
 
-Clientes legados não podem ser corrigidos retroativamente. Antes do corte, uma
-release corretiva separada deve substituir seus fallbacks mutáveis por um
-snapshot de compatibilidade imutável e fixado por SHA-256. Esse endpoint pode
-manter o schema antigo, mas não recebe novas promoções depois do corte. Não há
-downgrade automático de TUF para o catálogo legado.
+Legacy clients cannot be fixed retroactively. Before the cutover, a separate
+corrective release must replace their mutable fallbacks with an immutable
+compatibility snapshot pinned by SHA-256. That endpoint may keep the old
+schema, but it gets no new promotions after the cutover. There is no automatic
+downgrade from TUF to the legacy catalog.
 
-`/api/v1/catalog.json` pode continuar como projeção pública para o site e para
-observação humana; a CLI autenticada não o trata como autoridade.
+`/api/v1/catalog.json` may remain as a public projection for the site and for
+human observation; the authenticated CLI does not treat it as an authority.
 
-## Ameaças e comportamento de falha
+## Threats and failure behavior
 
-| Evento | Resultado obrigatório |
+| Event | Required result |
 |---|---|
-| assinatura ausente, inválida ou repetida | abortar antes de aceitar metadata |
-| root não ancorada ou salto de versão | abortar e preservar a última root confiável |
-| versão menor | classificar como rollback e abortar |
-| mesma versão com conteúdo diferente | classificar como equivocation e abortar |
-| metadata expirada | classificar como freeze possível e bloquear mutação remota |
-| snapshot/targets incoerentes | classificar como mix-and-match e abortar |
-| mirror indisponível | descartar o ciclo antes de tentar outro mirror |
-| payload com tamanho ou SHA-256 divergente | descartar staging e preservar destino anterior |
-| relógio local sem confiabilidade | não renovar confiança nem promover conteúdo |
+| missing, invalid or repeated signature | abort before accepting metadata |
+| unanchored root or version jump | abort and keep the last trusted root |
+| lower version | classify as rollback and abort |
+| same version with different content | classify as equivocation and abort |
+| expired metadata | classify as a possible freeze and block remote mutation |
+| inconsistent snapshot/targets | classify as mix-and-match and abort |
+| mirror unavailable | discard the cycle before trying another mirror |
+| payload with a mismatched size or SHA-256 | discard the staging and keep the previous destination |
+| unreliable local clock | do not renew trust nor promote content |
 
-Erros de trust são distintos de falhas de transporte e precisam ser visíveis em
-saída humana e estruturada, sem incluir chaves privadas, tokens ou URLs com
-credenciais.
+Trust errors are distinct from transport failures and must be visible in human
+and structured output, without including private keys, tokens or URLs with
+credentials.
 
-## Gate para E2
+## Gate for E2
 
-E2 só pode começar depois de registrar na issue #48:
+E2 can only start after recording in issue #48:
 
-1. aprovação deste ADR por maintainers e owner de segurança;
-2. revisão criptográfica independente do modelo, thresholds e janelas;
-3. designação dos custodians e operadores, fora do repositório;
-4. ensaio da cerimônia com material descartável que nunca será promovido;
-5. estratégia aprovada para empacotar dependências, licenças e SBOM no zipapp;
-6. plano de corte dos clientes legados sem branch `main` mutável.
+1. approval of this ADR by the maintainers and the security owner;
+2. an independent cryptographic review of the model, thresholds and windows;
+3. designation of the custodians and operators, outside the repository;
+4. a rehearsal of the ceremony with disposable material that will never be
+   promoted;
+5. an approved strategy to package dependencies, licenses and the SBOM in the
+   zipapp;
+6. a cutover plan for legacy clients without a mutable `main` branch.
 
-A implementação deve começar com testes adversariais RED para assinatura,
-threshold, expiração, rollback, freeze, equivocation, mix-and-match, rotação,
-revogação, root não ancorada e divergência entre mirrors. Só depois entra código
-produtivo. Chaves e metadata de produção são criadas na cerimônia aprovada, não
-em fixtures nem durante testes.
+The implementation must start with RED adversarial tests for signature,
+threshold, expiration, rollback, freeze, equivocation, mix-and-match, rotation,
+revocation, unanchored root and divergence between mirrors. Only then does
+production code come in. Production keys and metadata are created in the
+approved ceremony, not in fixtures nor during tests.
 
-## Consequências
+## Consequences
 
-A cadeia passa a tolerar comprometimento isolado de timestamp ou snapshot sem
-autorizar payload arbitrário, e comprometimento de menos de duas chaves root ou
-targets sem alcançar quorum. Expiração limita freeze, versões monotônicas
-limitam rollback e consistent snapshots impedem mistura entre gerações.
+The chain now tolerates an isolated compromise of timestamp or snapshot without
+authorizing arbitrary payloads, and a compromise of fewer than two root or
+targets keys without reaching quorum. Expiration bounds freezes, monotonic
+versions bound rollbacks and consistent snapshots prevent mixing generations.
 
-O custo é operacional: dependências auditadas entram no artefato, há cache
-confiável persistente, renovação contínua de metadata, custodians offline e
-procedimentos de incidente. Indisponibilidade ou expiração falham fechadas para
-atualização; disponibilidade nunca prevalece sobre a cadeia de confiança.
+The cost is operational: audited dependencies go into the artifact, there is a
+persistent trusted cache, continuous metadata renewal, offline custodians and
+incident procedures. Unavailability or expiration fails closed for updates;
+availability never prevails over the chain of trust.
 
-## Referências
+## References
 
 - [The Update Framework Specification 1.0](https://theupdateframework.github.io/specification/latest/)
 - [`tuf.ngclient.Updater`](https://theupdateframework.readthedocs.io/en/stable/api/tuf.ngclient.updater.html)
-- [Deploy de root confiável no python-tuf](https://theupdateframework.readthedocs.io/en/stable/INSTALLATION.html#application-deployment)
-- [Conformidade dos clientes TUF](https://theupdateframework.github.io/tuf-conformance/)
+- [Deploying a trusted root with python-tuf](https://theupdateframework.readthedocs.io/en/stable/INSTALLATION.html#application-deployment)
+- [TUF client conformance](https://theupdateframework.github.io/tuf-conformance/)

@@ -1,42 +1,42 @@
-# Release train pós-1.0 — M3-first
+# Post-1.0 release train — M3-first
 
-## Ordem canônica
+## Canonical order
 
-| Estação | Conteúdo | Gate de saída | Estado |
+| Station | Content | Exit gate | State |
 | --- | --- | --- | --- |
-| S0.1 | main e contrato DNS determinístico | sete contextos protegidos verdes | PASS |
-| S0.2 | candidato exato em instalação single-user M3 | install/lifecycle/verify/repair/cleanup/uninstall | PASS |
-| S0.3 | TUF técnico e projeção live | timestamp saudável; bootstraps/product/release-truth convergentes | PASS |
-| S0.4 | observação owner-only | incidentes e recibos do mantenedor | OBSERVED |
-| F1 | doctor e diagnostics | contratos JSON, sanitização e testes M3 | PASS |
-| F2 | perfis, favoritos e descoberta local | dados pessoais preservados e fallback | PASS |
-| F3 | hosting presets e health | readiness, logs e rollback | PASS |
-| EP-0 | decisão de audiência | ADR external-public explícito | DEFERRED |
-| EP-1 | migração histórica | somente se upgrade antigo for prometido | CONDITIONAL |
-| EP-2 | soak do candidato exato | sete dias completos | DEFERRED |
-| EP-3 | TUF com custódia independente | RTO e recovery de produção | EXTERNAL_ONLY |
-| EP-4 | aceite por usuário externo | máquina limpa e suporte | DEFERRED |
-| EP-5 | plataformas adicionais | evidência nativa por plataforma | DEFERRED |
+| S0.1 | main and the deterministic DNS contract | seven protected contexts green | PASS |
+| S0.2 | exact candidate in a single-user M3 installation | install/lifecycle/verify/repair/cleanup/uninstall | PASS |
+| S0.3 | technical TUF and live projection | healthy timestamp; bootstraps/product/release-truth converging | PASS |
+| S0.4 | owner-only observation | the maintainer's incidents and receipts | OBSERVED |
+| F1 | doctor and diagnostics | JSON contracts, sanitization and M3 tests | PASS |
+| F2 | profiles, favorites and local discovery | personal data preserved and fallback | PASS |
+| F3 | hosting presets and health | readiness, logs and rollback | PASS |
+| EP-0 | audience decision | explicit external-public ADR | DEFERRED |
+| EP-1 | historical migration | only if an old upgrade is promised | CONDITIONAL |
+| EP-2 | soak of the exact candidate | seven full days | DEFERRED |
+| EP-3 | TUF with independent custody | production RTO and recovery | EXTERNAL_ONLY |
+| EP-4 | acceptance by an external user | clean machine and support | DEFERRED |
+| EP-5 | additional platforms | native evidence per platform | DEFERRED |
 
-## Regra de avanço
+## Rule for advancing
 
-S0 é o único gate que bloqueia funcionalidades. Depois de S0, F1, F2 e F3 avançam em PRs pequenas no M3. EP-0 a EP-5 não são pré-requisitos para trabalhar no produto owner-only; só reabrem quando a audiência mudar.
+S0 is the only gate that blocks features. After S0, F1, F2 and F3 advance in small PRs on the M3. EP-0 to EP-5 are not prerequisites for working on the owner-only product; they reopen only when the audience changes.
 
-Qualquer mudança em bytes de produto cria candidato e repete S0. Mudança apenas em teste, documentação ou projeção não cria release artificial. Metadata TUF permanece última quando houver publicação autorizada.
+Any change to product bytes creates a candidate and repeats S0. A change only to tests, documentation or projection does not create an artificial release. TUF metadata stays last when there is an authorized publication.
 
-## Estado da carga
+## State of the load
 
-A carga é `x86qw-installer-1.0.0`, commit de produto `e12ed081...`, installer SHA-256 `d3274e...`, candidate `0bde05...`, mirror E2 e evidência nativa M3 E3 25/25. Ela é válida para o mantenedor e não é external-public.
+The load is `x86qw-installer-1.0.0`, product commit `e12ed081...`, installer SHA-256 `d3274e...`, candidate `0bde05...`, E2 mirror and E3 25/25 native M3 evidence. It is valid for the maintainer and is not external-public.
 
-## Migração e baseline nova
+## Migration and a new baseline
 
-A primeira publicação aberta pode declarar uma baseline nova e começar com instalação limpa. Nesse caso EP-1 não existe para a primeira abertura. Se o produto prometer upgrade de 0.7.13 ou outra baseline, EP-1 volta ao trem antes da promoção.
+The first open publication may declare a new baseline and start from a clean install. In that case EP-1 does not exist for the first opening. If the product promises an upgrade from 0.7.13 or another baseline, EP-1 returns to the train before the promotion.
 
 ## Handoff
 
-Maker registra estado, commit, digest, ambiente e rollback. Checker tenta refutar. O mantenedor decide avanço, hold ou rollback. Nenhum handoff contém secrets, cookies ou claims sem evidência.
+The Maker records state, commit, digest, environment and rollback. The Checker tries to refute it. The maintainer decides advance, hold or rollback. No handoff holds secrets, cookies or claims without evidence.
 
-## Referências
+## References
 
 - [master plan](MASTER-PLAN.md)
 - [issue backlog](ISSUE-BACKLOG.md)

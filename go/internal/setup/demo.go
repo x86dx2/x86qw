@@ -374,9 +374,9 @@ var _ Backend = (*Demo)(nil)
 func (d *Demo) MatchCatalog(context.Context, string) (*MatchCatalog, error) {
 	return &MatchCatalog{
 		Games: []Game{
-			{ID: "ktx", Label: "KTX", Version: "1.47+x86qw.20", Description: "QuakeWorld competitivo com o QVM KTX 1.47 derivado e reproduzível do x86QW.", Modes: true},
-			{ID: "final-arena", Label: "Final Arena", Version: "1.20", Description: "Duelos individuais em fila: o vencedor permanece na arena."},
-			{ID: "pro-x", Label: "Pro-X", Version: "1.1", Description: "Rounds e equipes com ready, break e votação."},
+			{ID: "ktx", Label: "KTX", Version: "1.47+x86qw.20", Description: "Competitive QuakeWorld with the KTX 1.47 QVM, built reproducibly by x86QW.", Modes: true},
+			{ID: "final-arena", Label: "Final Arena", Version: "1.20", Description: "Queued one-on-one duels: the winner stays in the arena."},
+			{ID: "pro-x", Label: "Pro-X", Version: "1.1", Description: "Rounds and teams with ready, break and votes."},
 		},
 		Modes: demoModes, Groups: demoGroups, Channels: []string{"stable"}, Ruleset: "x86qw",
 	}, nil

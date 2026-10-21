@@ -1,83 +1,84 @@
-# ADR 0008 — Gates da fase owner-only
+# ADR 0008 — Gates of the owner-only phase
 
-**Status:** aceito
+**Status:** accepted
 
-**Data:** 2026-08-14
+**Date:** 2026-08-14
 
-**Decisor:** mantenedor único do x86QW (`x86dx2`)
+**Decision maker:** x86QW's sole maintainer (`x86dx2`)
 
-## Contexto
+## Context
 
-O x86QW está nascendo do zero e, nesta fase, possui um único usuário e um único
-mantenedor. O usuário pode apagar o destino completo e instalar novamente. Não
-existe ainda compromisso de preservar instalações, dados ou configurações de
-usuários externos.
+x86QW is being born from scratch and, in this phase, has a single user and a
+single maintainer. The user can delete the whole destination and install again.
+There is no commitment yet to preserve installations, data or settings of
+external users.
 
-O repositório já contém contratos de migração, fixtures históricas e o comando
-`migrate`. Esses componentes continuam disponíveis, mas não devem transformar
-uma compatibilidade histórica ainda não necessária em bloqueio para a primeira
-instalação do produto.
+The repository already contains migration contracts, historical fixtures and
+the `migrate` command. Those components stay available, but they must not turn
+a historical compatibility that is not needed yet into a blocker for the
+product's first install.
 
-## Decisão
+## Decision
 
-O ciclo atual opera em `release_audience=owner-only`.
+The current cycle runs with `release_audience=owner-only`.
 
-O gate de aceitação obrigatório deste ciclo comprova:
+This cycle's mandatory acceptance gate proves:
 
-- instalação limpa em destino descartável;
-- `version`, `changes`, `verify` e lifecycle do launcher;
-- update aplicado e idempotente em destino descartável;
-- uninstall conservador e purge explícito;
-- evidência nativa Apple M3 do candidato exato;
-- contratos portáveis, build-once, bytes imutáveis, ownership, SBOM e
+- a clean install on a disposable destination;
+- `version`, `changes`, `verify` and the launcher lifecycle;
+- an applied, idempotent update on a disposable destination;
+- a conservative uninstall and an explicit purge;
+- native Apple M3 evidence for the exact candidate;
+- portable contracts, build-once, immutable bytes, ownership, SBOM and
   provenance;
-- convergência dos assets publicados quando uma release for publicada.
+- convergence of the published assets when a release is published.
 
-O gate `single-user` não exige:
+The `single-user` gate does not require:
 
-- instalação de `0.7.13`;
-- migração histórica ou preservação de dados de uma instalação antiga;
-- soak de sete dias voltado a usuários externos;
-- drill de operação TUF de produção para disponibilidade contínua;
-- aceitação por usuários externos.
+- installing `0.7.13`;
+- historical migration or preserving data from an old installation;
+- a seven-day soak aimed at external users;
+- a production TUF operations drill for continuous availability;
+- acceptance by external users.
 
-O código de migração e suas fixtures ficam preservados como capacidade
-`post-public`, e não como requisito da versão owner-only.
+The migration code and its fixtures are kept as a `post-public` capability,
+not as a requirement of the owner-only version.
 
-## Transição para usuários externos
+## Transition to external users
 
-Quando o mantenedor declarar que o produto será liberado para usuários
-externos, a audiência deve mudar explicitamente para
-`release_audience=external-public`. A partir dessa decisão, o workflow exige:
+When the maintainer declares that the product will be released to external
+users, the audience must change explicitly to
+`release_audience=external-public`. From that decision on, the workflow
+requires:
 
-1. aceitação com `acceptance_scope=external-users`;
-2. migração real da baseline suportada;
-3. soak protegido do candidato;
-4. operação TUF sustentável e recuperação comprovada;
-5. evidência pública durável vinculada aos bytes externos.
+1. acceptance with `acceptance_scope=external-users`;
+2. real migration of the supported baseline;
+3. a protected soak of the candidate;
+4. sustainable TUF operations and proven recovery;
+5. durable public evidence bound to the external bytes.
 
-A mudança de audiência é uma decisão de release e deve ser registrada em uma
-nova ata/PR antes da promoção. Um valor omitido continua sendo `owner-only` no
-workflow, mas a promoção ainda precisa dos gates próprios desse modo.
+Changing the audience is a release decision and must be recorded in new minutes
+or a PR before the promotion. An omitted value is still `owner-only` in the
+workflow, but the promotion still needs that mode's own gates.
 
-## Riscos aceitos
+## Accepted risks
 
-No modo owner-only, uma instalação antiga pode ser descartada em vez de
-migrada. Isso é uma limitação deliberada do produto nesta fase, não uma falha
-oculta. A documentação não deve anunciar compatibilidade histórica enquanto a
-transição para `external-public` não for registrada.
+In owner-only mode, an old installation may be discarded instead of migrated.
+That is a deliberate limitation of the product in this phase, not a hidden
+failure. The documentation must not advertise historical compatibility while
+the transition to `external-public` is not recorded.
 
-## Evidência e auditoria
+## Evidence and audit
 
-Cada promoção registra no recibo durável:
+Each promotion records in the durable receipt:
 
 - `release_audience`;
-- commit e identidade do candidato;
-- escopo da aceitação;
-- evidência M3 e root de evidência;
-- assets e mirrors;
-- gates externos, quando aplicáveis.
+- the candidate's commit and identity;
+- the acceptance scope;
+- the M3 evidence and the evidence root;
+- assets and mirrors;
+- external gates, when applicable.
 
-O recibo `owner-only` não contém handoffs de soak ou operação TUF externa. O
-recibo `external-public` continua exigindo esses handoffs e a divergência de
-bytes entre o candidato final e o RC sob soak.
+The `owner-only` receipt holds no soak or external TUF operations handoffs.
+The `external-public` receipt keeps requiring those handoffs and the byte
+divergence between the final candidate and the RC under soak.
