@@ -56,7 +56,7 @@ No PowerShell ou no Prompt de Comando:
 powershell -c "irm https://qw.x86.com.br/install.ps1 | iex"
 ```
 
-O bootstrap baixa a CLI nativa `x86qw` da release `x86qw-cli-2.3.2` no
+O bootstrap baixa a CLI nativa `x86qw` da release `x86qw-cli-2.4.0` no
 GitHub, confere o tamanho e o SHA-256 fixados no próprio script e executa
 `x86qw setup`. Num terminal, isso abre o instalador do app; ele consulta o
 catálogo TUF público e pergunta o que instalar e onde. Nada além do sistema é
@@ -85,7 +85,7 @@ curl -fsS https://qw.x86.com.br/install.sh | bash -s -- --platform windows
 ```
 
 Os valores aceitos são `macos`, `linux` e `windows`. Os binários da CLI também
-estão na [release `x86qw-cli-2.3.2`](https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.3.2),
+estão na [release `x86qw-cli-2.4.0`](https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.4.0),
 com `SHA256SUMS` e atestado de proveniência do build
 (`gh attestation verify ARQUIVO --repo x86dx2/x86qw`).
 
@@ -301,7 +301,7 @@ docs/           arquitetura, hospedagem, runbooks e decisões
 
 ## Estado do projeto
 
-A CLI atual é a da release `x86qw-cli-2.3.2`, em modo `owner-only`: um usuário,
+A CLI atual é a da release `x86qw-cli-2.4.0`, em modo `owner-only`: um usuário,
 o próprio mantenedor, que a usa num Mac Apple M3. Os binários de macOS, Windows
 e Linux estão no catálogo e na release; os testes de CI rodam em Linux e
 Windows, mas não há registro versionado de smoke nativo das versões 2.x, então
