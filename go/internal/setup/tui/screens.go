@@ -33,7 +33,6 @@ var bigDigits = func() map[rune][]string {
 const (
 	logoFullRows    = 31 // the full logo shows from this many rows
 	logoCompactRows = 24 // the compact one from this many
-	routeRows       = 52 // the setup shows the route from this many
 	labelWidth      = 13 // the labels of an open section
 	digitsWidth     = 26 // the big percentage
 	sparkColumns    = 18 // the speed history, one column per ~0.6 s
@@ -101,40 +100,9 @@ func (m *Model) logo(p *page) {
 	p.gap(2)
 }
 
-// route draws the five steps as diamonds with the current step named.
-func (m *Model) route(p *page) {
-	t := m.theme
-	steps := []string{"route.intent", "route.config", "route.install", "route.done"}
-	current := map[screen]int{scIntent: 0, scConfigure: 1, scInstall: 2, scDone: 3}[m.screen]
-	var b strings.Builder
-	for index := range steps {
-		if index > 0 {
-			color := t.Faint()
-			if index <= current {
-				color = t.Gray
-			}
-			b.WriteString(p.st(color).Render("───"))
-		}
-		switch {
-		case index < current:
-			b.WriteString(p.st(t.Bright).Render(m.glyphs.Diamond))
-		case index == current:
-			b.WriteString(p.st(t.Brand).Render(m.glyphs.Diamond))
-		default:
-			b.WriteString(p.st(t.Dim).Render(m.glyphs.DiamondOff))
-		}
-	}
-	line := b.String()
-	p.add(p.st(t.Base).Render(strings.Repeat(" ", (p.width-lipgloss.Width(line))/2)) + line)
-	label := m.t(steps[current])
-	p.add(p.st(t.Base).Render(strings.Repeat(" ", (p.width-lipgloss.Width(label))/2)) + p.st(t.Text2).Render(label))
-	p.gap(2)
-}
-
 func (m *Model) intentPage(p *page) {
 	t := m.theme
 	m.logo(p)
-	m.route(p)
 	p.title(m.t("intent.q"))
 	p.gap(1)
 	options := [][2]string{{"play", "play.d"}, {"host", "host.d"}, {"both", "both.d"}}
@@ -226,6 +194,28 @@ func (m *Model) sectionRows() []reviewRow {
 	return append(rows, reviewRow{"folder", m.t("sec.folder"), shortPath(o.Target)})
 }
 
+// sectionSummary is the one-line summary of a section of the setup.
+func (m *Model) sectionSummary(id string) string {
+	for _, row := range m.sectionRows() {
+		if row.id == id {
+			return row.summary
+		}
+	}
+	return ""
+}
+
+// openSetupAt opens the setup from a screen with one section in focus, so
+// the person lands where the change is.
+func (m *Model) openSetupAt(from screen, row, section string) tea.Cmd {
+	m.openSetup(from, row)
+	for index, r := range m.confirmRows() {
+		if r.id == section {
+			m.focus = index
+		}
+	}
+	return nil
+}
+
 // confirmRows are the setup screen: the sections, the recipe, then the
 // main action.
 func (m *Model) confirmRows() []reviewRow {
@@ -233,16 +223,28 @@ func (m *Model) confirmRows() []reviewRow {
 		reviewRow{"confirm", m.confirmLabel(), ""})
 }
 
+// goLabel names the step that starts the work: Install on the first run,
+// Apply to a change made from Console.
+func (m *Model) goLabel() string {
+	if m.fromPanel {
+		return m.t("conf.apply")
+	}
+	return m.t("conf.go")
+}
+
 func (m *Model) confirmLabel() string {
 	switch {
 	case !m.preOn:
-		return m.t("conf.go")
+		return m.goLabel()
 	case !m.preDone:
 		return m.t("rev.checking")
 	case m.preflightOutcome() == setup.CheckFailed:
 		return m.t("rev.blocked")
 	case m.preflightOutcome() == setup.CheckWarning:
 		return m.t("rev.anyway")
+	}
+	if m.fromPanel {
+		return m.t("rev.apply")
 	}
 	return m.t("rev.confirm")
 }
@@ -483,11 +485,12 @@ func (m *Model) integrationDetails() [][2]string {
 // the section in focus open with everything in it. Install and the
 // preflight live in the dock under it.
 func (m *Model) setupPage(p *page) {
-	if m.h >= routeRows {
-		m.route(p)
-	}
 	p.title(m.t("conf.title"))
-	p.lead(m.t("conf.lead"))
+	if m.fromPanel {
+		p.lead(m.t("conf.lead.apply"))
+	} else {
+		p.lead(m.t("conf.lead"))
+	}
 	p.gap(1)
 	rows := m.confirmRows()
 	m.accordion(p, rows[:len(rows)-1])
@@ -676,7 +679,6 @@ func (m *Model) activateConfirm(id string) tea.Cmd {
 
 func (m *Model) installPage(p *page) {
 	t := m.theme
-	m.route(p)
 	pr := m.progress
 	fraction := 0.0
 	if pr.Total > 0 {
@@ -932,9 +934,6 @@ func (m *Model) doneRows() []doneRow {
 
 func (m *Model) donePage(p *page) {
 	t := m.theme
-	if !m.fromPanel {
-		m.route(p)
-	}
 	title := m.t("done.title")
 	if !m.opts.Intent.WantsClient() {
 		title = m.t("done.host")
@@ -1028,11 +1027,11 @@ func (m *Model) activateDone(id string) tea.Cmd {
 	case "quit":
 		return tea.Quit
 	case "play":
-		return m.openScreen(scMatch)
+		return m.gotoCtx(ctxPlay)
 	case "server":
-		return m.openScreen(scHost)
+		return m.gotoCtx(ctxHost)
 	case "find":
-		return m.openScreen(scServers)
+		return m.gotoCtx(ctxFind)
 	}
 	return nil
 }
@@ -1053,52 +1052,12 @@ func (m *Model) panelRows() []reviewRow {
 		return []reviewRow{{"keep", keep + "  " + m.t("keep.personal"), m.t("keep.where")}, {"remove", m.t("m.remove"), ""}}
 	}
 	return []reviewRow{
-		{"play", m.t("h.play"), m.homeSummary("play")},
-		{"servers", m.t("h.servers"), m.homeSummary("servers")},
-		{"host", m.t("h.host"), m.homeSummary("host")},
 		{"update", m.t("m.update"), ""},
 		{"change", m.t("m.change"), m.t("m.change.d")},
+		{"remove", m.t("m.remove"), m.t("m.remove.d")},
 		{"repair", m.t("m.repair"), m.t("m.repair.d")},
 		{"tools", m.t("h.tools"), m.t("h.tools.d")},
-		{"remove", m.t("m.remove"), m.t("m.remove.d")},
 	}
-}
-
-// homeSummary is the live line beside a game row of home.
-func (m *Model) homeSummary(id string) string {
-	g := m.game
-	switch id {
-	case "play":
-		if g.catalog != nil && g.catalog.Last != nil {
-			return m.matchTitle() + " · " + m.ruleset(g.match.Ruleset)
-		}
-		return m.t("h.play.d")
-	case "servers":
-		switch {
-		case g.serversLoading:
-			return m.t("servers.loading")
-		case g.serversErr != nil:
-			return m.t("h.servers.off")
-		}
-		players := 0
-		for _, server := range g.servers {
-			players += server.Humans
-		}
-		return fmt.Sprintf(m.t("h.servers.d"), len(g.servers), players)
-	case "host":
-		switch {
-		case !m.serverInstalled():
-			return m.t("h.host.none")
-		case g.stack != nil && g.stack.Status == "starting":
-			return m.t("host.starting")
-		case g.stack != nil && g.stack.Status == "stopping":
-			return m.t("host.stopping")
-		case g.stack != nil:
-			return fmt.Sprintf(m.t("h.host.on"), m.instancesUp())
-		}
-		return fmt.Sprintf(m.t("h.host.off"), len(m.opts.Server.Instances))
-	}
-	return ""
 }
 
 func (m *Model) panelPage(p *page) {
@@ -1147,11 +1106,11 @@ func (m *Model) panelPage(p *page) {
 		if m.panelView == "" {
 			// Home groups the game and the installation.
 			switch row.id {
-			case "play":
-				p.heading(m.t("h.group.play"))
 			case "update":
-				p.gap(1)
 				p.heading(m.t("h.group.install"))
+			case "repair":
+				p.gap(1)
+				p.heading(m.t("h.group.maint"))
 			}
 		}
 		focused, hovered := index == m.focus, m.hover == "row:"+row.id
@@ -1212,7 +1171,7 @@ func (m *Model) panelKey(key string) tea.Cmd {
 			delete(m.tops, scPanel) // home keeps its own place, not the sub-view's
 			m.focusRow(back)
 		} else if key == "esc" {
-			return m.quit(key)
+			return m.toRail()
 		}
 	}
 	return nil
@@ -1270,16 +1229,10 @@ func (m *Model) activatePanel(id string) tea.Cmd {
 		return nil
 	}
 	switch id {
-	case "play":
-		return m.openScreen(scMatch)
-	case "servers":
-		return m.openScreen(scServers)
-	case "host":
-		return m.openScreen(scHost)
 	case "tools":
 		m.openModal("tools")
 	case "change":
-		m.openSetup(scPanel, "change")
+		return m.openSetupAt(scPanel, "change", "comps")
 	case "apply":
 		// Update applies every new version, from home and back to it.
 		m.openSetup(scPanel, "update")

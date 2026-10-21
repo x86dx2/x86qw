@@ -27,9 +27,10 @@ func TestOfflineInstallationStillOpensAndNewOneRetries(t *testing.T) {
 	m := New(Config{Backend: offline{&setup.Demo{ExistingInstall: true, Speed: 50}}, Target: shortTarget(t), Lang: PT})
 	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
 	drive(m, run(m.Init())...)
-	if m.err != nil || m.screen != scPanel {
+	if m.err != nil || m.screen != scMatch {
 		t.Fatalf("without a catalog, the installation still opens: %v, screen %d", m.err, m.screen)
 	}
+	toConsole(m)
 	m.focus = homeRow(m, "change")
 	drive(m, key("enter"))
 	if m.screen != scPanel {
@@ -52,6 +53,7 @@ func TestOfflineInstallationStillOpensAndNewOneRetries(t *testing.T) {
 // the end, returns there.
 func TestUpdateRunsFromHomeAndBack(t *testing.T) {
 	m := started(t, true)
+	toConsole(m)
 	m.focus = homeRow(m, "update")
 	drive(m, key("enter"), key("enter"))
 	if m.screen != scConfigure || !m.preOn || !m.opts.Upgrade || !m.fromPanel {
@@ -85,7 +87,7 @@ func TestNothingToDownloadReadsAsDone(t *testing.T) {
 
 func TestRemovedInstallationOnlyLeaves(t *testing.T) {
 	m := started(t, true)
-	m.panelView, m.removed = "remove", true
+	m.screen, m.panelView, m.removed = scPanel, "remove", true
 	if cmd := m.key("enter"); cmd != nil || m.busy {
 		t.Fatal("after uninstalling, enter does nothing")
 	}
@@ -174,8 +176,7 @@ func TestServerDialogKeepsAProblemWhereItIs(t *testing.T) {
 
 func TestHostStopsOnASecondPressAndAddRestores(t *testing.T) {
 	m := started(t, true)
-	m.focus = homeRow(m, "host")
-	drive(m, key("enter"))
+	toContext(m, "3")
 	m.focus = len(m.hostRows()) - 1
 	drive(m, key("enter"))
 	drive(m, run(m.loadStack())...)
@@ -208,14 +209,19 @@ func TestHostStopsOnASecondPressAndAddRestores(t *testing.T) {
 	}
 }
 
-func TestBackFromAScreenLandsOnItsRow(t *testing.T) {
+func TestBackFromAScreenLandsOnItsContext(t *testing.T) {
 	m := started(t, true)
-	for _, id := range []string{"servers", "host", "change"} {
-		m.focus = homeRow(m, id)
-		drive(m, key("enter"), key("esc"))
-		if m.screen != scPanel || m.panelRows()[m.focus].id != id {
-			t.Fatalf("from %s back to %s", id, m.panelRows()[m.focus].id)
+	for _, number := range []string{"2", "3"} {
+		toContext(m, number)
+		drive(m, key("esc"))
+		if !m.railOn || m.railFocus != ctx(number[0]-'1') {
+			t.Fatalf("from context %s back to the rail: on %v, context %d", number, m.railOn, m.railFocus)
 		}
+	}
+	toConsole(m)
+	drive(m, key("esc"))
+	if !m.railOn || m.railFocus != ctxConsole {
+		t.Fatalf("from Console back to the rail: on %v, context %d", m.railOn, m.railFocus)
 	}
 }
 
@@ -257,8 +263,8 @@ func TestLocalServerAndUnknownRuleset(t *testing.T) {
 
 func TestPortsStepByTen(t *testing.T) {
 	m := started(t, true)
-	m.focus = homeRow(m, "host")
-	drive(m, key("enter"), key("enter"), key("down"))
+	toContext(m, "3")
+	drive(m, key("enter"), key("down"))
 	base := m.opts.Server.BasePort
 	drive(m, key("shift+right"))
 	if m.opts.Server.BasePort != base+10 {
@@ -282,6 +288,7 @@ func TestQuitNamesTheKeyPressed(t *testing.T) {
 func TestEnglishShowsNoPortuguese(t *testing.T) {
 	m := started(t, true)
 	m.lang = EN
+	toConsole(m)
 	m.focus = homeRow(m, "update")
 	drive(m, key("enter"))
 	view := m.View().Content
@@ -297,6 +304,7 @@ func TestEnglishShowsNoPortuguese(t *testing.T) {
 func TestPortugueseShowsTheInventoryInPortuguese(t *testing.T) {
 	m := started(t, true)
 	m.lang = PT
+	toConsole(m)
 	m.focus = homeRow(m, "update")
 	drive(m, key("enter"))
 	view := m.View().Content

@@ -94,6 +94,8 @@ type Model struct {
 	confirmErr error
 
 	focus     int  // focused row on the current screen
+	railOn    bool // the keys go to the rail of contexts
+	railFocus ctx  // the context the rail cursor is on
 	fromPanel bool // the setup was opened from the app, not the installer
 	// returnTo and returnRow are where esc from the setup goes back to, and
 	// saved the choices to restore then.
@@ -370,20 +372,18 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.existing != nil {
 			m.opts = m.existing.Options
 			m.nick.Set(m.opts.Nick)
-			m.screen = scPanel
+			// Play opens first: the last match is what most visits want.
+			// The context asked for at start opens instead.
+			m.screen = scMatch
 			if !m.existing.Note.IsZero() {
 				m.say(m.in(m.existing.Note))
 			}
-			// Home shows the last match, the public servers and the
-			// server's state; the screen asked for opens at once.
 			cmds := []tea.Cmd{m.loadMatch(), m.loadStack(), m.loadServers()}
 			switch m.cfg.Start {
-			case "match":
-				m.screen = scMatch
 			case "servers":
-				cmds = append(cmds, m.openScreen(scServers))
+				cmds = append(cmds, m.gotoCtx(ctxFind))
 			case "host":
-				cmds = append(cmds, m.openScreen(scHost))
+				cmds = append(cmds, m.gotoCtx(ctxHost))
 			}
 			return m, tea.Batch(cmds...)
 		}
@@ -612,6 +612,8 @@ func (m *Model) focusRow(id string) {
 	switch m.screen {
 	case scPanel:
 		rows = m.panelRows()
+	case scMatch:
+		rows = m.matchRows()
 	case scHost:
 		rows = m.hostRows()
 	}
@@ -685,6 +687,9 @@ func (m *Model) keyPress(msg tea.KeyPressMsg) tea.Cmd {
 			return m.quit(key)
 		}
 		return nil
+	}
+	if m.railOn {
+		return m.railKey(key)
 	}
 	switch m.screen {
 	case scMatch, scServers, scHost:
@@ -772,13 +777,11 @@ func (m *Model) key(key string) tea.Cmd {
 		case "enter", "space", " ":
 			return m.activateDone(rows[m.focus].id)
 		case "esc":
-			// The installation exists now: esc goes to its home.
-			if m.existing == nil {
+			// The first run ends here; from an update, esc goes back to the tabs.
+			if !m.fromPanel {
 				return m.quit(key)
 			}
-			m.screen, m.panelView = scPanel, ""
-			m.focusRow("play")
-			return tea.Batch(m.loadMatch(), m.loadStack(), m.loadServers())
+			return m.toRail()
 		}
 	case scPanel:
 		if m.busy {
@@ -859,6 +862,13 @@ func (m *Model) click(id string) tea.Cmd {
 			return m.toolKey("enter")
 		}
 		return m.closeModal(true)
+	case strings.HasPrefix(id, "ctx:"):
+		var index int
+		fmt.Sscanf(id, "ctx:%d", &index)
+		if !m.canRail() || index < 1 || index > int(ctxCount) {
+			return nil
+		}
+		return m.gotoCtx(ctx(index - 1))
 	case id == "lang":
 		return m.keyPress(tea.KeyPressMsg(keyFor("ctrl+l")))
 	case strings.HasPrefix(id, "row:"):
@@ -1006,34 +1016,46 @@ func (m *Model) View() tea.View {
 		view.Content = canvas.Render()
 		return view
 	}
-	width := min(m.w-6, maxWidth)
+	left, width, first := m.bodyBox()
 	body := m.body(width)
 	footer, footerHits := hints(t, m.footerHints(), m.w-4, m.hover)
 
 	place(m.topBar(), 2, 0)
 
+	// The contexts are tabs under the top bar, with a rule below them.
+	if _, ok := m.contextOf(); ok {
+		tabLine, rule, tabHits := m.tabs()
+		place(tabLine, tabX, tabRow)
+		place(rule, tabX, ruleRow)
+		m.hits = append(m.hits, tabHits...)
+	} else {
+		// The first run has no tabs: its steps take their row.
+		line, rule := m.stepper()
+		place(line, tabX, tabRow)
+		place(rule, tabX, ruleRow)
+	}
+
 	// The dock sits on the footer and takes its rows from the body.
-	room := m.h - 4
+	room := m.h - first - 2
 	dock := m.dock(width)
 	if dock != nil {
 		room -= len(dock.lines) + 1
 	}
-	// Body: in the upper third of the free space, centred.
+	// Body: in the upper third of the free space, from the body's first row.
 	// A body that changes height (a field showing up, a section opening)
 	// keeps its place: the top only ever moves up, until the next resize.
-	top := 2 + max(0, (room-len(body.lines))/3)
+	top := first + max(0, (room-len(body.lines))/3)
 	if dock != nil {
-		top = 3
+		top = first + 1
 	}
 	if last, ok := m.tops[m.screen]; ok {
 		top = min(top, last)
 	}
 	m.tops[m.screen] = top
-	left := (m.w - width) / 2
 	offset := 0
 	if total := len(body.lines); total > room {
 		// Scroll just enough to keep the focused block on screen.
-		top = 2
+		top = first
 		offset = min(m.scroll[m.screen], total-room)
 		if body.focusBottom >= offset+room {
 			offset = body.focusBottom - room + 1
@@ -1149,6 +1171,9 @@ func (m *Model) footerHints() [][2]string {
 			return [][2]string{{"enter", m.t("tool.again")}}
 		}
 	}
+	if m.railOn && m.modal == nil {
+		return [][2]string{{"←→", m.t("k.choose")}, {"enter", m.t("k.open")}, {"esc", m.t("k.quit")}}
+	}
 	if m.modal != nil && m.modal.kind == "tool" {
 		items := [][2]string{{"↑↓", m.t("k.scroll")}}
 		actions := m.toolActions()
@@ -1192,6 +1217,9 @@ func (m *Model) footerHints() [][2]string {
 		switch {
 		case !m.preOn:
 			action = m.t("k.install")
+			if m.fromPanel {
+				action = m.t("k.apply")
+			}
 		case m.preDone && m.preflightOutcome() != setup.CheckFailed:
 			action = m.t("k.confirm")
 		}
@@ -1222,10 +1250,10 @@ func (m *Model) footerHints() [][2]string {
 		}
 		return [][2]string{{"p", pause}, {"l", m.t("k.log")}, {"ctrl+c", m.t("k.cancel")}}
 	case scDone:
-		if m.existing == nil {
+		if !m.fromPanel {
 			return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.open")}, {"esc", m.t("k.quit")}}
 		}
-		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.open")}, {"esc", m.t("k.home")}}
+		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.open")}, {"esc", m.t("k.contexts")}}
 	case scPanel:
 		switch {
 		case m.removed:
@@ -1241,23 +1269,23 @@ func (m *Model) footerHints() [][2]string {
 		case m.panelView == "remove":
 			return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.run")}, {"esc", m.t("k.back")}}
 		}
-		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.open")}, {"ctrl+t", m.t("k.theme")}, {"esc", m.t("k.quit")}}
+		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.open")}, {"ctrl+t", m.t("k.theme")}, {"esc", m.t("k.contexts")}}
 	case scMatch:
 		if m.game.catalog == nil || len(m.game.catalog.Games) == 0 {
-			return [][2]string{{"esc", m.t("k.home")}}
+			return [][2]string{{"esc", m.t("k.contexts")}}
 		}
-		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.edit")}, {"p", m.t("k.play")}, {"c", m.t("k.copycmd")}, {"esc", m.t("k.home")}}
+		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.edit")}, {"p", m.t("k.play")}, {"c", m.t("k.copycmd")}, {"esc", m.t("k.contexts")}}
 	case scServers:
 		return m.serversHints()
 	case scHost:
 		if !m.game.stackLoaded {
-			return [][2]string{{"esc", m.t("k.home")}}
+			return [][2]string{{"esc", m.t("k.contexts")}}
 		}
 		action := m.t("k.open")
 		if rows := m.hostRows(); m.focus >= len(rows)-1 {
 			action = m.t("k.run")
 		}
-		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", action}, {"esc", m.t("k.home")}}
+		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", action}, {"esc", m.t("k.contexts")}}
 	}
 	return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"esc", m.t("k.back")}}
 }

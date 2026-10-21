@@ -98,8 +98,12 @@ func TestKeyboardNavigation(t *testing.T) {
 
 func TestPanelNavigation(t *testing.T) {
 	m := started(t, true)
+	if m.screen != scMatch {
+		t.Fatalf("an existing installation opens Play: screen %d", m.screen)
+	}
+	toConsole(m)
 	if m.screen != scPanel {
-		t.Fatalf("an existing installation should open the panel: %d", m.screen)
+		t.Fatalf("the rail opens Console: screen %d", m.screen)
 	}
 	m.focus = homeRow(m, "change")
 	drive(m, key("enter"))
@@ -108,16 +112,7 @@ func TestPanelNavigation(t *testing.T) {
 	}
 	drive(m, key("esc"))
 	if m.screen != scPanel {
-		t.Fatalf("esc on the review should go back to the panel: %d", m.screen)
-	}
-	m.focus = homeRow(m, "update")
-	drive(m, key("enter"))
-	if m.panelView != "update" {
-		t.Fatalf("enter on Update: %q", m.panelView)
-	}
-	drive(m, key("esc"))
-	if m.panelView != "" {
-		t.Fatal("esc should go back to the panel menu")
+		t.Fatalf("enter should go back to the setup: screen %d", m.screen)
 	}
 }
 
@@ -315,13 +310,14 @@ func TestDoneOpensTheApp(t *testing.T) {
 	}
 	m.screen = scDone
 	drive(m, key("esc"))
-	if m.screen != scPanel {
-		t.Fatalf("esc at the end should go home: %d", m.screen)
+	if m.armed != "quit" {
+		t.Fatalf("esc at the end of a first run quits: armed %q", m.armed)
 	}
 }
 
 func TestPanelRepairsForReal(t *testing.T) {
 	m := started(t, true)
+	toConsole(m)
 	m.focus = homeRow(m, "repair")
 	drive(m, key("enter"))
 	if m.panelView != "repair" {
@@ -333,7 +329,19 @@ func TestPanelRepairsForReal(t *testing.T) {
 	}
 }
 
-// homeRow is where a row sits on the home screen.
+// toContext goes to a context the way a person does: esc to the rail when
+// it is not there yet, the context's number, then enter into it.
+func toContext(m *Model, number string) {
+	if !m.railOn {
+		drive(m, key("esc"))
+	}
+	drive(m, key(number), key("enter"))
+}
+
+// toConsole goes to the Console context, where the installation is kept.
+func toConsole(m *Model) { toContext(m, "4") }
+
+// homeRow is where a row sits on the Console screen.
 func homeRow(m *Model, id string) int {
 	for index, row := range m.panelRows() {
 		if row.id == id {
