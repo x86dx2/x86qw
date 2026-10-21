@@ -111,7 +111,7 @@ func syntheticInputs() map[string][]byte {
 	return inputs
 }
 
-// Digests of Compress output, produced by CPython's zlib 1.2.12.
+// Digests of Compress output, produced by zlib 1.2.12.
 var syntheticDigests = map[string]string{
 	"empty":        "9b4fb24edd6d1d8830e272398263cdbf026b97392cc35387b991dc0248a628f9",
 	"fibonacci":    "37cc424d95947581da0935551e806e6389245e38a9cd2d6050da7f876a6c1a5f",

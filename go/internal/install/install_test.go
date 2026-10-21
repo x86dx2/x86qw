@@ -19,8 +19,7 @@ func realRoot(t *testing.T) string {
 	return root
 }
 
-// TestVerifyRealInstallation checks the same installation that the Python
-// `x86qw verify` accepts.
+// TestVerifyRealInstallation verifies the developer's own installation.
 func TestVerifyRealInstallation(t *testing.T) {
 	report, err := Verify(realRoot(t))
 	if err != nil {
@@ -92,7 +91,8 @@ func TestEmbeddedGamesMatchMaintenance(t *testing.T) {
 	}
 }
 
-// TestPlaySupportOfRealInstallation derives the same gamecode Python recorded.
+// TestPlaySupportOfRealInstallation derives the gamecode the installation
+// recorded.
 func TestPlaySupportOfRealInstallation(t *testing.T) {
 	root := realRoot(t)
 	games, err := LoadGames()

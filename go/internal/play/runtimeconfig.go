@@ -15,8 +15,8 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/privfs"
 )
 
-// Ephemeral KTX launch configuration, journaled like
-// x86qw_runtime/gameplay/runtime_configs.py did.
+// Ephemeral KTX launch configuration: each cfg is journaled with the process
+// that owns it, and the next launch removes those whose owner is gone.
 
 const journalDir = ".x86qw/gameplay/ktx-runtime-configs"
 

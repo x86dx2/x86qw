@@ -1,21 +1,21 @@
-// Package content ports the maintainer content tooling (maintenance/manage.py
-// and the maintenance/tools modules it uses): data model, validators,
-// deterministic package builders and mirror publication.
+// Package content is the maintainer content tooling behind x86qw-content:
+// data model, validators, deterministic package builders and mirror
+// publication.
 package content
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 
+	"github.com/x86dx2/x86qw/go/internal/atomicfile"
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// Repository-relative locations used by manage.py.
+// Repository-relative locations.
 const (
 	DistDir           = "dist"
 	InventoryDir      = "maintenance/inventory"
@@ -38,8 +38,8 @@ const (
 // Object is the ordered JSON object used throughout the package.
 type Object = pyjson.Object
 
-// Project is one checkout. Documents are loaded once and cached; manage.py
-// re-reads them on every call, which is equivalent for a static tree.
+// Project is one checkout. Documents are loaded once and cached, which is
+// safe for a tree that does not change during a run.
 type Project struct {
 	Root string
 
@@ -78,7 +78,7 @@ type Project struct {
 func NewProject(root string) *Project { return &Project{Root: root} }
 
 // Staged returns a view of the project whose component catalog and release
-// inventory come from a workspace (manage.py's staged validation).
+// inventory come from a workspace, to validate a staged change.
 func (p *Project) Staged(componentsFile, releasesFile string) *Project {
 	return &Project{
 		Root: p.Root, HTTP: p.HTTP, Run: p.Run, Getenv: p.Getenv,
@@ -115,7 +115,7 @@ func (p *Project) command(stdin []byte, name string, args ...string) ([]byte, er
 // Path resolves a repository-relative POSIX path.
 func (p *Project) Path(relative string) string { return joinPosix(p.Root, relative) }
 
-// ReadJSON mirrors json.loads(path.read_text()) (last duplicate wins).
+// ReadJSON parses a JSON file (the last of duplicate keys wins).
 func ReadJSON(path string) (any, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -124,7 +124,7 @@ func ReadJSON(path string) (any, error) {
 	return pyjson.Decode(raw, pyjson.LastWins)
 }
 
-// LoadJSONObject mirrors manage.load_json.
+// LoadJSONObject parses a JSON file that must hold an object.
 func LoadJSONObject(path string) (*Object, error) {
 	value, err := ReadJSON(path)
 	if err != nil {
@@ -137,7 +137,7 @@ func LoadJSONObject(path string) (*Object, error) {
 	return object, nil
 }
 
-// WriteJSON mirrors manage.write_json (insertion order, mode 0644, atomic).
+// WriteJSON writes value in insertion order, mode 0644, atomically.
 func WriteJSON(path string, value any) error {
 	payload, err := pyjson.EncodeFile(value, false)
 	if err != nil {
@@ -146,28 +146,15 @@ func WriteJSON(path string, value any) error {
 	return writeAtomic(path, payload, 0o644)
 }
 
+// writeAtomic creates path's folders and replaces it with payload.
 func writeAtomic(path string, payload []byte, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	stem := pathStem(filepath.Base(path))
-	file, err := os.CreateTemp(filepath.Dir(path), "."+stem+"-*.json")
-	if err != nil {
-		return err
-	}
-	temporary := file.Name()
-	defer os.Remove(temporary)
-	_, writeErr := file.Write(payload)
-	if err := errors.Join(writeErr, file.Close()); err != nil {
-		return err
-	}
-	if err := os.Chmod(temporary, mode); err != nil {
-		return err
-	}
-	return os.Rename(temporary, path)
+	return atomicfile.Write(path, payload, mode)
 }
 
-// Policy mirrors load_component_policy: name → declaration, in file order.
+// Policy is the component policy: name → declaration, in file order.
 func (p *Project) Policy() (map[string]*Object, []string, error) {
 	if p.policyDone {
 		return p.policy, p.policyKeys, p.policyErr
@@ -231,7 +218,7 @@ func hasPrefixAny(value string, prefixes []string) bool {
 	return false
 }
 
-// RequireComponent mirrors component_policy.require_component.
+// RequireComponent refuses a component the policy does not declare.
 func (p *Project) RequireComponent(name string, path *string) error {
 	policy, _, err := p.Policy()
 	if err != nil {
@@ -250,7 +237,8 @@ func (p *Project) RequireComponent(name string, path *string) error {
 	return nil
 }
 
-// ComponentForDistributionPath mirrors component_for_distribution_path.
+// ComponentForDistributionPath is the component that consumes a
+// distribution path.
 func (p *Project) ComponentForDistributionPath(path string) (string, error) {
 	policy, keys, err := p.Policy()
 	if err != nil {

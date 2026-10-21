@@ -29,7 +29,7 @@ func identityOfFile(file *os.File) ([2]int64, error) {
 	return identityAt(file.Name(), info), nil
 }
 
-// processGroupStatus mirrors posix_process_group_status (kill -0 probe).
+// processGroupStatus probes a process group with kill -0.
 func processGroupStatus(group int) string {
 	err := syscall.Kill(-group, 0)
 	switch {
@@ -67,7 +67,8 @@ func processStillMatches(entry map[string]any) bool {
 	return ok && group == pid && group > 1 && processGroupStatus(group) == "alive"
 }
 
-// terminateRecordedProcess mirrors sessions.terminate_recorded_process.
+// terminateRecordedProcess ends a journaled process (and its group) once it
+// is confirmed to be the one recorded.
 func terminateRecordedProcess(entry map[string]any) (string, error) {
 	status := processProbe(entry)
 	pid, _ := intField(entry["pid"])
@@ -171,7 +172,8 @@ func stopGroups(commands []*exec.Cmd, exited map[int]bool) error {
 	return nil
 }
 
-// exitCode mirrors Popen.poll: negative signal number for signaled exits.
+// exitCode is the process's exit code, or the negative signal number when a
+// signal ended it.
 func exitCode(state *os.ProcessState) int {
 	if status, ok := state.Sys().(syscall.WaitStatus); ok && status.Signaled() {
 		return -int(status.Signal())
@@ -212,4 +214,3 @@ func spawnBackgroundController(executable string, arguments []string, request []
 var _ = lock.Identity
 
 // replaceFile atomically moves temporary over path.
-func replaceFile(temporary, path string) error { return os.Rename(temporary, path) }

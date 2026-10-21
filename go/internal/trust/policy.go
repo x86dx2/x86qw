@@ -1,6 +1,6 @@
 // Package trust authenticates the public x86QW catalog through TUF.
 //
-// It mirrors x86qw_runtime/trust.py: the embedded root must match the
+// The embedded root must match the
 // approved Ed25519 role policy before any network access, and the catalog is
 // only returned after the full root → timestamp → snapshot → targets chain
 // verifies.

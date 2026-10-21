@@ -14,11 +14,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/atomicfile"
 	"github.com/x86dx2/x86qw/go/internal/fspath"
 	"github.com/x86dx2/x86qw/go/internal/pyjson"
 )
 
-// Ported from x86qw_runtime/profiles.py.
+// Profiles back up and restore the personal configuration files.
 
 var (
 	profileFiles = []string{"ezquake/configs/config.cfg", "ezquake/configs/preset.cfg", "qtv/qtv.cfg", "qwfwd/qwfwd.cfg"}
@@ -30,7 +31,8 @@ var (
 const profileNotice = "Modo owner-only: perfil user-owned. Sem upload automático. " +
 	"Este zip contém só configurações pessoais, sem cache, demos ou bytes gerenciados.\n"
 
-// IsUserProfilePath mirrors profiles.is_user_profile_path.
+// IsUserProfilePath reports whether relative is a personal configuration
+// file a profile backup keeps.
 func IsUserProfilePath(relative string) bool {
 	if relative == "" || strings.Contains(relative, `\`) || strings.HasPrefix(relative, "/") {
 		return false
@@ -72,7 +74,8 @@ type DataReport struct {
 	Profile, Cache, Personal []string
 }
 
-// ClassifyInstallData mirrors profiles.classify_install_data.
+// ClassifyInstallData sorts an installation's own files into profile,
+// cache and personal data.
 func ClassifyInstallData(target string) DataReport {
 	var report DataReport
 	for _, name := range profileFiles {
@@ -134,7 +137,7 @@ func lessCodepoints(a, b string) bool {
 	return len(ra) < len(rb)
 }
 
-// RenderProfile mirrors render_profile_report.
+// RenderProfile is the classification as `x86qw profile` prints it.
 func RenderProfile(report DataReport) string {
 	lines := []string{"x86QW · perfil", ""}
 	for _, group := range []struct {
@@ -182,11 +185,11 @@ func BackupProfile(target, destination string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 		return "", err
 	}
-	staging := destination + ".tmp"
-	file, err := os.Create(staging)
+	file, err := os.CreateTemp(filepath.Dir(destination), "."+filepath.Base(destination)+".*.tmp")
 	if err != nil {
 		return "", err
 	}
+	staging := file.Name()
 	writer := zip.NewWriter(file)
 	add := func(name string, payload []byte) error {
 		out, err := writer.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Store})
@@ -205,11 +208,17 @@ func BackupProfile(target, destination string) (string, error) {
 			err = add(relative, payloads[relative])
 		}
 	}
-	if err = errors.Join(err, writer.Close(), file.Close()); err != nil {
+	if err = errors.Join(err, writer.Close(), file.Close()); err == nil {
+		err = os.Chmod(staging, 0o644)
+	}
+	if err == nil {
+		err = os.Rename(staging, destination)
+	}
+	if err != nil {
 		os.Remove(staging)
 		return "", err
 	}
-	return destination, os.Rename(staging, destination)
+	return destination, nil
 }
 
 // RestoreProfile restores profile files byte-for-byte, rolling back on failure.
@@ -226,7 +235,7 @@ func RestoreProfile(archive, target string) ([]string, error) {
 	read := func(name string) ([]byte, error) {
 		file, ok := members[name]
 		if !ok {
-			return nil, fmt.Errorf("\"There is no item named %s in the archive\"", pyRepr(name)) // str(KeyError)
+			return nil, fmt.Errorf("o backup não contém %q", name)
 		}
 		source, err := file.Open()
 		if err != nil {
@@ -288,44 +297,59 @@ func RestoreProfile(archive, target string) ([]string, error) {
 		}
 		payloads[item.Path] = payload
 	}
-	originals := map[string][]byte{}
+	originals := map[string]original{}
 	missing := map[string]bool{}
 	var restored []string
 	for _, relative := range order {
 		destination := filepath.Join(target, filepath.FromSlash(relative))
 		if info, err := os.Lstat(destination); err == nil && info.Mode()&os.ModeSymlink != 0 {
-			rollbackProfile(target, originals, missing)
-			return nil, fmt.Errorf("o destino do perfil é um symlink: %s", relative)
+			return nil, errors.Join(fmt.Errorf("o destino do perfil é um symlink: %s", relative), rollbackProfile(target, originals, missing))
 		}
-		if data, err := os.ReadFile(destination); err == nil && regular(destination) {
-			originals[relative] = data
+		if info, err := os.Stat(destination); err == nil && info.Mode().IsRegular() {
+			data, err := os.ReadFile(destination)
+			if err != nil {
+				return nil, errors.Join(err, rollbackProfile(target, originals, missing))
+			}
+			originals[relative] = original{data, info.Mode().Perm()}
 		} else {
 			missing[relative] = true
 		}
-		if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
-			rollbackProfile(target, originals, missing)
-			return nil, err
+		mode := os.FileMode(0o644)
+		if previous, ok := originals[relative]; ok {
+			mode = previous.mode
 		}
-		staging := destination + ".restore-tmp"
-		err := os.WriteFile(staging, payloads[relative], 0o644)
+		err := os.MkdirAll(filepath.Dir(destination), 0o755)
 		if err == nil {
-			err = os.Rename(staging, destination)
+			err = atomicfile.Write(destination, payloads[relative], mode)
 		}
-		os.Remove(staging)
 		if err != nil {
-			rollbackProfile(target, originals, missing)
-			return nil, err
+			return nil, errors.Join(err, rollbackProfile(target, originals, missing))
 		}
 		restored = append(restored, relative)
 	}
 	return restored, nil
 }
 
-func rollbackProfile(target string, originals map[string][]byte, missing map[string]bool) {
-	for relative, payload := range originals {
-		os.WriteFile(filepath.Join(target, filepath.FromSlash(relative)), payload, 0o644)
+// original is a profile file as it was before a restore.
+type original struct {
+	data []byte
+	mode os.FileMode
+}
+
+// rollbackProfile puts back what a failed restore changed and says what
+// it could not.
+func rollbackProfile(target string, originals map[string]original, missing map[string]bool) error {
+	var errs []error
+	for relative, previous := range originals {
+		errs = append(errs, atomicfile.Write(filepath.Join(target, filepath.FromSlash(relative)), previous.data, previous.mode))
 	}
 	for relative := range missing {
-		os.Remove(filepath.Join(target, filepath.FromSlash(relative)))
+		if err := os.Remove(filepath.Join(target, filepath.FromSlash(relative))); err != nil && !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, err)
+		}
 	}
+	if err := errors.Join(errs...); err != nil {
+		return fmt.Errorf("o perfil não pôde ser todo restaurado ao que era: %w", err)
+	}
+	return nil
 }

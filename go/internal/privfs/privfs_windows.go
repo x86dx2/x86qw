@@ -89,7 +89,7 @@ func currentUserSID() (*windows.SID, error) {
 	return user.User.Sid, nil
 }
 
-// IsPrivateFile mirrors read_validated_private_file(exact=False): the DACL
+// IsPrivateFile reports whether path is private: the DACL
 // may grant access only to the current user and LOCAL SYSTEM, and must
 // grant it to the current user.
 func IsPrivateFile(path string, info os.FileInfo) bool {

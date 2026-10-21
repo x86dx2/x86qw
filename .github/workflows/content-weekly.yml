@@ -1,0 +1,70 @@
+name: Content parity
+
+# Weekly, on the hydrated checkout: x86qw-content verify must reject every
+# known corruption with its exact message, and update/add must rebuild the
+# distribution byte for byte. These clone the whole dist tree, so they stay
+# out of the per-PR checks.
+on:
+  schedule:
+    - cron: "11 5 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    name: content parity and corruptions
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          lfs: false
+      - name: Key the LFS cache on its objects
+        id: lfs-key
+        run: echo "key=x86qw-lfs-v4-$(git lfs ls-files --long | sort | sha256sum | cut -c1-32)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: .git/lfs/objects
+          key: ${{ steps.lfs-key.outputs.key }}
+          restore-keys: x86qw-lfs-v4-
+          enableCrossOsArchive: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      - name: Materialize LFS
+        run: |
+          go -C go build -o "$RUNNER_TEMP/x86qw-content" ./cmd/x86qw-content
+          "$RUNNER_TEMP/x86qw-content" --root "$GITHUB_WORKSPACE" lfs-materialize \
+            --repository "$GITHUB_REPOSITORY" --commit "$GITHUB_SHA"
+          git lfs checkout
+      - name: Corruptions and rebuild parity
+        working-directory: go
+        env:
+          X86QW_CONTENT_CORRUPTIONS: "1"
+          X86QW_CONTENT_PARITY_BUILD: "1"
+        run: go test -count=1 -timeout 80m ./internal/content
+
+  report:
+    name: Report a failed week
+    needs: parity
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title: 'Weekly content parity failed',
+              labels: ['P1'],
+              body: `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`,
+            });

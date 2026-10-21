@@ -237,16 +237,3 @@ func splitList(value string) []string {
 	}
 	return out
 }
-
-// ParseRecipe reads a recipe's arguments (after `x86qw setup`).
-func ParseRecipe(args []string) (Options, error) {
-	flags := flag.NewFlagSet("setup", flag.ContinueOnError)
-	flags.SetOutput(io.Discard)
-	read := AddRecipeFlags(flags)
-	target := flags.String("target", "", "")
-	flags.Bool("yes", false, "")
-	if err := flags.Parse(args); err != nil {
-		return Options{}, err
-	}
-	return read(*target)
-}

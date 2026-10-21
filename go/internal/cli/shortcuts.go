@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Windows Start Menu and Desktop shortcuts (platform/host.py): both point at
+// Windows Start Menu and Desktop shortcuts: both point at
 // the installation's x86qw.cmd with the project icon; a shortcut that
 // points elsewhere is never replaced or removed.
 

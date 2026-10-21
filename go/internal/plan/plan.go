@@ -1,5 +1,5 @@
-// Package plan computes update and upgrade plans for an installation, row
-// for row like manager.py update()/upgrade() in dry-run mode.
+// Package plan computes the update and upgrade plans of an installation: one
+// row per change, as --dry-run shows them.
 package plan
 
 import (
@@ -17,8 +17,8 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/state"
 )
 
-// Row is one planned operation; JSON field order matches the sorted keys
-// the Python CLI emits.
+// Row is one planned operation; its JSON fields are declared in sorted key
+// order.
 type Row struct {
 	Action    string `json:"action"`
 	Available string `json:"available"`
@@ -43,7 +43,7 @@ var (
 	overlay        = regexp.MustCompile(`^(.+)\+x86qw\.(\d+)$`)
 )
 
-// macOS runtime actions (manager.py macos_runtime_action).
+// macOS runtime actions (see macos.RuntimeAction).
 const (
 	ActionPrepareNightly  = "prepare-nightly"
 	ActionRestoreUpstream = "restore-upstream"
@@ -55,7 +55,7 @@ type Input struct {
 	Catalog   *catalog.Catalog
 	Inventory *catalog.Inventory
 	// CLIVersion is the running native CLI; when set, a newer x86qw-cli
-	// package for GOOS/GOARCH adds a "CLI" row (Python's self-update row).
+	// package for GOOS/GOARCH adds a "CLI" row.
 	CLIVersion   string
 	GOOS, GOARCH string
 	// ClientAction verifies an installed client and returns its macOS
@@ -173,7 +173,7 @@ func Update(in Input) (*Plan, error) {
 			}
 			item := fmt.Sprintf("ezQuake %s %s", spec.Label, channel)
 			available, installed := releases[0].Version, rec.Get("selection")
-			// Same order as manager.py update_runtime.
+			// Up to date with nothing to prepare: no row.
 			if available == installed && action == "" {
 				continue
 			}

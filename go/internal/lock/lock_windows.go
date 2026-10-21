@@ -15,7 +15,7 @@ import (
 
 const noFollow = 0
 
-// mutexName mirrors locking.windows_acquisition_mutex_name.
+// mutexName is the per-installation named mutex.
 func mutexName(target string) string {
 	absolute, _ := filepath.Abs(target)
 	normalized := strings.ReplaceAll(strings.ToLower(absolute), "/", `\`)
@@ -24,7 +24,7 @@ func mutexName(target string) string {
 }
 
 // serialize holds the per-installation named mutex, restricted to the
-// current user and SYSTEM like the Python CLI.
+// current user and SYSTEM.
 func serialize(target, sessions string, fn func() error) error {
 	user, err := currentUserSID()
 	if err != nil {
@@ -60,7 +60,8 @@ func currentUserSID() (string, error) {
 	return user.User.Sid.String(), nil
 }
 
-// Identity mirrors processes._windows_process_identity.
+// Identity identifies a Windows process by PID, creation time and
+// executable.
 func Identity(pid int) (ProcessIdentity, string) {
 	if pid <= 0 {
 		return ProcessIdentity{}, "dead"

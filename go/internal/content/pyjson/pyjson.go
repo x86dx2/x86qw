@@ -1,7 +1,7 @@
-// Package pyjson decodes and encodes JSON exactly like CPython's json module
-// as used by the maintenance tooling: objects keep insertion order, and
-// Encode reproduces json.dumps(value, ensure_ascii=False, indent=2) byte for
-// byte, optionally with sort_keys=True.
+// Package pyjson decodes and encodes the maintenance JSON documents: objects
+// keep insertion order, numbers keep their literal, and Encode writes the
+// format the published files keep, byte for byte: what
+// json.dumps(value, ensure_ascii=False, indent=2[, sort_keys=True]) writes.
 package pyjson
 
 import (
@@ -19,7 +19,7 @@ import (
 // Number is a JSON number kept as its source literal.
 type Number string
 
-// IsInt reports whether the literal decodes to a Python int.
+// IsInt reports whether the literal is an integer (no fraction or exponent).
 func (n Number) IsInt() bool { return !strings.ContainsAny(string(n), ".eE") && !n.special() }
 
 func (n Number) special() bool {
@@ -47,7 +47,7 @@ func (n Number) Rat() *big.Rat {
 	return value
 }
 
-// Float returns the Python float value.
+// Float returns the literal as a float64.
 func (n Number) Float() float64 {
 	switch n {
 	case "NaN":
@@ -76,7 +76,7 @@ func (o *Object) Get(key string) (any, bool) {
 	return value, ok
 }
 
-// Value returns the value under key or nil (Python dict.get).
+// Value returns the value under key, or nil.
 func (o *Object) Value(key string) any { return o.values[key] }
 
 // Has reports whether key exists.
@@ -139,10 +139,10 @@ func Clone(value any) any {
 type DuplicateMode int
 
 const (
-	// LastWins mirrors json.loads: the key keeps its first position and the
-	// last value.
+	// LastWins keeps a duplicated key at its first position with its last
+	// value.
 	LastWins DuplicateMode = iota
-	// RejectDuplicates mirrors object_pairs_hook=_reject_duplicate_pairs.
+	// RejectDuplicates refuses a duplicated key.
 	RejectDuplicates
 )
 
@@ -416,7 +416,8 @@ func (d *decoder) object() (any, error) {
 	}
 }
 
-// Encode renders json.dumps(value, ensure_ascii=False, indent=2[, sort_keys]).
+// Encode renders value with indent 2, no ASCII escaping and, with sortKeys,
+// sorted keys.
 func Encode(value any, sortKeys bool) ([]byte, error) {
 	var buffer bytes.Buffer
 	if err := encode(&buffer, value, 0, sortKeys); err != nil {

@@ -13,12 +13,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/atomicfile"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 )
 
-// Ported from x86qw_runtime/installation_changes.py and
-// manager.report_installation_changes.
+// Changes compares the files in an installation with what it installed.
 
 // Change is one A/M/D difference.
 type Change struct {
@@ -29,7 +29,7 @@ type managedFile struct{ component, sha256 string }
 
 var componentID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$`)
 
-// changeIgnoredPaths mirrors installation_change_ignored_paths.
+// changeIgnoredPaths are the operational paths a comparison never reports.
 func changeIgnoredPaths() []string {
 	paths := map[string]bool{
 		".DS_Store": true, ".gitignore": true, ".x86qw": true, "LICENSE": true, "README-X86QW.txt": true,
@@ -48,7 +48,7 @@ func changeIgnoredPaths() []string {
 	return sorted
 }
 
-// changeBaseline mirrors installation_change_baseline.
+// changeBaseline is every managed file with its recorded digest.
 func changeBaseline(target string) (map[string]managedFile, error) {
 	managed := map[string]managedFile{}
 	add := func(component string, entries []receipt.Entry, personal bool) error {
@@ -156,7 +156,8 @@ func InspectChanges(target string) ([]Change, error) {
 
 var gitignoreSpecial = regexp.MustCompile(`([\\*?\[\]#! ])`)
 
-// RenderGitignore mirrors render_installation_gitignore.
+// RenderGitignore is the installation's selective .gitignore: managed files
+// and operational paths stay out.
 func RenderGitignore(target string) (string, error) {
 	managed, err := changeBaseline(target)
 	if err != nil {
@@ -194,12 +195,5 @@ func SyncGitignore(target string) error {
 	if err != nil {
 		return err
 	}
-	temporary := filepath.Join(target, ".gitignore.tmp")
-	if err := os.WriteFile(temporary, []byte(payload), 0o644); err != nil {
-		return err
-	}
-	if err := os.Chmod(temporary, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(temporary, filepath.Join(target, ".gitignore"))
+	return atomicfile.Write(filepath.Join(target, ".gitignore"), []byte(payload), 0o644)
 }

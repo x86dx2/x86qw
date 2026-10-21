@@ -105,7 +105,7 @@ func (r *Receipt) Marshal() []byte {
 }
 
 // ParseInventory parses "path\tsha256" lines and checks paths are safe and
-// unique. The Python installer writes them sorted but accepts any order.
+// unique. They are written sorted, but any order is accepted.
 func ParseInventory(payload []byte) (*Inventory, error) {
 	inventory := &Inventory{Raw: payload}
 	if len(payload) > 0 && payload[len(payload)-1] != '\n' {

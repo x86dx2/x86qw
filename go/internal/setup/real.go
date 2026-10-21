@@ -6,13 +6,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/x86dx2/x86qw/go/internal/buildinfo"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/doctor"
 	"github.com/x86dx2/x86qw/go/internal/install"
@@ -173,24 +171,9 @@ func (r *Real) Catalog(ctx context.Context) (*Catalog, error) {
 
 // Installed reports whether target holds an x86QW installation: its state
 // or a client receipt. What a rolled-back install leaves in .x86qw is not.
-func Installed(target string) bool {
-	if _, err := os.Stat(filepath.Join(target, ".x86qw", "state.json")); err == nil {
-		return true
-	}
-	for _, spec := range catalog.ClientSpecs {
-		for _, channel := range []string{"stable", "nightly"} {
-			if _, err := os.Stat(filepath.Join(target, filepath.FromSlash(spec.Receipt(channel)))); err == nil {
-				return true
-			}
-		}
-	}
-	return false
-}
+func Installed(target string) bool { return install.Installed(target) }
 
-func (r *Real) planInput(target string) plan.Input {
-	return plan.Input{Root: target, Catalog: r.cat, Inventory: r.inv, ClientAction: install.ClientAction(target),
-		CLIVersion: buildinfo.Version, GOOS: runtime.GOOS, GOARCH: runtime.GOARCH}
-}
+func (r *Real) planInput(target string) plan.Input { return install.PlanInput(target, r.cat, r.inv) }
 
 // Existing describes the installation at target, nil when there is none.
 // It reads the installation alone; the updates need the published
@@ -313,21 +296,10 @@ func (r *Real) required(options Options) int64 {
 	return total
 }
 
-// announceKey marks a context whose preflight announces each check.
-type announceKey struct{}
-
-// AnnounceChecks makes Preflight send each check as CheckRunning before it
-// runs, so an interface can show it working; a printed list does without.
-func AnnounceChecks(ctx context.Context) context.Context {
-	return context.WithValue(ctx, announceKey{}, true)
-}
-
-func announcing(ctx context.Context) bool { return ctx.Value(announceKey{}) != nil }
-
 // Preflight checks the machine against options: the folder, the disk,
 // the catalog and, for a server, its path and ports. Every value is
-// measured; with AnnounceChecks each check says it started before it says
-// how it ended.
+// measured; each check says it started (CheckRunning) before it says how
+// it ended.
 func (r *Real) Preflight(ctx context.Context, options Options) <-chan Check {
 	out := make(chan Check)
 	go func() {
@@ -341,7 +313,7 @@ func (r *Real) Preflight(ctx context.Context, options Options) <-chan Check {
 			}
 		}
 		for _, step := range r.steps(options) {
-			if announcing(ctx) && !emit(found{ID: step.id, Title: Say("check." + step.id), State: CheckRunning}.check()) {
+			if !emit(found{ID: step.id, Title: Say("check." + step.id), State: CheckRunning}.check()) {
 				return
 			}
 			if !emit(step.run(options).check()) {

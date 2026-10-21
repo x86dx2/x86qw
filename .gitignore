@@ -17,3 +17,7 @@ site/node_modules/
 /go/x86qw-content
 /go/x86qw-release
 /go/x86qw-setup-demo
+/go/dist/
+/go/**/*.exe
+/go/**/*.test
+/go/**/*.out

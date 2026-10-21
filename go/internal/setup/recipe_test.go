@@ -18,7 +18,7 @@ func TestRecipeRoundTrips(t *testing.T) {
 	play := Defaults(Play, "/games/qw")
 	play.Nick = "pla"
 	for _, want := range []Options{both, host, play} {
-		got, err := ParseRecipe(want.Recipe()[2:])
+		got, err := parseRecipe(want.Recipe()[2:])
 		if err != nil {
 			t.Fatalf("%v: %v", want.Recipe(), err)
 		}

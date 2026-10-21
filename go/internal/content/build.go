@@ -13,8 +13,8 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// Deterministic package builds (maintenance/tools/build_component_packages.py,
-// build_core_package.py and manage.py build).
+// Deterministic package builds: the component packages, the core package
+// and their registration in the catalog.
 
 const (
 	gitlabProjectID  = "84813414"
@@ -33,7 +33,7 @@ func GitHubReleaseURL(tag, filename string) string {
 	return "https://github.com/" + PrimaryRepository + "/releases/download/" + tag + "/" + filename
 }
 
-// GitLabPackageURL mirrors publish_gitlab_packages.artifact_url.
+// GitLabPackageURL is the GitLab package registry URL of an artifact.
 func GitLabPackageURL(packageName, version, filename string) string {
 	return "https://gitlab.com/api/v4/projects/" + gitlabProjectID + "/packages/generic/" + packageName + "/" + version + "/" + filename
 }
@@ -82,7 +82,7 @@ func memberOwnership(overrides []*Object, commit string) (string, string, any, s
 	return "upstream", "upstream-release", nil, "NOASSERTION"
 }
 
-// componentPackageMetadata mirrors component_package_metadata.
+// componentPackageMetadata is the internal manifest of a component package.
 func componentPackageMetadata(identifier, version, strategy, sourceRevision string, members []any, referenceRevision string) *Object {
 	metadata := object("format", pyjson.Number("1"), "project", "x86qw", "package", identifier, "members", orEmpty(members))
 	if strategy == "upstream-package" || strategy == "upstream-composed" {
@@ -136,7 +136,7 @@ type BuildOptions struct {
 	OwnershipOutput string
 }
 
-// BuildPackages mirrors build_component_packages.build_packages.
+// BuildPackages builds every component package from the distribution.
 func (p *Project) BuildPackages(distribution, output string, options BuildOptions) (*Object, error) {
 	catalog, err := p.Components()
 	if err != nil {
@@ -307,7 +307,7 @@ func (p *Project) BuildPackages(distribution, output string, options BuildOption
 	return manifest, nil
 }
 
-// BuildCorePackage mirrors build_core_package.
+// BuildCorePackage builds the core package and its ownership record.
 func (p *Project) BuildCorePackage(distribution, output, ownershipOutput string) (*Object, error) {
 	type source struct {
 		name    string
@@ -407,7 +407,8 @@ func packageKey(item *Object) any {
 	return item.Value("component")
 }
 
-// RegisterPackages mirrors register_packages; now is the generated_at clock.
+// RegisterPackages writes the built packages into the catalog; now is the
+// generated_at clock.
 func (p *Project) RegisterPackages(catalogPath string, manifest *Object, now time.Time) error {
 	value, err := ReadJSON(catalogPath)
 	if err != nil {
@@ -513,7 +514,8 @@ func (p *Project) RegisterPackages(catalogPath string, manifest *Object, now tim
 	return WriteJSON(catalogPath, catalog)
 }
 
-// NormalizeCatalogReleaseMetadata mirrors manage.normalize_catalog_release_metadata.
+// NormalizeCatalogReleaseMetadata brings the catalog's release metadata to
+// its canonical form.
 func (p *Project) NormalizeCatalogReleaseMetadata(catalog *Object) error {
 	packages, ok := catalog.Value("packages").([]any)
 	if !ok {

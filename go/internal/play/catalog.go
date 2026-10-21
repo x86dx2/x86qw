@@ -19,43 +19,11 @@ var KtxModesJSON []byte
 // ContextKeys are the KTX keys whose aliases are reset on every launch.
 var ContextKeys = []string{"F5", "F6", "H", "I", "M", "X", "Z", "F11"}
 
-// Game is the launch-relevant part of a games.json entry.
-type Game struct {
-	ID                           string      `json:"id"`
-	Label                        string      `json:"label"`
-	Component                    string      `json:"component"`
-	Gamedir                      string      `json:"gamedir"`
-	Marker                       string      `json:"marker"`
-	DefaultMap                   string      `json:"default_map"`
-	SuggestedMaps                []string    `json:"suggested_maps"`
-	PreMapArguments              []string    `json:"pre_map_arguments"`
-	PostMapArguments             []string    `json:"post_map_arguments"`
-	LocalServerSettings          [][2]string `json:"local_server_settings"`
-	LegacyRemoteCapabilities     []string    `json:"legacy_remote_capabilities"`
-	ClientGameArguments          []string    `json:"client_game_arguments"`
-	PreConnectArguments          []string    `json:"pre_connect_arguments"`
-	ClientCompatibilityArguments []string    `json:"client_compatibility_arguments"`
-	ModeCatalog                  string      `json:"mode_catalog"`
-	BotNamesPersonalConfig       string      `json:"bot_names_personal_config"`
-	Description                  string      `json:"description"`
-	PersonalConfig               string      `json:"personal_config"`
-	DedicatedArguments           []string    `json:"dedicated_arguments"`
-	DedicatedSettings            [][2]string `json:"dedicated_settings"`
-}
-
-// UsesModeCatalog reports whether the game is played through KTX modes.
-func (g Game) UsesModeCatalog() bool { return g.ModeCatalog != "" }
+// Game is a games.json entry; install owns the model.
+type Game = install.Game
 
 // LoadGames parses the games catalog shipped with the CLI.
-func LoadGames() ([]Game, error) {
-	var document struct {
-		Games []Game `json:"games"`
-	}
-	if err := json.Unmarshal(install.GamesJSON, &document); err != nil {
-		return nil, err
-	}
-	return document.Games, nil
-}
+var LoadGames = install.LoadGames
 
 // Requirement is one map asset a mode needs.
 type Requirement struct {
@@ -176,3 +144,29 @@ func FindMode(modes []Mode, requested string) (Mode, error) {
 }
 
 func errorf(format string, args ...any) error { return fmt.Errorf(format, args...) }
+
+// MenuGroup is one entry of modes.json menu_groups.
+type MenuGroup struct {
+	Key, Label, Description string
+	Modes                   []string
+}
+
+// LoadMenuGroups parses the KTX mode groups shown by the mode picker.
+func LoadMenuGroups() ([]MenuGroup, error) {
+	var document struct {
+		Groups []struct {
+			ID          string   `json:"id"`
+			Label       string   `json:"label"`
+			Description string   `json:"description"`
+			Modes       []string `json:"modes"`
+		} `json:"menu_groups"`
+	}
+	if err := json.Unmarshal(KtxModesJSON, &document); err != nil {
+		return nil, fmt.Errorf("catálogo de modos KTX inválido: %v", err)
+	}
+	groups := make([]MenuGroup, len(document.Groups))
+	for index, raw := range document.Groups {
+		groups[index] = MenuGroup{Key: raw.ID, Label: raw.Label, Description: raw.Description, Modes: raw.Modes}
+	}
+	return groups, nil
+}

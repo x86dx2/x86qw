@@ -28,19 +28,14 @@ func modeOf(mode play.Mode) Mode {
 
 // MatchCatalog lists the installed games, the KTX modes and clients.
 func (r *Real) MatchCatalog(ctx context.Context, target string) (*MatchCatalog, error) {
-	games, available, err := play.Installed(target)
+	games, err := play.Installed(target)
 	if err != nil {
 		return nil, err
 	}
 	out := &MatchCatalog{}
 	for _, game := range games {
-		version := ""
-		for _, candidate := range available {
-			if candidate.ID == game.ID {
-				version = install.InstalledVersion(target, candidate)
-			}
-		}
-		out.Games = append(out.Games, Game{ID: game.ID, Label: game.Label, Version: version, Description: game.Description, Modes: game.UsesModeCatalog()})
+		out.Games = append(out.Games, Game{ID: game.ID, Label: game.Label, Version: install.InstalledVersion(target, game),
+			Description: game.Description, Modes: game.UsesModeCatalog()})
 	}
 	modes, err := play.LoadModes()
 	if err != nil {
@@ -124,7 +119,7 @@ func playOptions(m Match) play.Options {
 
 // Maps lists the maps the match can run on.
 func (r *Real) Maps(ctx context.Context, target string, m Match) (*MapList, error) {
-	games, _, err := play.Installed(target)
+	games, err := play.Installed(target)
 	if err != nil {
 		return nil, err
 	}

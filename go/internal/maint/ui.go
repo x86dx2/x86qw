@@ -11,10 +11,10 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/doctor"
 )
 
-// Ported from x86qw_runtime/ui/local.py.
+// The local UI is a read-only HTML snapshot of the installation.
 
 func htmlEscape(value string) string {
-	// Python html.escape(quote=True) also escapes ' as &#x27;.
+	// Quotes are written as &quot; and &#x27;, the entities the page always used.
 	escaped := strings.ReplaceAll(html.EscapeString(value), "&#39;", "&#x27;")
 	return strings.ReplaceAll(escaped, "&#34;", "&quot;")
 }
@@ -30,7 +30,7 @@ func uiEntries(entries []LibraryEntry) string {
 	return builder.String()
 }
 
-// RenderLocalUI mirrors render_local_ui (doctor without catalog or trust).
+// RenderLocalUI renders the snapshot (doctor without catalog or trust).
 func RenderLocalUI(target string) (string, error) {
 	report := doctor.Diagnose(target, nil, time.Now().UTC())
 	library, err := LoadLibrary(target)

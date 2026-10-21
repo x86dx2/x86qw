@@ -51,8 +51,8 @@ func BinaryName() string {
 	return "x86qw"
 }
 
-// Receipt renders .x86qw/cli/receipt exactly like the Python installer
-// (sorted keys, indent 2, trailing newline).
+// Receipt renders .x86qw/cli/receipt: sorted keys, indent 2, trailing
+// newline.
 func Receipt(version string) []byte {
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
@@ -98,8 +98,13 @@ func (l *Layer) write(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	if runtime.GOOS == "windows" && existed {
-		// A running exe cannot be replaced; move it aside first.
-		os.Rename(path, path+".old")
+		// A running exe cannot be replaced, only renamed: move it aside.
+		// What a previous update moved aside goes first; TidyAside removes
+		// it once that process has ended.
+		os.Remove(path + asideSuffix)
+		if err := os.Rename(path, path+asideSuffix); err != nil {
+			return fmt.Errorf("a CLI em uso não pôde ser substituída: %w", err)
+		}
 	}
 	if err := os.Rename(temporary.Name(), path); err != nil {
 		return err

@@ -8,11 +8,11 @@ import (
 	"unicode/utf8"
 )
 
-// length counts characters like Python's len(str).
+// length counts characters (runes), not bytes.
 func length(value string) int { return utf8.RuneCountInString(value) }
 
-// Ported from x86qw_runtime/gameplay/planning.py; strings are part of the
-// observable behaviour (ezQuake console input) and must not drift.
+// The strings below are ezQuake console input: changing one changes what the
+// game runs.
 
 const (
 	frogbotAddWaitFrames = 8
@@ -25,7 +25,7 @@ var (
 	positiveInt     = regexp.MustCompile(`^[1-9][0-9]*$`)
 )
 
-// Options mirrors KtxLaunchOptions. Pointers mean "not given".
+// Options are the KTX launch options. Pointers mean "not given".
 type Options struct {
 	Bots            int
 	FillBots        bool
@@ -50,7 +50,7 @@ func DefaultOptions() Options {
 	return Options{BotSkill: "5", BotNamesProfile: "default"}
 }
 
-// BotOptionsRequested mirrors ktx_bot_options_requested.
+// BotOptionsRequested reports whether any bot option was asked for.
 func BotOptionsRequested(o Options) bool {
 	return o.Bots > 0 || o.FillBots || o.BotSkill != "5" || o.BotTeam != nil ||
 		o.BotWeapon != nil || o.BotHealth != nil || o.BotBreakOnDeath != nil
@@ -157,16 +157,21 @@ func QuoteConsoleCommand(command string) (string, error) {
 	return `"` + command + `"`, nil
 }
 
-func mustQuote(command string) string {
+// quoter quotes console commands and keeps the first error, so a list of
+// aliases builds without a check after every line.
+type quoter struct{ err error }
+
+func (q *quoter) quote(command string) string {
 	quoted, err := QuoteConsoleCommand(command)
-	if err != nil {
-		panic(err)
+	if err != nil && q.err == nil {
+		q.err = err
 	}
 	return quoted
 }
 
-// KeyAliasCommands mirrors ktx_key_alias_commands.
-func KeyAliasCommands(mode Mode, o Options) []string {
+// KeyAliasCommands are the aliases behind the mode's context keys and,
+// when bots are requested, the bot keys.
+func KeyAliasCommands(mode Mode, o Options) ([]string, error) {
 	var commands []string
 	for _, key := range ContextKeys {
 		alias := strings.ToLower(key)
@@ -184,13 +189,15 @@ func KeyAliasCommands(mode Mode, o Options) []string {
 			"tempalias x86qw_ktx_key_"+alias+" "+binding.Command,
 			"tempalias x86qw_ktx_key_help_"+alias+" echo "+colored.String()+"$x20$x7c$x20"+binding.Description)
 	}
-	if BotOptionsRequested(o) {
-		commands = append(commands, botManagementAliases(mode, o)...)
+	if !BotOptionsRequested(o) {
+		return commands, nil
 	}
-	return commands
+	bots, err := botManagementAliases(mode, o)
+	return append(commands, bots...), err
 }
 
-func botManagementAliases(mode Mode, o Options) []string {
+func botManagementAliases(mode Mode, o Options) ([]string, error) {
+	var q quoter
 	initial := RequestedNames(o, &mode)
 	maximum := 31
 	if limit, ok := BotLimit(mode); ok {
@@ -206,21 +213,21 @@ func botManagementAliases(mode Mode, o Options) []string {
 		if count < maximum {
 			action = fmt.Sprintf("x86qw_ktx_bot_add_command;x86qw_ktx_bot_roster_%d", count+1)
 		}
-		commands = append(commands, fmt.Sprintf("tempalias x86qw_ktx_bot_add_%d %s", count, mustQuote(action)))
+		commands = append(commands, fmt.Sprintf("tempalias x86qw_ktx_bot_add_%d %s", count, q.quote(action)))
 		action = "echo Nenhum Frogbot para remover"
 		if count > 0 {
 			action = fmt.Sprintf("cmd botcmd removebot;x86qw_ktx_bot_roster_%d", count-1)
 		}
-		commands = append(commands, fmt.Sprintf("tempalias x86qw_ktx_bot_remove_%d %s", count, mustQuote(action)))
+		commands = append(commands, fmt.Sprintf("tempalias x86qw_ktx_bot_remove_%d %s", count, q.quote(action)))
 		roster := fmt.Sprintf("tempalias x86qw_ktx_bot_add x86qw_ktx_bot_add_%d;tempalias x86qw_ktx_bot_remove x86qw_ktx_bot_remove_%d", count, count)
-		commands = append(commands, fmt.Sprintf("tempalias x86qw_ktx_bot_roster_%d %s", count, mustQuote(roster)))
+		commands = append(commands, fmt.Sprintf("tempalias x86qw_ktx_bot_roster_%d %s", count, q.quote(roster)))
 	}
 	if o.BotSkill == "random" {
 		message := "echo Habilidade aleatoria ativa para cada novo Frogbot"
 		commands = append(commands,
-			"tempalias x86qw_ktx_bot_add_command "+mustQuote("cmd botcmd addbot random"+team),
-			"tempalias x86qw_ktx_bot_skill_down "+mustQuote(message),
-			"tempalias x86qw_ktx_bot_skill_up "+mustQuote(message))
+			"tempalias x86qw_ktx_bot_add_command "+q.quote("cmd botcmd addbot random"+team),
+			"tempalias x86qw_ktx_bot_skill_down "+q.quote(message),
+			"tempalias x86qw_ktx_bot_skill_up "+q.quote(message))
 	} else {
 		for skill := 1; skill <= 20; skill++ {
 			lower, higher := skill-1, skill+1
@@ -238,19 +245,21 @@ func botManagementAliases(mode Mode, o Options) []string {
 				fmt.Sprintf("tempalias x86qw_ktx_bot_add_command cmd botcmd addbot %d%s", skill, team),
 			}, ";")
 			commands = append(commands,
-				fmt.Sprintf("tempalias x86qw_ktx_bot_skill_down_%d %s", skill, mustQuote(down)),
-				fmt.Sprintf("tempalias x86qw_ktx_bot_skill_up_%d %s", skill, mustQuote(up)),
-				fmt.Sprintf("tempalias x86qw_ktx_bot_skill_%d %s", skill, mustQuote(setup)))
+				fmt.Sprintf("tempalias x86qw_ktx_bot_skill_down_%d %s", skill, q.quote(down)),
+				fmt.Sprintf("tempalias x86qw_ktx_bot_skill_up_%d %s", skill, q.quote(up)),
+				fmt.Sprintf("tempalias x86qw_ktx_bot_skill_%d %s", skill, q.quote(setup)))
 		}
 		commands = append(commands, "x86qw_ktx_bot_skill_"+o.BotSkill)
 	}
 	return append(commands,
 		fmt.Sprintf("x86qw_ktx_bot_roster_%d", initial),
-		"tempalias x86qw_ktx_bot_help exec x86qw-ktx-help-bots.cfg")
+		"tempalias x86qw_ktx_bot_help exec x86qw-ktx-help-bots.cfg"), q.err
 }
 
-// ChunkedSetupPlan mirrors ktx_chunked_setup_alias_plan.
+// ChunkedSetupPlan splits setup commands into aliases of at most maximum
+// characters and returns their definitions and the command that runs them.
 func ChunkedSetupPlan(commands []string, maximum int) ([]string, string, error) {
+	var q quoter
 	var chunks [][]string
 	var current []string
 	total := 0
@@ -289,7 +298,7 @@ func ChunkedSetupPlan(commands []string, maximum int) ([]string, string, error) 
 		groupLength := 0
 		flush := func() {
 			parent := fmt.Sprintf("x86qw_ktx_launch_group_%d_%d", level, len(parents)+1)
-			definitions = append(definitions, "tempalias "+parent+" "+mustQuote(strings.Join(group, ";")))
+			definitions = append(definitions, "tempalias "+parent+" "+q.quote(strings.Join(group, ";")))
 			parents = append(parents, parent)
 		}
 		for _, alias := range aliases {
@@ -310,7 +319,7 @@ func ChunkedSetupPlan(commands []string, maximum int) ([]string, string, error) 
 		aliases = parents
 		level++
 	}
-	return definitions, strings.Join(aliases, ";"), nil
+	return definitions, strings.Join(aliases, ";"), q.err
 }
 
 // ChunkedSetupCommands adds the compatibility entry alias.
@@ -365,7 +374,7 @@ func teamSequence(mode Mode, o Options) []string {
 	return result
 }
 
-// LaunchCommands mirrors ktx_launch_commands (post-map setup).
+// LaunchCommands are the KTX commands run after the map loads.
 func LaunchCommands(mode Mode, mapName string, assets map[string]bool, o Options) ([]string, error) {
 	var commands []string
 	for _, requirement := range ActiveRequirements(mode, o) {

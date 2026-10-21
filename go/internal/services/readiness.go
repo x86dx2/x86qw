@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Readiness probes ported from x86qw_runtime/supervisor/readiness.py.
+// Readiness probes: each runtime is up before the next one starts.
 
 // PortRequest is one listener a service will bind.
 type PortRequest struct {
@@ -21,7 +21,7 @@ type PortRequest struct {
 	Kind           string
 }
 
-// RequestedPorts mirrors services.requested_ports.
+// RequestedPorts are the listeners an action will bind.
 func RequestedPorts(action string, host *HostOptions, proxy *ProxyOptions, qtv *QtvOptions) []PortRequest {
 	switch action {
 	case "proxy":
@@ -42,7 +42,7 @@ func RequestedPorts(action string, host *HostOptions, proxy *ProxyOptions, qtv *
 	return requests
 }
 
-// PreflightPorts mirrors readiness.preflight_ports.
+// PreflightPorts refuses duplicate ports and ports already taken.
 func PreflightPorts(requests []PortRequest) error {
 	seen := map[int]string{}
 	for _, request := range requests {
@@ -101,7 +101,7 @@ func sleepContext(ctx context.Context, duration time.Duration) error {
 	}
 }
 
-// waitHTTPReadiness mirrors wait_http_readiness (GET /nowplaying/ over 8 s).
+// waitHTTPReadiness waits up to 8 s for GET /nowplaying/ to answer.
 func waitHTTPReadiness(ctx context.Context, exited func() bool, readiness *Readiness) error {
 	deadline := time.Now().Add(8 * time.Second)
 	address := Endpoint(readiness.Address, readiness.Port)
@@ -131,7 +131,8 @@ func waitHTTPReadiness(ctx context.Context, exited func() bool, readiness *Readi
 	return errorf("QTV não respondeu em http://%s/.", address)
 }
 
-// waitUDPReadiness mirrors wait_udp_readiness: alive for 1 s and holding the port.
+// waitUDPReadiness waits until the runtime has been alive for 1 s and holds
+// the port.
 func waitUDPReadiness(ctx context.Context, exited func() bool, readiness *Readiness) error {
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
@@ -152,7 +153,7 @@ func waitUDPReadiness(ctx context.Context, exited func() bool, readiness *Readin
 
 var oob = []byte{0xff, 0xff, 0xff, 0xff}
 
-// applyStartupRcon mirrors apply_startup_rcon: status, serverinfo, then exec
+// applyStartupRcon sends status, serverinfo, then exec
 // of the post-map cfg with the bootstrap password.
 func applyStartupRcon(ctx context.Context, startup *StartupRcon) error {
 	destination, err := net.ResolveUDPAddr(network("udp", startup.Address), Endpoint(startup.Address, startup.Port))
@@ -189,7 +190,7 @@ func applyStartupRcon(ctx context.Context, startup *StartupRcon) error {
 			if errors.As(err, &netErr) && netErr.Timeout() {
 				continue
 			}
-			// Python only retries timeouts; ICMP refusals surface as errors.
+			// Only timeouts are retried; ICMP refusals surface as errors.
 			return errorf("Não foi possível iniciar um serviço: %v", err)
 		}
 		if bytes.HasPrefix(reply, oob) {

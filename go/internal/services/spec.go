@@ -65,7 +65,7 @@ var runtimePaths = map[string]map[string]string{
 	"qwfwd": {"macos-arm64": "qwfwd/qwfwd", "linux-amd64": "qwfwd/qwfwd", "windows-x64": "qwfwd/qwfwd.exe"},
 }
 
-// runtimeBinary mirrors runtime_launch_target: verified component, host
+// runtimeBinary is a runtime's launch target: verified component, host
 // variant, executable file and the inventory hash used at exec time.
 func runtimeBinary(target, component string) (string, string, error) {
 	record, err := install.VerifyComponentRecord(target, component)
@@ -108,25 +108,25 @@ type Hosted struct {
 	Options play.Options
 }
 
-// SelectHosted mirrors select_hosted_game for non-interactive requests.
+// SelectHosted picks the installed game, mode and map a host request names.
 func SelectHosted(target string, o *HostOptions) (*Hosted, error) {
 	if err := install.CheckPaks(target); err != nil {
 		return nil, err
 	}
-	installGames, err := install.LoadGames()
+	games, err := install.LoadGames()
 	if err != nil {
 		return nil, err
 	}
-	available := install.AvailableGames(target, installGames)
+	available := install.AvailableGames(target, games)
 	if len(available) == 0 {
 		return nil, errorf("Nenhum mod gerenciado está instalado. Execute o bootstrap e selecione um jogo.")
 	}
 	if o.Game == "" {
-		return nil, errorf("Informe o jogo a hospedar (ktx, final-arena, pro-x, team-fortress ou td2) ou use --menu.")
-	}
-	games, err := play.LoadGames()
-	if err != nil {
-		return nil, err
+		ids := make([]string, len(available))
+		for index, game := range available {
+			ids[index] = game.ID
+		}
+		return nil, errorf("Informe o jogo a hospedar (%s) ou use --menu.", strings.Join(ids, ", "))
 	}
 	var installed *install.Game
 	for index := range available {
@@ -217,7 +217,7 @@ func gameMarkerPath(target string, game install.Game) string {
 	return marker
 }
 
-// dedicatedKtxSettings mirrors services.dedicated_ktx_settings.
+// dedicatedKtxSettings are the KTX settings a dedicated server starts with.
 func dedicatedKtxSettings(mode play.Mode, mapName string, assets map[string]bool, o play.Options, maxclients int) ([][2]string, error) {
 	if _, err := play.LaunchCommands(mode, mapName, assets, o); err != nil {
 		return nil, err
@@ -304,35 +304,25 @@ func isBinaryName(name string) bool {
 	return strings.HasPrefix(name, "k_fb_name_") || strings.HasPrefix(name, "k_fb_name_team_") || strings.HasPrefix(name, "k_fb_name_enemy_")
 }
 
-// HostSpec mirrors services.host_spec.
+// HostSpec is how to start MVDSV for a hosted game.
 func HostSpec(target string, o *HostOptions, hosted *Hosted, session *Session, journal *Journal) (*Spec, error) {
 	binary, digest, err := runtimeBinary(target, "mvdsv")
 	if err != nil {
 		return nil, err
 	}
 	game := hosted.Game
-	installGames, err := install.LoadGames()
-	if err != nil {
-		return nil, err
-	}
-	for _, candidate := range installGames {
-		if candidate.ID != game.ID {
-			continue
+	if marker := gameMarkerPath(target, game); strings.EqualFold(filepath.Ext(marker), ".pk3") && !session.published[marker] {
+		if session.published == nil {
+			session.published = map[string]bool{}
 		}
-		marker := gameMarkerPath(target, candidate)
-		if strings.EqualFold(filepath.Ext(marker), ".pk3") && !session.published[marker] {
-			if session.published == nil {
-				session.published = map[string]bool{}
-			}
-			session.published[marker] = true
-			gamedir := filepath.Join(target, game.Gamedir)
-			materialized, err := MaterializePK3(marker, gamedir, game.Label, journal)
-			if err != nil {
-				return nil, err
-			}
-			materialized.SuppressAutoexec(gamedir)
-			session.Materialized = append(session.Materialized, materialized)
+		session.published[marker] = true
+		gamedir := filepath.Join(target, game.Gamedir)
+		materialized, err := MaterializePK3(marker, gamedir, game.Label, journal)
+		if err != nil {
+			return nil, err
 		}
+		materialized.SuppressAutoexec(gamedir)
+		session.Materialized = append(session.Materialized, materialized)
 	}
 	hostname := o.Hostname
 	if hostname == "" {
@@ -483,7 +473,7 @@ func toBytes(lines []string) [][]byte {
 	return result
 }
 
-// ProxySpec mirrors services.proxy_spec.
+// ProxySpec is how to start QWFWD.
 func ProxySpec(target, bind string, port int) (*Spec, error) {
 	binary, digest, err := runtimeBinary(target, "qwfwd")
 	if err != nil {
@@ -501,7 +491,7 @@ func ProxySpec(target, bind string, port int) (*Spec, error) {
 	}, nil
 }
 
-// QtvSpec mirrors services.qtv_spec.
+// QtvSpec is how to start QTV.
 func QtvSpec(target, bind string, port int, hostname, upstream, password string, session *Session, journal *Journal) (*Spec, error) {
 	binary, digest, err := runtimeBinary(target, "qtv")
 	if err != nil {

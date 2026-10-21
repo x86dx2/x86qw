@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/atomicfile"
 	"github.com/x86dx2/x86qw/go/internal/privfs"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 )
@@ -79,7 +80,7 @@ func loadRecord(root, id string) (*receipt.Record, map[string]string, error) {
 }
 
 // InstallOverlay publishes managed (a tree mapped onto the root) as the new
-// payload of component id, like manager.py install_component_overlay_transaction:
+// payload of component id:
 // existing files that are not owned with a matching hash are kept and dropped
 // from the payload; files removed between versions are deleted only when
 // their hash still matches the old inventory.
@@ -266,7 +267,7 @@ func (t *Transaction) replaceFiles(dir string, files map[string][]byte) (func() 
 		for _, name := range names {
 			path := filepath.Join(dir, name)
 			if data, ok := previous[name]; ok {
-				errs = append(errs, atomicWrite(path, data, 0o644))
+				errs = append(errs, atomicfile.Write(path, data, 0o644))
 			} else {
 				errs = append(errs, ignoreMissing(os.Remove(path)))
 			}
@@ -281,7 +282,7 @@ func (t *Transaction) replaceFiles(dir string, files map[string][]byte) (func() 
 		if data, err := os.ReadFile(path); err == nil {
 			previous[name] = data
 		}
-		if err := atomicWrite(path, files[name], 0o644); err != nil {
+		if err := atomicfile.Write(path, files[name], 0o644); err != nil {
 			undo()
 			return nil, err
 		}
@@ -604,30 +605,7 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	return atomicWrite(dst, data, mode)
-}
-
-func atomicWrite(path string, data []byte, mode os.FileMode) error {
-	temporary, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(temporary.Name())
-	if _, err := temporary.Write(data); err != nil {
-		temporary.Close()
-		return err
-	}
-	if err := temporary.Sync(); err != nil {
-		temporary.Close()
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(temporary.Name(), mode); err != nil {
-		return err
-	}
-	return os.Rename(temporary.Name(), path)
+	return atomicfile.Write(dst, data, mode)
 }
 
 func ignoreMissing(err error) error {

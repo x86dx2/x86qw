@@ -14,11 +14,11 @@ import (
 	"time"
 )
 
-// Bounded HTTPS transfers with the policy of x86qw_runtime.io.downloader:
-// HTTPS only (redirects included), size ceilings, deadlines, and pinned
+// Bounded HTTPS transfers: HTTPS only (redirects included), size ceilings,
+// deadlines, and pinned
 // size/SHA-256 for every persistent artifact.
 
-// HTTPError mirrors DownloadHTTPError.
+// HTTPError is an HTTP status other than 200.
 type HTTPError struct {
 	Status int
 	URL    string
@@ -28,7 +28,7 @@ func (e *HTTPError) Error() string {
 	return fmt.Sprintf("HTTP %d em %s", e.Status, safeURLForLog(e.URL))
 }
 
-// IntegrityError mirrors DownloadIntegrityError.
+// IntegrityError is a download whose size or digest is not the pinned one.
 type IntegrityError struct{ msg string }
 
 func (e *IntegrityError) Error() string { return e.msg }
@@ -88,7 +88,7 @@ func (p *Project) request(method, url string, headers map[string]string, body io
 	return response, cancel, nil
 }
 
-// Metadata mirrors download(BoundedMetadata(...)).
+// Metadata fetches a small document, bounded by maximum and deadline.
 func (p *Project) Metadata(method, url string, maximum int64, deadline time.Duration, headers map[string]string) (*Response, error) {
 	response, cancel, err := p.request(method, url, headers, nil, deadline)
 	if err != nil {

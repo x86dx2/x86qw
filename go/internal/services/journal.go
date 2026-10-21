@@ -14,12 +14,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/x86dx2/x86qw/go/internal/atomicfile"
 	"github.com/x86dx2/x86qw/go/internal/fspath"
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/privfs"
+	"github.com/x86dx2/x86qw/go/internal/pyjson"
 )
 
-// Session journal compatible with x86qw_runtime/supervisor/sessions.py.
+// The session journal records the controller and every supervised process,
+// so status, stop and recovery work from any later run.
 
 const (
 	maxJournalBytes     = 2 << 20
@@ -61,25 +64,6 @@ func ensurePrivateDirectory(dir string) error {
 	return privfs.Ensure(dir, info)
 }
 
-// atomicWritePrivate writes path through a ".<name>.<hex>.tmp" sibling (0600).
-func atomicWritePrivate(path string, payload []byte) error {
-	temporary := filepath.Join(filepath.Dir(path), "."+filepath.Base(path)+"."+tokenHex(12)+".tmp")
-	file, err := os.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		return err
-	}
-	_, writeErr := file.Write(payload)
-	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
-		os.Remove(temporary)
-		return err
-	}
-	if err := replaceFile(temporary, path); err != nil {
-		os.Remove(temporary)
-		return err
-	}
-	return nil
-}
-
 // NewJournal creates .x86qw/sessions/<id>/session.json in state "starting".
 func NewJournal(target string, owner *lock.Owner, background bool, backgroundLog string) (*Journal, error) {
 	sessions := filepath.Join(target, ".x86qw", "sessions")
@@ -117,7 +101,11 @@ func NewJournal(target string, owner *lock.Owner, background bool, backgroundLog
 }
 
 func (j *Journal) write() error {
-	if err := atomicWritePrivate(j.Path, []byte(pyDumps(j.Data, true)+"\n")); err != nil {
+	text, err := pyjson.Dumps(j.Data, 2)
+	if err == nil {
+		err = atomicfile.Write(j.Path, []byte(text+"\n"), 0o600)
+	}
+	if err != nil {
 		return errorf("O journal privado da sessão não pôde ser gravado.")
 	}
 	return nil
@@ -328,7 +316,7 @@ func LoadJournal(file string) (map[string]any, error) {
 	if err != nil {
 		return nil, invalid
 	}
-	value, err := decodeGeneric(payload)
+	value, err := pyjson.Decode(payload)
 	data, ok := value.(map[string]any)
 	if err != nil || !ok {
 		return nil, invalid
@@ -474,7 +462,8 @@ func removeIncompleteInitialSession(dir string) bool {
 	return os.Remove(dir) == nil
 }
 
-// AssertRecoveryConfirmable mirrors assert_recovery_processes_confirmable.
+// AssertRecoveryConfirmable refuses to go on while a journal's processes
+// cannot be confirmed dead or ours.
 func AssertRecoveryConfirmable(target string) error {
 	paths, err := SessionJournalPaths(target, "")
 	if err != nil {
@@ -639,7 +628,11 @@ func reconcileJournal(target, file string, warn func(string)) error {
 	}
 	data["status"] = "clean"
 	data["recovered_at"] = isoNow()
-	if err := atomicWritePrivate(file, []byte(pyDumps(data, true)+"\n")); err != nil {
+	text, err := pyjson.Dumps(data, 2)
+	if err == nil {
+		err = atomicfile.Write(file, []byte(text+"\n"), 0o600)
+	}
+	if err != nil {
 		return errorf("O journal privado de recuperação não pôde ser gravado.")
 	}
 	return nil

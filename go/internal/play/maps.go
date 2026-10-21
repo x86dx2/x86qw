@@ -39,7 +39,7 @@ func directory(name string) bool {
 	return err == nil && info.IsDir()
 }
 
-// LocalMapNames mirrors gameplay.local_map_names: .bsp files and maps inside
+// LocalMapNames lists the .bsp files and the maps inside
 // .pak/.pk3 packages of id1 and the game directory, sorted case-insensitively.
 func LocalMapNames(root, gamedir string) ([]string, error) {
 	found := map[string]bool{}
@@ -148,7 +148,8 @@ var (
 	routeCommands = map[string]bool{"race_add_route_node": true, "race_route_add_end": true, "race_route_add_start": true, "race_set_node_size": true, "race_set_route_falsestart_mode": true, "race_set_route_name": true, "race_set_route_timeout": true, "race_set_route_weapon_mode": true, "race_set_teleport_flags_by_name": true}
 )
 
-// validPersonalAsset mirrors gameplay.valid_personal_ktx_asset.
+// validPersonalAsset reports whether name is a usable personal KTX asset: a
+// regular text file of at most 1 MiB with suffix.
 func validPersonalAsset(name, suffix string) bool {
 	info, err := os.Lstat(name)
 	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 1<<20 {
@@ -220,11 +221,56 @@ func validPersonalAsset(name, suffix string) bool {
 	return false
 }
 
-// splitLines splits like Python's str.splitlines for the separators that can
-// appear after the control-character filter (\n, \r, \r\n, \x85).
+// splitLines splits at the line separators that can appear after the
+// control-character filter (\n, \r, \r\n, \x85).
 func splitLines(text string) []string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 	text = strings.ReplaceAll(text, "\u0085", "\n")
 	return strings.Split(text, "\n")
+}
+
+// CompatibleMaps are the installed maps that carry every asset requirements
+// asks for.
+func CompatibleMaps(root string, game Game, requirements []Requirement, assets map[string]bool, label string) ([]string, error) {
+	maps, err := LocalMapNames(root, game.Gamedir)
+	if err != nil {
+		return nil, err
+	}
+	if len(requirements) == 0 {
+		return maps, nil
+	}
+	var filtered []string
+	for _, name := range maps {
+		ok := true
+		for _, requirement := range requirements {
+			ok = ok && assets[strings.ToLower(strings.ReplaceAll(requirement.Asset, "{map}", strings.ToLower(name)))]
+		}
+		if ok {
+			filtered = append(filtered, name)
+		}
+	}
+	if len(filtered) == 0 {
+		keys := make([]string, len(requirements))
+		for index, requirement := range requirements {
+			keys[index] = requirement.Asset
+		}
+		return nil, errorf("Nenhum mapa instalado possui o recurso exigido por %s: %s.", label, strings.Join(keys, ", "))
+	}
+	return filtered, nil
+}
+
+// ResolveMap is the compatible installed map matching requested,
+// case-insensitively.
+func ResolveMap(root string, game Game, requested string, requirements []Requirement, assets map[string]bool, label string) (string, error) {
+	maps, err := CompatibleMaps(root, game, requirements, assets, label)
+	if err != nil {
+		return "", err
+	}
+	for _, name := range maps {
+		if strings.EqualFold(name, requested) {
+			return name, nil
+		}
+	}
+	return "", errorf("O mapa %s não está disponível ou não é compatível com %s.", requested, label)
 }

@@ -2,6 +2,7 @@ package state
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,8 +33,8 @@ func sampleBytes() []byte {
 	return []byte(strings.Replace(sample, "%s", Fingerprint([]string{"nquake-maps", "ktx"}), 1))
 }
 
-func TestFingerprintMatchesPython(t *testing.T) {
-	// hashlib.sha256(b"a\nb\n").hexdigest()
+func TestFingerprintIsTheSortedListDigest(t *testing.T) {
+	// sha256 of "a\nb\n": the ids sorted, one per line.
 	if got := Fingerprint([]string{"b", "a"}); got != "911169ddaaf146aff539f58c26c489af3b892dff0fe283c1c264c65ae5aa59a2" {
 		t.Fatalf("fingerprint %s", got)
 	}
@@ -48,12 +49,12 @@ func TestParseAndRoundTrip(t *testing.T) {
 	if state.Profile != "essential" || len(state.RecordedComponents) != 2 {
 		t.Fatalf("estado inesperado: %+v", state)
 	}
-	encoded, err := state.Marshal()
+	encoded, err := MarshalDocument(state.document)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(encoded, payload) {
-		t.Fatalf("serialização diverge do Python:\n%s", encoded)
+		t.Fatalf("serialização diverge do documento lido:\n%s", encoded)
 	}
 }
 
@@ -69,7 +70,7 @@ func TestRejectsInvalidStates(t *testing.T) {
 	}
 	for name, payload := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := Parse([]byte(payload)); err == nil || !IsInvalid(err) {
+			if _, err := Parse([]byte(payload)); err == nil || !errors.As(err, new(*Error)) {
 				t.Fatalf("estado inválido aceito: %v", err)
 			}
 		})
@@ -96,7 +97,7 @@ func TestRealInstallation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	encoded, _ := state.Marshal()
+	encoded, _ := MarshalDocument(state.document)
 	if !bytes.Equal(encoded, payload) {
 		t.Fatal("round-trip da instalação real diverge")
 	}

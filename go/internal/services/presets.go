@@ -8,9 +8,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+
+	"github.com/x86dx2/x86qw/go/internal/atomicfile"
+	"github.com/x86dx2/x86qw/go/internal/pyjson"
 )
 
-// Host presets: qw/x86qw-host-presets.json, like x86qw_runtime/host_presets.py.
+// Host presets live in qw/x86qw-host-presets.json.
 
 const (
 	hostPresetsPath = "qw/x86qw-host-presets.json"
@@ -45,7 +48,7 @@ func LoadPresets(target string) (map[string]Preset, error) {
 	if err != nil {
 		return nil, err
 	}
-	value, err := decodeGeneric(payload)
+	value, err := pyjson.Decode(payload)
 	if err != nil {
 		return nil, errors.New("o arquivo de presets não é um JSON válido")
 	}
@@ -179,7 +182,11 @@ func SavePreset(target, name string, options *HostOptions) (Preset, error) {
 	for _, key := range names {
 		list = append(list, map[string]any(presets[key]))
 	}
-	payload := pyDumps(map[string]any{"format": 1, "kind": "host-presets", "presets": list}, false) + "\n"
+	payload, err := pyjson.Dumps(map[string]any{"format": 1, "kind": "host-presets", "presets": list}, -1)
+	if err != nil {
+		return nil, err
+	}
+	payload += "\n"
 	destination := filepath.Join(target, filepath.FromSlash(hostPresetsPath))
 	if info, err := os.Lstat(destination); err == nil && info.Mode()&os.ModeSymlink != 0 {
 		return nil, errors.New("o arquivo de presets é um symlink")
@@ -187,12 +194,7 @@ func SavePreset(target, name string, options *HostOptions) (Preset, error) {
 	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 		return nil, err
 	}
-	staging := destination + ".tmp"
-	defer os.Remove(staging)
-	if err := os.WriteFile(staging, []byte(payload), 0o644); err != nil {
-		return nil, err
-	}
-	return preset, os.Rename(staging, destination)
+	return preset, atomicfile.Write(destination, []byte(payload), 0o644)
 }
 
 // ApplyPreset copies a stored layout onto host options.

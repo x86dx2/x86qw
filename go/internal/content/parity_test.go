@@ -14,8 +14,8 @@ import (
 
 // Verify corruptions. These tests clone the checkout with APFS/reflink
 // copies, corrupt one fact per case and require the verifier to reject it
-// with the message the retired manage.py verify printed for the same case
-// (testdata/verify-corruptions.json). They need a hydrated dist/ and take
+// with the message testdata/verify-corruptions.json records for the case.
+// They need a hydrated dist/ and take
 // minutes, so they only run with X86QW_CONTENT_CORRUPTIONS=1.
 
 func repoRoot(t *testing.T) string {
@@ -44,8 +44,8 @@ func requireHydrated(t *testing.T, root string) {
 func cloneCheckout(t *testing.T, root string) string {
 	t.Helper()
 	target := filepath.Join(t.TempDir(), "x86qw")
-	if output, err := exec.Command("cp", "-cR", root, target).CombinedOutput(); err != nil {
-		if output, err = exec.Command("cp", "-R", root, target).CombinedOutput(); err != nil {
+	if _, err := exec.Command("cp", "-cR", root, target).CombinedOutput(); err != nil {
+		if output, err := exec.Command("cp", "-R", root, target).CombinedOutput(); err != nil {
 			t.Fatalf("clone: %v: %s", err, output)
 		}
 	}

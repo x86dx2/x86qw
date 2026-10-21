@@ -1,8 +1,8 @@
-// Command x86qw-content is the native port of maintenance/manage.py: it
+// Command x86qw-content is the maintainer tool for the content: it
 // checks, updates, extends, verifies, builds and publishes the x86QW
 // content distribution, and regenerates the public product facts.
 //
-// Exit codes follow manage.py: 0 success, 1 operational error ("[ERRO] ..."
+// Exit codes: 0 success, 1 operational error ("[ERRO] ..."
 // on stderr), 2 usage error or, for check, pending updates.
 package main
 
