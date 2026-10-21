@@ -52,10 +52,11 @@ type Result struct {
 
 // Model is the installer program.
 type Model struct {
-	cfg  Config
-	next []string // the x86qw command to run once the interface closes
-	back bool     // and open again once it ends
-	game gameState
+	cfg     Config
+	next    []string // the x86qw command to run once the interface closes
+	ticking bool     // the tick loop is scheduled
+	back    bool     // and open again once it ends
+	game    gameState
 	// cancelling is a cancelled installation still rolling back.
 	cancelling bool
 	theme      Theme
@@ -215,13 +216,33 @@ func (m *Model) Init() tea.Cmd {
 
 // tick drives animation only while something moves: the logo shimmer at
 // about 12 fps, spinners and progress at 30 fps.
+// There is one tick loop at most: it runs while something on screen
+// moves and stops when the screen is still.
 func (m *Model) tick() tea.Cmd {
+	if m.ticking {
+		return nil
+	}
+	m.ticking = true
 	interval := 83 * time.Millisecond
-	if (m.screen == scConfigure && m.preOn && !m.preDone) || m.screen == scInstall || (m.screen == scPanel && m.busy) || m.game.acting != "" ||
-		m.game.serversLoading || (m.screen == scMatch && m.game.catalog == nil) || (m.screen == scHost && !m.game.stackLoaded) {
+	if m.spinning() {
 		interval = 33 * time.Millisecond
 	}
 	return tea.Tick(interval, func(t time.Time) tea.Msg { return tickMsg(t) })
+}
+
+// spinning is a spinner or a progress bar on screen.
+func (m *Model) spinning() bool {
+	return (m.screen == scConfigure && m.preOn && !m.preDone) || m.screen == scInstall || (m.screen == scPanel && m.busy) || m.game.acting != "" ||
+		m.game.serversLoading || (m.screen == scMatch && m.game.catalog == nil) || (m.screen == scHost && !m.game.stackLoaded) ||
+		(m.catalog == nil && m.err == nil)
+}
+
+// moving is anything that changes without input: the logo's shimmer,
+// a spinner or progress, a toast or an armed key waiting to expire.
+func (m *Model) moving() bool {
+	now := time.Now()
+	logo := m.err == nil && (m.screen == scIntent || (m.screen == scPanel && m.panelView == "")) && m.modal == nil
+	return logo || m.spinning() || now.Before(m.toastUntil) || (m.armed != "" && now.Before(m.armedUntil))
 }
 
 func (m *Model) t(key string) string { return T(m.lang, key) }
@@ -232,6 +253,17 @@ func (m *Model) say(text string) {
 
 // Update handles one message.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, ok := msg.(tickMsg); ok {
+		m.ticking = false
+	}
+	model, cmd := m.update(msg)
+	if m.moving() && !m.ticking {
+		cmd = tea.Batch(cmd, m.tick())
+	}
+	return model, cmd
+}
+
+func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if cmd, handled := m.gameUpdate(msg); handled {
 		return m, cmd
 	}
@@ -340,7 +372,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen, m.focus = screen(msg), 0
 		}
 	case tickMsg:
-		return m, m.tick()
+		return m, nil
 	case tea.PasteMsg:
 		if field := m.activeField(); field != nil {
 			field.Insert(msg.Content)
@@ -414,7 +446,7 @@ func (m *Model) startPreflight() tea.Cmd {
 
 func (m *Model) startInstall() tea.Cmd {
 	ctx, cancel := context.WithCancel(context.Background())
-	m.cancel, m.control = cancel, make(chan bool, 1)
+	m.cancel, m.control, m.cancelling = cancel, make(chan bool, 1), false
 	m.screen, m.progress, m.instAt, m.showLog = scInstall, setup.Progress{}, time.Now(), false
 	m.instCh = m.cfg.Backend.Install(ctx, m.opts, m.control)
 	return m.nextProgress()
@@ -423,6 +455,7 @@ func (m *Model) startInstall() tea.Cmd {
 // leaveInstall returns from the cockpit to where the installation was
 // confirmed.
 func (m *Model) leaveInstall() {
+	m.cancelling = false
 	m.screen, m.focus, m.preOn, m.preDone, m.checks = scConfigure, 0, false, false, nil
 	if m.fromPanel && m.existing != nil {
 		m.screen = scPanel
@@ -443,7 +476,8 @@ func (m *Model) keyPress(msg tea.KeyPressMsg) tea.Cmd {
 	key := msg.String()
 	switch key {
 	case "ctrl+c":
-		if m.screen == scInstall && !m.progress.Finished {
+		// A failed install is over: ctrl+c quits like anywhere else.
+		if m.screen == scInstall && !m.progress.Finished && m.progress.Err == nil {
 			if !m.cancelling && m.armedFor("cancel") {
 				m.cancelling = true
 				m.cancel()

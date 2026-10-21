@@ -279,6 +279,9 @@ func (m *Model) clickRow(id string) tea.Cmd {
 			}
 		}
 	case scMatch, scHost:
+		if m.screen == scMatch && m.game.catalog == nil {
+			return nil
+		}
 		rows, activate := m.matchRows(), m.activateMatch
 		if m.screen == scHost {
 			rows, activate = m.hostRows(), m.activateHost

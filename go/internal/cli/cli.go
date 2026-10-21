@@ -16,6 +16,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
+
+	"github.com/x86dx2/x86qw/go/internal/semver"
 )
 
 const (
@@ -226,4 +229,40 @@ func LinkUserCommand(root, home string) (string, error) {
 		return "", err
 	}
 	return command, nil
+}
+
+// InstalledVersion is the version root's CLI receipt records, "" when
+// there is none or it cannot be read.
+func InstalledVersion(root string) string {
+	payload, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(cliDir), "receipt"))
+	if err != nil {
+		return ""
+	}
+	var receipt struct {
+		Version string `json:"version"`
+	}
+	if json.Unmarshal(payload, &receipt) != nil {
+		return ""
+	}
+	return receipt.Version
+}
+
+// Replaces reports whether a CLI of version may replace root's: a
+// development build never does, an older release never does, and the
+// same version does only when sameToo is set.
+func Replaces(version, root string, sameToo bool) bool {
+	running, err := semver.Parse(version)
+	if err != nil || slices.Contains(running.Prerelease, "dev") {
+		return false
+	}
+	installed := InstalledVersion(root)
+	if installed == "" {
+		return true
+	}
+	current, err := semver.Parse(installed)
+	if err != nil {
+		return true
+	}
+	order := semver.Compare(running, current)
+	return order > 0 || (order == 0 && sameToo)
 }

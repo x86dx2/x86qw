@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/buildinfo"
 	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/lock"
@@ -33,18 +34,6 @@ var appOpen bool
 
 // interactive is whether the interface can take the terminal.
 func interactive() bool { return !appOpen && stdinIsTerminal() && isTerminal(os.Stdout) }
-
-// installedCopy reports whether this executable is root's own CLI, which
-// cannot be replaced while it runs on Windows.
-func installedCopy(root string) bool {
-	executable, err := os.Executable()
-	if err != nil {
-		return false
-	}
-	running, _ := filepath.EvalSymlinks(executable)
-	installed, _ := filepath.EvalSymlinks(filepath.Join(root, ".x86qw", "cli", cli.BinaryName()))
-	return running != "" && running == installed
-}
 
 // realBackend is the interface's backend for this command line: actions
 // that are x86qw commands run through the dispatcher, their output kept
@@ -101,9 +90,10 @@ func appTarget(target string) string {
 // runApp opens the interface on root, at start ("" is home), and opens it
 // again after each report it hands to the command line.
 func runApp(backend *setup.Real, root, start string, stdout, stderr io.Writer) int {
-	if hasInstallation(root) && !installedCopy(root) {
+	if hasInstallation(root) && cli.Replaces(buildinfo.Version, root, false) {
 		// A newer CLI opening the app publishes itself, as re-running the
-		// bootstrap always did, linked unless the setup said otherwise.
+		// bootstrap always did, linked unless the setup said otherwise;
+		// an older or development build leaves the installed one alone.
 		// A running server holds the lock: then the CLI stays as it is.
 		if held, err := lock.Acquire(root, "install"); err == nil {
 			link := true

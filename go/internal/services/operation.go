@@ -356,12 +356,6 @@ func (op *Operation) Run() (code int) {
 			c.Info(fmt.Sprintf("QTV HTTP: http://%s/", Endpoint(o.QtvBind, o.QtvPort)))
 		}
 	}
-	if capture := os.Getenv("X86QW_SERVICES_ORACLE"); capture != "" {
-		if err := writeOracleCapture(capture, op.Action, specs, journal, session); err != nil {
-			return fail(err)
-		}
-		return 0
-	}
 	result, err := RunProcesses(specs, journal, c, op.Output)
 	if err != nil {
 		return fail(err)
@@ -535,14 +529,6 @@ func (op *Operation) launchBackground(hosted *Hosted) int {
 	arguments := op.backgroundArguments(hosted, logRelative)
 	secrets := op.secrets()
 	request := pyDumps(map[string]any{"format": 1, "project": "x86qw", "secrets": secrets}, false) + "\n"
-	if capture := os.Getenv("X86QW_SERVICES_ORACLE"); capture != "" {
-		document := map[string]any{"action": op.Action, "background": map[string]any{"arguments": toAny(arguments), "request": request}}
-		if err := os.WriteFile(capture, []byte(pyDumps(document, true)+"\n"), 0o600); err != nil {
-			c.Error(err.Error())
-			return 1
-		}
-		return 0
-	}
 	executable, err := os.Executable()
 	if err != nil {
 		c.Error("Não foi possível criar o controlador em segundo plano: " + err.Error())
