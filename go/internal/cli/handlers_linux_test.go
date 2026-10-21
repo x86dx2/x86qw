@@ -18,7 +18,7 @@ func TestLinuxHandlersComeAndGo(t *testing.T) {
 		t.Fatal(err)
 	}
 	entry, _ := os.ReadFile(handlerEntryPath(home))
-	if !strings.Contains(string(entry), "x-scheme-handler/qw") || !strings.Contains(string(entry), `open --target "`+root+`" %u`) {
+	if !strings.Contains(string(entry), "x-scheme-handler/qw") || !strings.Contains(string(entry), "Exec="+root+"/x86qw.sh open --target "+root+" %u") {
 		t.Fatalf("entrada:\n%s", entry)
 	}
 	if err := SetHandlers(t.TempDir(), true, false); err == nil {
