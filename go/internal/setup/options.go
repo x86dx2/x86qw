@@ -90,8 +90,28 @@ type Server struct {
 	Password, Spectators string
 }
 
-// SlotChoices are the player limits offered.
-var SlotChoices = []int{8, 12, 16, 20, 24, 32}
+// The server's defaults, and the limits the setup accepts.
+const (
+	DefaultBasePort  = 27500
+	DefaultQTVPort   = 28000
+	DefaultQWFWDPort = 30000
+	DefaultSlots     = 16
+	MinSlots         = 2
+	MaxSlots         = 32
+	MaxInstances     = 8
+	// MVDSVPathRoom is the longest folder MVDSV still sees every file of:
+	// it cuts paths at 128 bytes, and its deepest files sit about 40 below.
+	MVDSVPathRoom = 88
+)
+
+// PathTooLong reports whether a server installed at target would not see
+// its own maps and progs.
+func PathTooLong(target string) bool { return len(target) > MVDSVPathRoom }
+
+// NameRune is what a nick, a server name or a password may hold: the
+// game's console reads them between quotes, so no quote, backslash or
+// semicolon.
+func NameRune(r rune) bool { return r >= ' ' && r != '"' && r != '\\' && r != ';' && r != 0x7f }
 
 // Ports lists the UDP game ports, one per instance.
 func (s Server) Ports() []int {
@@ -121,6 +141,10 @@ type Options struct {
 	Server      Server
 	Integration Integration
 	Target      string
+	// Upgrade, applied to an existing installation, also brings every
+	// component to its newest version; otherwise only what was added is
+	// installed. It is never recorded.
+	Upgrade bool `json:"-"`
 }
 
 // Defaults is a fresh installation for intent.
@@ -166,61 +190,75 @@ func FakeName(nick string) string {
 	return string(runes)
 }
 
-// Validate reports the first problem that stops the installation.
+// Validate reports the first problem that stops the installation, as a
+// Problem naming the choice it is about.
 func (o Options) Validate() error {
 	switch o.Intent {
 	case Play, Host, Both:
 	default:
-		return fmt.Errorf("intenção inválida: %q", o.Intent)
+		return problem("intent", "v.intent", o.Intent)
 	}
-	if o.Intent.WantsClient() && strings.TrimSpace(o.Nick) == "" {
-		return fmt.Errorf("escolha um nick")
-	}
-	if o.Intent.WantsClient() && !slices.Contains(RulesetKeys, o.Experience) {
-		return fmt.Errorf("ruleset desconhecido: %q", o.Experience)
+	if o.Intent.WantsClient() {
+		nick := strings.TrimSpace(o.Nick)
+		switch {
+		case nick == "":
+			return problem("nick", "v.nick")
+		case strings.IndexFunc(nick, func(r rune) bool { return !NameRune(r) }) >= 0:
+			return problem("nick", "v.nick.chars")
+		case !slices.Contains(RulesetKeys, o.Experience):
+			return problem("experience", "v.ruleset", o.Experience)
+		}
 	}
 	if o.Intent.WantsServer() {
-		s := o.Server
-		if strings.TrimSpace(s.Name) == "" {
-			return fmt.Errorf("dê um nome ao servidor")
+		return o.Server.Validate()
+	}
+	return nil
+}
+
+// Validate reports the first problem that stops the server from starting.
+func (s Server) Validate() error {
+	if strings.TrimSpace(s.Name) == "" {
+		return problem("server.name", "v.name")
+	}
+	if strings.IndexFunc(s.Name, func(r rune) bool { return !NameRune(r) }) >= 0 {
+		return problem("server.name", "v.name.chars")
+	}
+	if len(s.Instances) == 0 || len(s.Instances) > MaxInstances {
+		return problem("server.instances", "v.instances")
+	}
+	if s.Slots != 0 && (s.Slots < MinSlots || s.Slots > MaxSlots) {
+		return problem("server.slots", "v.slots", s.Slots)
+	}
+	for _, secret := range []struct{ field, value string }{{"server.password", s.Password}, {"server.password", s.Spectators}, {"server.rcon", s.Rcon}} {
+		if strings.IndexFunc(secret.value, func(r rune) bool { return !NameRune(r) }) >= 0 {
+			return problem(secret.field, "v.secrets")
 		}
-		if len(s.Instances) == 0 || len(s.Instances) > 8 {
-			return fmt.Errorf("o servidor precisa de 1 a 8 instâncias")
+	}
+	used := map[string]Text{}
+	claim := func(field, proto string, port int, what Text) error {
+		if port < 1025 || port > 65535 {
+			return problem(field, "v.port.range", what, port)
 		}
-		if s.Slots != 0 && (s.Slots < 2 || s.Slots > 32) {
-			return fmt.Errorf("vagas: de 2 a 32, não %d", s.Slots)
+		key := proto + strconv.Itoa(port)
+		if other, ok := used[key]; ok {
+			return problem(field, "v.port.clash", other, what, strings.ToUpper(proto), port)
 		}
-		for _, secret := range []string{s.Password, s.Spectators, s.Rcon} {
-			if strings.ContainsAny(secret, "\"\\\n\r;") {
-				return fmt.Errorf("senhas não aceitam aspas, barras invertidas, ponto e vírgula nem quebras de linha")
-			}
+		used[key] = what
+		return nil
+	}
+	for index, port := range s.Ports() {
+		if err := claim("server.ports", "udp", port, Say("instance", index+1)); err != nil {
+			return err
 		}
-		used := map[string]string{}
-		claim := func(proto string, port int, what string) error {
-			if port < 1025 || port > 65535 {
-				return fmt.Errorf("%s: porta %d fora de 1025–65535", what, port)
-			}
-			key := proto + strconv.Itoa(port)
-			if other, ok := used[key]; ok {
-				return fmt.Errorf("%s e %s usam a mesma porta %s %d", other, what, strings.ToUpper(proto), port)
-			}
-			used[key] = what
-			return nil
+	}
+	if s.QTVPort != 0 {
+		if err := claim("server.qtv", "tcp", s.QTVPort, Raw("QTV")); err != nil {
+			return err
 		}
-		for index, port := range s.Ports() {
-			if err := claim("udp", port, fmt.Sprintf("instância #%d", index+1)); err != nil {
-				return err
-			}
-		}
-		if s.QTVPort != 0 {
-			if err := claim("tcp", s.QTVPort, "QTV"); err != nil {
-				return err
-			}
-		}
-		if s.QWFWDPort != 0 {
-			if err := claim("udp", s.QWFWDPort, "QWFWD"); err != nil {
-				return err
-			}
+	}
+	if s.QWFWDPort != 0 {
+		if err := claim("server.qwfwd", "udp", s.QWFWDPort, Raw("QWFWD")); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -299,14 +337,18 @@ func portFlag(port int) string {
 	return strconv.Itoa(port)
 }
 
-// RecipeJSON is the same recipe as a file; the rcon password is left out.
+// RecipeJSON is the same recipe as a file for `x86qw setup --recipe`; like
+// the command, it carries no password.
 func (o Options) RecipeJSON() ([]byte, error) {
 	copy := o
-	copy.Server.Rcon = ""
-	return json.MarshalIndent(struct {
-		Format int `json:"format"`
-		Options
-	}{1, copy}, "", "  ")
+	copy.Server.Rcon, copy.Server.Password, copy.Server.Spectators = "", "", ""
+	return json.MarshalIndent(recipeFile{1, copy}, "", "  ")
+}
+
+// recipeFile is a recipe as RecipeJSON writes it.
+type recipeFile struct {
+	Format int `json:"format"`
+	Options
 }
 
 // RulesetKeys are the client rulesets `x86qw play` knows, the recommended

@@ -49,8 +49,16 @@ func SaveChoices(target string, options Options) error {
 	if !options.Intent.WantsServer() {
 		return nil
 	}
+	return saveSecrets(target, options.Server)
+}
+
+// saveSecrets writes the passwords the host command reads from files.
+func saveSecrets(target string, server Server) error {
+	if err := privfs.MkdirAll(filepath.Join(target, filepath.FromSlash(choicesDir))); err != nil {
+		return err
+	}
 	for _, secret := range []struct{ file, value string }{
-		{RconFile, options.Server.Rcon}, {PasswordFile, options.Server.Password}, {SpectatorFile, options.Server.Spectators},
+		{RconFile, server.Rcon}, {PasswordFile, server.Password}, {SpectatorFile, server.Spectators},
 	} {
 		path := filepath.Join(target, filepath.FromSlash(secret.file))
 		if secret.value == "" {
@@ -73,10 +81,10 @@ func (s Server) bind() string {
 	return "0.0.0.0"
 }
 
-// slots is the player limit, 16 when none was chosen.
+// slots is the player limit, the default when none was chosen.
 func (s Server) slots() int {
 	if s.Slots == 0 {
-		return 16
+		return DefaultSlots
 	}
 	return s.Slots
 }
@@ -92,7 +100,7 @@ func LoadChoices(target string) (*Options, error) {
 	}
 	var options Options
 	if err := json.Unmarshal(payload, &options); err != nil {
-		return nil, fmt.Errorf("escolhas do setup ilegíveis: %w", err)
+		return nil, problem("", "err.choices", err.Error())
 	}
 	options.Target = target
 	return &options, nil
@@ -119,7 +127,7 @@ func writePrivate(path string, payload []byte) error {
 // in the game afterwards are kept.
 func ClientConfig(o Options, stamp int64) string {
 	var b strings.Builder
-	line := func(name, value string) { fmt.Fprintf(&b, "%-24s %q\n", name, value) }
+	line := func(name, value string) { fmt.Fprintf(&b, "%-24s %s\n", name, cfgQuote(value)) }
 	b.WriteString("// x86QW setup: escolhas do instalador, aplicadas uma vez a cada vez que mudam.\n")
 	b.WriteString("// Gerado por x86qw setup; mudanças feitas dentro do jogo continuam valendo.\n\n")
 	line("name", o.Nick)
@@ -130,7 +138,7 @@ func ClientConfig(o Options, stamp int64) string {
 		{o.Keys.Right, "+moveright"}, {o.Keys.Jump, "+jump"},
 	} {
 		if bind.key != "" && bind.key != "—" {
-			fmt.Fprintf(&b, "bind %-19s %q\n", bind.key, bind.action)
+			fmt.Fprintf(&b, "bind %-19s %s\n", bind.key, cfgQuote(bind.action))
 		}
 	}
 	b.WriteString("\n")
@@ -163,11 +171,23 @@ func ClientConfig(o Options, stamp int64) string {
 	b.WriteString("\n")
 	// ezQuake saves user-created variables in config.cfg, so the stamp
 	// outlives the session and the script does not run again.
-	fmt.Fprintf(&b, "set _x86qw_setup %q\n", strconv.FormatInt(stamp, 10))
+	fmt.Fprintf(&b, "set _x86qw_setup %s\n", cfgQuote(strconv.FormatInt(stamp, 10)))
 	// The renderer started before this ran; restart it so the video
 	// choices hold from the first match.
 	b.WriteString("vid_restart\n")
 	return b.String()
+}
+
+// cfgQuote quotes a value for the ezQuake console, which reads what is
+// between quotes as it is: no escapes, so what would end the quote or the
+// command is dropped (Validate already refuses it).
+func cfgQuote(value string) string {
+	return `"` + strings.Map(func(r rune) rune {
+		if !NameRune(r) {
+			return -1
+		}
+		return r
+	}, value) + `"`
 }
 
 var userBlock = regexp.MustCompile(`(?s)// x86qw setup: begin\n.*?// x86qw setup: end\n`)
@@ -199,7 +219,7 @@ func WriteClientConfig(target string, o Options, stamp int64) error {
 		return err
 	}
 	if play.Rulesets[o.Experience] == "" {
-		return fmt.Errorf("ruleset desconhecido: %s", o.Experience)
+		return problem("experience", "err.ruleset", o.Experience)
 	}
 	ruleset, _ := json.MarshalIndent(map[string]any{"format": 1, "project": "x86qw", "ruleset": o.Experience}, "", "  ")
 	return install.SavePersonalFile(target, ".x86qw/launcher/client-ruleset.json", append(ruleset, '\n'))
@@ -216,7 +236,7 @@ func HostOptions(o Options, index int) *services.HostOptions {
 		Game: "ktx", Selection: "ktx", Mode: instance.Mode, Map: instance.Map, ModeGiven: true,
 		Bind: o.Server.bind(), Hostname: o.Server.Name, Port: o.Server.BasePort + index, Maxclients: o.Server.slots(), NoMVD: o.Server.NoRecord,
 		// Unused QTV and proxy keep the host command's own defaults.
-		QtvBind: "127.0.0.1", QtvPort: 28000, ProxyBind: "127.0.0.1", ProxyPort: 30000,
+		QtvBind: "127.0.0.1", QtvPort: DefaultQTVPort, ProxyBind: "127.0.0.1", ProxyPort: DefaultQWFWDPort,
 	}
 	if index == 0 && o.Server.QTVPort != 0 {
 		host.WithQTV, host.QtvBind, host.QtvPort = true, o.Server.bind(), o.Server.QTVPort
@@ -266,13 +286,13 @@ func ServiceCommand(target string, o Options, kind string) []string {
 	if kind == "qtv" {
 		port := s.QTVPort
 		if port == 0 {
-			port = 28000
+			port = DefaultQTVPort
 		}
 		return []string{"qtv", "--target", target, "--bind", s.bind(), "--port", strconv.Itoa(port), "--hostname", s.Name + " QTV", "--background"}
 	}
 	port := s.QWFWDPort
 	if port == 0 {
-		port = 30000
+		port = DefaultQWFWDPort
 	}
 	return []string{"proxy", "--target", target, "--bind", s.bind(), "--port", strconv.Itoa(port), "--background"}
 }

@@ -2,8 +2,6 @@ package setup
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -137,7 +135,7 @@ func (r *Real) Maps(ctx context.Context, target string, m Match) (*MapList, erro
 		}
 	}
 	if game == nil {
-		return nil, fmt.Errorf("jogo não instalado: %s", m.Game)
+		return nil, problem("", "err.game", m.Game)
 	}
 	var mode *play.Mode
 	if game.UsesModeCatalog() {
@@ -161,7 +159,7 @@ func (r *Real) Maps(ctx context.Context, target string, m Match) (*MapList, erro
 // run runs an x86qw command through the command line's dispatcher.
 func (r *Real) run(args []string) error {
 	if r.Run == nil {
-		return errors.New("o comando x86qw não está disponível aqui")
+		return problem("", "err.run")
 	}
 	return r.Run(args)
 }
@@ -198,6 +196,14 @@ func (r *Real) Servers(ctx context.Context, target string) ([]PublicServer, erro
 	return out, nil
 }
 
+// Favorite pins address in the library (on) or unpins it.
+func (r *Real) Favorite(ctx context.Context, target, address string, on bool) error {
+	if on {
+		return maint.AddFavorite(target, address, time.Now())
+	}
+	return maint.RemoveFavorite(target, address)
+}
+
 // Open connects ezQuake to address.
 func (r *Real) Open(ctx context.Context, target, address string) error {
 	if !strings.HasPrefix(strings.ToLower(address), "qw://") {
@@ -220,12 +226,22 @@ func (r *Real) Stack(ctx context.Context, target string) (*Stack, error) {
 	return stack, nil
 }
 
-// StartServer records the server choices and starts every instance.
+// StartServer records the server choices and starts every instance. Only
+// the server's choices matter here: an installation that never recorded a
+// nick still hosts.
 func (r *Real) StartServer(ctx context.Context, target string, options Options) error {
-	if err := options.Validate(); err != nil {
+	if err := options.Server.Validate(); err != nil {
 		return err
 	}
+	if PathTooLong(target) {
+		return problem("", "v.path", len(target), MVDSVPathRoom)
+	}
 	if err := SaveChoices(target, options); err != nil {
+		return err
+	}
+	// The host command reads the passwords from files, whatever the
+	// recorded intent said.
+	if err := saveSecrets(target, options.Server); err != nil {
 		return err
 	}
 	if err := SaveServerPresets(target, options); err != nil {
@@ -241,6 +257,9 @@ func (r *Real) StopServer(ctx context.Context, target string) error {
 
 // StartService records the choices and starts QTV or QWFWD alone.
 func (r *Real) StartService(ctx context.Context, target, kind string, options Options) error {
+	if err := options.Server.Validate(); err != nil {
+		return err
+	}
 	if err := SaveChoices(target, options); err != nil {
 		return err
 	}

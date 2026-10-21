@@ -131,6 +131,7 @@ func TestSnapshots(t *testing.T) {
 	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
 	drive(m, run(m.Init())...)
 	save(m, "dark-13-panel")
+	m.focus = homeRow(m, "update")
 	drive(m, key("enter"))
 	save(m, "dark-14-panel-update")
 }

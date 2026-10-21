@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -91,6 +92,19 @@ func TestRealInstall(t *testing.T) {
 		t.Fatal(last.Err)
 	}
 	t.Logf("%d bytes, %d faixas, %d linhas de log em %s; avisos: %v", last.Total, len(last.Lanes), len(last.Log), time.Since(started).Round(time.Second), last.Warnings)
+	again := options
+	again.Content = "recommended"
+	before := len(existingOrNil(t, r, target).Installed)
+	var applied Progress
+	for progress := range r.Install(context.Background(), again, nil) {
+		if applied.Total != 0 && progress.Total != applied.Total && !progress.Finished {
+			t.Fatalf("o total do apply mudou no caminho: %d → %d", applied.Total, progress.Total)
+		}
+		applied = progress
+	}
+	if applied.Err != nil || !applied.Finished || len(existingOrNil(t, r, target).Installed) <= before {
+		t.Fatalf("apply: %+v", applied.Err)
+	}
 	if !last.Finished || last.Done != last.Total || last.Total == 0 {
 		t.Fatalf("terminou em %d de %d", last.Done, last.Total)
 	}
@@ -121,22 +135,90 @@ func TestRealInstall(t *testing.T) {
 	}
 }
 
+// TestDeepFolderWarnsAServer: the long path is a check of its own, so a
+// folder that is not empty, or already installed, does not hide it.
 func TestDeepFolderWarnsAServer(t *testing.T) {
 	r := &Real{}
-	options := Defaults(Host, filepath.Join(t.TempDir(), strings.Repeat("pasta-funda/", 9), "x86qw"))
-	if check := r.checkFolder(options); check.State != CheckWarning || !strings.Contains(check.Detail, "MVDSV") {
-		t.Fatalf("%+v", check)
+	deep := filepath.Join(t.TempDir(), strings.Repeat("pasta-funda/", 9), "x86qw")
+	os.MkdirAll(deep, 0o755)
+	os.WriteFile(filepath.Join(deep, "alheio.txt"), nil, 0o644)
+	options := Defaults(Host, deep)
+	ids := func() []string {
+		var out []string
+		for _, step := range r.steps(options) {
+			out = append(out, step.id)
+		}
+		return out
+	}
+	if !slices.Contains(ids(), "path") {
+		t.Fatalf("servidor sem a conferência do caminho: %v", ids())
+	}
+	if check := r.checkFolder(options); check.State != CheckWarning || check.Value.Key != "folder.full" {
+		t.Fatalf("pasta: %+v", check)
+	}
+	if check := checkPath(options); check.State != CheckWarning || !strings.Contains(check.Detail.In(LangEN), "MVDSV") {
+		t.Fatalf("caminho: %+v", check)
 	}
 	options.Intent = Play
-	if check := r.checkFolder(options); check.State != CheckOK {
-		t.Fatalf("jogador não precisa do aviso: %+v", check)
+	if slices.Contains(ids(), "path") {
+		t.Fatal("jogador não precisa do aviso")
 	}
+}
+
+// TestPreflightSaysEachCheckStarts: a slow check shows running first.
+func TestPreflightSaysEachCheckStarts(t *testing.T) {
+	r := &Real{CatalogFile: filepath.Join(t.TempDir(), "sem-catalogo.json")}
+	options := Defaults(Play, filepath.Join(t.TempDir(), "x86qw"))
+	var states []CheckState
+	var ids []string
+	for check := range r.Preflight(AnnounceChecks(context.Background()), options) {
+		states, ids = append(states, check.State), append(ids, check.ID)
+	}
+	if len(states) != 8 || states[0] != CheckRunning || states[1] == CheckRunning || ids[0] != ids[1] {
+		t.Fatalf("%v %v", ids, states)
+	}
+	// A printed list, the command line's, gets each check once.
+	count := 0
+	for range r.Preflight(context.Background(), options) {
+		count++
+	}
+	if count != 4 {
+		t.Fatalf("%d linhas sem anúncio", count)
+	}
+}
+
+// TestOfflineInstallationStillOpens: without the published catalog the
+// installation is read from disk and the catalog comes from the inventory.
+func TestOfflineInstallationStillOpens(t *testing.T) {
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, ".x86qw"), 0o755)
+	os.WriteFile(filepath.Join(target, ".x86qw", "state.json"), []byte("{}"), 0o644)
+	os.MkdirAll(filepath.Join(target, ".x86qw", "setup"), 0o755)
+	os.WriteFile(filepath.Join(target, ".x86qw", "setup", "choices.json"), []byte("{"), 0o600)
+	r := &Real{CatalogFile: filepath.Join(t.TempDir(), "sem-catalogo.json")}
+	existing, err := r.Existing(context.Background(), target)
+	if err != nil || existing == nil || existing.UpdatesErr == nil || existing.Note.IsZero() {
+		t.Fatalf("instalação offline: %+v %v", existing, err)
+	}
+	cat, err := r.Catalog(context.Background())
+	if err != nil || cat.Unavailable == nil || len(cat.Components) == 0 || len(cat.Modes) == 0 {
+		t.Fatalf("catálogo offline: %+v %v", cat, err)
+	}
+}
+
+func existingOrNil(t *testing.T, r *Real, target string) *Existing {
+	t.Helper()
+	existing, err := r.Existing(context.Background(), target)
+	if err != nil || existing == nil {
+		t.Fatalf("instalação: %v", err)
+	}
+	return existing
 }
 
 func TestCancelledWorkStillReportsHowItEnded(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	release := make(chan struct{})
-	out := track(ctx, newTracker([]Lane{{ID: "a", Label: "A", Size: 10}}, nil), nil, func(ctx context.Context) ([]string, error) {
+	out := track(ctx, newTracker([]Lane{{ID: "a", Label: "A", Size: 10}}, nil), nil, func(ctx context.Context) ([]Text, error) {
 		<-ctx.Done()
 		<-release // the rollback takes a while
 		return nil, ctx.Err()

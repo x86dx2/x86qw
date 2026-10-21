@@ -94,7 +94,7 @@ func PublicAddress(ctx context.Context, family string) (netip.Addr, error) {
 			return netip.ParseAddr(strings.TrimSpace(value))
 		}
 	}
-	return netip.Addr{}, fmt.Errorf("resposta sem endereço")
+	return netip.Addr{}, problem("", "err.noaddress")
 }
 
 // DetectNetwork gathers the private addresses and both public ones.
@@ -127,7 +127,7 @@ func CheckHostname(ctx context.Context, hostname string, network Network) DNSChe
 	check := DNSCheck{Hostname: hostname}
 	hostname = strings.TrimSuffix(strings.TrimSpace(hostname), ".")
 	if hostname == "" {
-		check.Err = fmt.Errorf("hostname vazio")
+		check.Err = problem("", "err.nohostname")
 		return check
 	}
 	addresses, err := net.DefaultResolver.LookupNetIP(ctx, "ip", hostname)

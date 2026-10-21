@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/x86dx2/x86qw/go/internal/setup"
 )
@@ -44,11 +44,29 @@ type Config struct {
 }
 
 // Result is how the interface ended: the x86qw command to run next, if
-// any, and whether the interface should open again after it.
+// any, and whether the interface should open again after it, in the
+// language and theme it had.
 type Result struct {
-	Next []string
-	Back bool
+	Next  []string
+	Back  bool
+	Lang  Lang
+	Theme string
 }
+
+// Layout and timing.
+const (
+	maxWidth      = 74 // the widest the body grows
+	minWidth      = 60 // smaller terminals get a note instead
+	minHeight     = 18
+	toastFor      = 2600 * time.Millisecond
+	armedFor      = time.Second // how long a double press waits
+	logoInterval  = 83 * time.Millisecond
+	spinInterval  = 33 * time.Millisecond
+	advanceAfter  = 900 * time.Millisecond // the finished install stays on screen
+	dnsDebounce   = 600 * time.Millisecond
+	stackInterval = 2 * time.Second
+	serversFresh  = time.Minute
+)
 
 // Model is the installer program.
 type Model struct {
@@ -59,10 +77,12 @@ type Model struct {
 	game    gameState
 	// cancelling is a cancelled installation still rolling back.
 	cancelling bool
-	theme      Theme
-	glyphs     Glyphs
-	lang       Lang
-	themed     bool // the theme was chosen explicitly or detected
+	// reloading is a finished installation being read again.
+	reloading bool
+	theme     Theme
+	glyphs    Glyphs
+	lang      Lang
+	themed    bool // the theme was chosen explicitly or detected
 
 	w, h int
 
@@ -76,14 +96,23 @@ type Model struct {
 	nick     Field
 	nickFlag bool
 
-	checks  []setup.Check
-	preDone bool
-	preRun  int  // counts preflight runs, so late checks of an old run are ignored
-	preOn   bool // Install was pressed: the preflight shows on the setup screen
-	preCh   <-chan setup.Check
+	checks    []setup.Check
+	preDone   bool
+	preRun    int  // counts preflight runs, so late checks of an old run are ignored
+	preOn     bool // Install was pressed: the preflight shows on the setup screen
+	preCh     <-chan setup.Check
+	preCancel context.CancelFunc
+	// confirmErr is why Install refused the choices; it stays under the
+	// setup until they change.
+	confirmErr error
 
 	focus     int  // focused row on the current screen
-	fromPanel bool // the review was opened from the management panel
+	fromPanel bool // the setup was opened from the app, not the installer
+	// returnTo and returnRow are where esc from the setup goes back to, and
+	// saved the choices to restore then.
+	returnTo  screen
+	returnRow string
+	saved     *setup.Options
 
 	modal *modal
 
@@ -110,6 +139,7 @@ type Model struct {
 	toast      string
 	toastUntil time.Time
 	armed      string
+	armedKey   string // the key that armed it, as the footer names it
 	armedUntil time.Time
 
 	pending tea.Cmd
@@ -117,10 +147,9 @@ type Model struct {
 	tops    map[screen]int // where each screen's body starts; it only moves up
 	speeds  []float64
 
-	hits     []hit
-	hover    string
-	animTick bool
-	started  time.Time
+	hits    []hit
+	hover   string
+	started time.Time
 }
 
 type modal struct {
@@ -155,7 +184,7 @@ func New(cfg Config) *Model {
 	}
 	m.opts = setup.Defaults(setup.Play, cfg.Target)
 	m.nick = NewField("", 15)
-	m.nick.Accept = func(r rune) bool { return r > ' ' && r != '"' && r != ';' }
+	m.nick.Accept = func(r rune) bool { return r > ' ' && setup.NameRune(r) }
 	return m
 }
 
@@ -164,6 +193,9 @@ type catalogMsg struct {
 	existing *setup.Existing
 	err      error
 }
+
+// reloadMsg is the installation read again after an install.
+type reloadMsg catalogMsg
 type checkMsg struct {
 	check setup.Check
 	ok    bool
@@ -190,17 +222,9 @@ type advanceMsg screen
 // Init loads the catalog, looks for an installation, detects the network
 // and asks the terminal for its background.
 func (m *Model) Init() tea.Cmd {
-	backend, target := m.cfg.Backend, m.cfg.Target
+	backend := m.cfg.Backend
 	cmds := []tea.Cmd{
-		func() tea.Msg {
-			ctx := context.Background()
-			catalog, err := backend.Catalog(ctx)
-			if err != nil {
-				return catalogMsg{err: err}
-			}
-			existing, err := backend.Existing(ctx, target)
-			return catalogMsg{catalog, existing, err}
-		},
+		m.loadCatalog(),
 		func() tea.Msg {
 			ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
 			defer cancel()
@@ -214,6 +238,37 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+// loadCatalog reads the catalog and the installation at the target. A
+// catalog that cannot be published still lists the components, and an
+// installation opens without it.
+func (m *Model) loadCatalog() tea.Cmd {
+	backend, target := m.cfg.Backend, m.cfg.Target
+	return func() tea.Msg {
+		ctx := context.Background()
+		catalog, err := backend.Catalog(ctx)
+		if err != nil {
+			return catalogMsg{err: err}
+		}
+		existing, err := backend.Existing(ctx, target)
+		return catalogMsg{catalog, existing, err}
+	}
+}
+
+// reload reads the installation again once an install ends.
+func (m *Model) reload() tea.Cmd {
+	m.reloading = true
+	backend, target := m.cfg.Backend, m.opts.Target
+	return func() tea.Msg {
+		ctx := context.Background()
+		catalog, err := backend.Catalog(ctx)
+		if err != nil {
+			return reloadMsg{err: err}
+		}
+		existing, err := backend.Existing(ctx, target)
+		return reloadMsg{catalog, existing, err}
+	}
+}
+
 // tick drives animation only while something moves: the logo shimmer at
 // about 12 fps, spinners and progress at 30 fps.
 // There is one tick loop at most: it runs while something on screen
@@ -223,16 +278,16 @@ func (m *Model) tick() tea.Cmd {
 		return nil
 	}
 	m.ticking = true
-	interval := 83 * time.Millisecond
+	interval := logoInterval
 	if m.spinning() {
-		interval = 33 * time.Millisecond
+		interval = spinInterval
 	}
 	return tea.Tick(interval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
 // spinning is a spinner or a progress bar on screen.
 func (m *Model) spinning() bool {
-	return (m.screen == scConfigure && m.preOn && !m.preDone) || m.screen == scInstall || (m.screen == scPanel && m.busy) || m.game.acting != "" ||
+	return (m.screen == scConfigure && m.preOn && !m.preDone) || m.screen == scInstall || (m.screen == scPanel && m.busy) || m.game.acting != "" || m.reloading ||
 		m.game.serversLoading || (m.screen == scMatch && m.game.catalog == nil) || (m.screen == scHost && !m.game.stackLoaded) ||
 		(m.catalog == nil && m.err == nil)
 }
@@ -248,7 +303,21 @@ func (m *Model) moving() bool {
 func (m *Model) t(key string) string { return T(m.lang, key) }
 
 func (m *Model) say(text string) {
-	m.toast, m.toastUntil = text, time.Now().Add(2600*time.Millisecond)
+	m.toast, m.toastUntil = text, time.Now().Add(toastFor)
+}
+
+// explain is an error in the interface language.
+func (m *Model) explain(err error) string { return setup.Explain(err, string(m.lang)) }
+
+// in is a backend text in the interface language.
+func (m *Model) in(text setup.Text) string { return text.In(string(m.lang)) }
+
+// size writes bytes the way the interface language writes decimals.
+func (m *Model) size(b int64) string { return setup.FormatSize(b, string(m.lang)) }
+
+// label is a data text (component, game, mode) in the interface language.
+func (m *Model) label(kind, id, text string) string {
+	return setup.Localize(string(m.lang), kind, id, text)
 }
 
 // Update handles one message.
@@ -281,6 +350,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.themed = true
 		}
 	case catalogMsg:
+		if msg.err == nil && msg.existing == nil && msg.catalog.Unavailable != nil {
+			// Nothing installed and nothing to install from: say why; r
+			// tries again.
+			msg.err = msg.catalog.Unavailable
+		}
 		if msg.err != nil {
 			m.err = msg.err
 			break
@@ -290,7 +364,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.opts = m.existing.Options
 			m.nick.Set(m.opts.Nick)
 			m.screen = scPanel
-			if m.cfg.Notice != "" {
+			switch {
+			case !m.existing.Note.IsZero():
+				m.say(m.in(m.existing.Note))
+			case m.cfg.Notice != "":
 				m.say(m.cfg.Notice)
 			}
 			// Home shows the last match, the public servers and the
@@ -321,11 +398,28 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if check.Hostname == m.opts.Server.Hostname {
 			m.dns = &check
 		}
+	case reloadMsg:
+		m.reloading = false
+		if msg.err == nil && msg.existing != nil {
+			m.catalog, m.existing = msg.catalog, msg.existing
+			m.opts = m.existing.Options
+		}
+		if m.screen != scInstall {
+			break
+		}
+		// From the app, the run ends at home; a new installation, or one
+		// with notes to read, ends on the last step of the installer.
+		if m.fromPanel && m.existing != nil && len(m.progress.Notes) == 0 {
+			m.screen, m.panelView, m.saved, m.opts.Upgrade = m.returnTo, "", nil, false
+			m.focusRow(m.returnRow)
+			m.say(m.t("done.applied"))
+			return m, tea.Batch(m.loadMatch(), m.loadStack())
+		}
+		m.screen, m.focus, m.saved = scDone, 0, nil
 	case checkMsg:
 		if !msg.ok {
 			if msg.run == m.preRun {
 				m.preDone = true
-				m.focus = len(m.confirmRows()) - 1
 			}
 			break
 		}
@@ -364,12 +458,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 		if m.progress.Finished {
-			return m, tea.Tick(900*time.Millisecond, func(time.Time) tea.Msg { return advanceMsg(scDone) })
+			return m, tea.Tick(advanceAfter, func(time.Time) tea.Msg { return advanceMsg(scDone) })
 		}
 		return m, m.nextProgress()
 	case advanceMsg:
-		if m.screen == scInstall {
-			m.screen, m.focus = screen(msg), 0
+		if m.screen == scInstall && !m.reloading {
+			return m, m.reload()
 		}
 	case tickMsg:
 		return m, nil
@@ -385,10 +479,20 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.click(m.hitAt(msg.Mouse().X, msg.Mouse().Y))
 		}
 	case tea.MouseWheelMsg:
+		// The wheel moves through lists; the intent is a choice, not a list.
+		key := "down"
 		if msg.Mouse().Button == tea.MouseWheelUp {
-			return m, m.key("up")
+			key = "up"
 		}
-		return m, m.key("down")
+		switch {
+		case m.modal != nil:
+			return m, m.modalNav(key)
+		case m.screen == scIntent:
+			return m, nil
+		case m.screen == scMatch || m.screen == scServers || m.screen == scHost:
+			return m, m.gameKey(tea.KeyPressMsg(keyFor(key)))
+		}
+		return m, m.key(key)
 	case tea.KeyPressMsg:
 		return m, m.keyPress(msg)
 	}
@@ -435,30 +539,83 @@ func (m *Model) resolve(hostname string) tea.Cmd {
 }
 
 // startPreflight runs the checks for the current options under the setup,
-// right above the confirmation.
-func (m *Model) startPreflight() tea.Cmd {
-	m.screen, m.preOn, m.checks, m.preDone = scConfigure, true, nil, false
-	m.focus = len(m.confirmRows()) - 1
-	m.preRun++
-	m.preCh = m.cfg.Backend.Preflight(context.Background(), m.opts)
+// right above the confirmation; the Install button takes the focus when
+// it asked for them, not when an edit runs them again.
+func (m *Model) startPreflight(focusConfirm bool) tea.Cmd {
+	m.stopPreflight()
+	m.screen, m.preOn, m.checks, m.preDone, m.confirmErr = scConfigure, true, nil, false, nil
+	if focusConfirm {
+		m.focus = len(m.confirmRows()) - 1
+	}
+	var ctx context.Context
+	ctx, m.preCancel = context.WithCancel(setup.AnnounceChecks(context.Background()))
+	m.preCh = m.cfg.Backend.Preflight(ctx, m.opts)
 	return m.nextCheck()
 }
 
+// stopPreflight abandons the checks running, so their goroutine ends.
+func (m *Model) stopPreflight() {
+	m.preRun++
+	if m.preCancel != nil {
+		m.preCancel()
+		m.preCancel = nil
+	}
+}
+
 func (m *Model) startInstall() tea.Cmd {
+	m.stopPreflight()
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel, m.control, m.cancelling = cancel, make(chan bool, 1), false
-	m.screen, m.progress, m.instAt, m.showLog = scInstall, setup.Progress{}, time.Now(), false
+	m.screen, m.progress, m.instAt, m.showLog, m.speeds = scInstall, setup.Progress{}, time.Now(), false, nil
 	m.instCh = m.cfg.Backend.Install(ctx, m.opts, m.control)
 	return m.nextProgress()
 }
 
 // leaveInstall returns from the cockpit to where the installation was
-// confirmed.
+// confirmed: the setup, or the app it was opened from.
 func (m *Model) leaveInstall() {
 	m.cancelling = false
 	m.screen, m.focus, m.preOn, m.preDone, m.checks = scConfigure, 0, false, false, nil
 	if m.fromPanel && m.existing != nil {
-		m.screen = scPanel
+		m.backFromSetup()
+	}
+}
+
+// openSetup opens the setup from the app, remembering where it came from
+// and the choices to put back if it is left.
+func (m *Model) openSetup(from screen, row string) {
+	saved := cloneOptions(m.opts)
+	m.saved, m.returnTo, m.returnRow = &saved, from, row
+	m.screen, m.focus, m.fromPanel, m.preOn, m.confirmErr = scConfigure, 0, true, false, nil
+}
+
+// backFromSetup returns to the app screen the setup was opened from, with
+// the choices as they were.
+func (m *Model) backFromSetup() {
+	m.stopPreflight()
+	if m.saved != nil {
+		m.opts = *m.saved
+	}
+	m.saved, m.preOn, m.preDone, m.checks, m.confirmErr = nil, false, false, nil, nil
+	m.opts.Upgrade = false
+	m.screen, m.panelView = m.returnTo, ""
+	m.focusRow(m.returnRow)
+}
+
+// focusRow puts the focus on the row id of the current screen.
+func (m *Model) focusRow(id string) {
+	var rows []reviewRow
+	switch m.screen {
+	case scPanel:
+		rows = m.panelRows()
+	case scHost:
+		rows = m.hostRows()
+	}
+	m.focus = 0
+	for index, row := range rows {
+		if row.id == id {
+			m.focus = index
+		}
 	}
 }
 
@@ -468,8 +625,20 @@ func (m *Model) armedFor(what string) bool {
 		m.armed = ""
 		return true
 	}
-	m.armed, m.armedUntil = what, time.Now().Add(time.Second)
+	m.armed, m.armedUntil = what, time.Now().Add(armedFor)
 	return false
+}
+
+// quit is the one way out: the key pressed twice.
+func (m *Model) quit(key string) tea.Cmd {
+	if m.armed == "quit" && m.armedKey != key {
+		m.armed = ""
+	}
+	m.armedKey = key
+	if m.armedFor("quit") {
+		return tea.Quit
+	}
+	return nil
 }
 
 func (m *Model) keyPress(msg tea.KeyPressMsg) tea.Cmd {
@@ -484,10 +653,7 @@ func (m *Model) keyPress(msg tea.KeyPressMsg) tea.Cmd {
 			}
 			return nil
 		}
-		if m.armedFor("quit") {
-			return tea.Quit
-		}
-		return nil
+		return m.quit(key)
 	case "ctrl+t":
 		if m.theme.Dark {
 			m.theme = Day()
@@ -505,6 +671,16 @@ func (m *Model) keyPress(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	if m.modal != nil {
 		return m.modalKey(msg)
+	}
+	if m.err != nil {
+		switch key {
+		case "r":
+			m.err = nil
+			return m.loadCatalog()
+		case "esc":
+			return m.quit(key)
+		}
+		return nil
 	}
 	switch m.screen {
 	case scMatch, scServers, scHost:
@@ -538,9 +714,7 @@ func (m *Model) key(key string) tea.Cmd {
 		case "enter", "right":
 			return m.leaveIntent()
 		case "esc":
-			if m.armedFor("quit") {
-				return tea.Quit
-			}
+			return m.quit(key)
 		}
 	case scConfigure:
 		rows := m.confirmRows()
@@ -559,10 +733,10 @@ func (m *Model) key(key string) tea.Cmd {
 			switch {
 			case m.preOn:
 				// Fold the preflight away; Install brings it back.
-				m.preRun++
+				m.stopPreflight()
 				m.preOn, m.preDone, m.checks = false, false, nil
 			case m.fromPanel:
-				m.screen, m.focus = scPanel, 1
+				m.backFromSetup()
 			default:
 				m.screen, m.focus = scIntent, 0
 			}
@@ -587,15 +761,20 @@ func (m *Model) key(key string) tea.Cmd {
 		}
 	case scDone:
 		rows := m.doneRows()
+		if listNav(key, &m.focus, len(rows)) {
+			return nil
+		}
 		switch key {
-		case "up", "k":
-			m.focus = (m.focus + len(rows) - 1) % len(rows)
-		case "down", "j", "tab":
-			m.focus = (m.focus + 1) % len(rows)
 		case "enter", "space", " ":
 			return m.activateDone(rows[m.focus].id)
-		case "esc", "q":
-			return tea.Quit
+		case "esc":
+			// The installation exists now: esc goes to its home.
+			if m.existing == nil {
+				return m.quit(key)
+			}
+			m.screen, m.panelView = scPanel, ""
+			m.focusRow("play")
+			return tea.Batch(m.loadMatch(), m.loadStack(), m.loadServers())
 		}
 	case scPanel:
 		if m.busy {
@@ -621,9 +800,31 @@ func (m *Model) leaveIntent() tea.Cmd {
 	return nil
 }
 
+// copyRecipe copies the recipe as the dialog shows it: the command, or
+// the JSON file for x86qw setup --recipe.
 func (m *Model) copyRecipe() tea.Cmd {
 	m.say(m.t("recipe.copied"))
+	if m.modal != nil && m.modal.json {
+		data, _ := m.opts.RecipeJSON()
+		return tea.SetClipboard(string(data))
+	}
 	return tea.SetClipboard(shellJoin(m.opts.Recipe()))
+}
+
+// listNav moves the focus through n rows; it reports whether key did.
+func listNav(key string, focus *int, n int) bool {
+	if n == 0 {
+		return false
+	}
+	switch key {
+	case "up", "k", "shift+tab":
+		*focus = (*focus + n - 1) % n
+	case "down", "j", "tab":
+		*focus = (*focus + 1) % n
+	default:
+		return false
+	}
+	return true
 }
 
 // click routes a mouse click on a region.
@@ -634,9 +835,10 @@ func (m *Model) click(id string) tea.Cmd {
 	case strings.HasPrefix(id, "hint:"):
 		return m.hintKey(strings.TrimPrefix(id, "hint:"))
 	case strings.HasPrefix(id, "intent:"):
+		// Like every row: the first click picks, the second goes on.
 		var index int
 		fmt.Sscanf(id, "intent:%d", &index)
-		if index == m.intent && !m.opts.Intent.WantsClient() {
+		if index == m.intent {
 			return m.leaveIntent()
 		}
 		m.setIntent(index)
@@ -660,7 +862,8 @@ func (m *Model) click(id string) tea.Cmd {
 
 // hintKey turns a clicked footer hint into its key.
 func (m *Model) hintKey(label string) tea.Cmd {
-	keys := map[string]string{"↑↓": "down", "enter": "enter", "esc": "esc", "←": "left", "tab": "tab", "space": " ", "p": "p", "l": "l", "c": "c", "i": "i", "ctrl+c": "ctrl+c", "ctrl+l": "ctrl+l", "ctrl+t": "ctrl+t", "r": "r", "←→": "right"}
+	keys := map[string]string{"↑↓": "down", "enter": "enter", "esc": "esc", "←": "left", "tab": "tab", "space": " ", "p": "p", "l": "l", "c": "c", "i": "i",
+		"f": "f", "v": "v", "ctrl+c": "ctrl+c", "ctrl+l": "ctrl+l", "ctrl+t": "ctrl+t", "ctrl+o": "ctrl+o", "ctrl+r": "ctrl+r", "r": "r", "←→": "right"}
 	key, ok := keys[label]
 	if !ok {
 		return nil
@@ -686,6 +889,14 @@ func keyFor(name string) tea.Key {
 		return tea.Key{Code: 'l', Mod: tea.ModCtrl}
 	case "ctrl+t":
 		return tea.Key{Code: 't', Mod: tea.ModCtrl}
+	case "ctrl+o":
+		return tea.Key{Code: 'o', Mod: tea.ModCtrl}
+	case "ctrl+r":
+		return tea.Key{Code: 'r', Mod: tea.ModCtrl}
+	case "up":
+		return tea.Key{Code: tea.KeyUp}
+	case "right":
+		return tea.Key{Code: tea.KeyRight}
 	case " ":
 		return tea.Key{Code: tea.KeySpace, Text: " "}
 	}
@@ -738,14 +949,14 @@ func (m *Model) View() tea.View {
 	base := lipgloss.NewStyle().Background(t.Base).Width(m.w).Height(m.h).Render("")
 	layers := []*lipgloss.Layer{lipgloss.NewLayer(base)}
 	place := func(content string, x, y int) { layers = append(layers, lipgloss.NewLayer(content).X(x).Y(y)) }
-	if m.w < 60 || m.h < 18 {
+	if m.w < minWidth || m.h < minHeight {
 		msg := t.Style(t.Gray).Render(m.t("small"))
 		place(msg, max(0, (m.w-lipgloss.Width(msg))/2), m.h/2)
 		canvas.Compose(lipgloss.NewCompositor(layers...))
 		view.Content = canvas.Render()
 		return view
 	}
-	width := min(m.w-6, 74)
+	width := min(m.w-6, maxWidth)
 	body := m.body(width)
 	footer, footerHits := hints(t, m.footerHints(), m.w-4, m.hover)
 
@@ -861,8 +1072,13 @@ func (m *Model) View() tea.View {
 		m.hits = append(m.hits, hit{y: m.h - 1, x0: h.x0 + footerX, x1: h.x1 + footerX, id: h.id})
 	}
 	if time.Now().Before(m.toastUntil) {
+		// The row above the footer is kept free for it: nothing else sits
+		// there, so it never covers a button.
 		toast := lipgloss.NewStyle().Foreground(t.Text).Background(t.Visual).Bold(true).Render(" " + m.toast + " ")
-		place(toast, m.w-lipgloss.Width(toast)-2, m.h-3)
+		if lipgloss.Width(toast) > m.w-4 {
+			toast = ansi.Truncate(toast, m.w-4, "…")
+		}
+		place(toast, m.w-lipgloss.Width(toast)-2, m.h-2)
 	}
 	if len(layers) > 0 {
 		canvas.Compose(lipgloss.NewCompositor(layers...))
@@ -902,11 +1118,13 @@ func (m *Model) footerHints() [][2]string {
 	if m.armed != "" && time.Now().Before(m.armedUntil) {
 		switch m.armed {
 		case "quit":
-			return [][2]string{{"ctrl+c", m.t("quit.again")}}
+			return [][2]string{{m.armedKey, m.t("quit.again")}}
 		case "cancel":
 			return [][2]string{{"ctrl+c", m.t("cancel.again")}}
 		case "remove":
 			return [][2]string{{"enter", m.t("remove.again")}}
+		case "stop":
+			return [][2]string{{"enter", m.t("stop.again")}}
 		}
 	}
 	if m.modal != nil {
@@ -926,9 +1144,15 @@ func (m *Model) footerHints() [][2]string {
 		}
 		return append(items, [2]string{"enter", m.t("k.ok")}, [2]string{"esc", m.t("k.cancel")})
 	}
+	if m.err != nil {
+		return [][2]string{{"r", m.t("k.retry")}, {"esc", m.t("k.quit")}}
+	}
+	if m.catalog == nil {
+		return [][2]string{{"ctrl+c", m.t("k.quit")}}
+	}
 	switch m.screen {
 	case scIntent:
-		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"ctrl+c", m.t("k.quit")}}
+		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"ctrl+t", m.t("k.theme")}, {"esc", m.t("k.quit")}}
 	case scConfigure:
 		// The main action keeps its i shortcut; on its row, enter is it.
 		action := ""
@@ -951,11 +1175,13 @@ func (m *Model) footerHints() [][2]string {
 		}
 		return append(items, [2]string{"c", m.t("k.copy")}, [2]string{"esc", m.t("k.back")})
 	case scInstall:
-		if m.progress.Err != nil {
+		switch {
+		case m.progress.Err != nil:
 			return [][2]string{{"enter", m.t("k.back")}}
-		}
-		if m.cancelling {
+		case m.cancelling:
 			return [][2]string{{m.spinner(), m.t("inst.cancelling")}}
+		case m.progress.Finished:
+			return [][2]string{{m.spinner(), m.t("inst.finishing")}}
 		}
 		pause := m.t("k.pause")
 		if m.progress.Paused {
@@ -963,32 +1189,50 @@ func (m *Model) footerHints() [][2]string {
 		}
 		return [][2]string{{"p", pause}, {"l", m.t("k.log")}, {"ctrl+c", m.t("k.cancel")}}
 	case scDone:
-		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"esc", m.t("k.quit")}}
+		if m.existing == nil {
+			return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.open")}, {"esc", m.t("k.quit")}}
+		}
+		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.open")}, {"esc", m.t("k.home")}}
 	case scPanel:
 		switch {
 		case m.removed:
 			return [][2]string{{"esc", m.t("k.quit")}}
+		case m.busy && m.panelView == "repair":
+			return [][2]string{{m.spinner(), m.t("verify.running")}}
 		case m.busy:
-			return [][2]string{{"ctrl+c", m.t("k.quit")}}
-		case m.panelView == "":
-			return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.open")}, {"esc", m.t("k.quit")}}
+			return [][2]string{{m.spinner(), m.t("remove.running")}}
+		case m.panelView == "update":
+			return [][2]string{{"enter", m.t("k.apply")}, {"esc", m.t("k.back")}}
+		case m.panelView == "repair":
+			return [][2]string{{"enter", m.t("k.verify")}, {"esc", m.t("k.back")}}
+		case m.panelView == "remove":
+			return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.run")}, {"esc", m.t("k.back")}}
 		}
+		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.open")}, {"ctrl+t", m.t("k.theme")}, {"esc", m.t("k.quit")}}
 	case scMatch:
+		if m.game.catalog == nil || len(m.game.catalog.Games) == 0 {
+			return [][2]string{{"esc", m.t("k.home")}}
+		}
 		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.edit")}, {"p", m.t("k.play")}, {"c", m.t("k.copycmd")}, {"esc", m.t("k.home")}}
 	case scServers:
-		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.join")}, {"ctrl+o", m.t("k.observe")}, {"ctrl+r", m.t("k.refresh")}, {"esc", m.t("k.home")}}
+		return m.serversHints()
 	case scHost:
-		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.open")}, {"esc", m.t("k.home")}}
+		if !m.game.stackLoaded {
+			return [][2]string{{"esc", m.t("k.home")}}
+		}
+		action := m.t("k.open")
+		if rows := m.hostRows(); m.focus >= len(rows)-1 {
+			action = m.t("k.run")
+		}
+		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", action}, {"esc", m.t("k.home")}}
 	}
-	return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"esc", m.t("k.back")}, {"ctrl+c", m.t("k.quit")}}
+	return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"esc", m.t("k.back")}}
 }
 
-// DefaultTarget is where x86QW installs unless told otherwise.
+// DefaultTarget is where x86QW installs unless told otherwise, on every
+// system.
 func DefaultTarget() string {
 	home, _ := os.UserHomeDir()
-	if runtime.GOOS == "windows" {
-		return filepath.Join(home, "Games", "x86qw")
-	}
 	return filepath.Join(home, "Games", "x86qw")
 }
 
@@ -996,7 +1240,11 @@ func DefaultTarget() string {
 func Run(cfg Config) (Result, error) {
 	final, err := tea.NewProgram(New(cfg)).Run()
 	if m, ok := final.(*Model); ok && err == nil {
-		return Result{Next: m.next, Back: m.back}, nil
+		theme := "dark"
+		if !m.theme.Dark {
+			theme = "light"
+		}
+		return Result{Next: m.next, Back: m.back, Lang: m.lang, Theme: theme}, nil
 	}
 	return Result{}, err
 }
