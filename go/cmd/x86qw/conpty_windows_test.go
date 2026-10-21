@@ -51,6 +51,9 @@ func TestAppOpensInARealConsole(t *testing.T) {
 	}
 	startup := &windows.StartupInfoEx{ProcThreadAttributeList: attributes.List()}
 	startup.Cb = uint32(unsafe.Sizeof(*startup))
+	// Null standard handles: without them the app inherits the test's
+	// redirected ones (the runner's pipes) instead of the pseudo console.
+	startup.Flags |= windows.STARTF_USESTDHANDLES
 	line, err := windows.UTF16PtrFromString(windows.EscapeArg(exe) + " --target " + windows.EscapeArg(target))
 	if err != nil {
 		t.Fatal(err)
