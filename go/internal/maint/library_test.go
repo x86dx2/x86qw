@@ -13,7 +13,7 @@ import (
 func TestFavoritesAreNormalizedNewestFirstAndUnique(t *testing.T) {
 	root := t.TempDir()
 	now := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
-	for _, address := range []string{"QW.Example.COM:27500", "outro.example:28501", "qw.example.com:27500"} {
+	for _, address := range []string{"QW.Example.COM:27500", "other.example:28501", "qw.example.com:27500"} {
 		if err := AddFavorite(root, address, now); err != nil {
 			t.Fatal(err)
 		}
@@ -26,16 +26,16 @@ func TestFavoritesAreNormalizedNewestFirstAndUnique(t *testing.T) {
 	for _, entry := range library.Favorites {
 		addresses = append(addresses, entry.Address)
 	}
-	if strings.Join(addresses, ",") != "qw.example.com:27500,outro.example:28501" {
+	if strings.Join(addresses, ",") != "qw.example.com:27500,other.example:28501" {
 		t.Fatalf("favorites: %v", addresses)
 	}
 	if entry := library.Favorites[0]; entry.Origin != "user" || entry.Title != entry.Address || entry.Freshness != "2026-10-21T12:00:00Z" {
 		t.Fatalf("entry: %+v", entry)
 	}
-	if err := RemoveFavorite(root, "OUTRO.example:28501"); err != nil {
+	if err := RemoveFavorite(root, "OTHER.example:28501"); err != nil {
 		t.Fatal(err)
 	}
-	if err := RemoveFavorite(root, "outro.example:28501"); err == nil {
+	if err := RemoveFavorite(root, "other.example:28501"); err == nil {
 		t.Fatal("removing again should say it does not exist")
 	}
 	rendered := RenderLibrary(&Library{Favorites: library.Favorites[:1]})
@@ -52,7 +52,7 @@ func TestFavoritesStopAtTheLimit(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := AddFavorite(root, "mais-um.example:27500", now); err == nil || !strings.Contains(err.Error(), "full") {
+	if err := AddFavorite(root, "one-more.example:27500", now); err == nil || !strings.Contains(err.Error(), "full") {
 		t.Fatalf("the 21st favorite should be refused: %v", err)
 	}
 	// Re-adding one already there only moves it to the top.
@@ -63,7 +63,7 @@ func TestFavoritesStopAtTheLimit(t *testing.T) {
 
 func TestLibraryRejectsBadAddressesAndDocuments(t *testing.T) {
 	root := t.TempDir()
-	for _, address := range []string{"semporta.example", "host:0", "host:70000", "host :27500", "http://host:27500"} {
+	for _, address := range []string{"noport.example", "host:0", "host:70000", "host :27500", "http://host:27500"} {
 		if err := AddFavorite(root, address, time.Now()); err == nil {
 			t.Errorf("%q accepted", address)
 		}

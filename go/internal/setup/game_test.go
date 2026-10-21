@@ -19,7 +19,7 @@ func TestLastMatchRoundTripsAndExpires(t *testing.T) {
 	if !catalog.valid(match) {
 		t.Fatal("the match is still valid")
 	}
-	for _, gone := range []Match{{Game: "pro-x"}, {Game: "ktx", Mode: "removido"}} {
+	for _, gone := range []Match{{Game: "pro-x"}, {Game: "ktx", Mode: "removed"}} {
 		if catalog.valid(gone) {
 			t.Fatalf("%+v is no longer valid", gone)
 		}

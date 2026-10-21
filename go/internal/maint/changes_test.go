@@ -11,9 +11,9 @@ func TestChangesReportAddedModifiedAndDeletedFiles(t *testing.T) {
 	root := managedInstall(t)
 	write(t, filepath.Join(root, "qw", "maps", "x86qw-a.bsp"), "map a edited")
 	os.Remove(filepath.Join(root, "qw", "maps", "x86qw-b.bsp"))
-	write(t, filepath.Join(root, "qw", "meu.cfg"), "bind x")
+	write(t, filepath.Join(root, "qw", "my.cfg"), "bind x")
 	// Operational paths never show up.
-	write(t, filepath.Join(root, "qw", "demos", "outra.mvd"), "demo")
+	write(t, filepath.Join(root, "qw", "demos", "other.mvd"), "demo")
 	write(t, filepath.Join(root, "ezquake", "temp", "x"), "temp")
 	changes, err := InspectChanges(root)
 	if err != nil {
@@ -24,7 +24,7 @@ func TestChangesReportAddedModifiedAndDeletedFiles(t *testing.T) {
 		got = append(got, change.Status+" "+change.Path+" "+change.Component)
 	}
 	// The runtime, PAKs, demos, temp files and the launcher are operational.
-	expected := "A ezquake/configs/config.cfg |M qw/maps/x86qw-a.bsp nquake-maps|D qw/maps/x86qw-b.bsp nquake-maps|A qw/meu.cfg "
+	expected := "A ezquake/configs/config.cfg |M qw/maps/x86qw-a.bsp nquake-maps|D qw/maps/x86qw-b.bsp nquake-maps|A qw/my.cfg "
 	if strings.Join(got, "|") != expected {
 		t.Fatalf("changes:\n%s\nexpected:\n%s", strings.Join(got, "\n"), strings.ReplaceAll(expected, "|", "\n"))
 	}
@@ -40,7 +40,7 @@ func TestChangesRefuseInventoriesThatDisagree(t *testing.T) {
 
 func TestGitignoreListsOperationalAndManagedPaths(t *testing.T) {
 	root := managedInstall(t)
-	record(t, root, "nquake-models", map[string]string{"qw/progs/a b[1].mdl": "modelo"})
+	record(t, root, "nquake-models", map[string]string{"qw/progs/a b[1].mdl": "model"})
 	if err := SyncGitignore(root); err != nil {
 		t.Fatal(err)
 	}

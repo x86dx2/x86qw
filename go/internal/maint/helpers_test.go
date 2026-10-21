@@ -31,7 +31,7 @@ func isolate(t *testing.T) (cache string) {
 // ownedCache creates an installer cache with its ownership marker.
 func ownedCache(t *testing.T, root string) {
 	t.Helper()
-	write(t, filepath.Join(root, "components", "pacote.zip"), "zip")
+	write(t, filepath.Join(root, "components", "package.zip"), "zip")
 	if err := os.WriteFile(filepath.Join(root, cacheMarker), []byte(cacheMarkerValue+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -95,8 +95,8 @@ func managedInstall(t *testing.T) string {
 	root := filepath.Join(t.TempDir(), "x86qw")
 	write(t, filepath.Join(root, "id1", "pak0.pak"), "PACK pak0")
 	write(t, filepath.Join(root, "id1", "pak1.pak"), "PACK pak1")
-	write(t, filepath.Join(root, "ezquake", "configs", "config.cfg"), "name jogador\n")
-	write(t, filepath.Join(root, "qw", "demos", "partida.mvd"), "demo")
+	write(t, filepath.Join(root, "ezquake", "configs", "config.cfg"), "name player\n")
+	write(t, filepath.Join(root, "qw", "demos", "match.mvd"), "demo")
 	spec := catalog.ClientSpecs[1] // Linux x86_64
 	version := "20260101-000000_abcdef0"
 	write(t, filepath.Join(root, spec.Runtime("nightly")), "\x7fELF nightly")
@@ -107,7 +107,7 @@ func managedInstall(t *testing.T) string {
 			"format": "1", "platform": spec.Platform, "architecture": spec.Architecture, "channel": "nightly",
 			"selection": version, "install_name": spec.Runtime("nightly"), "bundle_version": version,
 			"artifact_name": version + spec.NightlySuffix, "artifact_url": "https://example.invalid/" + version + spec.NightlySuffix,
-			"artifact_sha256": sha("artefato"), "binary_sha256": sha("\x7fELF nightly"),
+			"artifact_sha256": sha("artifact"), "binary_sha256": sha("\x7fELF nightly"),
 		},
 	}
 	if _, err := receipt.ParseClient(client.Marshal(), spec.Context("nightly")); err != nil {

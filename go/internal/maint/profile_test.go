@@ -18,9 +18,9 @@ func profiled(t *testing.T) string {
 	write(t, filepath.Join(root, "ezquake", "configs", "config.cfg"), "sensitivity 3\n")
 	write(t, filepath.Join(root, "qw", "x86qw-ktx-user.cfg"), "// ktx\n")
 	write(t, filepath.Join(root, "qtv", "qtv.cfg"), "port 28000\n")
-	write(t, filepath.Join(root, "qw", "demos", "partida.mvd"), "demo")
+	write(t, filepath.Join(root, "qw", "demos", "match.mvd"), "demo")
 	write(t, filepath.Join(root, "ezquake", "sb", "cache", "x"), "cache")
-	write(t, filepath.Join(root, "qw", "ktx.pk3"), "gerenciado")
+	write(t, filepath.Join(root, "qw", "ktx.pk3"), "managed")
 	return root
 }
 
@@ -41,7 +41,7 @@ func TestProfileClassifiesOnlyUserOwnedFiles(t *testing.T) {
 
 func TestProfileBackupRestoresByteForByte(t *testing.T) {
 	root := profiled(t)
-	archive := filepath.Join(t.TempDir(), "perfil.zip")
+	archive := filepath.Join(t.TempDir(), "profile.zip")
 	if _, err := BackupProfile(root, archive); err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestProfileBackupRestoresByteForByte(t *testing.T) {
 // forged writes a profile zip from raw members, manifest included.
 func forged(t *testing.T, members map[string]string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "forjado.zip")
+	path := filepath.Join(t.TempDir(), "forged.zip")
 	file, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
@@ -119,7 +119,7 @@ func TestProfileRestoreRollsBackOnASymlinkedDestination(t *testing.T) {
 		t.Skip("symbolic links need a privilege on Windows")
 	}
 	root := profiled(t)
-	archive := filepath.Join(t.TempDir(), "perfil.zip")
+	archive := filepath.Join(t.TempDir(), "profile.zip")
 	if _, err := BackupProfile(root, archive); err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestInsideUsesTheOSSeparator(t *testing.T) {
 		root:                                       true,
 		filepath.Join(root, "qw", "a.cfg"):         true,
 		filepath.Join(root, "..", "fora.zip"):      false,
-		filepath.Join(root+"-irmao", "a.zip"):      false,
+		filepath.Join(root+"-sibling", "a.zip"):      false,
 		filepath.Join(filepath.Dir(root), "a.zip"): false,
 	} {
 		if inside(name, root) != want {

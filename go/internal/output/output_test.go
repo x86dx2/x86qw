@@ -18,7 +18,7 @@ func TestSuccessEnvelopeIsOneSortedLine(t *testing.T) {
 	}
 	want := `{"command":"version","data":{"target":"<home>/x86qw","version":"2.3.2"},"dry_run":false,"errors":[],"exit_code":0,"ok":true,"schema_version":1}` + "\n"
 	if out.String() != want {
-		t.Fatalf("envelope:\n%s\nesperado:\n%s", out.String(), want)
+		t.Fatalf("envelope:\n%s\nwant:\n%s", out.String(), want)
 	}
 }
 
@@ -51,8 +51,8 @@ func TestFailureEnvelopeCarriesTheError(t *testing.T) {
 
 func TestEnvelopeKeepsTextAsIs(t *testing.T) {
 	var out bytes.Buffer
-	Success("doctor", map[string]any{"summary": "a < b & c > d", "nick": "jogador™"}).Write(&out)
-	if !strings.Contains(out.String(), `"summary":"a < b & c > d"`) || !strings.Contains(out.String(), `"nick":"jogador™"`) {
+	Success("doctor", map[string]any{"summary": "a < b & c > d", "nick": "player™"}).Write(&out)
+	if !strings.Contains(out.String(), `"summary":"a < b & c > d"`) || !strings.Contains(out.String(), `"nick":"player™"`) {
 		t.Fatalf("the text was escaped: %s", out.String())
 	}
 }

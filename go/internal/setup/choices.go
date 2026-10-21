@@ -108,7 +108,7 @@ func LoadChoices(target string) (*Options, error) {
 
 func writePrivate(path string, payload []byte) error {
 	if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
-		return fmt.Errorf("caminho privado inseguro: %s", path)
+		return fmt.Errorf("unsafe private path: %s", path)
 	}
 	temporary := path + ".tmp"
 	defer os.Remove(temporary)

@@ -141,7 +141,7 @@ func TestDeepFolderWarnsAServer(t *testing.T) {
 	r := &Real{}
 	deep := filepath.Join(t.TempDir(), strings.Repeat("deep-folder/", 9), "x86qw")
 	os.MkdirAll(deep, 0o755)
-	os.WriteFile(filepath.Join(deep, "alheio.txt"), nil, 0o644)
+	os.WriteFile(filepath.Join(deep, "foreign.txt"), nil, 0o644)
 	options := Defaults(Host, deep)
 	ids := func() []string {
 		var out []string
@@ -314,7 +314,7 @@ func TestRealResolve(t *testing.T) {
 	if all == nil || bots == nil || ctf == nil || !bots.Narrowed || len(bots.Maps) >= len(all.Maps) || !ctf.Narrowed || len(ctf.Maps) >= len(all.Maps) {
 		t.Fatalf("maps: all %v, bots %v, ctf %v", all, bots, ctf)
 	}
-	for _, refused := range []play.Request{{Mode: "duel", Map: "nao-existe"}, {Mode: "duel", Channel: "nightly"}, {Game: "pro-x"}} {
+	for _, refused := range []play.Request{{Mode: "duel", Map: "missing"}, {Mode: "duel", Channel: "nightly"}, {Game: "pro-x"}} {
 		if _, err := play.Resolve(target, refused); err == nil {
 			t.Fatalf("%+v should be refused", refused)
 		}

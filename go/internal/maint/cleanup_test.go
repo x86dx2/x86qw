@@ -15,13 +15,13 @@ func cluttered(t *testing.T, root string) {
 	t.Helper()
 	write(t, filepath.Join(root, "ezquake", "sb", "cache", "servidores"), "cache")
 	write(t, filepath.Join(root, "ezquake", "temp", "x"), "temp")
-	write(t, filepath.Join(root, "fortress", "baixando.tmp"), "parcial")
-	write(t, filepath.Join(root, "fortress", "progs", "baixado.mdl"), "downloaded from the server")
-	write(t, filepath.Join(root, "td2", "demos", "vazia.mvd"), "")
+	write(t, filepath.Join(root, "fortress", "downloading.tmp"), "parcial")
+	write(t, filepath.Join(root, "fortress", "progs", "downloaded.mdl"), "downloaded from the server")
+	write(t, filepath.Join(root, "td2", "demos", "empty.mvd"), "")
 	write(t, filepath.Join(root, "td2", "demos", "boa.mvd"), "demo")
 	write(t, filepath.Join(root, "qw", "qconsole.log"), "log")
 	write(t, filepath.Join(root, "logs", "servidor.log"), "log")
-	record(t, root, "team-fortress", map[string]string{"fortress/progs/gerenciado.mdl": "do pacote"})
+	record(t, root, "team-fortress", map[string]string{"fortress/progs/managed.mdl": "from the package"})
 }
 
 func TestCleanupRemovesOnlyRegenerableData(t *testing.T) {
@@ -33,12 +33,12 @@ func TestCleanupRemovesOnlyRegenerableData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, gone := range []string{"ezquake/sb/cache", "ezquake/temp", "fortress/baixando.tmp", "fortress/progs/baixado.mdl", "td2/demos/vazia.mvd"} {
+	for _, gone := range []string{"ezquake/sb/cache", "ezquake/temp", "fortress/downloading.tmp", "fortress/progs/downloaded.mdl", "td2/demos/empty.mvd"} {
 		if exists(filepath.Join(root, filepath.FromSlash(gone))) {
 			t.Errorf("%s should be gone", gone)
 		}
 	}
-	for _, kept := range []string{"fortress/progs/gerenciado.mdl", "td2/demos/boa.mvd", "qw/qconsole.log", "logs/servidor.log", "id1/pak0.pak"} {
+	for _, kept := range []string{"fortress/progs/managed.mdl", "td2/demos/boa.mvd", "qw/qconsole.log", "logs/servidor.log", "id1/pak0.pak"} {
 		if !exists(filepath.Join(root, filepath.FromSlash(kept))) {
 			t.Errorf("%s should have stayed", kept)
 		}
@@ -62,7 +62,7 @@ func TestCleanupWithPersonalDataTakesLogsAndDemos(t *testing.T) {
 		}
 	}
 	// Without --downloads, files the client fetched stay.
-	if !exists(filepath.Join(root, "fortress", "progs", "baixado.mdl")) {
+	if !exists(filepath.Join(root, "fortress", "progs", "downloaded.mdl")) {
 		t.Error("without downloads, the downloaded file should stay")
 	}
 	if result.Personal != 3 {

@@ -19,7 +19,7 @@ func TestReplacesNeverDowngrades(t *testing.T) {
 		want    bool
 	}{
 		{"2.3.2", false, true}, {"2.3.1", false, false}, {"2.3.1", true, true},
-		{"2.3.0", true, false}, {"0.0.0-dev", true, false}, {"lixo", true, false},
+		{"2.3.0", true, false}, {"0.0.0-dev", true, false}, {"junk", true, false},
 	} {
 		if got := Replaces(c.version, root, c.same); got != c.want {
 			t.Fatalf("%s (same=%v): %v", c.version, c.same, got)
