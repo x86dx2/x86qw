@@ -64,7 +64,7 @@ func (i Instance) String() string {
 func parseInstance(value string) (Instance, error) {
 	parts := strings.Split(value, ":")
 	if len(parts) < 3 || len(parts) > 4 || parts[0] == "" || parts[1] == "" || (len(parts) == 4 && parts[3] != "bots") {
-		return Instance{}, usagef("use MODO:MAPA:PORTA ou MODO:MAPA:PORTA:bots, não %q", value)
+		return Instance{}, usagef("use MODE:MAP:PORT or MODE:MAP:PORT:bots, not %q", value)
 	}
 	instance := Instance{Mode: parts[0], Map: parts[1], Bots: len(parts) == 4}
 	if err := boundedInteger(1024, 65535, &instance.Port)(parts[2]); err != nil {
@@ -103,10 +103,10 @@ func boundedInteger(minimum, maximum int, target *int) func(string) error {
 	return func(value string) error {
 		parsed, err := strconv.Atoi(strings.TrimSpace(value))
 		if err != nil {
-			return usagef("deve ser um número inteiro")
+			return usagef("must be a whole number")
 		}
 		if parsed < minimum || parsed > maximum {
-			return usagef("deve estar entre %d e %d", minimum, maximum)
+			return usagef("must be between %d and %d", minimum, maximum)
 		}
 		*target = parsed
 		return nil
@@ -134,30 +134,30 @@ func choicePointer(target **string, choices ...string) func(string) error {
 				return nil
 			}
 		}
-		return usagef("escolha inválida: '%s' (use %s)", value, strings.Join(choices, ", "))
+		return usagef("invalid choice: '%s' (use %s)", value, strings.Join(choices, ", "))
 	}
 }
 
 // common declares what every service command takes; service adds what
 // only host, qtv and proxy do: the app screen and the background run.
 func common(p *cliargs.Parser, c *Common, service bool) {
-	p.String(&c.Target, "DESTINO", "pasta da instalação", "--target")
-	p.Bool(&c.Verbose, "detalhes técnicos", "-v", "--verbose")
-	p.Bool(&c.NoColor, "sem cores", "--no-color")
+	p.String(&c.Target, "TARGET", "installation folder", "--target")
+	p.Bool(&c.Verbose, "technical details", "-v", "--verbose")
+	p.Bool(&c.NoColor, "no colors", "--no-color")
 	if service {
-		p.Bool(&c.Menu, "abre a tela de servidor do app", "--menu")
-		p.Bool(&c.Background, "roda em segundo plano", "--background")
+		p.Bool(&c.Menu, "opens the app's server screen", "--menu")
+		p.Bool(&c.Background, "runs in the background", "--background")
 		p.Bool(&c.BackgroundChild, "", "--background-child")
-		p.String(&c.BackgroundLog, "ARQUIVO", "", "--background-log")
+		p.String(&c.BackgroundLog, "FILE", "", "--background-log")
 		p.Hidden("--background-child")
 		p.Hidden("--background-log")
 	}
 }
 
 func passwordSource(p *cliargs.Parser, what string, value *string, prompt *bool, file *string, names []string, promptFlag, fileFlag string) {
-	p.String(value, "SENHA", "senha "+what+" (aparece na lista de processos; prefira o arquivo)", names...)
-	p.Bool(prompt, "pergunta a senha "+what, promptFlag)
-	p.String(file, "ARQUIVO", "lê a senha "+what+" de um arquivo", fileFlag)
+	p.String(value, "PASSWORD", what+" password (shows in the process list; prefer the file)", names...)
+	p.Bool(prompt, "asks for the "+what+" password", promptFlag)
+	p.String(file, "FILE", "reads the "+what+" password from a file", fileFlag)
 	p.Exclusive(append(append([]string{}, names...), promptFlag, fileFlag)...)
 }
 
@@ -170,10 +170,10 @@ type hostFlags struct {
 
 func hostParser(o *HostOptions, k *play.Options, f *hostFlags) *cliargs.Parser {
 	p := cliargs.New()
-	p.Value(func(value string) error { o.Mode, o.ModeGiven = value, true; return nil }, "MODO", "modo KTX: duel, 2on2, 4on4, ffa, ctf, race...", "--mode")
-	p.String(&o.Map, "MAPA", "mapa inicial", "--map")
-	p.Value(func(value string) error { f.botsGiven = true; return boundedInteger(1, 31, &f.bots)(value) }, "N", "quantos Frogbots entram (1 a 31)", "--bots")
-	p.Bool(&k.FillBots, "completa as vagas com Frogbots", "--fill-bots")
+	p.Value(func(value string) error { o.Mode, o.ModeGiven = value, true; return nil }, "MODE", "KTX mode: duel, 2on2, 4on4, ffa, ctf, race...", "--mode")
+	p.String(&o.Map, "MAP", "starting map", "--map")
+	p.Value(func(value string) error { f.botsGiven = true; return boundedInteger(1, 31, &f.bots)(value) }, "N", "how many Frogbots join (1 to 31)", "--bots")
+	p.Bool(&k.FillBots, "fills the free slots with Frogbots", "--fill-bots")
 	p.Exclusive("--bots", "--fill-bots")
 	p.Value(func(value string) error {
 		f.skillGiven = true
@@ -187,42 +187,42 @@ func hostParser(o *HostOptions, k *play.Options, f *hostFlags) *cliargs.Parser {
 		}
 		f.skill = strconv.Itoa(parsed)
 		return nil
-	}, "1-20|random", "habilidade dos bots", "--bot-skill")
-	p.Choice(&f.weapon, []string{"random", "1", "2", "3", "4", "5", "6", "7", "8"}, "arma inicial dos bots", "--bot-weapon")
-	p.Value(func(value string) error { f.healthGiven = true; return boundedInteger(1, 300, &f.health)(value) }, "N", "vida dos bots (1 a 300)", "--bot-health")
-	p.Bool(&f.on, "bots largam a mochila ao morrer", "--bot-break-on-death")
-	p.Bool(&f.off, "bots não largam a mochila", "--no-bot-break-on-death")
+	}, "1-20|random", "bot skill", "--bot-skill")
+	p.Choice(&f.weapon, []string{"random", "1", "2", "3", "4", "5", "6", "7", "8"}, "bots' starting weapon", "--bot-weapon")
+	p.Value(func(value string) error { f.healthGiven = true; return boundedInteger(1, 300, &f.health)(value) }, "N", "bot health (1 to 300)", "--bot-health")
+	p.Bool(&f.on, "bots drop their backpack when they die", "--bot-break-on-death")
+	p.Bool(&f.off, "bots keep their backpack", "--no-bot-break-on-death")
 	p.Exclusive("--bot-break-on-death", "--no-bot-break-on-death")
-	p.Choice(&f.names, []string{"default", "x86qw", "one-piece", "personal"}, "nomes dos bots", "--bot-names")
-	p.Value(choicePointer(&k.CTFHook, "smooth", "fast", "classic", "crhook", "off"), "smooth|fast|classic|crhook|off", "gancho do CTF", "--ctf-hook")
-	p.Value(choicePointer(&k.CTFRunes, "on", "off"), "on|off", "runas do CTF", "--ctf-runes")
-	p.Bool(&k.CTFBasedSpawn, "CTF nasce na base", "--ctf-based-spawn")
-	p.Value(choicePointer(&k.RaceStyle, "solo", "simultaneous", "match"), "solo|simultaneous|match", "estilo da Race", "--race-style")
-	p.Value(choicePointer(&k.RaceScoring, "win", "scaled", "formula1"), "win|scaled|formula1", "pontuação da Race", "--race-scoring")
-	p.Value(bindFlag(&o.Bind), "IP", "endereço onde o servidor escuta (padrão 127.0.0.1)", "--bind")
-	p.Int(&o.Port, 1024, 65535, "PORTA", "porta UDP do servidor (padrão 28501)", "--port")
-	p.String(&o.Hostname, "NOME", "nome do servidor na lista", "--hostname")
-	p.Int(&o.Maxclients, 1, 32, "N", "vagas (1 a 32, padrão 16)", "--maxclients")
-	passwordSource(p, "de jogador", &o.Password, &o.PromptPassword, &o.PasswordFile, []string{"--password"}, "--prompt-password", "--password-file")
-	passwordSource(p, "de espectador", &o.SpectatorPassword, &o.PromptSpectatorPassword, &o.SpectatorPasswordFile, []string{"--spectator-password"}, "--prompt-spectator-password", "--spectator-password-file")
-	passwordSource(p, "de rcon", &o.RconPassword, &o.PromptRconPassword, &o.RconPasswordFile, []string{"--rcon-password"}, "--prompt-rcon-password", "--rcon-password-file")
-	p.Bool(&o.NoMVD, "não grava demos MVD", "--no-mvd")
-	p.Bool(&o.WithQTV, "inicia o relay QTV junto", "--with-qtv")
-	p.Value(bindFlag(&o.QtvBind), "IP", "endereço do QTV", "--qtv-bind")
-	p.Int(&o.QtvPort, 1024, 65535, "PORTA", "porta TCP do QTV (padrão 28000)", "--qtv-port")
-	passwordSource(p, "do QTV", &o.QtvPassword, &o.PromptQtvPassword, &o.QtvPasswordFile, []string{"--qtv-password"}, "--prompt-qtv-password", "--qtv-password-file")
-	p.Bool(&o.WithProxy, "inicia o proxy QWFWD junto", "--with-proxy")
-	p.Value(bindFlag(&o.ProxyBind), "IP", "endereço do QWFWD", "--proxy-bind")
-	p.Int(&o.ProxyPort, 1024, 65535, "PORTA", "porta UDP do QWFWD (padrão 30000)", "--proxy-port")
-	p.String(&o.Preset, "NOME", "usa um preset salvo", "--preset")
+	p.Choice(&f.names, []string{"default", "x86qw", "one-piece", "personal"}, "bot names", "--bot-names")
+	p.Value(choicePointer(&k.CTFHook, "smooth", "fast", "classic", "crhook", "off"), "smooth|fast|classic|crhook|off", "CTF hook", "--ctf-hook")
+	p.Value(choicePointer(&k.CTFRunes, "on", "off"), "on|off", "CTF runes", "--ctf-runes")
+	p.Bool(&k.CTFBasedSpawn, "CTF players spawn at their base", "--ctf-based-spawn")
+	p.Value(choicePointer(&k.RaceStyle, "solo", "simultaneous", "match"), "solo|simultaneous|match", "Race style", "--race-style")
+	p.Value(choicePointer(&k.RaceScoring, "win", "scaled", "formula1"), "win|scaled|formula1", "Race scoring", "--race-scoring")
+	p.Value(bindFlag(&o.Bind), "IP", "address the server listens on (default 127.0.0.1)", "--bind")
+	p.Int(&o.Port, 1024, 65535, "PORT", "server UDP port (default 28501)", "--port")
+	p.String(&o.Hostname, "NAME", "server name in the list", "--hostname")
+	p.Int(&o.Maxclients, 1, 32, "N", "slots (1 to 32, default 16)", "--maxclients")
+	passwordSource(p, "player", &o.Password, &o.PromptPassword, &o.PasswordFile, []string{"--password"}, "--prompt-password", "--password-file")
+	passwordSource(p, "spectator", &o.SpectatorPassword, &o.PromptSpectatorPassword, &o.SpectatorPasswordFile, []string{"--spectator-password"}, "--prompt-spectator-password", "--spectator-password-file")
+	passwordSource(p, "rcon", &o.RconPassword, &o.PromptRconPassword, &o.RconPasswordFile, []string{"--rcon-password"}, "--prompt-rcon-password", "--rcon-password-file")
+	p.Bool(&o.NoMVD, "does not record MVD demos", "--no-mvd")
+	p.Bool(&o.WithQTV, "starts the QTV relay too", "--with-qtv")
+	p.Value(bindFlag(&o.QtvBind), "IP", "QTV address", "--qtv-bind")
+	p.Int(&o.QtvPort, 1024, 65535, "PORT", "QTV TCP port (default 28000)", "--qtv-port")
+	passwordSource(p, "QTV", &o.QtvPassword, &o.PromptQtvPassword, &o.QtvPasswordFile, []string{"--qtv-password"}, "--prompt-qtv-password", "--qtv-password-file")
+	p.Bool(&o.WithProxy, "starts the QWFWD proxy too", "--with-proxy")
+	p.Value(bindFlag(&o.ProxyBind), "IP", "QWFWD address", "--proxy-bind")
+	p.Int(&o.ProxyPort, 1024, 65535, "PORT", "QWFWD UDP port (default 30000)", "--proxy-port")
+	p.String(&o.Preset, "NAME", "uses a saved preset", "--preset")
 	p.Value(func(value string) error {
 		instance, err := parseInstance(value)
 		if err == nil {
 			o.Instances = append(o.Instances, instance)
 		}
 		return err
-	}, "MODO:MAPA:PORTA[:bots]", "mais um servidor KTX na mesma sessão (repetível)", "--instance")
-	p.String(&o.SavePreset, "NOME", "salva estas opções como preset", "--save-preset")
+	}, "MODE:MAP:PORT[:bots]", "one more KTX server in the same session (repeatable)", "--instance")
+	p.String(&o.SavePreset, "NAME", "saves these options as a preset", "--save-preset")
 	p.Exclusive("--preset", "--save-preset")
 	common(p, &o.Common, true)
 	return p
@@ -240,7 +240,7 @@ func ParseHost(args []string, games []play.Game) (*HostOptions, error) {
 	}
 	positional := p.Positional()
 	if len(positional) > 1 {
-		return nil, usagef("argumentos a mais: %s", strings.Join(positional[1:], " "))
+		return nil, usagef("unexpected arguments: %s", strings.Join(positional[1:], " "))
 	}
 	if len(positional) == 1 {
 		o.Selection = positional[0]
@@ -266,7 +266,7 @@ func ParseHost(args []string, games []play.Game) (*HostOptions, error) {
 	}
 	if o.Preset != "" {
 		if o.Selection != "" {
-			return nil, usagef("--preset não pode ser combinado com o jogo na linha de comando")
+			return nil, usagef("--preset cannot be combined with a game on the command line")
 		}
 		presets, err := LoadPresets(o.Target)
 		if err != nil {
@@ -274,7 +274,7 @@ func ParseHost(args []string, games []play.Game) (*HostOptions, error) {
 		}
 		preset, ok := presets[o.Preset]
 		if !ok {
-			return nil, usagef("preset de hospedagem não encontrado: %s", o.Preset)
+			return nil, usagef("host preset not found: %s", o.Preset)
 		}
 		ApplyPreset(o, preset)
 		o.ModeGiven = o.Mode != ""
@@ -287,26 +287,26 @@ func ParseHost(args []string, games []play.Game) (*HostOptions, error) {
 			}
 		}
 		if o.Game == "" {
-			return nil, usagef("jogo desconhecido: %s", o.Selection)
+			return nil, usagef("unknown game: %s", o.Selection)
 		}
 	}
 	// A dedicated server takes no --bot-team, pacemaker or hidden runners.
 	if o.ModeGiven {
 		if o.Game != "" && o.Game != "ktx" {
-			return nil, usagef("--mode só pode ser usado com o jogo KTX")
+			return nil, usagef("--mode can only be used with the KTX game")
 		}
 		o.Game = "ktx"
 	}
 	modifiers := f.skillGiven || k.BotWeapon != nil || k.BotHealth != nil || k.BotBreakOnDeath != nil || k.BotNamesProfile != "default"
 	if modifiers && !(k.Bots > 0 || k.FillBots) {
-		return nil, usagef("opções --bot-* exigem --bots ou --fill-bots")
+		return nil, usagef("--bot-* options need --bots or --fill-bots")
 	}
 	ktxSpecific := k.Bots > 0 || k.FillBots || f.skillGiven || k.BotWeapon != nil || k.BotHealth != nil ||
 		(k.BotBreakOnDeath != nil && *k.BotBreakOnDeath) || k.BotNamesProfile != "default" ||
 		k.CTFHook != nil || k.CTFRunes != nil || k.CTFBasedSpawn || k.RaceStyle != nil || k.RaceScoring != nil
 	if ktxSpecific {
 		if o.Game != "" && o.Game != "ktx" {
-			return nil, usagef("opções de bots, CTF e Race só podem ser usadas com o jogo KTX")
+			return nil, usagef("bot, CTF and Race options can only be used with the KTX game")
 		}
 		o.Game = "ktx"
 	}
@@ -316,8 +316,8 @@ func ParseHost(args []string, games []play.Game) (*HostOptions, error) {
 
 func proxyParser(o *ProxyOptions) *cliargs.Parser {
 	p := cliargs.New()
-	p.Value(bindFlag(&o.ProxyBind), "IP", "endereço onde o proxy escuta (padrão 127.0.0.1)", "--bind")
-	p.Int(&o.ProxyPort, 1024, 65535, "PORTA", "porta UDP (padrão 30000)", "--port")
+	p.Value(bindFlag(&o.ProxyBind), "IP", "address the proxy listens on (default 127.0.0.1)", "--bind")
+	p.Int(&o.ProxyPort, 1024, 65535, "PORT", "UDP port (default 30000)", "--port")
 	common(p, &o.Common, true)
 	return p
 }
@@ -330,16 +330,16 @@ func ParseProxy(args []string) (*ProxyOptions, error) {
 		return nil, err
 	}
 	if len(p.Positional()) > 0 {
-		return nil, usagef("argumentos a mais: %s", strings.Join(p.Positional(), " "))
+		return nil, usagef("unexpected arguments: %s", strings.Join(p.Positional(), " "))
 	}
 	return o, nil
 }
 
 func qtvParser(o *QtvOptions) *cliargs.Parser {
 	p := cliargs.New()
-	p.Value(bindFlag(&o.Bind), "IP", "endereço onde o QTV escuta (padrão 127.0.0.1)", "--bind")
-	p.Int(&o.Port, 1024, 65535, "PORTA", "porta TCP (padrão 28000)", "--port")
-	p.String(&o.Hostname, "NOME", "nome do relay", "--hostname")
+	p.Value(bindFlag(&o.Bind), "IP", "address QTV listens on (default 127.0.0.1)", "--bind")
+	p.Int(&o.Port, 1024, 65535, "PORT", "TCP port (default 28000)", "--port")
+	p.String(&o.Hostname, "NAME", "relay name", "--hostname")
 	p.Value(func(value string) error {
 		normalized, err := ParseNetworkEndpoint(value)
 		if err != nil {
@@ -347,8 +347,8 @@ func qtvParser(o *QtvOptions) *cliargs.Parser {
 		}
 		o.Upstream = normalized
 		return nil
-	}, "HOST:PORTA", "servidor que o QTV transmite", "--upstream")
-	passwordSource(p, "do QTV", &o.QtvPassword, &o.PromptQtvPassword, &o.QtvPasswordFile, []string{"--password", "--qtv-password"}, "--prompt-qtv-password", "--qtv-password-file")
+	}, "HOST:PORT", "server QTV relays", "--upstream")
+	passwordSource(p, "QTV", &o.QtvPassword, &o.PromptQtvPassword, &o.QtvPasswordFile, []string{"--password", "--qtv-password"}, "--prompt-qtv-password", "--qtv-password-file")
 	common(p, &o.Common, true)
 	return p
 }
@@ -361,15 +361,15 @@ func ParseQtv(args []string) (*QtvOptions, error) {
 		return nil, err
 	}
 	if len(p.Positional()) > 0 {
-		return nil, usagef("argumentos a mais: %s", strings.Join(p.Positional(), " "))
+		return nil, usagef("unexpected arguments: %s", strings.Join(p.Positional(), " "))
 	}
 	return o, nil
 }
 
 func statusParser(o *StatusOptions) *cliargs.Parser {
 	p := cliargs.New()
-	p.Bool(&o.Stop, "encerra a stack ativa", "--stop")
-	p.Bool(&o.Yes, "encerra sem perguntar", "--yes")
+	p.Bool(&o.Stop, "stops the running stack", "--stop")
+	p.Bool(&o.Yes, "stops without asking", "--yes")
 	common(p, &o.Common, false)
 	return p
 }
@@ -383,7 +383,7 @@ func ParseStatus(args []string) (*StatusOptions, error) {
 	}
 	positional := p.Positional()
 	if len(positional) > 1 || (len(positional) == 1 && o.Target != "" && o.Target != positional[0]) {
-		return nil, usagef("argumentos a mais: %s", strings.Join(positional, " "))
+		return nil, usagef("unexpected arguments: %s", strings.Join(positional, " "))
 	}
 	if len(positional) == 1 {
 		o.Target = positional[0]

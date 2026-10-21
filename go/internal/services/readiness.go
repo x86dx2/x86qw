@@ -47,7 +47,7 @@ func PreflightPorts(requests []PortRequest) error {
 	seen := map[int]string{}
 	for _, request := range requests {
 		if previous, ok := seen[request.Port]; ok {
-			return errorf("Porta local duplicada: %d foi solicitada por %s e %s.", request.Port, previous, request.Label)
+			return errorf("Duplicate local port: %d was requested by %s and %s.", request.Port, previous, request.Label)
 		}
 		seen[request.Port] = request.Label
 		address := Endpoint(request.Address, request.Port)
@@ -59,7 +59,7 @@ func PreflightPorts(requests []PortRequest) error {
 			closer, err = net.ListenPacket(network("udp", request.Address), address)
 		}
 		if err != nil {
-			return errorf("A porta %s de %s não está disponível.", address, request.Label)
+			return errorf("Port %s for %s is not available.", address, request.Label)
 		}
 		closer.Close()
 	}
@@ -108,7 +108,7 @@ func waitHTTPReadiness(ctx context.Context, exited func() bool, readiness *Readi
 	var last []byte
 	for time.Now().Before(deadline) {
 		if exited() {
-			return errorf("QTV encerrou antes de ficar pronto.")
+			return errorf("QTV exited before it was ready.")
 		}
 		if connection, err := net.DialTimeout("tcp", address, 400*time.Millisecond); err == nil {
 			connection.SetDeadline(time.Now().Add(400 * time.Millisecond))
@@ -126,9 +126,9 @@ func waitHTTPReadiness(ctx context.Context, exited func() bool, readiness *Readi
 		}
 	}
 	if readiness.Upstream != "" && qtvResponseReady(last, "") {
-		return errorf("QTV respondeu por HTTP, mas não registrou o upstream solicitado.")
+		return errorf("QTV answered over HTTP but did not register the requested upstream.")
 	}
-	return errorf("QTV não respondeu em http://%s/.", address)
+	return errorf("QTV did not answer at http://%s/.", address)
 }
 
 // waitUDPReadiness waits until the runtime has been alive for 1 s and holds
@@ -137,7 +137,7 @@ func waitUDPReadiness(ctx context.Context, exited func() bool, readiness *Readin
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
 		if exited() {
-			return errorf("QWFWD encerrou durante a inicialização.")
+			return errorf("QWFWD exited while starting.")
 		}
 		if err := sleepContext(ctx, 50*time.Millisecond); err != nil {
 			return err
@@ -148,7 +148,7 @@ func waitUDPReadiness(ctx context.Context, exited func() bool, readiness *Readin
 		return nil
 	}
 	probe.Close()
-	return errorf("QWFWD permaneceu vivo, mas não ocupou a porta UDP solicitada.")
+	return errorf("QWFWD stayed alive but did not take the requested UDP port.")
 }
 
 var oob = []byte{0xff, 0xff, 0xff, 0xff}
@@ -178,7 +178,7 @@ func applyStartupRcon(ctx context.Context, startup *StartupRcon) error {
 	var response []byte
 	for {
 		if !time.Now().Before(deadline) {
-			return errorf("MVDSV não respondeu em %s.", Endpoint(startup.Address, startup.Port))
+			return errorf("MVDSV did not answer at %s.", Endpoint(startup.Address, startup.Port))
 		}
 		if err := ctx.Err(); err != nil {
 			return err
@@ -191,7 +191,7 @@ func applyStartupRcon(ctx context.Context, startup *StartupRcon) error {
 				continue
 			}
 			// Only timeouts are retried; ICMP refusals surface as errors.
-			return errorf("Não foi possível iniciar um serviço: %v", err)
+			return errorf("Could not start a service: %v", err)
 		}
 		if bytes.HasPrefix(reply, oob) {
 			response = reply
@@ -200,19 +200,19 @@ func applyStartupRcon(ctx context.Context, startup *StartupRcon) error {
 	}
 	decoded := strings.ToLower(latin1(response))
 	if !strings.Contains(decoded, strings.ToLower(startup.ExpectedMap)) {
-		return errorf("MVDSV respondeu, mas não confirmou o mapa %s.", startup.ExpectedMap)
+		return errorf("MVDSV answered but did not confirm the map %s.", startup.ExpectedMap)
 	}
 	connection.WriteToUDP(append(append([]byte{}, oob...), fmt.Sprintf("rcon %s serverinfo\n", startup.Password)...), destination)
 	serverinfo, err := receive(250 * time.Millisecond)
 	if err != nil {
-		return errorf("MVDSV não confirmou o gamecode carregado.")
+		return errorf("MVDSV did not confirm the loaded gamecode.")
 	}
 	if bytes.Contains(serverinfo, []byte("Bad rcon_password")) {
-		return errorf("MVDSV rejeitou o preflight RCON local.")
+		return errorf("MVDSV rejected the local RCON preflight.")
 	}
 	combined := strings.ToLower(latin1(append(append(response, '\n'), serverinfo...)))
 	if !strings.Contains(combined, strings.ToLower(startup.ExpectedGamedir)) {
-		return errorf("MVDSV não confirmou o gamecode %s.", startup.ExpectedGamedir)
+		return errorf("MVDSV did not confirm the %s gamecode.", startup.ExpectedGamedir)
 	}
 	// KTX's sv_rconlim counts both password checks performed for each packet.
 	if err := sleepContext(ctx, 1050*time.Millisecond); err != nil {
@@ -221,10 +221,10 @@ func applyStartupRcon(ctx context.Context, startup *StartupRcon) error {
 	connection.WriteToUDP(append(append([]byte{}, oob...), fmt.Sprintf("rcon %s exec %s\n", startup.Password, startup.ConfigName)...), destination)
 	reply, err := receive(2 * time.Second)
 	if err != nil {
-		return errorf("MVDSV não confirmou a configuração dedicada.")
+		return errorf("MVDSV did not confirm the dedicated configuration.")
 	}
 	if bytes.Contains(reply, []byte("Bad rcon_password")) {
-		return errorf("MVDSV rejeitou a configuração dedicada por RCON local.")
+		return errorf("MVDSV rejected the dedicated configuration over local RCON.")
 	}
 	return nil
 }

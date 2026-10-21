@@ -101,14 +101,14 @@ func terminateRecordedProcess(entry map[string]any) (string, error) {
 		return "identity_mismatch", nil
 	case "alive":
 	default:
-		return "", errorf("A identidade de um processo órfão ficou inconclusiva.")
+		return "", errorf("The identity of an orphaned process is inconclusive.")
 	}
 	exited, err := terminateProcess(pid, 4*time.Second)
 	if err != nil {
-		return "", errorf("Não foi possível encerrar o processo órfão PID %d.", pid)
+		return "", errorf("Could not stop orphaned process PID %d.", pid)
 	}
 	if !exited {
-		return "", errorf("O processo órfão PID %d não encerrou; estado preservado.", pid)
+		return "", errorf("Orphaned process PID %d did not stop; its state was kept.", pid)
 	}
 	return "terminated", nil
 }
@@ -127,14 +127,14 @@ func serviceJob() (windows.Handle, error) {
 	}
 	handle, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
-		return 0, errorf("Não foi possível criar o Job Object dos serviços (%v).", err)
+		return 0, errorf("Could not create the services' Job Object (%v).", err)
 	}
 	var limits windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION
 	limits.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
 	if _, err := windows.SetInformationJobObject(handle, windows.JobObjectExtendedLimitInformation,
 		uintptr(unsafe.Pointer(&limits)), uint32(unsafe.Sizeof(limits))); err != nil {
 		windows.CloseHandle(handle)
-		return 0, errorf("Não foi possível configurar o Job Object (%v).", err)
+		return 0, errorf("Could not configure the Job Object (%v).", err)
 	}
 	job.handle = handle
 	return handle, nil
@@ -151,10 +151,10 @@ func closeJob() error {
 	closeErr := windows.CloseHandle(job.handle)
 	job.handle = 0
 	if closeErr != nil {
-		return errorf("Não foi possível fechar o Job Object (%v).", closeErr)
+		return errorf("Could not close the Job Object (%v).", closeErr)
 	}
 	if terminateErr != nil {
-		return errorf("O Job Object foi fechado, mas o encerramento explícito da árvore falhou (%v).", terminateErr)
+		return errorf("The Job Object was closed, but stopping the process tree explicitly failed (%v).", terminateErr)
 	}
 	return nil
 }
@@ -163,7 +163,7 @@ func closeJob() error {
 func resumeMainThread(pid int) error {
 	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPTHREAD, 0)
 	if err != nil {
-		return errorf("Não foi possível enumerar a thread inicial do PID %d (%v).", pid, err)
+		return errorf("Could not enumerate the initial thread of PID %d (%v).", pid, err)
 	}
 	defer windows.CloseHandle(snapshot)
 	var threads []uint32
@@ -175,22 +175,22 @@ func resumeMainThread(pid int) error {
 		entry.Size = uint32(unsafe.Sizeof(entry))
 	}
 	if !errors.Is(err, windows.ERROR_NO_MORE_FILES) {
-		return errorf("Não foi possível enumerar a thread inicial do PID %d (%v).", pid, err)
+		return errorf("Could not enumerate the initial thread of PID %d (%v).", pid, err)
 	}
 	if len(threads) != 1 {
-		return errorf("A thread inicial suspensa do PID %d não pôde ser identificada de forma inequívoca.", pid)
+		return errorf("The suspended initial thread of PID %d could not be identified unambiguously.", pid)
 	}
 	thread, err := windows.OpenThread(windows.THREAD_SUSPEND_RESUME, false, threads[0])
 	if err != nil {
-		return errorf("Não foi possível abrir a thread inicial do PID %d (%v).", pid, err)
+		return errorf("Could not open the initial thread of PID %d (%v).", pid, err)
 	}
 	defer windows.CloseHandle(thread)
 	previous, err := windows.ResumeThread(thread)
 	if err != nil {
-		return errorf("Não foi possível retomar o PID %d (%v).", pid, err)
+		return errorf("Could not resume PID %d (%v).", pid, err)
 	}
 	if previous != 1 {
-		return errorf("O PID %d apresentou contagem de suspensão inesperada (%d).", pid, previous)
+		return errorf("PID %d had an unexpected suspend count (%d).", pid, previous)
 	}
 	return nil
 }
@@ -223,12 +223,12 @@ func startDetached(arguments []string, dir string, output *os.File) (*exec.Cmd, 
 	}
 	process, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, uint32(pid))
 	if err != nil {
-		return rollback(errorf("Não foi possível associar PID %d ao Job Object (%v).", pid, err), false)
+		return rollback(errorf("Could not assign PID %d to the Job Object (%v).", pid, err), false)
 	}
 	assignErr := windows.AssignProcessToJobObject(jobHandle, process)
 	windows.CloseHandle(process)
 	if assignErr != nil {
-		return rollback(errorf("Não foi possível associar PID %d ao Job Object (%v).", pid, assignErr), false)
+		return rollback(errorf("Could not assign PID %d to the Job Object (%v).", pid, assignErr), false)
 	}
 	if err := resumeMainThread(pid); err != nil {
 		return rollback(err, true)
@@ -254,7 +254,7 @@ func stopGroups(commands []*exec.Cmd, exited map[int]bool) error {
 		}
 		if processGroupStatus(pid) == "alive" {
 			if _, err := terminateProcess(pid, time.Second); err != nil {
-				return errorf("Não foi possível forçar o encerramento do PID %d.", pid)
+				return errorf("Could not force-stop PID %d.", pid)
 			}
 		}
 	}
@@ -274,16 +274,16 @@ func spawnBackgroundController(executable string, arguments []string, request []
 	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP | windows.DETACHED_PROCESS}
 	stdin, err := command.StdinPipe()
 	if err != nil {
-		return nil, errorf("Não foi possível criar o controlador em segundo plano: %v", err)
+		return nil, errorf("Could not create the background controller: %v", err)
 	}
 	if err := command.Start(); err != nil {
-		return nil, errorf("Não foi possível criar o controlador em segundo plano: %v", err)
+		return nil, errorf("Could not create the background controller: %v", err)
 	}
 	_, writeErr := stdin.Write(request)
 	if err := errors.Join(writeErr, stdin.Close()); err != nil {
 		command.Process.Kill()
 		command.Wait()
-		return nil, errorf("O handoff privado do controlador falhou: %v", err)
+		return nil, errorf("The controller's private handoff failed: %v", err)
 	}
 	return command, nil
 }

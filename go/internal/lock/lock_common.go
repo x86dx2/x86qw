@@ -62,15 +62,15 @@ func Acquire(target, command string) (*Lock, error) {
 		}
 		info, err := os.Lstat(dir)
 		if err != nil || !info.IsDir() {
-			return nil, fmt.Errorf("diretório de controle inseguro: %s", dir)
+			return nil, fmt.Errorf("unsafe control folder: %s", dir)
 		}
 		if err := privfs.Ensure(dir, info); err != nil {
-			return nil, fmt.Errorf("diretório de controle não pôde ser protegido: %s: %w", dir, err)
+			return nil, fmt.Errorf("could not protect the control folder: %s: %w", dir, err)
 		}
 	}
 	self, status := Identity(os.Getpid())
 	if status != "alive" {
-		return nil, errors.New("não foi possível confirmar a identidade desta CLI; nenhuma sessão foi recuperada")
+		return nil, errors.New("could not confirm this CLI's identity; no session was recovered")
 	}
 	kind := "maintenance"
 	if serviceCommands[command] {
@@ -102,14 +102,14 @@ func acquireSerialized(sessions string, owner Owner) (*Lock, error) {
 				return nil, err
 			}
 			if existing.Installation != owner.Installation {
-				return nil, fmt.Errorf("lock de operação pertence a outra instalação: %s", path)
+				return nil, fmt.Errorf("the operation lock belongs to another installation: %s", path)
 			}
 			switch Probe(existing.ControllerPID, existing.ControllerStartToken, existing.ControllerExecutable) {
 			case "alive":
-				return nil, fmt.Errorf("existe uma operação x86QW ativa nesta instalação.\nOperação: %s\nSessão: %s\nControlador: PID %d\n\nEncerre a operação antes de modificar o conteúdo instalado",
+				return nil, fmt.Errorf("an x86QW operation is running in this installation.\nOperation: %s\nSession: %s\nController: PID %d\n\nStop the operation before changing the installed content",
 					existing.Command, existing.SessionID, existing.ControllerPID)
 			case "inconclusive":
-				return nil, fmt.Errorf("não foi possível confirmar se a operação x86QW existente terminou; lock preservado em %s", sessions)
+				return nil, fmt.Errorf("could not confirm whether the existing x86QW operation ended; lock kept in %s", sessions)
 			}
 			candidate := filepath.Join(sessions, ".active.lock.reclaimed."+owner.SessionID)
 			if err := os.Link(path, candidate); err != nil {
@@ -122,7 +122,7 @@ func acquireSerialized(sessions string, owner Owner) (*Lock, error) {
 			continue
 		}
 		if err != nil {
-			return nil, fmt.Errorf("não foi possível criar o lock privado da instalação: %w", err)
+			return nil, fmt.Errorf("could not create the installation's private lock: %w", err)
 		}
 		var payload bytes.Buffer
 		encoder := json.NewEncoder(&payload)
@@ -134,7 +134,7 @@ func acquireSerialized(sessions string, owner Owner) (*Lock, error) {
 		closeErr := file.Close()
 		if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
 			os.Remove(path)
-			return nil, fmt.Errorf("lock de operação não pôde ser gravado: %w", err)
+			return nil, fmt.Errorf("could not write the operation lock: %w", err)
 		}
 		return &Lock{Path: path, Owner: owner, reclaimed: reclaimed}, nil
 	}
@@ -160,21 +160,21 @@ func ReadOwner(path string) (*Owner, error) { return readOwner(path) }
 func readOwner(path string) (*Owner, error) {
 	file, err := os.OpenFile(path, os.O_RDONLY|noFollow, 0)
 	if err != nil {
-		return nil, fmt.Errorf("lock de operação inválido foi preservado para inspeção: %s", path)
+		return nil, fmt.Errorf("invalid operation lock kept for inspection: %s", path)
 	}
 	defer file.Close()
 	payload, err := io.ReadAll(io.LimitReader(file, 65537))
 	if err != nil || len(payload) > 65536 {
-		return nil, fmt.Errorf("lock de operação inválido foi preservado para inspeção: %s", path)
+		return nil, fmt.Errorf("invalid operation lock kept for inspection: %s", path)
 	}
 	var document map[string]any
 	if err := json.Unmarshal(payload, &document); err != nil {
-		return nil, fmt.Errorf("lock de operação inválido foi preservado para inspeção: %s", path)
+		return nil, fmt.Errorf("invalid operation lock kept for inspection: %s", path)
 	}
 	var owner Owner
 	if err := json.Unmarshal(payload, &owner); err != nil || owner.Project != "x86qw" || owner.ControllerPID <= 0 ||
 		owner.Installation == "" || owner.ControllerStartToken == "" {
-		return nil, fmt.Errorf("lock de operação inválido foi preservado para inspeção: %s", path)
+		return nil, fmt.Errorf("invalid operation lock kept for inspection: %s", path)
 	}
 	return &owner, nil
 }
