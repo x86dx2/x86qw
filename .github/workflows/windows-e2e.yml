@@ -55,7 +55,7 @@ jobs:
           $inst = Join-Path $env:RUNNER_TEMP "inst"
           # A recipe on the installation applies its integration.
           & "$inst\x86qw.cmd" setup --target $inst --catalog-file "$PWD\site\public\api\v1\catalog.json" `
-            --intent play --nick tester --content complete --integrate shortcuts,qw-links,demos --yes
+            --intent play --nick tester --content complete --integrate shortcuts,path,qw-links,demos --yes
           if ($LASTEXITCODE -ne 0) { throw "recipe: $LASTEXITCODE" }
           # The command the registry keeps for qw://, with --dry-run so no
           # ezQuake starts on the runner.
@@ -91,6 +91,31 @@ jobs:
             $copied = @(Get-ChildItem (Join-Path $inst "qw\demos") -Filter "x86qw-open-*.mvd" -ErrorAction SilentlyContinue)
           } while ($copied.Count -eq 0 -and (Get-Date) -lt $deadline)
           if ($copied.Count -eq 0) { throw "the demo did not reach the handler" }
+          Get-Process ezquake* -ErrorAction SilentlyContinue | Stop-Process -Force
+      - name: A new terminal finds x86qw on the PATH
+        run: |
+          $ErrorActionPreference = "Stop"
+          $inst = Join-Path $env:RUNNER_TEMP "inst"
+          $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+          if (@($userPath -split ";" | ForEach-Object { $_.TrimEnd("\") }) -notcontains $inst.TrimEnd("\")) { throw "the installation is not on the user PATH: $userPath" }
+          # A new terminal builds its PATH from the registry, not from this one.
+          $fresh = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + $userPath
+          $found = & powershell -NoProfile -Command { param($path) $env:Path = $path; (Get-Command x86qw).Source; x86qw version } -args $fresh
+          Write-Host ($found -join "`n")
+          if (-not ($found -match "x86qw\.cmd$") -or -not ($found -match "^x86QW ")) { throw "a new terminal does not run x86qw" }
+      - name: A local KTX match starts ezQuake
+        run: |
+          $ErrorActionPreference = "Stop"
+          $inst = Join-Path $env:RUNNER_TEMP "inst"
+          & "$inst\x86qw.cmd" play ktx --mode duel --map dm6 --target $inst
+          if ($LASTEXITCODE -ne 0) { throw "play: $LASTEXITCODE" }
+          $deadline = (Get-Date).AddSeconds(30)
+          do {
+            Start-Sleep -Milliseconds 250
+            $started = @(Get-CimInstance Win32_Process -Filter "Name LIKE 'ezquake%'" | Where-Object { $_.CommandLine -like "*k_defmap dm6*" })
+          } while ($started.Count -eq 0 -and (Get-Date) -lt $deadline)
+          if ($started.Count -eq 0) { throw "play did not start ezQuake with the match" }
+          Write-Host "play -> $($started[0].CommandLine)"
           Get-Process ezquake* -ErrorAction SilentlyContinue | Stop-Process -Force
       - name: verify, doctor, shortcuts and ACL
         run: |
@@ -145,6 +170,7 @@ jobs:
           if (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\x86QW.lnk") { throw "the Start Menu shortcut stayed" }
           if (Test-Path "$env:USERPROFILE\Desktop\x86QW.lnk") { throw "the Desktop shortcut stayed" }
           if (Test-Path "HKCU:\Software\Classes\qw") { throw "the qw:// handler stayed in the registry" }
+          if (@([Environment]::GetEnvironmentVariable("Path", "User") -split ";" | ForEach-Object { $_.TrimEnd("\") }) -contains $inst.TrimEnd("\")) { throw "the installation stayed on the user PATH" }
           $deadline = (Get-Date).AddSeconds(30)
           do {
             Start-Sleep -Seconds 1

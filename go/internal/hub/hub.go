@@ -20,9 +20,10 @@ import (
 )
 
 const (
-	// API is the QuakeWorld Hub endpoint for MVDSV servers with players.
-	API        = "https://hubapi.quakeworld.nu/v2/servers/mvdsv?empty=exclude&limit=20"
-	maxBytes   = 1 << 20
+	// API is the QuakeWorld Hub's server list: every server it knows,
+	// empty ones and proxies included, so Active picks the games.
+	API        = "https://api.quake.world/v1/servers"
+	maxBytes   = 8 << 20
 	maxServers = 20
 )
 
@@ -108,6 +109,32 @@ func Library(root string) ([]any, error) {
 	return rows, nil
 }
 
+// qwGlyphs are the readable forms of the QuakeWorld charset's first 32
+// glyphs; 0 drops a decoration.
+var qwGlyphs = [32]rune{
+	0, 0, 0, 0, 0, '•', 0, 0, 0, 0, 0, 0, 0, 0, '•', '•',
+	'[', ']', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '•', 0, 0, 0,
+}
+
+// readable turns QuakeWorld charset text, which servers send as bytes
+// (U+0000–U+00FF here; the upper half is the lower one in another colour),
+// into plain text.
+func readable(raw string) string {
+	var out strings.Builder
+	for _, r := range raw {
+		if r < 256 {
+			if r &= 0x7f; r < 32 {
+				r = qwGlyphs[r]
+			}
+			if r == 0 || r == 0x7f {
+				continue
+			}
+		}
+		out.WriteRune(r)
+	}
+	return out.String()
+}
+
 func text(fallback string, values ...any) string {
 	for _, value := range values {
 		raw, ok := value.(string)
@@ -119,7 +146,7 @@ func text(fallback string, values ...any) string {
 				return '?'
 			}
 			return r
-		}, raw)
+		}, readable(raw))
 		cleaned = strings.TrimSpace(cleaned)
 		if cleaned != "" {
 			if len([]rune(cleaned)) > 4096 {
@@ -144,30 +171,15 @@ func Project(rows []any) ([]Server, error) {
 		if !validAddress(address) || seen[address] {
 			continue
 		}
+		// The Hub's server info was "settings" before it became "info".
 		settings, _ := row["settings"].(map[string]any)
+		if settings == nil {
+			settings, _ = row["info"].(map[string]any)
+		}
 		if settings == nil {
 			settings = map[string]any{}
 		}
-		var players Players
-		switch value := row["players"].(type) {
-		case []any:
-			for _, player := range value {
-				if entry, ok := player.(map[string]any); ok {
-					if bot, _ := entry["is_bot"].(bool); bot {
-						players.Bots++
-					} else {
-						players.Humans++
-					}
-				}
-			}
-		case map[string]any:
-			if humans, ok := value["humans"].(float64); ok && humans >= 0 && humans == float64(int(humans)) {
-				players.Humans = int(humans)
-			}
-			if bots, ok := value["bots"].(float64); ok && bots >= 0 && bots == float64(int(bots)) {
-				players.Bots = int(bots)
-			}
-		}
+		players := countPlayers(row["players"])
 		var stream *string
 		rawQTV := row["qtv_stream"]
 		if nested, ok := rawQTV.(map[string]any); ok {
@@ -182,7 +194,7 @@ func Project(rows []any) ([]Server, error) {
 		servers = append(servers, Server{
 			Address:   address,
 			Title:     text(address, settings["hostname"], row["title"], row["name"]),
-			Mode:      text("-", row["mode"], settings["mode"]),
+			Mode:      text("-", row["mode"], row["player_mode"], settings["mode"]),
 			Map:       text("-", settings["map"], row["map"]),
 			Players:   players,
 			QTVStream: stream,
@@ -192,16 +204,72 @@ func Project(rows []any) ([]Server, error) {
 	if len(servers) == 0 {
 		return nil, errors.New("The Hub returned no recognized active server.")
 	}
-	sort.Slice(servers, func(a, b int) bool { return servers[a].Address < servers[b].Address })
+	// The busiest first, then by address.
+	sort.Slice(servers, func(a, b int) bool {
+		left, right := servers[a].Players.Humans+servers[a].Players.Bots, servers[b].Players.Humans+servers[b].Players.Bots
+		if left != right {
+			return left > right
+		}
+		return servers[a].Address < servers[b].Address
+	})
 	if len(servers) > maxServers {
 		servers = servers[:maxServers]
 	}
 	return servers, nil
 }
 
+// countPlayers reads a row's players: a list (bots marked is_bot) or
+// counts.
+func countPlayers(value any) Players {
+	var players Players
+	switch value := value.(type) {
+	case []any:
+		for _, player := range value {
+			if entry, ok := player.(map[string]any); ok {
+				if bot, _ := entry["is_bot"].(bool); bot {
+					players.Bots++
+				} else {
+					players.Humans++
+				}
+			}
+		}
+	case map[string]any:
+		if humans, ok := value["humans"].(float64); ok && humans >= 0 && humans == float64(int(humans)) {
+			players.Humans = int(humans)
+		}
+		if bots, ok := value["bots"].(float64); ok && bots >= 0 && bots == float64(int(bots)) {
+			players.Bots = int(bots)
+		}
+	}
+	return players
+}
+
+// Active keeps the Hub rows worth joining: MVDSV game servers with
+// someone on them.
+func Active(rows []any) []any {
+	var active []any
+	for _, raw := range rows {
+		row, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if kind, ok := row["server_type"].(string); ok && kind != "game" {
+			continue
+		}
+		if software, ok := row["software_type"].(string); ok && software != "mvdsv" {
+			continue
+		}
+		if players := countPlayers(row["players"]); players.Humans+players.Bots > 0 {
+			active = append(active, row)
+		}
+	}
+	return active
+}
+
 // Servers fetches the Hub and falls back to the local library.
 func Servers(ctx context.Context, root string) ([]Server, error) {
 	rows, err := Fetch(ctx, &http.Client{})
+	rows = Active(rows)
 	valid := 0
 	for _, raw := range rows {
 		if row, ok := raw.(map[string]any); ok {

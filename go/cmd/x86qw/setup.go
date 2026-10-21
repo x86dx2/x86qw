@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/buildinfo"
@@ -158,8 +159,17 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 	if err := publishCLI(root, true, stdout); err != nil {
 		return failure(root, err, stderr)
 	}
-	fmt.Fprintln(stdout, "  Play now: x86qw play")
+	fmt.Fprintf(stdout, "  Play now: %s play\n", here(root))
 	return output.ExitSuccess
+}
+
+// here is the command to type in this terminal: on Windows the PATH
+// reaches new terminals only, so it is the full path of x86qw.cmd.
+func here(root string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(root, "x86qw.cmd")
+	}
+	return "x86qw"
 }
 
 // runRecipe installs options without the interface, printing the
@@ -202,11 +212,11 @@ func runRecipe(backend *setup.Real, options setup.Options, yes bool, stdout, std
 	}
 	fmt.Fprintf(stdout, "✓ x86QW installed in %s\n", options.Target)
 	if options.Intent.WantsServer() {
-		fmt.Fprintf(stdout, "  Start the server: x86qw %s\n", strings.Join(setup.HostCommand(options.Target, options), " "))
+		fmt.Fprintf(stdout, "  Start the server: %s %s\n", here(options.Target), strings.Join(setup.HostCommand(options.Target, options), " "))
 		fmt.Fprintf(stdout, "  rcon: %s (kept in %s)\n", options.Server.Rcon, filepath.Join(options.Target, filepath.FromSlash(setup.RconFile)))
 	}
 	if options.Intent.WantsClient() {
-		fmt.Fprintln(stdout, "  Play now: x86qw play")
+		fmt.Fprintf(stdout, "  Play now: %s play\n", here(options.Target))
 	}
 	return output.ExitSuccess
 }

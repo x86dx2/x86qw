@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"math"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -939,6 +940,10 @@ func (m *Model) donePage(p *page) {
 		downloaded = m.t("done.nothing")
 	}
 	p.add(p.st(t.Gray).Render("   " + fmt.Sprintf("%s · %s · %s", downloaded, duration(time.Since(m.instAt).Round(time.Second)), shortPath(m.opts.Target))))
+	// Windows hands the new PATH to new terminals only.
+	if runtime.GOOS == "windows" && m.opts.Integration.Path {
+		p.add(p.st(t.Gray).Render("   " + fmt.Sprintf(m.t("done.path"), filepath.Join(m.opts.Target, "x86qw.cmd"))))
+	}
 	p.gap(1)
 	for index, row := range m.doneRows() {
 		m.actionRow(p, row.id, row.label, row.desc, index == m.focus, index == 0)
