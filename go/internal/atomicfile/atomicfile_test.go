@@ -11,7 +11,7 @@ import (
 func TestWriteReplacesAndLeavesNothingBehind(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "doc.json")
-	if err := os.WriteFile(path, []byte("velho"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	var group sync.WaitGroup
@@ -19,22 +19,22 @@ func TestWriteReplacesAndLeavesNothingBehind(t *testing.T) {
 		group.Add(1)
 		go func() {
 			defer group.Done()
-			if err := Write(path, []byte("novo"), 0o600); err != nil {
+			if err := Write(path, []byte("new"), 0o600); err != nil {
 				t.Error(err)
 			}
 		}()
 	}
 	group.Wait()
-	if data, _ := os.ReadFile(path); string(data) != "novo" {
-		t.Fatalf("conteúdo: %q", data)
+	if data, _ := os.ReadFile(path); string(data) != "new" {
+		t.Fatalf("content: %q", data)
 	}
 	if info, _ := os.Stat(path); runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
-		t.Fatalf("modo: %v", info.Mode())
+		t.Fatalf("mode: %v", info.Mode())
 	}
 	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
-		t.Fatalf("sobrou temporário: %v", entries)
+		t.Fatalf("temporary file left: %v", entries)
 	}
-	if err := Write(filepath.Join(dir, "falta", "doc.json"), []byte("x"), 0o644); err == nil {
-		t.Fatal("uma pasta que não existe deveria falhar")
+	if err := Write(filepath.Join(dir, "missing", "doc.json"), []byte("x"), 0o644); err == nil {
+		t.Fatal("a folder that does not exist should fail")
 	}
 }

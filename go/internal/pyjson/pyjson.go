@@ -44,7 +44,7 @@ func write(b *strings.Builder, value any, indent, depth int) error {
 		b.WriteString(strconv.FormatUint(v, 10))
 	case float64:
 		if math.IsNaN(v) || math.IsInf(v, 0) {
-			return fmt.Errorf("valor JSON não finito")
+			return fmt.Errorf("non-finite JSON value")
 		}
 		if v == math.Trunc(v) && math.Abs(v) < 1e16 {
 			b.WriteString(strconv.FormatFloat(v, 'f', 1, 64))
@@ -80,7 +80,7 @@ func write(b *strings.Builder, value any, indent, depth int) error {
 		// numbers exact.
 		payload, err := json.Marshal(value)
 		if err != nil {
-			return fmt.Errorf("tipo JSON não suportado: %T", value)
+			return fmt.Errorf("unsupported JSON type: %T", value)
 		}
 		decoder := json.NewDecoder(bytes.NewReader(payload))
 		decoder.UseNumber()

@@ -29,6 +29,6 @@ func TestProjectsClosedShape(t *testing.T) {
 
 func TestEmptyIsError(t *testing.T) {
 	if _, err := Project(nil); err == nil {
-		t.Fatal("lista vazia aceita")
+		t.Fatal("empty list accepted")
 	}
 }

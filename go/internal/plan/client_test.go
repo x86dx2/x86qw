@@ -28,7 +28,7 @@ func clientRows(t *testing.T, action string, age bool) []Row {
 	}
 	var rows []Row
 	for _, row := range result.Operations {
-		if row.Kind == "Cliente" {
+		if row.Kind == "Client" {
 			rows = append(rows, row)
 		}
 	}
@@ -37,25 +37,25 @@ func clientRows(t *testing.T, action string, age bool) []Row {
 
 func TestClientRowsFollowUpdateRuntimeOrder(t *testing.T) {
 	if rows := clientRows(t, "", false); len(rows) != 0 {
-		t.Fatalf("cliente atualizado sem ação: %+v", rows)
+		t.Fatalf("up-to-date client without an action: %+v", rows)
 	}
 	rows := clientRows(t, ActionRestoreUpstream, false)
-	if len(rows) != 1 || rows[0].Action != "Restaurar" || rows[0].Installed != "bundle re-assinado localmente" ||
-		rows[0].Available != "bundle upstream integral" || rows[0].Size == nil {
+	if len(rows) != 1 || rows[0].Action != "Restore" || rows[0].Installed != "bundle re-signed locally" ||
+		rows[0].Available != "intact upstream bundle" || rows[0].Size == nil {
 		t.Fatalf("restore-upstream: %+v", rows)
 	}
 	rows = clientRows(t, "", true)
-	if len(rows) != 1 || rows[0].Action != "Atualizar" || rows[0].Installed != "3.6.8" || rows[0].Item != "ezQuake macOS stable" {
-		t.Fatalf("stable antigo: %+v", rows)
+	if len(rows) != 1 || rows[0].Action != "Update" || rows[0].Installed != "3.6.8" || rows[0].Item != "ezQuake macOS stable" {
+		t.Fatalf("old stable: %+v", rows)
 	}
 	// prepare-nightly with the same version is only meaningful for nightly;
 	// with a newer release available the update supersedes the repair.
 	rows = clientRows(t, ActionPrepareNightly, true)
-	if len(rows) != 1 || rows[0].Action != "Atualizar" {
-		t.Fatalf("prepare + versão nova: %+v", rows)
+	if len(rows) != 1 || rows[0].Action != "Update" {
+		t.Fatalf("prepare + new version: %+v", rows)
 	}
 	rows = clientRows(t, ActionPrepareNightly, false)
-	if len(rows) != 1 || rows[0].Action != "Reparar" || rows[0].Installed != "área segura" || rows[0].Size != nil {
+	if len(rows) != 1 || rows[0].Action != "Repair" || rows[0].Installed != "safe area" || rows[0].Size != nil {
 		t.Fatalf("prepare-nightly: %+v", rows)
 	}
 }

@@ -44,7 +44,7 @@ func Start(target, executable, binarySHA string, launch *Launch) error {
 		if config != nil {
 			config.Release()
 		}
-		return fmt.Errorf("não foi possível abrir o ezQuake: %w", err)
+		return fmt.Errorf("could not open ezQuake: %w", err)
 	}
 	if config == nil {
 		return nil
@@ -56,7 +56,7 @@ func Start(target, executable, binarySHA string, launch *Launch) error {
 	}
 	if exited, code := child.ExitsWithin(startGrace); exited {
 		config.Release()
-		return fmt.Errorf("o ezQuake encerrou antes de carregar a configuração KTX (código %d)", code)
+		return fmt.Errorf("ezQuake quit before loading the KTX configuration (code %d)", code)
 	}
 	return nil
 }

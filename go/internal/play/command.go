@@ -76,7 +76,7 @@ func Build(game Game, mode *Mode, mapName string, assets map[string]bool, o Opti
 	launch := &Launch{}
 	if game.UsesModeCatalog() {
 		if mode == nil {
-			return nil, fmt.Errorf("modo KTX ausente")
+			return nil, fmt.Errorf("KTX mode missing")
 		}
 		settings, err := BotNameSettings(o, mode)
 		if err != nil {

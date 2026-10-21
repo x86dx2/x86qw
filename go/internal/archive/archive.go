@@ -101,10 +101,10 @@ func Open(source string, limits Limits) (*Plan, error) {
 		return nil, err
 	}
 	if !info.Mode().IsRegular() {
-		return nil, fail("arquivo ZIP não é regular: %s", source)
+		return nil, fail("ZIP file is not regular: %s", source)
 	}
 	if info.Size() > limits.MaxSourceSize {
-		return nil, fail("arquivo ZIP excede %d bytes", limits.MaxSourceSize)
+		return nil, fail("ZIP file exceeds %d bytes", limits.MaxSourceSize)
 	}
 	digest, err := fileSHA256(source)
 	if err != nil {
@@ -112,7 +112,7 @@ func Open(source string, limits Limits) (*Plan, error) {
 	}
 	reader, err := zip.OpenReader(source)
 	if err != nil {
-		return nil, fail("ZIP inválido: %v", err)
+		return nil, fail("invalid ZIP: %v", err)
 	}
 	plan := &Plan{SHA256: digest, reader: reader}
 	if err := plan.validate(limits); err != nil {
@@ -125,7 +125,7 @@ func Open(source string, limits Limits) (*Plan, error) {
 func (p *Plan) validate(limits Limits) error {
 	files := p.reader.File
 	if len(files) > limits.MaxMembers {
-		return fail("ZIP excede %d membros", limits.MaxMembers)
+		return fail("ZIP exceeds %d members", limits.MaxMembers)
 	}
 	exact := map[string]bool{}
 	semantic := map[string]string{}
@@ -137,7 +137,7 @@ func (p *Plan) validate(limits Limits) error {
 		name := file.Name
 		offset, err := file.DataOffset()
 		if err != nil || offsets[offset] {
-			return fail("membro ZIP com cabeçalho local duplicado ou inválido: %q", name)
+			return fail("ZIP member with a duplicate or invalid local header: %q", name)
 		}
 		offsets[offset] = true
 		if err := checkExtra(file.Extra, name); err != nil {
@@ -146,36 +146,36 @@ func (p *Plan) validate(limits Limits) error {
 		unixMode := file.ExternalAttrs >> 16
 		fileType := unixMode & unixTypeMask
 		if fileType != 0 && fileType != unixRegular && fileType != unixDirectory {
-			return fail("ZIP contém membro especial: %q", name)
+			return fail("ZIP contains a special member: %q", name)
 		}
 		dos := file.ExternalAttrs & 0xFFFF
 		if dos&(windowsDevice|windowsReparse) != 0 {
-			return fail("ZIP contém membro especial do Windows: %q", name)
+			return fail("ZIP contains a special Windows member: %q", name)
 		}
 		isDir := strings.HasSuffix(name, "/")
 		if dos&windowsDirectory != 0 && !isDir {
-			return fail("tipo do membro ZIP conflita com os atributos DOS: %q", name)
+			return fail("ZIP member type conflicts with its DOS attributes: %q", name)
 		}
 		if (isDir && fileType != 0 && fileType != unixDirectory) || (!isDir && fileType == unixDirectory) {
-			return fail("tipo do membro ZIP conflita com o nome: %q", name)
+			return fail("ZIP member type conflicts with its name: %q", name)
 		}
 		canonical, parts, key, err := validateName(name, isDir, limits)
 		if err != nil {
 			return err
 		}
 		if exact[canonical] {
-			return fail("ZIP contém colisão exata de caminho: %q", canonical)
+			return fail("ZIP contains an exact path collision: %q", canonical)
 		}
 		exact[canonical] = true
 		if previous, ok := semantic[key]; ok {
-			return fail("ZIP contém colisão casefold/NFC: %q, %q", previous, canonical)
+			return fail("ZIP contains a casefold/NFC collision: %q, %q", previous, canonical)
 		}
 		semantic[key] = canonical
 		for index := 1; index <= len(parts); index++ {
 			spelling := strings.Join(parts[:index], "/")
 			prefixKey := semanticKey(parts[:index])
 			if prior, ok := spellings[prefixKey]; ok && prior != spelling {
-				return fail("ZIP contém colisão casefold/NFC de prefixo: %q, %q", prior, spelling)
+				return fail("ZIP contains a casefold/NFC prefix collision: %q, %q", prior, spelling)
 			}
 			spellings[prefixKey] = spelling
 			wanted := "file"
@@ -183,38 +183,38 @@ func (p *Plan) validate(limits Limits) error {
 				wanted = "directory"
 			}
 			if prior, ok := types[prefixKey]; ok && prior != wanted {
-				return fail("ZIP contém conflito arquivo/diretório: %q", canonical)
+				return fail("ZIP contains a file/folder conflict: %q", canonical)
 			}
 			types[prefixKey] = wanted
 		}
 		if file.Flags&encryptedFlags != 0 {
-			return fail("ZIP contém membro criptografado: %q", canonical)
+			return fail("ZIP contains an encrypted member: %q", canonical)
 		}
 		if file.Flags&^allowedFlags != 0 {
-			return fail("membro ZIP usa flags não suportadas: %q", canonical)
+			return fail("ZIP member uses unsupported flags: %q", canonical)
 		}
 		if file.Method != zip.Store && file.Method != zip.Deflate {
-			return fail("ZIP usa compressão não suportada: %q", canonical)
+			return fail("ZIP uses unsupported compression: %q", canonical)
 		}
 		if file.UncompressedSize64 > limits.MaxMemberSize {
-			return fail("membro ZIP excede o limite de tamanho: %q", canonical)
+			return fail("ZIP member exceeds the size limit: %q", canonical)
 		}
 		if isDir {
 			if file.UncompressedSize64 != 0 {
-				return fail("diretório ZIP com conteúdo: %q", canonical)
+				return fail("ZIP folder with contents: %q", canonical)
 			}
 			continue
 		}
 		total += file.UncompressedSize64
 		if total > limits.MaxTotalSize {
-			return fail("ZIP excede o limite total descompactado")
+			return fail("ZIP exceeds the total uncompressed limit")
 		}
 		compressed := file.CompressedSize64
 		if compressed == 0 {
 			compressed = 1
 		}
 		if file.UncompressedSize64 > 0 && float64(file.UncompressedSize64)/float64(compressed) > limits.MaxCompressionRatio {
-			return fail("membro ZIP excede a razão de compressão: %q", canonical)
+			return fail("ZIP member exceeds the compression ratio: %q", canonical)
 		}
 		p.Members = append(p.Members, Member{
 			Name: canonical, Size: file.UncompressedSize64, file: file,
@@ -226,16 +226,16 @@ func (p *Plan) validate(limits Limits) error {
 func checkExtra(extra []byte, name string) error {
 	for offset := 0; offset < len(extra); {
 		if len(extra)-offset < 4 {
-			return fail("membro ZIP com campo extra truncado: %q", name)
+			return fail("ZIP member with a truncated extra field: %q", name)
 		}
 		id := binary.LittleEndian.Uint16(extra[offset:])
 		size := int(binary.LittleEndian.Uint16(extra[offset+2:]))
 		offset += 4
 		if offset+size > len(extra) {
-			return fail("membro ZIP com campo extra truncado: %q", name)
+			return fail("ZIP member with a truncated extra field: %q", name)
 		}
 		if id == extraUnixLegacy || id == extraUnixNew {
-			return fail("membro ZIP com campo extra Unix capaz de link: %q", name)
+			return fail("ZIP member with a link-capable Unix extra field: %q", name)
 		}
 		offset += size
 	}
@@ -254,17 +254,17 @@ func semanticKey(parts []string) string {
 
 func validateName(name string, isDir bool, limits Limits) (string, []string, string, error) {
 	if name == "" {
-		return "", nil, "", fail("membro ZIP sem nome")
+		return "", nil, "", fail("ZIP member without a name")
 	}
 	if utf16Units(name) > limits.MaxPathUTF16Units {
-		return "", nil, "", fail("caminho ZIP excede %d unidades UTF-16: %q", limits.MaxPathUTF16Units, name)
+		return "", nil, "", fail("ZIP path exceeds %d UTF-16 units: %q", limits.MaxPathUTF16Units, name)
 	}
 	if strings.HasPrefix(name, "/") || strings.ContainsAny(name, `\:`) {
-		return "", nil, "", fail("caminho ZIP não é POSIX portável: %q", name)
+		return "", nil, "", fail("ZIP path is not portable POSIX: %q", name)
 	}
 	for _, r := range name {
 		if unicode.Is(unicode.C, r) {
-			return "", nil, "", fail("caminho ZIP com caractere de controle: %q", name)
+			return "", nil, "", fail("ZIP path with a control character: %q", name)
 		}
 	}
 	canonical := name
@@ -273,21 +273,21 @@ func validateName(name string, isDir bool, limits Limits) (string, []string, str
 	}
 	parts := strings.Split(canonical, "/")
 	if canonical == "" || len(parts) > limits.MaxDepth {
-		return "", nil, "", fail("caminho ZIP inseguro: %q", name)
+		return "", nil, "", fail("unsafe ZIP path: %q", name)
 	}
 	for _, part := range parts {
 		if part == "" || part == "." || part == ".." {
-			return "", nil, "", fail("caminho ZIP inseguro: %q", name)
+			return "", nil, "", fail("unsafe ZIP path: %q", name)
 		}
 		if strings.ContainsAny(part, windowsForbidden) {
-			return "", nil, "", fail("caminho ZIP usa caractere proibido no Windows: %q", name)
+			return "", nil, "", fail("ZIP path uses a character Windows forbids: %q", name)
 		}
 		if strings.HasSuffix(part, ".") || strings.HasSuffix(part, " ") {
-			return "", nil, "", fail("caminho ZIP termina com ponto ou espaço: %q", name)
+			return "", nil, "", fail("ZIP path ends with a dot or a space: %q", name)
 		}
 		stem := strings.ToUpper(strings.TrimRight(strings.SplitN(part, ".", 2)[0], ". "))
 		if windowsReserved[stem] {
-			return "", nil, "", fail("caminho ZIP usa nome reservado do Windows: %q", name)
+			return "", nil, "", fail("ZIP path uses a reserved Windows name: %q", name)
 		}
 	}
 	return canonical, parts, semanticKey(parts), nil
@@ -310,10 +310,10 @@ func (p *Plan) Extract(destination string, executables ...string) error {
 		}
 	}
 	if found != len(wanted) {
-		return fail("membro executável ausente do ZIP")
+		return fail("executable member missing from the ZIP")
 	}
 	if _, err := os.Lstat(destination); err == nil {
-		return fail("destino de extração já existe: %s", destination)
+		return fail("extraction target already exists: %s", destination)
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
@@ -352,7 +352,7 @@ func extractMember(root string, member Member) error {
 	// validate already refused these names; this keeps the write local even
 	// if a future change skips it.
 	if !filepath.IsLocal(filepath.FromSlash(member.Name)) {
-		return fail("caminho ZIP inseguro: %q", member.Name)
+		return fail("unsafe ZIP path: %q", member.Name)
 	}
 	target := filepath.Join(root, filepath.FromSlash(member.Name))
 	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
@@ -360,7 +360,7 @@ func extractMember(root string, member Member) error {
 	}
 	source, err := member.file.Open()
 	if err != nil {
-		return fail("membro ZIP ilegível %q: %v", member.Name, err)
+		return fail("unreadable ZIP member %q: %v", member.Name, err)
 	}
 	defer source.Close()
 	out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
@@ -371,13 +371,13 @@ func extractMember(root string, member Member) error {
 	written, copyErr := io.Copy(io.MultiWriter(out, checksum), io.LimitReader(source, int64(member.Size)+1))
 	closeErr := out.Close()
 	if copyErr != nil {
-		return fail("membro ZIP corrompido %q: %v", member.Name, copyErr)
+		return fail("corrupt ZIP member %q: %v", member.Name, copyErr)
 	}
 	if closeErr != nil {
 		return closeErr
 	}
 	if uint64(written) != member.Size || checksum.Sum32() != member.file.CRC32 {
-		return fail("membro ZIP diverge do tamanho ou CRC declarado: %q", member.Name)
+		return fail("ZIP member differs from its declared size or CRC: %q", member.Name)
 	}
 	mode := os.FileMode(0o644)
 	if member.Executable {
@@ -415,9 +415,9 @@ func (p *Plan) ReadMember(name string) ([]byte, error) {
 			return nil, err
 		}
 		if uint64(len(payload)) != member.Size || crc32.ChecksumIEEE(payload) != member.file.CRC32 {
-			return nil, fail("membro ZIP diverge do tamanho ou CRC declarado: %q", name)
+			return nil, fail("ZIP member differs from its declared size or CRC: %q", name)
 		}
 		return payload, nil
 	}
-	return nil, fail("membro ausente do ZIP: %q", name)
+	return nil, fail("member missing from the ZIP: %q", name)
 }

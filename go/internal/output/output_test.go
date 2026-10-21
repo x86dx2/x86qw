@@ -24,7 +24,7 @@ func TestSuccessEnvelopeIsOneSortedLine(t *testing.T) {
 
 func TestFailureEnvelopeCarriesTheError(t *testing.T) {
 	var out bytes.Buffer
-	if err := Failure("update", ExitUsage, "usage", "opção desconhecida: --x").Write(&out); err != nil {
+	if err := Failure("update", ExitUsage, "usage", "unknown option: --x").Write(&out); err != nil {
 		t.Fatal(err)
 	}
 	var decoded struct {
@@ -41,11 +41,11 @@ func TestFailureEnvelopeCarriesTheError(t *testing.T) {
 	}
 	if decoded.OK || decoded.ExitCode != ExitUsage || decoded.Command != "update" || decoded.SchemaVersion != SchemaVersion ||
 		decoded.Data == nil || len(decoded.Data) != 0 || len(decoded.Errors) != 1 ||
-		decoded.Errors[0]["code"] != "usage" || decoded.Errors[0]["message"] != "opção desconhecida: --x" {
+		decoded.Errors[0]["code"] != "usage" || decoded.Errors[0]["message"] != "unknown option: --x" {
 		t.Fatalf("envelope: %s", out.String())
 	}
 	if strings.Count(out.String(), "\n") != 1 {
-		t.Fatal("o envelope deve ser uma linha só")
+		t.Fatal("the envelope must be a single line")
 	}
 }
 
@@ -53,7 +53,7 @@ func TestEnvelopeKeepsTextAsIs(t *testing.T) {
 	var out bytes.Buffer
 	Success("doctor", map[string]any{"summary": "a < b & c > d", "nick": "jogador™"}).Write(&out)
 	if !strings.Contains(out.String(), `"summary":"a < b & c > d"`) || !strings.Contains(out.String(), `"nick":"jogador™"`) {
-		t.Fatalf("o texto foi escapado: %s", out.String())
+		t.Fatalf("the text was escaped: %s", out.String())
 	}
 }
 
@@ -62,17 +62,17 @@ func TestDryRunAndStructData(t *testing.T) {
 		Action string `json:"action"`
 		Item   string `json:"item"`
 	}
-	envelope := Success("update", []row{{"Atualizar", "KTX"}})
+	envelope := Success("update", []row{{"Update", "KTX"}})
 	envelope.DryRun = true
 	var out bytes.Buffer
 	envelope.Write(&out)
-	if !strings.Contains(out.String(), `"data":[{"action":"Atualizar","item":"KTX"}],"dry_run":true`) {
+	if !strings.Contains(out.String(), `"data":[{"action":"Update","item":"KTX"}],"dry_run":true`) {
 		t.Fatalf("envelope: %s", out.String())
 	}
 }
 
 func TestExitCodesAreStable(t *testing.T) {
 	if ExitSuccess != 0 || ExitFailure != 1 || ExitUsage != 2 || ExitInterrupted != 130 || SchemaVersion != 1 {
-		t.Fatal("os códigos de saída e a versão do esquema são contrato público")
+		t.Fatal("the exit codes and the schema version are a public contract")
 	}
 }

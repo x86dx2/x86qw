@@ -18,12 +18,12 @@ func TestEmbeddedCatalogsMatchSources(t *testing.T) {
 			t.Fatal(err)
 		}
 		if string(want) != string(embedded) {
-			t.Fatalf("cópia embutida diverge de %s", path)
+			t.Fatalf("embedded copy differs from %s", path)
 		}
 	}
 	modes, err := LoadModes()
 	if err != nil || len(modes) != 24 {
-		t.Fatalf("modos: %d %v", len(modes), err)
+		t.Fatalf("modes: %d %v", len(modes), err)
 	}
 	for _, profile := range []struct {
 		payload []byte
@@ -59,14 +59,14 @@ func TestPlanForDuelWithBots(t *testing.T) {
 	}
 	o.Bots = 2
 	if _, err := LaunchCommands(duel, "dm6", map[string]bool{"bots/maps/dm6.bot": true}, o); err == nil {
-		t.Fatal("duel com 2 bots aceito")
+		t.Fatal("duel with 2 bots accepted")
 	}
 	if _, err := LaunchCommands(duel, "dm6", map[string]bool{}, DefaultOptions()); err != nil {
 		t.Fatal(err)
 	}
 	o.Bots = 1
 	if _, err := LaunchCommands(duel, "dm6", map[string]bool{}, o); err == nil {
-		t.Fatal("bots sem rota Frogbot aceitos")
+		t.Fatal("bots without a Frogbot route accepted")
 	}
 }
 
@@ -81,10 +81,10 @@ func TestChunkingKeepsBodiesBounded(t *testing.T) {
 	}
 	for _, definition := range definitions {
 		if len(definition) > 700+64 {
-			t.Fatalf("definição grande demais: %d", len(definition))
+			t.Fatalf("definition too large: %d", len(definition))
 		}
 	}
 	if len(invocation) > 700 {
-		t.Fatalf("invocação grande demais: %d", len(invocation))
+		t.Fatalf("invocation too large: %d", len(invocation))
 	}
 }

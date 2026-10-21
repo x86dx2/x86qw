@@ -59,7 +59,7 @@ func (t *Transaction) prepareRelease(ctx context.Context, spec catalog.ClientSpe
 	}
 	if regular(cached) {
 		if !download.Cached(cached, pin) {
-			return nil, fmt.Errorf("O arquivo em cache falhou na verificação: %s. Execute cleanup e tente novamente.", cached)
+			return nil, fmt.Errorf("The cached file failed verification: %s. Run cleanup and try again.", cached)
 		}
 		if report := t.observer().bytes("client"); report != nil {
 			report(release.Size)
@@ -67,7 +67,7 @@ func (t *Transaction) prepareRelease(ctx context.Context, spec catalog.ClientSpe
 	} else {
 		temporary := filepath.Join(t.Stage, release.Filename+".download")
 		if err := download.Fetch(ctx, pin, temporary, download.Options{Deadline: 30 * time.Minute, Progress: t.observer().bytes("client")}); err != nil {
-			return nil, fmt.Errorf("download do ezQuake falhou: %w", err)
+			return nil, fmt.Errorf("ezQuake download failed: %w", err)
 		}
 		if err := os.MkdirAll(filepath.Dir(cached), 0o755); err != nil {
 			return nil, err
@@ -76,7 +76,7 @@ func (t *Transaction) prepareRelease(ctx context.Context, spec catalog.ClientSpe
 			return nil, err
 		}
 		if !download.Cached(cached, pin) {
-			return nil, errors.New("o download do ezQuake falhou na verificação após a cópia")
+			return nil, errors.New("the ezQuake download failed verification after the copy")
 		}
 	}
 	prepared := filepath.Join(t.Stage, "prepared-runtime")
@@ -100,12 +100,12 @@ func (t *Transaction) prepareRelease(ctx context.Context, spec catalog.ClientSpe
 			return nil, err
 		}
 		if channel == "stable" && bundleVersion != release.Version {
-			return nil, fmt.Errorf("o pacote stable traz a versão %s, esperada %s", bundleVersion, release.Version)
+			return nil, fmt.Errorf("the stable package carries version %s, expected %s", bundleVersion, release.Version)
 		}
 		if channel == "nightly" {
 			revision := release.Version[strings.LastIndex(release.Version, "_")+1:]
 			if !strings.Contains(bundleVersion, "-g"+revision) {
-				return nil, fmt.Errorf("o pacote nightly %s não confere com %s", bundleVersion, release.Version)
+				return nil, fmt.Errorf("the nightly package %s does not match %s", bundleVersion, release.Version)
 			}
 			changed, err := macos.PrepareNightly(app)
 			if err != nil {
@@ -141,7 +141,7 @@ func (t *Transaction) prepareRelease(ctx context.Context, spec catalog.ClientSpe
 			source = filepath.Join(extract, archiveBinary[spec.Platform])
 		}
 		if !regular(source) {
-			return nil, fmt.Errorf("o pacote não contém %s", archiveBinary[spec.Platform])
+			return nil, fmt.Errorf("the package does not contain %s", archiveBinary[spec.Platform])
 		}
 		if err := copyFile(source, prepared, keepMode); err != nil {
 			return nil, err
@@ -176,7 +176,7 @@ func (t *Transaction) checkRuntimeOwnership(spec catalog.ClientSpec, channel str
 	info, err := os.Lstat(runtimePath)
 	if err == nil {
 		if (spec.Platform == "macos") != info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
-			return fmt.Errorf("caminho de runtime gerenciado inválido: %s", runtimePath)
+			return fmt.Errorf("invalid managed runtime path: %s", runtimePath)
 		}
 		if !regular(receiptPath) {
 			return fmt.Errorf("refusing to replace an unmanaged %s runtime: %s", spec.Label, runtimePath)
@@ -270,17 +270,17 @@ func (t *Transaction) InstallClient(ctx context.Context, cat *catalog.Catalog, s
 // InstallClientRelease installs one release of a channel; "" or "latest"
 // is the newest (choose_release).
 func (t *Transaction) InstallClientRelease(ctx context.Context, cat *catalog.Catalog, spec catalog.ClientSpec, channel, version string) (string, error) {
-	return t.installClient(ctx, cat, spec, channel, version, fmt.Sprintf("A versão %s não está disponível no canal %s.", version, channel))
+	return t.installClient(ctx, cat, spec, channel, version, fmt.Sprintf("Version %s is not available on the %s channel.", version, channel))
 }
 
 // InstallClientVersion reinstalls the receipt's exact release for repair.
 func (t *Transaction) InstallClientVersion(ctx context.Context, cat *catalog.Catalog, spec catalog.ClientSpec, channel, selection string) (string, error) {
-	return t.installClient(ctx, cat, spec, channel, selection, fmt.Sprintf("A versão registrada do ezQuake %s não está disponível para reparo.", channel))
+	return t.installClient(ctx, cat, spec, channel, selection, fmt.Sprintf("The recorded ezQuake version %s is not available for repair.", channel))
 }
 
 func (t *Transaction) installClient(ctx context.Context, cat *catalog.Catalog, spec catalog.ClientSpec, channel, version, missing string) (string, error) {
 	if channel != "stable" && channel != "nightly" {
-		return "", fmt.Errorf("canal ezQuake inválido: %s", channel)
+		return "", fmt.Errorf("invalid ezQuake channel: %s", channel)
 	}
 	if spec.Platform == "macos" {
 		if err := macos.EnsureProcessAbsent("ezQuake"); err != nil {
@@ -380,7 +380,7 @@ func copyTree(source, destination string) error {
 			}
 			return os.Chmod(target, info.Mode().Perm())
 		case entry.Type()&fs.ModeSymlink != 0:
-			return fmt.Errorf("symlink inesperado no bundle: %s", path)
+			return fmt.Errorf("unexpected symlink in the bundle: %s", path)
 		default:
 			return copyFile(path, target, info.Mode().Perm())
 		}
@@ -418,7 +418,7 @@ func clientRowTarget(item string) (catalog.ClientSpec, string, bool) {
 func inspectMacApp(app string) (string, string, error) {
 	binaryPath := filepath.Join(app, "Contents", "MacOS", "ezQuake")
 	if !regular(binaryPath) || !regular(filepath.Join(app, "Contents", "_CodeSignature", "CodeResources")) {
-		return "", "", fmt.Errorf("bundle ezQuake incompleto: %s", app)
+		return "", "", fmt.Errorf("incomplete ezQuake bundle: %s", app)
 	}
 	version, err := bundleVersion(filepath.Join(app, "Contents", "Info.plist"))
 	if err != nil {
@@ -426,14 +426,14 @@ func inspectMacApp(app string) (string, string, error) {
 	}
 	header, err := readHeader(binaryPath, 4)
 	if err != nil || (binary.BigEndian.Uint32(header) != 0xCAFEBABE && binary.BigEndian.Uint32(header) != 0xCAFEBABF) {
-		return "", "", fmt.Errorf("Executável Mach-O universal esperado: %s", binaryPath)
+		return "", "", fmt.Errorf("Expected a universal Mach-O executable: %s", binaryPath)
 	}
 	if runtime.GOOS == "darwin" {
 		command := exec.Command("codesign", "--verify", "--deep", "--strict", app)
 		var stderr bytes.Buffer
 		command.Stderr = &stderr
 		if err := command.Run(); err != nil {
-			return "", "", fmt.Errorf("assinatura do ezQuake inválida: %s", strings.TrimSpace(stderr.String()))
+			return "", "", fmt.Errorf("invalid ezQuake signature: %s", strings.TrimSpace(stderr.String()))
 		}
 	}
 	digest, err := fileSHA256(binaryPath)
@@ -445,7 +445,7 @@ func inspectMacApp(app string) (string, string, error) {
 func inspectPortableBinary(path, platform string) (string, error) {
 	header, err := readHeader(path, 64)
 	if err != nil {
-		return "", fmt.Errorf("binário ezQuake ilegível: %s", path)
+		return "", fmt.Errorf("unreadable ezQuake binary: %s", path)
 	}
 	switch platform {
 	case "linux":

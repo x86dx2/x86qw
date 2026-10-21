@@ -96,8 +96,8 @@ func (f *fixture) setInventory(profiles map[string][]string) {
 		"profiles":           profiles,
 		"profile_history":    map[string][]string{},
 		"components": []map[string]any{
-			{"id": "fixture-maps", "label": "Mapas de teste", "kind": "maps", "requires": []string{}},
-			{"id": "fixture-extra", "label": "Extra de teste", "kind": "maps", "requires": []string{"fixture-maps"}},
+			{"id": "fixture-maps", "label": "Test maps", "kind": "maps", "requires": []string{}},
+			{"id": "fixture-extra", "label": "Test extra", "kind": "maps", "requires": []string{"fixture-maps"}},
 		},
 	}
 	raw, _ := json.Marshal(document)
@@ -235,14 +235,14 @@ func TestOfflineInstallBuildsAVerifiedInstallation(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "x86qw")
 	result := f.install(root, "essential")
 	if strings.Join(result.Installed, ",") != "fixture-maps" || result.Files != 4 {
-		t.Fatalf("resultado: %+v", result)
+		t.Fatalf("result: %+v", result)
 	}
 	report, err := Verify(root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if report.Clients != 1 || strings.Join(report.Components, ",") != "fixture-maps" {
-		t.Fatalf("verificação: %+v", report)
+		t.Fatalf("verification: %+v", report)
 	}
 	order, _ := os.ReadFile(filepath.Join(root, "qw", "pak.lst"))
 	if string(order) != "x86qw-fixture.pk3\n" {
@@ -253,13 +253,13 @@ func TestOfflineInstallBuildsAVerifiedInstallation(t *testing.T) {
 		t.Fatalf("state.json: %+v %v", current, err)
 	}
 	if runtime.GOOS != "windows" && executableMissing(filepath.Join(root, "ezquake-nightly-x86_64.AppImage")) {
-		t.Fatal("o AppImage deveria ser executável")
+		t.Fatal("the AppImage should be executable")
 	}
 	// A second installation comes from the shared cache, not the network.
 	before := f.requests("fixture-maps-1.0.0.zip")
-	f.install(filepath.Join(t.TempDir(), "outra"), "essential")
+	f.install(filepath.Join(t.TempDir(), "other"), "essential")
 	if f.requests("fixture-maps-1.0.0.zip") != before {
-		t.Fatal("a segunda instalação baixou de novo o que estava em cache")
+		t.Fatal("the second installation downloaded again what was cached")
 	}
 }
 
@@ -274,12 +274,12 @@ func TestOfflineInstallRollsBackWhenAPackageIsCorrupt(t *testing.T) {
 	_, err := Install(f.ctx, root, f.catalog(), f.inventory, InstallOptions{Platform: "linux", Channel: "nightly", Profile: "essential"})
 	var integrity *download.IntegrityError
 	if !errors.As(err, &integrity) {
-		t.Fatalf("esperava erro de integridade, veio %v", err)
+		t.Fatalf("expected an integrity error, got %v", err)
 	}
 	for _, relative := range []string{"id1/pak0.pak", "ezquake-nightly-x86_64.AppImage", ".x86qw/state.json",
 		".x86qw/clients/ezquake/linux/nightly.receipt", "qw/maps/x86qw-fixture.bsp"} {
 		if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(relative))); err == nil {
-			t.Errorf("o rollback deixou %s", relative)
+			t.Errorf("the rollback left %s", relative)
 		}
 	}
 	// Nothing bad reached the shared cache, so the next try works.
@@ -315,25 +315,25 @@ func TestOfflineApplyUpdatesClientAndComponents(t *testing.T) {
 	for _, row := range planned.Operations {
 		actions = append(actions, row.Kind+":"+row.Action)
 	}
-	if strings.Join(actions, " ") != "Cliente:Atualizar Componente:Atualizar Componente:Adicionar" {
-		t.Fatalf("plano: %v", actions)
+	if strings.Join(actions, " ") != "Client:Update Component:Update Component:Add" {
+		t.Fatalf("plan: %v", actions)
 	}
 	result, err := Apply(f.ctx, "upgrade", in, planned)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if strings.Join(result.Installed, ",") != "fixture-maps,fixture-extra" || len(result.Clients) != 1 {
-		t.Fatalf("resultado: %+v", result)
+		t.Fatalf("result: %+v", result)
 	}
 	if got := selection(t, root, "fixture-maps"); got != "1.1.0" {
-		t.Fatalf("fixture-maps ficou em %s", got)
+		t.Fatalf("fixture-maps stayed at %s", got)
 	}
 	if _, err := os.Lstat(filepath.Join(root, "qw", "maps", "x86qw-retired.bsp")); err == nil {
-		t.Fatal("o arquivo que saiu do pacote continuou instalado")
+		t.Fatal("the file dropped from the package stayed installed")
 	}
 	rec, err := loadVerifiedClient(root, catalog.ClientSpecs[1], "nightly")
 	if err != nil || rec.Get("selection") != "20260201-000000_bcdef01" {
-		t.Fatalf("cliente: %v %v", rec, err)
+		t.Fatalf("client: %v %v", rec, err)
 	}
 	order, _ := os.ReadFile(filepath.Join(root, "qw", "pak.lst"))
 	if string(order) != "x86qw-extra.pk3\nx86qw-fixture.pk3\n" {
@@ -343,7 +343,7 @@ func TestOfflineApplyUpdatesClientAndComponents(t *testing.T) {
 		t.Fatal(err)
 	}
 	if again, err := plan.Upgrade(f.input(root)); err != nil || len(again.Operations) != 0 {
-		t.Fatalf("depois do upgrade nada deveria restar: %+v %v", again, err)
+		t.Fatalf("nothing should be left after the upgrade: %+v %v", again, err)
 	}
 }
 
@@ -352,7 +352,7 @@ func TestOfflineApplyKeepsAModifiedManagedFile(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "x86qw")
 	f.install(root, "essential")
 	edited := filepath.Join(root, "qw", "maps", "x86qw-fixture.bsp")
-	if err := os.WriteFile(edited, []byte("meu mapa"), 0o644); err != nil {
+	if err := os.WriteFile(edited, []byte("my map"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	f.component("fixture-maps", "x86qw", "1.1.0", map[string][]byte{
@@ -369,11 +369,11 @@ func TestOfflineApplyKeepsAModifiedManagedFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if data, _ := os.ReadFile(edited); string(data) != "meu mapa" {
-		t.Fatalf("a edição do usuário foi sobrescrita: %q", data)
+	if data, _ := os.ReadFile(edited); string(data) != "my map" {
+		t.Fatalf("the user's edit was overwritten: %q", data)
 	}
 	if len(result.Warnings) == 0 || !strings.Contains(strings.Join(result.Warnings, "\n"), "x86qw-fixture.bsp") {
-		t.Fatalf("faltou o aviso do arquivo preservado: %v", result.Warnings)
+		t.Fatalf("the kept-file warning is missing: %v", result.Warnings)
 	}
 }
 
@@ -382,7 +382,7 @@ func TestOfflineRepairRestoresWhatWasDamaged(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "x86qw")
 	f.install(root, "essential")
 	if planned, _, err := RepairPlan(f.input(root)); err != nil || planned.Status != "noop" {
-		t.Fatalf("instalação íntegra deveria ter plano vazio: %+v %v", planned, err)
+		t.Fatalf("an intact installation should have an empty plan: %+v %v", planned, err)
 	}
 	os.Remove(filepath.Join(root, "qw", "maps", "x86qw-fixture.bsp"))
 	os.Remove(filepath.Join(root, "qw", "pak.lst"))
@@ -398,8 +398,8 @@ func TestOfflineRepairRestoresWhatWasDamaged(t *testing.T) {
 	for _, row := range planned.Operations {
 		actions = append(actions, row.Kind+":"+row.Action)
 	}
-	if strings.Join(actions, " ") != "Cliente:Reparar Componente:Reparar Gerado:Reparar" {
-		t.Fatalf("plano: %v", actions)
+	if strings.Join(actions, " ") != "Client:Repair Component:Repair Generated:Repair" {
+		t.Fatalf("plan: %v", actions)
 	}
 	if _, err := Repair(f.ctx, f.input(root)); err != nil {
 		t.Fatal(err)
@@ -408,7 +408,7 @@ func TestOfflineRepairRestoresWhatWasDamaged(t *testing.T) {
 		t.Fatal(err)
 	}
 	if data, _ := os.ReadFile(filepath.Join(root, "qw", "maps", "x86qw-fixture.bsp")); string(data) != string(bsp("fixture map 1.0.0")) {
-		t.Fatalf("mapa não restaurado: %q", data)
+		t.Fatalf("map not restored: %q", data)
 	}
 }
 
@@ -424,13 +424,13 @@ func TestOfflineRepairRebuildsAMissingState(t *testing.T) {
 	}
 	current, err := state.Read(root)
 	if err != nil || strings.Join(current.Installed(), ",") != "fixture-maps" {
-		t.Fatalf("state.json reconstruído: %+v %v", current, err)
+		t.Fatalf("state.json rebuilt: %+v %v", current, err)
 	}
 }
 
 func TestOfflineRepairRestoresTheExecuteBit(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("Windows não tem o bit de execução POSIX")
+		t.Skip("Windows has no POSIX execute bit")
 	}
 	f := newFixture(t)
 	root := filepath.Join(t.TempDir(), "x86qw")
@@ -443,7 +443,7 @@ func TestOfflineRepairRestoresTheExecuteBit(t *testing.T) {
 		t.Fatal(err)
 	}
 	if executableMissing(appimage) {
-		t.Fatal("o repair não devolveu a permissão de execução")
+		t.Fatal("repair did not restore the execute permission")
 	}
 }
 
@@ -455,11 +455,11 @@ func TestOfflineRepairRefusesAClientTheCatalogDropped(t *testing.T) {
 	f.nightly("20260301-000000_cdef012") // replaces the installed release
 	before, _ := os.ReadDir(root)
 	_, err := Repair(f.ctx, f.input(root))
-	if err == nil || !strings.Contains(err.Error(), "payload validado") {
-		t.Fatalf("o repair deveria recusar: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "validated payload") {
+		t.Fatalf("repair should refuse: %v", err)
 	}
 	after, _ := os.ReadDir(root)
 	if len(after) != len(before) {
-		t.Fatal("o repair recusado alterou a instalação")
+		t.Fatal("the refused repair changed the installation")
 	}
 }

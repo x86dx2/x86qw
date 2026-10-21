@@ -82,7 +82,7 @@ func writeJournal(path string, document journalDocument, create bool) error {
 func currentController() (controller, error) {
 	identity, status := lock.Identity(os.Getpid())
 	if status != "alive" {
-		return controller{}, errors.New("Não foi possível registrar o controlador da configuração KTX.")
+		return controller{}, errors.New("Could not record the KTX configuration controller.")
 	}
 	return controller{PID: identity.PID, CreationToken: identity.Token, Executable: identity.Executable}, nil
 }
@@ -108,13 +108,13 @@ func Recover(target string) error {
 		}
 		var document journalDocument
 		if json.Unmarshal(payload, &document) != nil || document.Type != "ktx-runtime-config" {
-			return fmt.Errorf("Journal KTX inválido preservado para inspeção: %s", path)
+			return fmt.Errorf("Invalid KTX journal kept for inspection: %s", path)
 		}
 		switch lock.Probe(document.Controller.PID, document.Controller.CreationToken, document.Controller.Executable) {
 		case "alive":
 			continue
 		case "inconclusive":
-			return fmt.Errorf("Controlador da configuração KTX não pôde ser confirmado; preservado: %s", document.Config.Path)
+			return fmt.Errorf("The KTX configuration controller could not be confirmed; kept: %s", document.Config.Path)
 		}
 		for _, relative := range []string{document.Config.Path, document.Config.StagingPath} {
 			candidate := filepath.Join(target, filepath.FromSlash(relative))
@@ -124,14 +124,14 @@ func Recover(target string) error {
 			}
 			sum := sha256.Sum256(data)
 			if err != nil || hex.EncodeToString(sum[:]) != document.Config.SHA256 {
-				return fmt.Errorf("Objetos KTX divergentes e seu journal foram preservados para inspeção: %s", candidate)
+				return fmt.Errorf("Mismatched KTX objects and their journal were kept for inspection: %s", candidate)
 			}
 			if err := os.Remove(candidate); err != nil {
 				return err
 			}
 		}
 		if err := os.Remove(path); err != nil {
-			return fmt.Errorf("Journal KTX não pôde ser removido: %s", path)
+			return fmt.Errorf("The KTX journal could not be removed: %s", path)
 		}
 	}
 	return nil
@@ -140,7 +140,7 @@ func Recover(target string) error {
 // Create journals and publishes qw/x86qw-ktx-session-<token>.cfg.
 func Create(target string, payload []byte) (*RuntimeConfig, error) {
 	if info, err := os.Lstat(filepath.Join(target, "qw")); err != nil || !info.IsDir() {
-		return nil, fmt.Errorf("Diretório de configuração do ezQuake inválido: %s", filepath.Join(target, "qw"))
+		return nil, fmt.Errorf("Invalid ezQuake configuration folder: %s", filepath.Join(target, "qw"))
 	}
 	if err := Recover(target); err != nil {
 		return nil, err
@@ -148,7 +148,7 @@ func Create(target string, payload []byte) (*RuntimeConfig, error) {
 	dir := filepath.Join(target, filepath.FromSlash(journalDir))
 	for _, path := range []string{filepath.Join(target, ".x86qw", "gameplay"), dir} {
 		if err := privfs.Mkdir(path); err != nil && !errors.Is(err, os.ErrExist) {
-			return nil, errors.New("Não foi possível criar o journal privado do gameplay.")
+			return nil, errors.New("Could not create the private gameplay journal.")
 		}
 	}
 	raw := make([]byte, 12)
@@ -175,13 +175,13 @@ func Create(target string, payload []byte) (*RuntimeConfig, error) {
 		},
 	}
 	if err := writeJournal(config.journal, document, true); err != nil {
-		return nil, errors.New("Não foi possível registrar a intenção KTX.")
+		return nil, errors.New("Could not record the KTX intent.")
 	}
 	fail := func(err error) (*RuntimeConfig, error) {
 		os.Remove(config.config)
 		os.Remove(config.staging)
 		os.Remove(config.journal)
-		return nil, fmt.Errorf("Não foi possível publicar a configuração KTX: %w", err)
+		return nil, fmt.Errorf("Could not publish the KTX configuration: %w", err)
 	}
 	file, err := os.OpenFile(config.staging, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
@@ -210,7 +210,7 @@ func Create(target string, payload []byte) (*RuntimeConfig, error) {
 func (c *RuntimeConfig) Transfer(pid int) error {
 	identity, status := lock.Identity(pid)
 	if status != "alive" {
-		return errors.New("o cliente encerrou antes de receber a configuração KTX")
+		return errors.New("the client quit before receiving the KTX configuration")
 	}
 	payload, err := os.ReadFile(c.journal)
 	if err != nil {

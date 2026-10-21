@@ -41,7 +41,7 @@ func TestFetchesPinnedArtifact(t *testing.T) {
 	}
 	data, _ := os.ReadFile(destination)
 	if string(data) != body || !Cached(destination, Artifact{Size: size, SHA256: digest}) {
-		t.Fatal("artefato baixado diverge")
+		t.Fatal("downloaded artifact differs")
 	}
 }
 
@@ -81,7 +81,7 @@ func TestRetriesTransientStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	if calls.Load() != 2 {
-		t.Fatalf("chamadas: %d", calls.Load())
+		t.Fatalf("calls: %d", calls.Load())
 	}
 }
 
@@ -90,16 +90,16 @@ func TestRejectsWrongHashOversizeAndPlainHTTP(t *testing.T) {
 	destination := filepath.Join(t.TempDir(), "a")
 	size, _ := pin("0123456789")
 	if err := Fetch(context.Background(), Artifact{URLs: []string{srv.URL}, Size: size, SHA256: strings.Repeat("0", 64)}, destination, options); err == nil {
-		t.Fatal("hash divergente aceito")
+		t.Fatal("mismatched hash accepted")
 	}
 	if err := Fetch(context.Background(), Artifact{URLs: []string{srv.URL}, Size: 4, SHA256: strings.Repeat("0", 64)}, destination, options); err == nil {
-		t.Fatal("corpo maior que o pin aceito")
+		t.Fatal("body larger than the pin accepted")
 	}
 	if err := Fetch(context.Background(), Artifact{URLs: []string{"http://example.invalid/a"}, Size: 1, SHA256: strings.Repeat("0", 64)}, destination, options); err == nil {
-		t.Fatal("HTTP simples aceito")
+		t.Fatal("plain HTTP accepted")
 	}
 	if _, err := os.Stat(destination); err == nil {
-		t.Fatal("destino criado após falha")
+		t.Fatal("target created after a failure")
 	}
 }
 
@@ -109,7 +109,7 @@ func TestRejectsRedirectToPlainHTTP(t *testing.T) {
 	})
 	size, digest := pin("x")
 	if err := Fetch(context.Background(), Artifact{URLs: []string{srv.URL}, Size: size, SHA256: digest}, filepath.Join(t.TempDir(), "a"), options); err == nil {
-		t.Fatal("redirect para HTTP aceito")
+		t.Fatal("redirect to HTTP accepted")
 	}
 }
 
@@ -123,11 +123,11 @@ func TestReportsProgressUpToTheSize(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(seen) < 2 || seen[0] != 0 || seen[len(seen)-1] != size {
-		t.Fatalf("progresso: %v", seen)
+		t.Fatalf("progress: %v", seen)
 	}
 	for index := 1; index < len(seen); index++ {
 		if seen[index] < seen[index-1] {
-			t.Fatalf("progresso voltou: %v", seen)
+			t.Fatalf("progress went back: %v", seen)
 		}
 	}
 }
@@ -141,10 +141,10 @@ func TestContextCarriesTheClient(t *testing.T) {
 	artifact := Artifact{URLs: []string{srv.URL + "/c.zip"}, Size: size, SHA256: digest}
 	ctx := WithClient(context.Background(), options.Client)
 	if err := Fetch(ctx, artifact, filepath.Join(t.TempDir(), "c.zip"), Options{Deadline: 10 * time.Second, Attempts: 1}); err != nil {
-		t.Fatalf("o cliente do contexto deveria confiar no servidor de teste: %v", err)
+		t.Fatalf("the context's client should trust the test server: %v", err)
 	}
 	// Without it, the default client refuses the test certificate.
 	if err := Fetch(context.Background(), artifact, filepath.Join(t.TempDir(), "d.zip"), Options{Deadline: 10 * time.Second, Attempts: 1}); err == nil {
-		t.Fatal("o cliente padrão aceitou um certificado de teste")
+		t.Fatal("the default client accepted a test certificate")
 	}
 }

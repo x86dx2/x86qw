@@ -81,12 +81,12 @@ func LoadModes() ([]Mode, error) {
 		} `json:"modes"`
 	}
 	if err := json.Unmarshal(KtxModesJSON, &document); err != nil || document.Format != 1 {
-		return nil, fmt.Errorf("catálogo de modos KTX inválido: %v", err)
+		return nil, fmt.Errorf("invalid KTX mode catalog: %v", err)
 	}
 	requirement := func(key string) (Requirement, error) {
 		policy, ok := document.Policies[key]
 		if !ok {
-			return Requirement{}, fmt.Errorf("política de mapa KTX desconhecida: %s", key)
+			return Requirement{}, fmt.Errorf("unknown KTX map policy: %s", key)
 		}
 		return Requirement{Key: key, Asset: policy.Asset, When: policy.When, Label: policy.Label}, nil
 	}
@@ -140,7 +140,7 @@ func FindMode(modes []Mode, requested string) (Mode, error) {
 	for index, mode := range modes {
 		keys[index] = mode.Key
 	}
-	return Mode{}, fmt.Errorf("Modo KTX desconhecido: %s. Disponíveis: %s.", requested, strings.Join(keys, ", "))
+	return Mode{}, fmt.Errorf("Unknown KTX mode: %s. Available: %s.", requested, strings.Join(keys, ", "))
 }
 
 func errorf(format string, args ...any) error { return fmt.Errorf(format, args...) }
@@ -162,7 +162,7 @@ func LoadMenuGroups() ([]MenuGroup, error) {
 		} `json:"menu_groups"`
 	}
 	if err := json.Unmarshal(KtxModesJSON, &document); err != nil {
-		return nil, fmt.Errorf("catálogo de modos KTX inválido: %v", err)
+		return nil, fmt.Errorf("invalid KTX mode catalog: %v", err)
 	}
 	groups := make([]MenuGroup, len(document.Groups))
 	for index, raw := range document.Groups {

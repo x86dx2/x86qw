@@ -40,18 +40,18 @@ func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory
 		}
 	}
 	if spec == nil {
-		return nil, fmt.Errorf("plataforma desconhecida: %s", options.Platform)
+		return nil, fmt.Errorf("unknown platform: %s", options.Platform)
 	}
 	requested := []string{}
 	switch options.Profile {
 	case "essential", "recommended", "complete", "none":
 	case "custom":
 		if len(options.Requested) == 0 {
-			return nil, errors.New("Nenhum componente x86QW foi selecionado.")
+			return nil, errors.New("No x86QW component was selected.")
 		}
 		requested = options.Requested
 	default:
-		return nil, fmt.Errorf("perfil inválido: %s", options.Profile)
+		return nil, fmt.Errorf("invalid profile: %s", options.Profile)
 	}
 	selected, err := inventory.Desired(options.Profile, requested)
 	if err != nil {
@@ -87,7 +87,7 @@ func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory
 	tx.observe = observing(ctx)
 	fail := func(err error) (*Result, error) {
 		if undoErr := tx.Rollback(); undoErr != nil {
-			return nil, fmt.Errorf("%w; rollback incompleto: %v", err, undoErr)
+			return nil, fmt.Errorf("%w; incomplete rollback: %v", err, undoErr)
 		}
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory
 		return fail(err)
 	}
 	if _, err := Verify(target); err != nil {
-		return fail(fmt.Errorf("verificação após a instalação falhou: %w", err))
+		return fail(fmt.Errorf("verification after the installation failed: %w", err))
 	}
 	return &Result{Installed: selected, Files: count, Warnings: tx.Warnings}, nil
 }
@@ -159,7 +159,7 @@ func (t *Transaction) provisionPaks(ctx context.Context, cat *catalog.Catalog) e
 		return err
 	}
 	if len(prepared.Defaults) > 0 || len(files) != 2 || files[0] != "id1/pak0.pak" || files[1] != "id1/pak1.pak" {
-		return errors.New("o pacote de dados base contém arquivos inesperados")
+		return errors.New("the base data package contains unexpected files")
 	}
 	var created []string
 	t.observer().files(corePackage, 2)

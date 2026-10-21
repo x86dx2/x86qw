@@ -19,10 +19,10 @@ func TestPrepareCacheAdoptsTheCLITrustMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := prepareCache(root); err != nil {
-		t.Fatalf("cache com metadata TUF da CLI foi recusado: %v", err)
+		t.Fatalf("cache with the CLI's TUF metadata was refused: %v", err)
 	}
 	if marker, err := os.ReadFile(filepath.Join(root, cacheMarker)); err != nil || string(marker) != "x86qw-cache-v1\n" {
-		t.Fatalf("marcador do cache ausente: %q %v", marker, err)
+		t.Fatalf("cache marker missing: %q %v", marker, err)
 	}
 
 	foreign := filepath.Join(t.TempDir(), "x86qw")
@@ -32,7 +32,7 @@ func TestPrepareCacheAdoptsTheCLITrustMetadata(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(foreign, "notes.txt"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := prepareCache(foreign); err == nil || !strings.Contains(err.Error(), "não pertencem ao instalador") {
-		t.Fatalf("cache com arquivos alheios deveria ser preservado: %v", err)
+	if err := prepareCache(foreign); err == nil || !strings.Contains(err.Error(), "do not belong to the installer") {
+		t.Fatalf("a cache with foreign files should be kept: %v", err)
 	}
 }

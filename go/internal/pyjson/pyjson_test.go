@@ -31,17 +31,17 @@ func TestDumpsKeepsThePublishedFormat(t *testing.T) {
 func TestServicesDocuments(t *testing.T) {
 	value := map[string]any{"b": []any{1, "á\n"}, "a": nil, "c": map[string]any{}, "d": true}
 	if got, _ := Dumps(value, -1); got != `{"a": null, "b": [1, "á\n"], "c": {}, "d": true}` {
-		t.Fatalf("uma linha: %s", got)
+		t.Fatalf("one line: %s", got)
 	}
 	want := "{\n  \"a\": null,\n  \"b\": [\n    1,\n    \"á\\n\"\n  ],\n  \"c\": {},\n  \"d\": true\n}"
 	if got, _ := Dumps(value, 2); got != want {
-		t.Fatalf("indentado: %q", got)
+		t.Fatalf("indented: %q", got)
 	}
 	decoded, err := Decode([]byte(`{"pid": 12345678901234, "ratio": 0.5}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := Dumps(decoded, -1); got != `{"pid": 12345678901234, "ratio": 0.5}` {
-		t.Fatalf("números: %s", got)
+		t.Fatalf("numbers: %s", got)
 	}
 }

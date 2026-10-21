@@ -144,7 +144,7 @@ func Update(in Input) (*Plan, error) {
 		rows = append(rows, *row)
 	}
 	if current.stale {
-		rows = append(rows, Row{Kind: "Sistema", Item: "Estado da instalação", Installed: "ausente ou formato histórico", Available: "formato 2", Action: "Migrar"})
+		rows = append(rows, Row{Kind: "System", Item: "Installation state", Installed: "missing or an old format", Available: "format 2", Action: "Migrate"})
 	}
 	clients := 0
 	for _, spec := range catalog.ClientSpecs {
@@ -158,7 +158,7 @@ func Update(in Input) (*Plan, error) {
 			}
 			rec, err := receipt.ParseClient(payload, spec.Context(channel))
 			if err != nil {
-				return nil, fmt.Errorf("recibo ezQuake inválido %s %s: %w", spec.Platform, channel, err)
+				return nil, fmt.Errorf("invalid ezQuake receipt %s %s: %w", spec.Platform, channel, err)
 			}
 			clients++
 			releases, err := in.Catalog.ClientReleases(spec, channel)
@@ -178,25 +178,25 @@ func Update(in Input) (*Plan, error) {
 				continue
 			}
 			if available == installed && action == ActionPrepareNightly {
-				rows = append(rows, Row{Kind: "Cliente", Item: item, Installed: "área segura", Available: "tela inteira", Action: "Reparar"})
+				rows = append(rows, Row{Kind: "Client", Item: item, Installed: "safe area", Available: "full screen", Action: "Repair"})
 				continue
 			}
 			if available != installed && !catalog.ReleaseIsNewer(available, installed, channel) {
 				continue
 			}
-			row := Row{Kind: "Cliente", Item: item, Installed: installed, Available: available, Action: "Atualizar", Size: size(releases[0])}
+			row := Row{Kind: "Client", Item: item, Installed: installed, Available: available, Action: "Update", Size: size(releases[0])}
 			if action == ActionRestoreUpstream {
-				row.Installed, row.Available, row.Action = "bundle re-assinado localmente", "bundle upstream integral", "Restaurar"
+				row.Installed, row.Available, row.Action = "bundle re-signed locally", "intact upstream bundle", "Restore"
 			}
 			rows = append(rows, row)
 		}
 	}
 	if clients == 0 {
-		return nil, fmt.Errorf("nenhum ezQuake gerenciado foi encontrado em %s; use install.sh para instalar o x86QW", in.Root)
+		return nil, fmt.Errorf("no managed ezQuake was found in %s; use install.sh to install x86QW", in.Root)
 	}
 	for _, id := range legacyRemovals {
 		if record, ok := current.records[id]; ok {
-			rows = append(rows, Row{Kind: "Componente", Item: "Sons redundantes nQuake", Installed: record.Receipt.Get("selection"), Available: "incorporado ao KTX", Action: "Remover"})
+			rows = append(rows, Row{Kind: "Component", Item: "Redundant nQuake sounds", Installed: record.Receipt.Get("selection"), Available: "merged into KTX", Action: "Remove"})
 		}
 	}
 	for _, legacy := range legacyReplacements {
@@ -208,7 +208,7 @@ func Update(in Input) (*Plan, error) {
 		if err != nil {
 			return nil, err
 		}
-		rows = append(rows, Row{Kind: "Componente", Item: label(in, legacy.replacement), Installed: record.Receipt.Get("selection"), Available: pkg.Version, Action: "Migrar", Size: size(pkg)})
+		rows = append(rows, Row{Kind: "Component", Item: label(in, legacy.replacement), Installed: record.Receipt.Get("selection"), Available: pkg.Version, Action: "Migrate", Size: size(pkg)})
 	}
 	for _, id := range current.installed(in) {
 		pkg, err := in.Catalog.ComponentPackage(id, in.Inventory.ContentNamespaces)
@@ -219,7 +219,7 @@ func Update(in Input) (*Plan, error) {
 		if installed == pkg.Version || newerOverlay(installed, pkg.Version) {
 			continue
 		}
-		rows = append(rows, Row{Kind: "Componente", Item: label(in, id), Installed: installed, Available: pkg.Version, Action: "Atualizar", Size: size(pkg)})
+		rows = append(rows, Row{Kind: "Component", Item: label(in, id), Installed: installed, Available: pkg.Version, Action: "Update", Size: size(pkg)})
 	}
 	return finish(in.Root, rows), nil
 }
@@ -260,7 +260,7 @@ func Upgrade(in Input) (*Plan, error) {
 		if err != nil {
 			return nil, err
 		}
-		rows = append(rows, Row{Kind: "Componente", Item: label(in, id), Installed: "não instalado", Available: pkg.Version, Action: "Adicionar", Size: size(pkg)})
+		rows = append(rows, Row{Kind: "Component", Item: label(in, id), Installed: "not installed", Available: pkg.Version, Action: "Add", Size: size(pkg)})
 	}
 	return finish(in.Root, rows), nil
 }
@@ -301,5 +301,5 @@ func cliRow(in Input) (*Row, error) {
 	if err != nil || newer <= 0 {
 		return nil, err
 	}
-	return &Row{Kind: "CLI", Item: "x86QW", Installed: in.CLIVersion, Available: pkg.Version, Action: "Atualizar", Size: size(pkg)}, nil
+	return &Row{Kind: "CLI", Item: "x86QW", Installed: in.CLIVersion, Available: pkg.Version, Action: "Update", Size: size(pkg)}, nil
 }
