@@ -68,6 +68,18 @@ jobs:
           Start-Process -FilePath $exe -ArgumentList $arguments -RedirectStandardOutput $out -NoNewWindow -Wait
           $printed = Get-Content $out -Raw
           if ($printed -notmatch [regex]::Escape("+qwurl $link")) { throw "o handler de qw:// não abriu o link: $printed" }
+          # Um clique: sem "URL Protocol" o shell não entrega o link ao
+          # handler, que abre o ezQuake com +qwurl.
+          if ($null -eq (Get-ItemProperty "HKCU:\Software\Classes\qw").'URL Protocol') { throw "qw sem URL Protocol" }
+          Start-Process $link
+          $deadline = (Get-Date).AddSeconds(30)
+          do {
+            Start-Sleep -Milliseconds 250
+            $started = @(Get-CimInstance Win32_Process -Filter "Name LIKE 'ezquake%'" | Where-Object { $_.CommandLine -like "*+qwurl $link*" })
+          } while ($started.Count -eq 0 -and (Get-Date) -lt $deadline)
+          if ($started.Count -eq 0) { throw "o clique no link não abriu o ezQuake com +qwurl" }
+          Write-Host "clique -> $($started[0].CommandLine)"
+          Get-Process ezquake* -ErrorAction SilentlyContinue | Stop-Process -Force
           # Uma demo aberta pelo shell, como um duplo clique: o handler a copia
           # para qw\demos antes de abrir o ezQuake.
           $demo = Join-Path $env:RUNNER_TEMP "final.mvd"
