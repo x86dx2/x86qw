@@ -101,6 +101,18 @@ planeje o trabalho antes de junho de 2027.
 - **O deploy recusou: "produção serve o timestamp N e main o M".** A renovação
   publicou e o PR que registra o timestamp ainda não entrou. Espere o merge
   dele; o deploy roda de novo.
+- **A renovação publicou, mas o PR de registro nem abriu** (o run falha em
+  "Record the published timestamp on main"; o branch `bot/tuf-timestamp-vN`
+  existe sem PR). Produção fica à frente de `main` e todo deploy recusa até o
+  registro entrar. Abra o PR à mão, espere a CI e faça o merge:
+
+  ```sh
+  gh pr create --base main --head bot/tuf-timestamp-vN \
+    --title "chore(trust): record published TUF timestamp vN" --body "Registro manual."
+  ```
+
+  A causa usual é o `RELEASE_GH_TOKEN` sem permissão *Pull requests: Read and
+  write* (aconteceu com a v56, #355).
 - **O PR da renovação (`bot/tuf-timestamp-vN`) falhou na CI e ficou aberto.**
   Produção segue à frente de `main` até ele entrar. Corrija o que a CI apontou
   no próprio branch e faça o merge; o deploy e o monitor voltam ao normal.
