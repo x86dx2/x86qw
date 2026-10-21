@@ -120,7 +120,7 @@ func runPlan(command string, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "! %s\n", warning)
 	}
 	for _, client := range applied.Clients {
-		fmt.Fprintf(stdout, "✓ %s atualizado\n", client)
+		fmt.Fprintf(stdout, "✓ %s updated\n", client)
 	}
 	if len(applied.Installed) > 0 {
 		fmt.Fprintf(stdout, "✓ %d components updated · %d files\n", len(applied.Installed), applied.Files)

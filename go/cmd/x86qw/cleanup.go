@@ -48,13 +48,13 @@ func runCleanup(args []string, stdout, stderr io.Writer) int {
 		return fail(err)
 	}
 	defer held.Release()
-	fmt.Fprintln(stdout, "\nLimpeza segura")
+	fmt.Fprintln(stdout, "\nSafe cleanup")
 	result, err := maint.Cleanup(target, a.downloads, a.personal)
 	if err != nil {
 		return fail(err)
 	}
 	for _, root := range result.Caches {
-		fmt.Fprintf(stdout, "✓ Cache removido: %s\n", root)
+		fmt.Fprintf(stdout, "✓ Cache removed: %s\n", root)
 	}
 	if result.Cache > 0 {
 		fmt.Fprintf(stdout, "✓ Regenerable data removed (%s).\n", fileCount(result.Cache))
@@ -62,7 +62,7 @@ func runCleanup(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "· No regenerable data in the installation needed removing.")
 	}
 	if result.Personal > 0 {
-		fmt.Fprintf(stdout, "✓ Dados pessoais locais removidos (%s).\n", fileCount(result.Personal))
+		fmt.Fprintf(stdout, "✓ Local personal data removed (%s).\n", fileCount(result.Personal))
 	} else if !a.personal {
 		fmt.Fprintln(stdout, "· History, logs and demos were kept; use --personal-data to remove them.")
 	}

@@ -43,7 +43,7 @@ func runPlay(args []string, stdout, stderr io.Writer) int {
 	if request.planJSON {
 		con.out = io.Discard
 	} else {
-		fmt.Fprintf(stdout, "\n%s · partida local\nDestino: %s\n", con.paint("x86QW", paletteAccent+"m\033[1"), target)
+		fmt.Fprintf(stdout, "\n%s · local match\nTarget: %s\n", con.paint("x86QW", paletteAccent+"m\033[1"), target)
 	}
 	resolved, err := play.Resolve(target, play.Request{Game: request.game, Mode: request.mode, Map: request.mapName,
 		Ruleset: request.ruleset, Channel: request.channel, Options: request.options})

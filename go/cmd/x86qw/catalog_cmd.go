@@ -78,7 +78,7 @@ func runCatalog(args []string, stdout, stderr io.Writer) int {
 	sort.Strings(names)
 	for _, name := range names {
 		state := catalog.Roles[name]
-		fmt.Fprintf(stdout, "  %-9s v%-3d expira %s\n", name, state.Version, state.Expires.UTC().Format(time.RFC3339))
+		fmt.Fprintf(stdout, "  %-9s v%-3d expires %s\n", name, state.Version, state.Expires.UTC().Format(time.RFC3339))
 	}
 	return output.ExitSuccess
 }

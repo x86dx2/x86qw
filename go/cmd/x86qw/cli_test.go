@@ -63,8 +63,8 @@ func TestFlagsGoAnywhere(t *testing.T) {
 		t.Fatalf("%d %s", code, stderr.String())
 	}
 	stderr.Reset()
-	if code := run([]string{"verify", target, "--target", filepath.Join(target, "outra")}, &stdout, &stderr); code != 2 {
-		t.Fatalf("destinos divergentes: %d %s", code, stderr.String())
+	if code := run([]string{"verify", target, "--target", filepath.Join(target, "other")}, &stdout, &stderr); code != 2 {
+		t.Fatalf("targets disagree: %d %s", code, stderr.String())
 	}
 }
 

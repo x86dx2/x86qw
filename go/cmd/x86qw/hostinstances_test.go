@@ -74,7 +74,7 @@ func TestServerInstancesRunTogether(t *testing.T) {
 	}
 	options, err := setup.LoadChoices(target)
 	if err != nil || options == nil {
-		t.Fatalf("escolhas: %v", err)
+		t.Fatalf("choices: %v", err)
 	}
 	before := treeFiles(t, filepath.Join(target, "qw"))
 	// The test binary cannot be a background controller: run the same
@@ -96,7 +96,7 @@ func TestServerInstancesRunTogether(t *testing.T) {
 		time.Sleep(300 * time.Millisecond)
 	}
 	if first, second := queryServer(27720), queryServer(27721); first != "dm6" || second != "dm3" {
-		t.Fatalf("mapas: %q e %q", first, second)
+		t.Fatalf("maps: %q and %q", first, second)
 	}
 	var status bytes.Buffer
 	run([]string{"status", "--target", target}, &status, &status)

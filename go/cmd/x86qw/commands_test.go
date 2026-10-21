@@ -50,8 +50,8 @@ func fixtureInstall(t *testing.T) string {
 	root := filepath.Join(t.TempDir(), "x86qw")
 	writeFile(t, filepath.Join(root, "id1", "pak0.pak"), "PACK pak0")
 	writeFile(t, filepath.Join(root, "id1", "pak1.pak"), "PACK pak1")
-	writeFile(t, filepath.Join(root, "ezquake", "configs", "config.cfg"), "name jogador\n")
-	writeFile(t, filepath.Join(root, "qw", "demos", "partida.mvd"), "demo")
+	writeFile(t, filepath.Join(root, "ezquake", "configs", "config.cfg"), "name player\n")
+	writeFile(t, filepath.Join(root, "qw", "demos", "match.mvd"), "demo")
 	spec := catalog.ClientSpecs[1] // Linux x86_64
 	version := "20260101-000000_abcdef0"
 	writeFile(t, filepath.Join(root, spec.Runtime("nightly")), "\x7fELF nightly")
@@ -62,11 +62,11 @@ func fixtureInstall(t *testing.T) string {
 			"format": "1", "platform": spec.Platform, "architecture": spec.Architecture, "channel": "nightly",
 			"selection": version, "install_name": spec.Runtime("nightly"), "bundle_version": version,
 			"artifact_name": version + spec.NightlySuffix, "artifact_url": "https://example.invalid/" + version + spec.NightlySuffix,
-			"artifact_sha256": digest("artefato"), "binary_sha256": digest("\x7fELF nightly"),
+			"artifact_sha256": digest("artifact"), "binary_sha256": digest("\x7fELF nightly"),
 		},
 	}
 	writeFile(t, filepath.Join(root, filepath.FromSlash(spec.Receipt("nightly"))), string(client.Marshal()))
-	files := map[string]string{"qw/maps/x86qw-a.bsp": "mapa a", "qw/maps/x86qw-b.bsp": "mapa b"}
+	files := map[string]string{"qw/maps/x86qw-a.bsp": "map a", "qw/maps/x86qw-b.bsp": "map b"}
 	var entries []receipt.Entry
 	for relative, body := range files {
 		writeFile(t, filepath.Join(root, filepath.FromSlash(relative)), body)
@@ -110,10 +110,10 @@ func runOK(t *testing.T, want int, args ...string) string {
 
 func TestLibraryAddsListsAndRemoves(t *testing.T) {
 	root := fixtureInstall(t)
-	if out := runOK(t, 0, "library", root, "--add", "QW.Example.com:27500"); !strings.Contains(out, "favoritos: 1\n  qw.example.com:27500") {
+	if out := runOK(t, 0, "library", root, "--add", "QW.Example.com:27500"); !strings.Contains(out, "favorites: 1\n  qw.example.com:27500") {
 		t.Fatalf("after --add: %s", out)
 	}
-	if out := runOK(t, 0, "library", "--remove", "qw.example.com:27500", "--target", root); !strings.Contains(out, "favoritos: 0") {
+	if out := runOK(t, 0, "library", "--remove", "qw.example.com:27500", "--target", root); !strings.Contains(out, "favorites: 0") {
 		t.Fatalf("after --remove: %s", out)
 	}
 	runOK(t, 1, "library", root, "--add", "not an address")
@@ -122,25 +122,25 @@ func TestLibraryAddsListsAndRemoves(t *testing.T) {
 
 func TestProfileBacksUpAndRestores(t *testing.T) {
 	root := fixtureInstall(t)
-	bundle := filepath.Join(t.TempDir(), "perfil.zip")
+	bundle := filepath.Join(t.TempDir(), "profile.zip")
 	runOK(t, 0, "profile", root, "--backup", bundle)
 	if _, err := os.Stat(bundle); err != nil {
 		t.Fatal(err)
 	}
 	config := filepath.Join(root, "ezquake", "configs", "config.cfg")
-	writeFile(t, config, "name outro\n")
+	writeFile(t, config, "name other\n")
 	if out := runOK(t, 0, "profile", "--restore", bundle, root); !strings.Contains(out, "ezquake/configs/config.cfg") {
 		t.Fatalf("restore: %s", out)
 	}
-	if data, _ := os.ReadFile(config); string(data) != "name jogador\n" {
+	if data, _ := os.ReadFile(config); string(data) != "name player\n" {
 		t.Fatalf("config.cfg did not come back: %q", data)
 	}
-	runOK(t, 1, "profile", root, "--backup", filepath.Join(root, "sub", "dentro.zip"))
+	runOK(t, 1, "profile", root, "--backup", filepath.Join(root, "sub", "inside.zip"))
 }
 
 func TestChangesShowsWhatTheUserEdited(t *testing.T) {
 	root := fixtureInstall(t)
-	writeFile(t, filepath.Join(root, "qw", "maps", "x86qw-a.bsp"), "mapa editado")
+	writeFile(t, filepath.Join(root, "qw", "maps", "x86qw-a.bsp"), "map edited")
 	if out := runOK(t, 0, "changes", root); !strings.Contains(out, "M  qw/maps/x86qw-a.bsp") {
 		t.Fatalf("changes: %s", out)
 	}
@@ -161,9 +161,9 @@ func TestCleanupMigrateAndStatusLeaveTheInstallation(t *testing.T) {
 	}
 	runOK(t, 1, "status", "--stop", "--yes", root)
 	runOK(t, 2, "status", "--json", "--stop", root)
-	for _, kept := range []string{"id1/pak0.pak", "qw/demos/partida.mvd", ".x86qw/state.json"} {
+	for _, kept := range []string{"id1/pak0.pak", "qw/demos/match.mvd", ".x86qw/state.json"} {
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(kept))); err != nil {
-			t.Fatalf("%s sumiu: %v", kept, err)
+			t.Fatalf("%s is gone: %v", kept, err)
 		}
 	}
 }
@@ -190,7 +190,7 @@ func TestUninstallWithYesKeepsWhatIsYours(t *testing.T) {
 	root := fixtureInstall(t)
 	runOK(t, 2, "uninstall", root)
 	runOK(t, 0, "uninstall", root, "--yes")
-	for _, kept := range []string{"id1/pak0.pak", "ezquake/configs/config.cfg", "qw/demos/partida.mvd"} {
+	for _, kept := range []string{"id1/pak0.pak", "ezquake/configs/config.cfg", "qw/demos/match.mvd"} {
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(kept))); err != nil {
 			t.Fatalf("%s should stay: %v", kept, err)
 		}

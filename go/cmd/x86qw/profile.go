@@ -42,7 +42,7 @@ func runProfile(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
 			return output.ExitFailure
 		}
-		fmt.Fprintf(stdout, "✓ Perfil gravado: %s\n", destination)
+		fmt.Fprintf(stdout, "✓ Profile written: %s\n", destination)
 	}
 	if a.restore != "" {
 		restored, err := maint.RestoreProfile(expandHome(a.restore), target)
@@ -54,7 +54,7 @@ func runProfile(args []string, stdout, stderr io.Writer) int {
 		if len(restored) > 0 {
 			list = strings.Join(restored, ", ")
 		}
-		fmt.Fprintf(stdout, "✓ Arquivos restaurados: %s\n", list)
+		fmt.Fprintf(stdout, "✓ Files restored: %s\n", list)
 	}
 	return output.ExitSuccess
 }
