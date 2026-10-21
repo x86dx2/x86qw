@@ -1,31 +1,31 @@
 # Risk register — M3-first
 
-Riscos owner-only e riscos condicionais de uma futura audiência external-public são separados. Nenhum risco externo vira bloqueio artificial para a funcionalidade no M3.
+Owner-only risks and the conditional risks of a future external-public audience are kept apart. No external risk becomes an artificial block on features on the M3.
 
-| ID | Risco | P | I | Score | Estado | Escopo | Mitigação |
+| ID | Risk | P | I | Score | State | Scope | Mitigation |
 | --- | --- | ---: | ---: | --- | --- | --- | --- |
-| R-001 | CI vermelho mascara regressão no contrato Windows | alta | alta | high | MITIGATED | owner-only | protocolo determinístico e flake zero |
-| R-002 | autoridade comunica bytes ou audiência errados | média | crítica | high | CONTROLLED | owner-only | projeção única, hashes e verificação live; receipt 33136179763 |
-| R-003 | lease TUF expira sem renovação | média | crítica | high | CONTROLLED | owner-only | monitor técnico, alerta e renovação antes da janela |
-| R-004 | reachability transitória interrompe update | média | alta | high | ACCEPTED_WITH_FALLBACK | owner-only | retry, cache, mirror e diagnóstico |
-| R-005 | SBOM/ownership sem classificação | alta | alta | high | DEFERRED | external-public | classificar antes de redistribuição ampla |
-| R-006 | cleanup remove ou abandona dados pessoais | média | alta | high | CONTROLLED | owner-only | contrato, dry-run, backup e purge explícito |
-| R-007 | self-review falha em release/trust | média | crítica | high | ACCEPTED_OWNER_ONLY | external-public | custodian e reviewer antes da abertura |
-| R-008 | mirror único vira ponto de falha | média | alta | high | CONTROLLED | owner-only | fallback e verificação após deploy |
-| R-009 | claim de suporte excede evidência M3 | alta | média | high | MITIGATED | owner-only | M3 como único suporte nativo; demais preview |
-| R-010 | migração/soak externo falha após abertura | média | crítica | high | DEFERRED | external-public | EP-1/EP-2 somente quando audiência mudar |
-| R-011 | QWLeague usa protocolo não autorizado | baixa | alta | medium | BLOCKED_EXTERNAL | opcional | sem scraping, auth ou dependência obrigatória |
-| R-012 | processo grande demais congela funcionalidades | alta | alta | high | MITIGATED_BY_S0 | owner-only | S0 curto; gates externos condicionais |
-| R-013 | reset destrutivo perde evidência ou dados | baixa | crítica | high | DEFERRED | futura publicação | backup/export/rollback antes de apagar histórico |
+| R-001 | red CI masks a regression in the Windows contract | high | high | high | MITIGATED | owner-only | deterministic protocol and zero flakes |
+| R-002 | an authority communicates the wrong bytes or audience | medium | critical | high | CONTROLLED | owner-only | single projection, hashes and live verification; receipt 33136179763 |
+| R-003 | the TUF lease expires without renewal | medium | critical | high | CONTROLLED | owner-only | technical monitor, alert and renewal before the window |
+| R-004 | transient reachability interrupts an update | medium | high | high | ACCEPTED_WITH_FALLBACK | owner-only | retry, cache, mirror and diagnostics |
+| R-005 | unclassified SBOM/ownership | high | high | high | DEFERRED | external-public | classify before wide redistribution |
+| R-006 | cleanup removes or abandons personal data | medium | high | high | CONTROLLED | owner-only | contract, dry-run, backup and explicit purge |
+| R-007 | self-review fails on release/trust | medium | critical | high | ACCEPTED_OWNER_ONLY | external-public | custodian and reviewer before opening |
+| R-008 | a single mirror becomes a point of failure | medium | high | high | CONTROLLED | owner-only | fallback and verification after deploy |
+| R-009 | a support claim exceeds the M3 evidence | high | medium | high | MITIGATED | owner-only | the M3 as the only native support; the rest preview |
+| R-010 | external migration/soak fails after opening | medium | critical | high | DEFERRED | external-public | EP-1/EP-2 only when the audience changes |
+| R-011 | QWLeague uses an unauthorized protocol | low | high | medium | BLOCKED_EXTERNAL | optional | no scraping, auth or required dependency |
+| R-012 | too much process freezes features | high | high | high | MITIGATED_BY_S0 | owner-only | short S0; conditional external gates |
+| R-013 | a destructive reset loses evidence or data | low | critical | high | DEFERRED | future publication | backup/export/rollback before erasing history |
 
-## Política de tratamento
+## Treatment policy
 
-- **Aceitar:** risco explícito no escopo owner-only, sem afirmar suporte externo.
-- **Mitigar:** issue pequena com Maker, Checker, teste e rollback.
-- **Transferir:** somente com custódia ou contrato real.
-- **Evitar:** não iniciar integração externa sem autorização.
-- **Encerrar:** apenas com evidência correspondente ao acceptance.
+- **Accept:** an explicit risk in the owner-only scope, without claiming external support.
+- **Mitigate:** a small issue with Maker, Checker, test and rollback.
+- **Transfer:** only with real custody or a real contract.
+- **Avoid:** do not start an external integration without authorization.
+- **Close:** only with evidence matching the acceptance.
 
-Histórico Git não é apagado como parte da estabilização. Uma eventual publicação com baseline nova deve ser planejada como operação destrutiva separada, com cópia verificável das evidências.
+Git history is not erased as part of stabilization. A possible publication with a new baseline must be planned as a separate destructive operation, with a verifiable copy of the evidence.
 
-Os dados machine-readable estão em [risk-register.json](risk-register.json).
+The machine-readable data is in [risk-register.json](risk-register.json).

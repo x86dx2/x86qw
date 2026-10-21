@@ -1,69 +1,70 @@
-# Audiência e claims de suporte
+# Audience and support claims
 
-Audiência é uma decisão de autorização, não um sinônimo de bytes publicados.
-O candidato `x86qw-installer-1.0.0` existe e a cadeia de verdade foi
-reconciliada para o escopo owner-only: um mantenedor no Apple M3, com
-`MAIN=GREEN`, `TUF=HEALTHY` e deployment convergente. Isso não autoriza
-`external-public`.
+An audience is an authorization decision, not a synonym for published bytes.
+The `x86qw-installer-1.0.0` candidate exists and the chain of truth was
+reconciled for the owner-only scope: one maintainer on the Apple M3, with
+`MAIN=GREEN`, `TUF=HEALTHY` and a converging deployment. That does not
+authorize `external-public`.
 
-## Matriz atual
+## Current matrix
 
-| Audiência | Estado | O que pode ser dito | O que não pode ser dito |
+| Audience | State | What may be said | What may not be said |
 | --- | --- | --- | --- |
-| `owner-only` | VALID_FOR_SINGLE_USER_M3 | publicação final, E3 M3 e lifecycle single-user verificados | suporte externo ou upgrade histórico não validado |
-| `external-public` | NO-GO | é uma intenção futura sujeita a EP-1–EP-5 | que a release está pronta para usuários externos |
-| `preview` por plataforma | VERIFIED POLICY | artefato/contrato pode ser consultado | que houve execução nativa do candidato |
-| `supported` | BLOCKED onde não há E3 | somente após evidência nativa do candidato exato | inferir por CI portátil ou presença do ZIP |
+| `owner-only` | VALID_FOR_SINGLE_USER_M3 | final publication, E3 M3 and single-user lifecycle verified | external support or an unvalidated historical upgrade |
+| `external-public` | NO-GO | it is a future intention subject to EP-1–EP-5 | that the release is ready for external users |
+| `preview` per platform | VERIFIED POLICY | the artifact/contract may be consulted | that the candidate ran natively |
+| `supported` | BLOCKED where there is no E3 | only after native evidence of the exact candidate | inferring it from portable CI or the ZIP being present |
 
-## Owner-only limitado
+## Limited owner-only
 
-O escopo owner-only permite um mantenedor, instalação limpa descartável e
-aceitação no Apple M3. A aceitação pública final registrada usa `single-user`;
-ela não comprova migração histórica nem experiência de usuários externos. A
-observação 0E deve registrar versão, catálogo/TUF, lifecycle, update, repair,
-uninstall/purge e qualquer incidente sem alterar os bytes já publicados.
+The owner-only scope allows one maintainer, a clean throwaway install and
+acceptance on the Apple M3. The final recorded public acceptance uses
+`single-user`; it does not prove historical migration nor the experience of
+external users. The 0E observation must record version, catalog/TUF, lifecycle,
+update, repair, uninstall/purge and any incident without changing the bytes
+already published.
 
-## Transição para `external-public`
+## Moving to `external-public`
 
-O mantenedor precisa registrar uma decisão EP-0 explícita. Sem ela, as
-capacidades externas ficam estacionadas. Com ela, a ordem obrigatória é:
+The maintainer must record an explicit EP-0 decision. Without it, the external
+capabilities stay parked. With it, the required order is:
 
-1. EP-1: migração real com fixtures `0.7.0–0.7.13`, preservação e rollback;
-2. EP-2: soak exato de sete dias, com uma referência HTTPS e hardware por dia;
-3. EP-3: custódia, renovação e recuperação TUF de produção;
-4. EP-4: aceitação por usuário externo no endpoint e candidato exatos;
-5. EP-5: decisão de plataforma, mantendo `preview` até haver E3 específico.
+1. EP-1: real migration with `0.7.0–0.7.13` fixtures, preservation and rollback;
+2. EP-2: an exact seven-day soak, with one HTTPS reference and hardware per day;
+3. EP-3: production TUF custody, renewal and recovery;
+4. EP-4: acceptance by an external user on the exact endpoint and candidate;
+5. EP-5: platform decision, keeping `preview` until there is a specific E3.
 
-O resumo de cada etapa deve conter commit, digests, run, artefacto, endpoint
-observado, timestamp e Checker. Falha ou evidência ausente mantém `NO-GO`.
+The summary of each step must hold the commit, digests, run, artifact, observed
+endpoint, timestamp and Checker. A failure or missing evidence keeps `NO-GO`.
 
-## Matriz de evidência nativa
+## Native evidence matrix
 
-| Plataforma | Artefato | Contrato portátil | Evidência nativa do candidato exato | Estado |
+| Platform | Artifact | Portable contract | Native evidence of the exact candidate | State |
 | --- | --- | --- | --- | --- |
-| macOS arm64/M3 | sim | sim | E3, 25/25 | conditional |
-| macOS Intel | sim | sim | não observada | preview |
-| Linux x86_64 | sim | sim | não observada | preview |
-| Windows x64 | sim | sim | não observada; contrato portátil 3.10/3.13 verde | preview |
-| macOS nightly | sim | sim | insuficiente | preview |
+| macOS arm64/M3 | yes | yes | E3, 25/25 | conditional |
+| macOS Intel | yes | yes | not observed | preview |
+| Linux x86_64 | yes | yes | not observed | preview |
+| Windows x64 | yes | yes | not observed; portable contract 3.10/3.13 green | preview |
+| macOS nightly | yes | yes | insufficient | preview |
 
-Disponibilidade do artefato não é suporte. Cada promoção exige issue, owner,
-Checker, candidato/digest e execução nativa no ambiente declarado.
+Artifact availability is not support. Each promotion needs an issue, owner,
+Checker, candidate/digest and a native run in the declared environment.
 
-## Claims proibidos nesta fase
+## Claims forbidden in this phase
 
-- não afirmar headers de site, Core Web Vitals ou latência sem captura
-  reproduzível;
-- não chamar Linux, Windows, macOS Intel ou nightly de `supported` por causa do
-  instalador físico;
-- não chamar um mirror de pacote de operação redundante;
-- não tratar QWLeague como integração oficial sem contrato/API/OAuth/webhook
-  verificado;
-- não apresentar o RC como evidência final quando a receipt aponta para ele.
+- do not claim site headers, Core Web Vitals or latency without a reproducible
+  capture;
+- do not call Linux, Windows, macOS Intel or nightly `supported` because of the
+  physical installer;
+- do not call a package mirror a redundant operation;
+- do not treat QWLeague as an official integration without a verified
+  contract/API/OAuth/webhook;
+- do not present the RC as final evidence when the receipt points at it.
 
-## Fontes
+## Sources
 
 - [release truth](RELEASE-TRUTH.md);
-- [readiness external-public](EXTERNAL-PUBLIC-READINESS.md);
-- [política de plataformas](../PROJECT-STATUS.md);
-- [ADR owner-only](../adr/0008-owner-only-release-gates.md).
+- [external-public readiness](EXTERNAL-PUBLIC-READINESS.md);
+- [platform policy](../PROJECT-STATUS.md);
+- [owner-only ADR](../adr/0008-owner-only-release-gates.md).

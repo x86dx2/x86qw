@@ -1,54 +1,54 @@
-# Readiness para external-public
+# Readiness for external-public
 
-**Veredito:** NO-GO.
+**Verdict:** NO-GO.
 
-Snapshot vivo: `2026-08-28T02:32:21Z`; `MAIN=GREEN`, `TUF=HEALTHY` e
-`1.0.0 owner-only=VALID_FOR_SINGLE_USER_M3`. A projeção pública convergente
-foi verificada no run `33136179763`; o Validate da linha `main` passou no run
-`33135951867`. Esses fatos fecham o escopo owner-only, mas não substituem os
-gates condicionais de abertura para terceiros.
+Live snapshot: `2026-08-28T02:32:21Z`; `MAIN=GREEN`, `TUF=HEALTHY` and
+`1.0.0 owner-only=VALID_FOR_SINGLE_USER_M3`. The converging public projection
+was verified in run `33136179763`; the `main` line's Validate passed in run
+`33135951867`. These facts close the owner-only scope, but they do not replace
+the conditional gates for opening to third parties.
 
-A tag x86qw-installer-1.0.0 e o smoke M3 não removem os pré-requisitos de
-disponibilidade, release truth, migração, soak, trust/recovery, aceitação e
-plataforma.
+The x86qw-installer-1.0.0 tag and the M3 smoke do not remove the prerequisites
+of availability, release truth, migration, soak, trust/recovery, acceptance and
+platform.
 
-## Checklist de entrada
+## Entry checklist
 
-| Gate | Exigência | Evidência atual | Estado |
+| Gate | Requirement | Current evidence | State |
 | --- | --- | --- | --- |
-| 0A | main verde e matriz Windows 3.10/3.13 | Validate 33135951867, 5/5 jobs exigidos | PASS |
-| 0B | TUF sustentável, custódia e recovery | root v1, timestamp v30, snapshot/targets v29; custódia/RTO independentes ausentes | BLOCKED_EXTERNAL |
-| 0C | receipt, candidate, audiência e digests coerentes | projeção 33136179763; site/product/catalog/release-truth convergentes | PASS_OWNER_ONLY |
-| 0D | backlog, Maker/Checker e rollback completos | documentação vinculada à #164; limites externos registrados | PASS_OWNER_ONLY |
-| 0E | observação owner-only | aceitação single-user e lifecycle completo no M3 | PASS_OWNER_ONLY |
-| EP-1 | migração real da baseline publicada | instalador 0.7.13 exato não autentica o estado histórico; somente condicional se upgrade for prometido | CONDITIONAL |
-| EP-2 | soak consecutivo de sete dias | não iniciado para audiência externa | BLOCKED |
-| EP-3 | operação/recovery TUF de produção | falta custódia e recovery | BLOCKED |
-| EP-4 | usuário externo | não autorizado/executado | BLOCKED |
-| EP-5 | decisão de plataforma | só E3 M3 do candidato | BLOCKED |
+| 0A | green main and the Windows 3.10/3.13 matrix | Validate 33135951867, 5/5 required jobs | PASS |
+| 0B | sustainable TUF, custody and recovery | root v1, timestamp v30, snapshot/targets v29; independent custody/RTO missing | BLOCKED_EXTERNAL |
+| 0C | coherent receipt, candidate, audience and digests | projection 33136179763; site/product/catalog/release-truth converge | PASS_OWNER_ONLY |
+| 0D | complete backlog, Maker/Checker and rollback | documentation tied to #164; external limits recorded | PASS_OWNER_ONLY |
+| 0E | owner-only observation | single-user acceptance and full lifecycle on the M3 | PASS_OWNER_ONLY |
+| EP-1 | real migration from the published baseline | the exact 0.7.13 installer does not authenticate the historical state; only conditional if an upgrade is promised | CONDITIONAL |
+| EP-2 | seven consecutive days of soak | not started for an external audience | BLOCKED |
+| EP-3 | production TUF operation/recovery | custody and recovery missing | BLOCKED |
+| EP-4 | external user | not authorized/run | BLOCKED |
+| EP-5 | platform decision | only E3 M3 of the candidate | BLOCKED |
 
-## Migração real
+## Real migration
 
-O baseline público usado no EP-1 deve ser o instalador efetivamente publicado
+The public baseline used in EP-1 must be the installer actually published as
 0.7.13 (SHA-256 114604400e1fd18c4180624314d4bc8ca9b6d4559ed26cfe8d0a767287f2aa32).
-Nesta auditoria, esse instalador foi instalado em destino descartável e o CLI
-final 1.0.0 executou migrate; o comando terminou bloqueado porque o estado
-histórico não tinha uma versão autenticada.
+In this audit, that installer was installed into a throwaway target and the
+final 1.0.0 CLI ran migrate; the command ended blocked because the historical
+state had no authenticated version.
 
-A evidência nativa assinada declara o caso migration-0.7.13-real como
-passado, porém o código público do harness escreve installation_version no
-fixture antes da chamada de migração (maintenance/native_case_entrypoint.py).
-Isso prova o contrato do fixture, não o caminho de um usuário que só possui o
-instalador 0.7.13 publicado. O EP-1 deve resolver essa diferença com uma
-decisão/reprodução independente, sem fabricar estado autenticado.
+The signed native evidence declares the migration-0.7.13-real case as passed,
+but the harness's public code writes installation_version into the fixture
+before the migration call (maintenance/native_case_entrypoint.py). That proves
+the fixture's contract, not the path of a user who has only the published
+0.7.13 installer. EP-1 must settle that difference with an independent
+decision/reproduction, without fabricating authenticated state.
 
-## Critérios de promoção
+## Promotion criteria
 
-Uma promoção só é elegível quando cada linha acima tem receipt verificável,
-Checker independente, referência do commit e dos bytes, e nenhum risco high sem
-exceção aprovada. O candidato exato deve permanecer imutável entre EP-1 e EP-5;
-qualquer alteração reinicia a train.
+A promotion is eligible only when every row above has a verifiable receipt, an
+independent Checker, a reference to the commit and the bytes, and no high risk
+without an approved exception. The exact candidate must stay immutable between
+EP-1 and EP-5; any change restarts the train.
 
-QWLeague permanece BLOCKED_EXTERNAL: nenhum adapter, autenticação, scraping,
-cookie, deep link ou alegação de parceria é permitido sem contrato e autorização
-oficiais.
+QWLeague stays BLOCKED_EXTERNAL: no adapter, authentication, scraping, cookie,
+deep link or partnership claim is allowed without an official contract and
+authorization.

@@ -1,30 +1,30 @@
-# CI health e Gate 0A
+# CI health and Gate 0A
 
-**Estado corrente:** `MAIN=GREEN`; Gate 0A permanece fechado. O Validate da
-linha `main` passou no run
+**Current state:** `MAIN=GREEN`; Gate 0A stays closed. The `main` line's
+Validate passed in run
 [33135951867](https://github.com/x86dx2/x86qw/actions/runs/33135951867),
-no commit `962fb2b2cc27560e982c2255d9299a55f16acdd1`, com 5/5 jobs exigidos
-verdes; o job de preview foi omitido sem ser usado como suporte.
+on commit `962fb2b2cc27560e982c2255d9299a55f16acdd1`, with 5/5 required jobs
+green; the preview job was skipped and not used as support.
 
-## Diagnóstico fechado
+## Closed diagnosis
 
-O run histórico 31853649373 falhou somente em
-portable-contract / Windows / Python 3.10. A correção foi restrita a
-maintenance/tests/test_downloader.py: os dois ramos temporais usam relógio
-controlado, o protocolo do processo fake é explícito e os cenários de kill,
-reap limitado, detach e timeout são regressões determinísticas.
+The historical run 31853649373 failed only in
+portable-contract / Windows / Python 3.10. The fix was confined to
+maintenance/tests/test_downloader.py: both time branches use a controlled
+clock, the fake process protocol is explicit, and the kill, bounded reap,
+detach and timeout scenarios are deterministic regressions.
 
-Verificação do Checker:
+Checker verification:
 
-- módulo downloader: 87 testes OK (1 skip);
-- 30.000 execuções repetidas dos três casos novos: zero falha;
-- casos adversariais de kill, wait, TimeoutExpired e output parcial
-  preservaram o orçamento e o erro esperado;
-- manage.py verify --no-tests e git diff --check: OK;
-- Windows/Python 3.10 e 3.13 e a matriz protegida: verdes no run
+- downloader module: 87 tests OK (1 skip);
+- 30,000 repeated runs of the three new cases: zero failures;
+- adversarial cases of kill, wait, TimeoutExpired and partial output
+  kept the budget and the expected error;
+- manage.py verify --no-tests and git diff --check: OK;
+- Windows/Python 3.10 and 3.13 and the protected matrix: green in run
   33135951867.
 
-A classificação é **test-only**. Não há evidência de mudança necessária no
-runtime/package nem motivo para 1.0.1 por este finding. Se uma futura
-reprodução de produto alterar bytes/comportamento, a decisão deverá ser
-reaberta com candidato, receipt e observação novos.
+The classification is **test-only**. There is no evidence of a needed change in
+the runtime/package and no reason for 1.0.1 from this finding. If a future
+product reproduction changes bytes/behavior, the decision must be reopened with
+a new candidate, receipt and observation.
