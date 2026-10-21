@@ -18,7 +18,7 @@ func TestLinuxHandlersComeAndGo(t *testing.T) {
 		t.Fatal(err)
 	}
 	entry, _ := os.ReadFile(handlerEntryPath(home))
-	if !strings.Contains(string(entry), "x-scheme-handler/qw") || !strings.Contains(string(entry), "Exec="+root+"/x86qw.sh open --target "+root+" %u") {
+	if !strings.Contains(string(entry), "x-scheme-handler/qw") || !strings.Contains(string(entry), "Exec="+Command(root)+" open --target "+root+" %u") {
 		t.Fatalf("entry:\n%s", entry)
 	}
 	if err := SetHandlers(t.TempDir(), true, false); err == nil {
@@ -53,7 +53,7 @@ func TestUpdatesRewriteEntriesFromEarlierVersions(t *testing.T) {
 	}
 	RefreshEntries(root, home)
 	for path := range legacy {
-		if got, _ := os.ReadFile(path); !strings.Contains(string(got), "Exec="+launcher+" ") {
+		if got, _ := os.ReadFile(path); !strings.Contains(string(got), "Exec="+Command(root)+" ") || len(StillLegacy(root, home)) > 0 {
 			t.Fatalf("%s was not rewritten:\n%s", path, got)
 		}
 	}

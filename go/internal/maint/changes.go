@@ -34,7 +34,7 @@ func changeIgnoredPaths() []string {
 	paths := map[string]bool{
 		".DS_Store": true, ".gitignore": true, ".x86qw": true, "LICENSE": true, "README-X86QW.txt": true,
 		"ezquake/qconsole.log": true, "ezquake/temp": true, "id1/pak0.pak": true, "id1/pak1.pak": true,
-		"qw/demos": true, "qw/screenshots": true, "x86qw.cmd": true, "x86qw.sh": true,
+		"qw/demos": true, "qw/screenshots": true, "x86qw": true, "x86qw.exe": true, "x86qw.cmd": true, "x86qw.sh": true,
 	}
 	for _, spec := range catalog.ClientSpecs {
 		paths[spec.Runtime("stable")] = true

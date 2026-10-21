@@ -1,10 +1,12 @@
 // Package cli installs this binary as the command-line layer of an
 // installation:
 //
-//	.x86qw/cli/x86qw[.exe]  the native CLI (0755)
+//	x86qw[.exe]             the native CLI (0755), what everything runs
 //	.x86qw/cli/receipt      {"format":1,...,"version":V}
-//	x86qw.sh / x86qw.cmd    a shim that execs the native CLI
-//	~/.local/bin/x86qw      symlink to x86qw.sh (POSIX)
+//	~/.local/bin/x86qw      symlink to it (POSIX)
+//
+// Before 2.5 the binary lived in .x86qw/cli and x86qw.sh or x86qw.cmd
+// launched it; Retire removes those once nothing points at them.
 package cli
 
 import (
@@ -25,30 +27,62 @@ const (
 	cliDir = ".x86qw/cli"
 )
 
-// Shim is the POSIX launcher: resolve symlinks to find the installation,
-// then exec its native CLI with the arguments unchanged.
-const Shim = `#!/bin/sh
-# x86QW launcher: runs the native CLI of this installation.
-set -eu
-path=$0
-while [ -L "$path" ]; do
-  dir=$(CDPATH='' cd -- "$(dirname -- "$path")" && pwd)
-  link=$(readlink "$path")
-  case "$link" in /*) path=$link ;; *) path=$dir/$link ;; esac
-done
-root=$(CDPATH='' cd -- "$(dirname -- "$path")" && pwd)
-exec "$root/.x86qw/cli/x86qw" "$@"
-`
-
-// CmdShim is the Windows launcher.
-const CmdShim = "@echo off\r\n\"%~dp0.x86qw\\cli\\x86qw.exe\" %*\r\nexit /b %ERRORLEVEL%\r\n"
-
 // BinaryName is the CLI file name for this OS.
 func BinaryName() string {
 	if runtime.GOOS == "windows" {
 		return "x86qw.exe"
 	}
 	return "x86qw"
+}
+
+// Command is root's CLI: the command, the shortcuts, the menu entries and
+// the qw:// and demo handlers all run it.
+func Command(root string) string { return filepath.Join(root, BinaryName()) }
+
+// legacyPaths are what the layout before 2.5 put in root: the binary in
+// .x86qw/cli and its launchers.
+func legacyPaths(root string) []string {
+	return []string{
+		filepath.Join(root, filepath.FromSlash(cliDir), BinaryName()),
+		filepath.Join(root, "x86qw.sh"),
+		filepath.Join(root, "x86qw.cmd"),
+	}
+}
+
+// legacyLauncher is the launcher that integrations pointed at before 2.5.
+func legacyLauncher(root string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(root, "x86qw.cmd")
+	}
+	return filepath.Join(root, "x86qw.sh")
+}
+
+// Legacy reports whether root still has any of the layout before 2.5.
+func Legacy(root string) bool {
+	for _, path := range legacyPaths(root) {
+		if _, err := os.Lstat(path); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// Retire removes the layout before 2.5 from root. A binary that is still
+// running moves aside instead (TidyAside removes it later), and on Windows
+// an x86qw.cmd that cmd.exe is running goes once that cmd.exe ends.
+func Retire(root string) error {
+	var errs []error
+	binary := legacyPaths(root)[0]
+	if err := os.Remove(binary); err != nil && !errors.Is(err, os.ErrNotExist) {
+		// Windows keeps a running executable, but lets it be renamed.
+		os.Remove(binary + asideSuffix)
+		errs = append(errs, os.Rename(binary, binary+asideSuffix))
+	}
+	if err := os.Remove(filepath.Join(root, "x86qw.sh")); err != nil && !errors.Is(err, os.ErrNotExist) {
+		errs = append(errs, err)
+	}
+	errs = append(errs, retireBatch(filepath.Join(root, "x86qw.cmd")))
+	return errors.Join(errs...)
 }
 
 // Receipt renders .x86qw/cli/receipt: sorted keys, indent 2, trailing
@@ -76,6 +110,12 @@ type Layer struct {
 }
 
 func (l *Layer) write(path string, data []byte, mode os.FileMode) error {
+	return l.put(path, path+asideSuffix, data, mode)
+}
+
+// put writes path atomically. On Windows the file it replaces, which may
+// be the running CLI, moves to aside first.
+func (l *Layer) put(path, aside string, data []byte, mode os.FileMode) error {
 	previous, err := os.ReadFile(path)
 	existed := err == nil
 	var oldMode os.FileMode
@@ -101,8 +141,11 @@ func (l *Layer) write(path string, data []byte, mode os.FileMode) error {
 		// A running exe cannot be replaced, only renamed: move it aside.
 		// What a previous update moved aside goes first; TidyAside removes
 		// it once that process has ended.
-		os.Remove(path + asideSuffix)
-		if err := os.Rename(path, path+asideSuffix); err != nil {
+		os.Remove(aside)
+		if err := os.MkdirAll(filepath.Dir(aside), 0o755); err != nil {
+			return err
+		}
+		if err := os.Rename(path, aside); err != nil {
 			return fmt.Errorf("the CLI in use could not be replaced: %w", err)
 		}
 	}
@@ -110,22 +153,6 @@ func (l *Layer) write(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	l.changes = append(l.changes, change{path: path, previous: previous, mode: oldMode, existed: existed})
-	return nil
-}
-
-func (l *Layer) remove(path string) error {
-	previous, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	info, _ := os.Lstat(path)
-	if err := os.Remove(path); err != nil {
-		return err
-	}
-	l.changes = append(l.changes, change{path: path, previous: previous, mode: info.Mode().Perm(), existed: true})
 	return nil
 }
 
@@ -147,7 +174,9 @@ func (l *Layer) Rollback() error {
 	return errors.Join(errs...)
 }
 
-// Install publishes source (normally os.Executable()) as the CLI of root.
+// Install publishes source (normally os.Executable()) as the CLI of root,
+// with its receipt. It leaves the layout before 2.5 alone: Retire removes
+// it once whatever pointed at it points at the new binary.
 func Install(root, source, version string) (*Layer, error) {
 	payload, err := readExecutable(source)
 	if err != nil {
@@ -161,26 +190,12 @@ func Install(root, source, version string) (*Layer, error) {
 		return nil, err
 	}
 	dir := filepath.Join(root, filepath.FromSlash(cliDir))
-	if err := layer.write(filepath.Join(dir, BinaryName()), payload, 0o755); err != nil {
+	// The running CLI moves aside into .x86qw/cli, out of the user's way.
+	if err := layer.put(Command(root), filepath.Join(dir, BinaryName()+asideSuffix), payload, 0o755); err != nil {
 		return fail(err)
 	}
 	if err := layer.write(filepath.Join(dir, "receipt"), Receipt(version), 0o644); err != nil {
 		return fail(err)
-	}
-	if runtime.GOOS == "windows" {
-		if err := layer.write(filepath.Join(root, "x86qw.cmd"), []byte(CmdShim), 0o644); err != nil {
-			return fail(err)
-		}
-		if err := layer.remove(filepath.Join(root, "x86qw.sh")); err != nil {
-			return fail(err)
-		}
-	} else {
-		if err := layer.write(filepath.Join(root, "x86qw.sh"), []byte(Shim), 0o755); err != nil {
-			return fail(err)
-		}
-		if err := layer.remove(filepath.Join(root, "x86qw.cmd")); err != nil {
-			return fail(err)
-		}
 	}
 	return layer, nil
 }
@@ -194,10 +209,10 @@ func readExecutable(source string) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(file, 256<<20))
 }
 
-// LinkUserCommand points ~/.local/bin/x86qw at root/x86qw.sh. An existing
-// link to another target or a regular file is refused.
-// On Windows it creates the Start Menu and Desktop shortcuts instead and
-// puts root, where x86qw.cmd lives, on the user PATH.
+// LinkUserCommand points ~/.local/bin/x86qw at root's CLI, also when it
+// pointed at root's x86qw.sh. A link to anything else or a regular file is
+// refused. On Windows it creates the Start Menu and Desktop shortcuts
+// instead and puts root, where x86qw.exe lives, on the user PATH.
 func LinkUserCommand(root, home string) (string, error) {
 	if runtime.GOOS == "windows" {
 		shortcut, err := InstallShortcuts(root)
@@ -207,24 +222,22 @@ func LinkUserCommand(root, home string) (string, error) {
 		return shortcut, AddUserPath(root)
 	}
 	command := filepath.Join(home, ".local", "bin", "x86qw")
-	launcher := filepath.Join(root, "x86qw.sh")
+	launcher := Command(root)
 	if info, err := os.Lstat(command); err == nil {
 		if info.Mode()&os.ModeSymlink == 0 {
 			return "", fmt.Errorf("An unmanaged file is already at %s.", command)
 		}
-		target, _ := os.Readlink(command)
-		if !filepath.IsAbs(target) {
-			target = filepath.Join(filepath.Dir(command), target)
-		}
-		resolved, _ := filepath.EvalSymlinks(target)
-		expected, _ := filepath.EvalSymlinks(launcher)
-		if resolved == expected && expected != "" {
+		switch target := LinkTarget(command); {
+		case samePath(target, launcher):
 			return command, nil
+		case samePath(target, legacyLauncher(root)):
+			// The link of the layout before 2.5: repoint it.
+		default:
+			if _, err := os.Stat(target); err == nil {
+				return "", fmt.Errorf("An unmanaged link is already at %s.", command)
+			}
+			// Dangling link from a removed installation: replace it.
 		}
-		if _, err := os.Stat(target); err == nil {
-			return "", fmt.Errorf("An unmanaged link is already at %s.", command)
-		}
-		// Dangling link from a removed installation: replace it.
 	}
 	if err := os.MkdirAll(filepath.Dir(command), 0o755); err != nil {
 		return "", err
@@ -275,4 +288,33 @@ func Replaces(version, root string, sameToo bool) bool {
 	}
 	order := semver.Compare(running, current)
 	return order > 0 || (order == 0 && sameToo)
+}
+
+// LinkTarget is where the symlink at path points, made absolute; "" when
+// path is no symlink.
+func LinkTarget(path string) string {
+	target, err := os.Readlink(path)
+	if err != nil {
+		return ""
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(filepath.Dir(path), target)
+	}
+	return filepath.Clean(target)
+}
+
+// samePath compares two paths through their symlinks; for a file that is
+// gone, through its folder's.
+func samePath(a, b string) bool {
+	return a != "" && b != "" && resolvePath(a) == resolvePath(b)
+}
+
+func resolvePath(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	if dir, err := filepath.EvalSymlinks(filepath.Dir(path)); err == nil {
+		return filepath.Join(dir, filepath.Base(path))
+	}
+	return filepath.Clean(path)
 }

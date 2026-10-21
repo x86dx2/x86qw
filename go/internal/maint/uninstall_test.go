@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/x86dx2/x86qw/go/internal/cli"
 )
 
 func TestUninstallRemovesManagedFilesAndKeepsPersonalOnes(t *testing.T) {
@@ -15,7 +17,7 @@ func TestUninstallRemovesManagedFilesAndKeepsPersonalOnes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, gone := range []string{"ezquake-nightly-x86_64.AppImage", "qw/maps/x86qw-a.bsp", "x86qw.sh", ".x86qw"} {
+	for _, gone := range []string{"ezquake-nightly-x86_64.AppImage", "qw/maps/x86qw-a.bsp", "x86qw.sh", cli.BinaryName(), ".x86qw"} {
 		if exists(filepath.Join(root, filepath.FromSlash(gone))) {
 			t.Errorf("%s should have been removed", gone)
 		}
@@ -61,13 +63,13 @@ func TestUninstallOfACLIOnlyFolderKeepsPersonalFiles(t *testing.T) {
 	isolate(t)
 	root := filepath.Join(t.TempDir(), "x86qw")
 	write(t, filepath.Join(root, ".x86qw", "cli", "receipt"), `{"version":"2.3.2"}`)
-	write(t, filepath.Join(root, "x86qw.sh"), "#!/bin/sh\n")
+	write(t, cli.Command(root), "#!/bin/sh\n")
 	write(t, filepath.Join(root, "qw", "demos", "match.mvd"), "demo")
 	report, err := Uninstall(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if exists(filepath.Join(root, ".x86qw")) || exists(filepath.Join(root, "x86qw.sh")) {
+	if exists(filepath.Join(root, ".x86qw")) || exists(cli.Command(root)) {
 		t.Fatal("the CLI and the metadata should be gone")
 	}
 	if !exists(filepath.Join(root, "qw", "demos", "match.mvd")) {

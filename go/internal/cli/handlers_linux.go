@@ -78,3 +78,6 @@ func refreshMIME(home string) {
 	exec.Command("update-mime-database", filepath.Join(home, ".local", "share", "mime")).Run()
 	exec.Command("update-desktop-database", filepath.Join(home, ".local", "share", "applications")).Run()
 }
+
+// legacyHandlers is empty: StillLegacy reads the Linux entries itself.
+func legacyHandlers(string) []string { return nil }

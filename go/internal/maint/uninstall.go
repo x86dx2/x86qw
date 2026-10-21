@@ -40,6 +40,7 @@ func (r *Report) warn(format string, args ...any) {
 
 func cliPaths(target string) []string {
 	return []string{
+		cli.Command(target),
 		filepath.Join(target, ".x86qw", "cli"),
 		filepath.Join(target, filepath.FromSlash(legacyCLIReceipt)),
 		filepath.Join(target, "x86qw.sh"),
@@ -69,19 +70,7 @@ func removeShellIntegration(target string) {
 	if runtime.GOOS == "linux" {
 		cli.RemoveDesktopEntry(target, home)
 	}
-	command := filepath.Join(home, ".local", "bin", "x86qw")
-	info, err := os.Lstat(command)
-	if err != nil || info.Mode()&os.ModeSymlink == 0 {
-		return
-	}
-	link, err := os.Readlink(command)
-	if err != nil {
-		return
-	}
-	if !filepath.IsAbs(link) {
-		link = filepath.Join(filepath.Dir(command), link)
-	}
-	if resolve(link) == resolve(filepath.Join(target, "x86qw.sh")) {
+	if command := filepath.Join(home, ".local", "bin", "x86qw"); cli.PointsAt(command, target) {
 		os.Remove(command)
 	}
 }

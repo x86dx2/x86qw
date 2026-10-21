@@ -7,7 +7,7 @@ import (
 
 // Publish installs the running executable as root's CLI when version
 // replaces what is there: never a development build, never an older
-// version, the same one only with sameToo (which refreshes the launcher
+// version, the same one only with sameToo (which refreshes the binary
 // and receipt). The Linux entries root already has are rewritten in the
 // current format. With link it then links the user command, or creates
 // the shortcuts on Windows, and returns where, "" when nothing was linked.
@@ -45,9 +45,11 @@ func Publish(root, version string, sameToo, link bool) (string, error) {
 const asideSuffix = ".old"
 
 // TidyAside removes the executable an earlier update moved aside on
-// Windows, once nothing runs it any more; elsewhere there is none.
+// Windows, once nothing runs it any more: next to it, or in .x86qw/cli
+// for the CLI at the installation's root. Elsewhere there is none.
 func TidyAside() {
 	if executable, err := os.Executable(); err == nil {
 		os.Remove(executable + asideSuffix)
+		os.Remove(filepath.Join(filepath.Dir(executable), filepath.FromSlash(cliDir), BinaryName()+asideSuffix))
 	}
 }
