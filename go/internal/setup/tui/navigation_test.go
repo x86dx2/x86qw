@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"errors"
-	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -138,14 +137,31 @@ func shortTarget(t *testing.T) string {
 	return filepath.Join(dir, "x86qw")
 }
 
+// busyPort is the demo with something holding UDP 27500: whatever the
+// machine's ports, the preflight warns while the server starts there.
+type busyPort struct{ *setup.Demo }
+
+func (b busyPort) Preflight(ctx context.Context, options setup.Options) <-chan setup.Check {
+	out := make(chan setup.Check)
+	go func() {
+		defer close(out)
+		for check := range b.Demo.Preflight(ctx, options) {
+			if check.ID == "ports" && check.State != setup.CheckRunning {
+				check.State, check.Says.Value = setup.CheckOK, setup.Say("ports.free")
+				if options.Server.BasePort == 27500 {
+					check.State, check.Says.Value = setup.CheckWarning, setup.Say("ports.busy")
+				}
+			}
+			out <- check
+		}
+	}()
+	return out
+}
+
 func TestPreflightWarningWaitsAndCorrects(t *testing.T) {
-	// The demo checks the ports for real: hold the first one.
-	held, err := net.ListenPacket("udp", "0.0.0.0:27500")
-	if err != nil {
-		t.Skip("a porta 27500 já está ocupada nesta máquina")
-	}
-	defer held.Close()
-	m := started(t, false)
+	m := New(Config{Backend: busyPort{&setup.Demo{Speed: 50}}, Target: shortTarget(t), Lang: PT, Theme: "dark"})
+	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
+	drive(m, run(m.Init())...)
 	drive(m, typeText("x86dx2")...)
 	drive(m, key("down"), key("down"), key("enter"), key("i"))
 	if m.screen != scConfigure || !m.preOn || m.preflightOutcome() != setup.CheckWarning {
