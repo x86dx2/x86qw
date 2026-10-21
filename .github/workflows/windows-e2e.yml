@@ -96,6 +96,12 @@ jobs:
           $sddl = (Get-Acl .x86qw).Sddl
           Write-Host $sddl
           if ($sddl -notmatch "D:P") { throw "DACL de .x86qw não é protegida" }
+      - name: o app abre num console de verdade (ConPTY)
+        env:
+          X86QW_CONPTY_TARGET: ${{ runner.temp }}\inst
+        run: |
+          go -C go test -count=1 -run TestAppOpensInARealConsole -v ./cmd/x86qw
+          if ($LASTEXITCODE -ne 0) { throw "app no console: $LASTEXITCODE" }
       - name: hospedar KTX em segundo plano, consultar e encerrar
         run: |
           $ErrorActionPreference = "Stop"
