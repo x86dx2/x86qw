@@ -192,9 +192,12 @@ func resolve(name string) string {
 	return filepath.Join(resolve(parent), filepath.Base(absolute))
 }
 
+// inside reports whether name is root or below it. Rel speaks the OS
+// separator, so on Windows a path outside starts with ..\ (and one on
+// another drive is an error).
 func inside(name, root string) bool {
 	relative, err := filepath.Rel(root, name)
-	return err == nil && relative != ".." && !strings.HasPrefix(relative, "../")
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
 // BackupProfile writes a zip of user-owned profile files.

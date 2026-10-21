@@ -140,6 +140,21 @@ func TestProfileRestoreRollsBackOnASymlinkedDestination(t *testing.T) {
 	}
 }
 
+func TestInsideUsesTheOSSeparator(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "x86qw")
+	for name, want := range map[string]bool{
+		root:                                       true,
+		filepath.Join(root, "qw", "a.cfg"):         true,
+		filepath.Join(root, "..", "fora.zip"):      false,
+		filepath.Join(root+"-irmao", "a.zip"):      false,
+		filepath.Join(filepath.Dir(root), "a.zip"): false,
+	} {
+		if inside(name, root) != want {
+			t.Errorf("inside(%s) deveria ser %v", name, want)
+		}
+	}
+}
+
 // Same rule for the local UI snapshot, through a folder that does not
 // exist yet.
 func TestLocalUINeverLandsInsideTheInstallation(t *testing.T) {
