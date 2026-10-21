@@ -14,8 +14,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// Public upstream discovery (maintenance/tools/public_upstreams.py and the
-// discovery half of sync_distribution.py).
+// Public upstream discovery: which files each upstream publishes now.
 
 const (
 	discoveryMaxBytes  = 4 * 1024 * 1024
@@ -35,7 +34,7 @@ var (
 	attrPattern    = regexp.MustCompile(`(?s)([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?`)
 )
 
-// Asset mirrors sync_distribution.Asset.
+// Asset is one upstream file the distribution may hold.
 type Asset struct {
 	Component       string
 	URL             string
@@ -70,7 +69,7 @@ func htmlTags(document string) []htmlTag {
 	return tags
 }
 
-// githubRepositoryName mirrors _github_repository_name.
+// githubRepositoryName checks an owner/name repository and returns it.
 func githubRepositoryName(repository string) (string, error) {
 	if safeGitHubRepository.MatchString(repository) {
 		return repository, nil
@@ -105,7 +104,7 @@ func githubRepositoryName(repository string) (string, error) {
 	return path, nil
 }
 
-// githubHeadRef mirrors _github_head_ref.
+// githubHeadRef splits a GitHub ref into its kind and name.
 func githubHeadRef(value string) (string, string, error) {
 	normalized := strings.TrimPrefix(value, "refs/")
 	if !strings.Contains(normalized, "/") {
@@ -158,7 +157,7 @@ func githubRefTarget(document *Object, repository, expectedRef string) (string, 
 	return revision, nil
 }
 
-// GitHubRefRevision mirrors github_ref_revision.
+// GitHubRefRevision is the commit a ref of repository points at.
 func (p *Project) GitHubRefRevision(repository, ref string) (string, error) {
 	name, err := githubRepositoryName(repository)
 	if err != nil {
@@ -175,10 +174,10 @@ func (p *Project) GitHubRefRevision(repository, ref string) (string, error) {
 	return githubRefTarget(document, name, expected)
 }
 
-// quotePath mirrors urllib.parse.quote(value, safe="/").
+// quotePath percent-encodes a URL path, keeping "/".
 func quotePath(value string) string { return quote(value, "/") }
 
-// quote mirrors urllib.parse.quote(value, safe=safe).
+// quote percent-encodes value, keeping unreserved characters and safe.
 func quote(value, safe string) string {
 	const always = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-~"
 	var builder strings.Builder
@@ -199,7 +198,7 @@ type GitTreeEntry struct {
 	Size int64
 }
 
-// GitHubRecursiveTree mirrors github_recursive_tree.
+// GitHubRecursiveTree is the commit and full file tree of a branch.
 func (p *Project) GitHubRecursiveTree(repository, branch string) (string, []GitTreeEntry, error) {
 	name, err := githubRepositoryName(repository)
 	if err != nil {
@@ -279,7 +278,8 @@ func (p *Project) GitHubRecursiveTree(repository, branch string) (string, []GitT
 	return revision, entries, nil
 }
 
-// GitHubLatestRelease mirrors github_latest_release (follows the redirect).
+// GitHubLatestRelease is the tag of the latest release (it follows the
+// redirect).
 func (p *Project) GitHubLatestRelease(repository string) (string, error) {
 	name, err := githubRepositoryName(repository)
 	if err != nil {
@@ -297,7 +297,7 @@ func (p *Project) GitHubLatestRelease(repository string) (string, error) {
 	return unquote(match[1]), nil
 }
 
-// GitHubCommitRevision mirrors github_commit_revision.
+// GitHubCommitRevision expands an abbreviated commit to its full hash.
 func (p *Project) GitHubCommitRevision(repository, abbreviation string) (string, error) {
 	name, err := githubRepositoryName(repository)
 	if err != nil {
@@ -337,7 +337,7 @@ func (p *Project) GitHubCommitRevision(repository, abbreviation string) (string,
 	return "", nil
 }
 
-// RemoteContentLength mirrors remote_content_length.
+// RemoteContentLength is the size a URL announces.
 func (p *Project) RemoteContentLength(url string) (int64, error) {
 	response, err := p.Metadata(http.MethodHead, url, MaxArtifactBytes, 60*time.Second, nil)
 	if err != nil {
@@ -397,7 +397,7 @@ func releaseVariant(name string) (string, error) {
 	return "", fmt.Errorf("release asset has no supported runtime variant: %s", name)
 }
 
-// DiscoverAssets mirrors sync_distribution.discover_assets.
+// DiscoverAssets lists the files each upstream publishes now.
 // Unavailable maps a network source ("ezquake" or "nquake") to the error
 // that kept it from being consulted.
 type Unavailable map[string]string
@@ -550,8 +550,8 @@ func int64Of(value any) int64 {
 	return result
 }
 
-// discoverLocalAssets mirrors discover_component_release_assets,
-// discover_preserved_sources and discover_installer_assets.
+// discoverLocalAssets lists the component release assets, the preserved
+// sources and the installer assets.
 func (p *Project) discoverLocalAssets() ([]Asset, error) {
 	var assets []Asset
 	releases, err := p.Releases()
@@ -595,7 +595,8 @@ func (p *Project) discoverLocalAssets() ([]Asset, error) {
 	return assets, nil
 }
 
-// PinAssetsFromManifest mirrors pin_assets_from_manifest.
+// PinAssetsFromManifest gives each asset the size and digest the manifest
+// records.
 func PinAssetsFromManifest(assets []Asset, manifest *Object) ([]Asset, error) {
 	files, ok := manifest.Value("files").(*Object)
 	if !ok {
@@ -623,7 +624,7 @@ func PinAssetsFromManifest(assets []Asset, manifest *Object) ([]Asset, error) {
 	return resolved, nil
 }
 
-// UnpinnedAssetPaths mirrors unpinned_asset_paths.
+// UnpinnedAssetPaths are the assets without a recorded digest.
 func UnpinnedAssetPaths(assets []Asset) []string {
 	var paths []string
 	for _, asset := range assets {

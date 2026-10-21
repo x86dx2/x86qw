@@ -24,8 +24,8 @@ type TemporaryConfig struct {
 	Sensitive bool
 }
 
-// WriteTemporaryConfig mirrors services.temporary_config (prefix +
-// token_hex(12) + ".cfg", 0600, journaled before writing).
+// WriteTemporaryConfig writes a session cfg (prefix + 24 hex digits +
+// ".cfg", 0600), journaled before it is written.
 func WriteTemporaryConfig(dir, prefix string, lines [][]byte, journal *Journal) (*TemporaryConfig, error) {
 	if info, err := os.Lstat(dir); err != nil || !info.IsDir() {
 		return nil, errorf("Diretório de configuração ausente ou inseguro: %s", dir)
@@ -88,7 +88,7 @@ type Materialized struct {
 	Directories []*MaterializedDirectory
 }
 
-// MaterializePK3 mirrors managed_files.materialize_archive: MVDSV cannot read
+// MaterializePK3 publishes a PK3's members as files: MVDSV cannot read
 // PK3s, so members are published as files for the session and removed later.
 func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, error) {
 	if info, err := os.Lstat(pk3); err != nil || !info.Mode().IsRegular() {
@@ -270,7 +270,8 @@ func (m *Materialized) Cleanup(warn func(string)) {
 	}
 }
 
-// ReadPasswordFile mirrors services.read_password_file.
+// ReadPasswordFile reads a one-line password from a private regular file of
+// at most 4096 bytes.
 func ReadPasswordFile(path, label string) (string, error) {
 	info, err := os.Lstat(path)
 	if err != nil {

@@ -1,6 +1,5 @@
-// Package semver implements strict SemVer 2.0.0 parsing and precedence,
-// matching x86qw_runtime/versioning.py (no "v" prefix, no leading zeroes,
-// build metadata ignored for ordering).
+// Package semver implements strict SemVer 2.0.0 parsing and precedence: no
+// "v" prefix, no leading zeroes, build metadata ignored for ordering.
 package semver
 
 import (

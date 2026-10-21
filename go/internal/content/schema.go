@@ -8,7 +8,8 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/semver"
 )
 
-// errContract mirrors ContractError; callers wrap it with their own message.
+// errContract is a contract violation; callers wrap it with their own
+// message.
 var errContract = errors.New("invalid contract")
 
 func isDigits(value string) bool {
@@ -23,8 +24,8 @@ func isDigits(value string) bool {
 	return true
 }
 
-// validateCatalogVersions mirrors validate_document_versions(document,
-// kind=SchemaKind.CATALOG, allow_legacy=allowLegacy).
+// validateCatalogVersions checks a catalog's format and version fields,
+// accepting the legacy ones only with allowLegacy.
 func validateCatalogVersions(document *Object, allowLegacy bool) error {
 	has := func(field string) bool {
 		return document.Has(field) || document.Has(strings.Replace(field, "_version", "_schema_version", 1))

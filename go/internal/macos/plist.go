@@ -1,7 +1,6 @@
-// Package macos ports the ezQuake bundle helpers of
-// x86qw_runtime/platform/macos.py: Info.plist editing in plistlib's exact
-// XML form, entitlement and safe-area probes, nightly preparation and the
-// process check.
+// Package macos prepares and checks the ezQuake app bundle: Info.plist
+// editing that keeps the exact XML form already on disk, entitlement and
+// safe-area probes, nightly preparation and the process check.
 package macos
 
 import (
@@ -34,7 +33,8 @@ func (v *Value) Bool() (bool, bool) {
 	return false, false
 }
 
-// Set stores key in a dict, appending new keys like a Python dict.
+// Set stores key in a dict; a new key goes last, so the order on disk is
+// kept.
 func (v *Value) Set(key string, value *Value) {
 	if _, ok := v.Dict[key]; !ok {
 		v.Keys = append(v.Keys, key)

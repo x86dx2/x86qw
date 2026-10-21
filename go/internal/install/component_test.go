@@ -11,24 +11,24 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 )
 
-func pythonCacheDir(t *testing.T) string {
+func componentCacheDir(t *testing.T) string {
 	t.Helper()
 	output, err := exec.Command("getconf", "DARWIN_USER_CACHE_DIR").Output()
 	if err != nil {
-		t.Skip("sem cache do instalador Python")
+		t.Skip("sem cache de componentes")
 	}
 	dir := filepath.Join(strings.TrimSpace(string(output)), "x86qw", "components")
 	if _, err := os.Stat(dir); err != nil {
-		t.Skip("sem cache do instalador Python")
+		t.Skip("sem cache de componentes")
 	}
 	return dir
 }
 
 // TestPreparedPackagesMatchInstalledInventories prepares every cached real
-// package and requires the payload to equal what Python recorded.
+// package and requires the payload to equal what the installation recorded.
 func TestPreparedPackagesMatchInstalledInventories(t *testing.T) {
 	root := realRoot(t)
-	cache := pythonCacheDir(t)
+	cache := componentCacheDir(t)
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "site", "public", "api", "v1", "catalog.json"))
 	if err != nil {
 		t.Fatal(err)

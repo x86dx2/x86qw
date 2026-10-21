@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-// TestPlistRoundTripMatchesPlistlib compares with the output Python's
-// plistlib produced for the same edit (testdata/nightly-Info.safe-area.plist).
-func TestPlistRoundTripMatchesPlistlib(t *testing.T) {
+// TestPlistRoundTripKeepsTheFormat compares the edit with the reference
+// output already on disk (testdata/nightly-Info.safe-area.plist).
+func TestPlistRoundTripKeepsTheFormat(t *testing.T) {
 	sample := filepath.Join("testdata", "nightly-Info.plist")
 	payload, err := os.ReadFile(sample)
 	if err != nil {

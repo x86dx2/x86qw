@@ -2,9 +2,10 @@ package pyjson
 
 import "testing"
 
-// The expected strings are what Python's json.dumps(..., ensure_ascii=False,
-// sort_keys=True[, indent=2]) printed for the same value.
-func TestMatchesPython(t *testing.T) {
+// The expected strings are the format the published files keep: what
+// json.dumps(..., ensure_ascii=False, sort_keys=True[, indent=2]) printed
+// for the same value.
+func TestDumpsKeepsThePublishedFormat(t *testing.T) {
 	value := map[string]any{
 		"b": []any{1, "ç\"\n\x01", map[string]any{}, []any{}},
 		"a": map[string]any{"z": true, "y": nil},

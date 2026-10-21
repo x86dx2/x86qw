@@ -1,7 +1,7 @@
 // Package privfs creates and protects the private directories of an
 // installation (.x86qw, sessions, staging, journals, caches): mode 0700 on
-// POSIX, and on Windows the protected DACL of x86qw_runtime/platform/
-// windows_acl.py, which grants full access only to the current user and
+// POSIX, and on Windows a protected DACL that grants full access only to the
+// current user and
 // LOCAL SYSTEM and is inherited by everything created inside.
 package privfs
 

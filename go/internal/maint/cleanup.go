@@ -16,7 +16,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/state"
 )
 
-// Ported from manager.py cleanup_data, purge and their helpers.
+// Cleanup removes caches and, when asked, personal data.
 
 const (
 	cacheMarker        = ".x86qw-cache"
@@ -34,7 +34,8 @@ const (
 	componentsRelative = ".x86qw/components"
 )
 
-// ValidateTarget mirrors Installer.validate_target for maintenance actions.
+// ValidateTarget resolves a maintenance target: a directory, not a symlink
+// nor the filesystem root, and existing when mustExist.
 func ValidateTarget(target string, mustExist bool) (string, error) {
 	info, err := os.Lstat(target)
 	exists := err == nil
@@ -54,7 +55,7 @@ func ValidateTarget(target string, mustExist bool) (string, error) {
 	return resolved, nil
 }
 
-// ManagedIdentity mirrors managed_installation_identity: persisted evidence
+// ManagedIdentity lists the persisted evidence
 // that the target is an x86QW installation.
 func ManagedIdentity(target string) ([]string, error) {
 	if _, err := os.Lstat(target); err != nil {
@@ -236,7 +237,8 @@ func managedRuntimePaths(target string) map[string]bool {
 	return managed
 }
 
-// CleanupSelection mirrors _runtime_cleanup_selection.
+// CleanupSelection lists the cache paths and, when asked, the personal
+// paths a cleanup removes.
 func CleanupSelection(target string, downloads, personalData bool) ([]string, []string) {
 	if info, err := os.Lstat(target); err != nil || !info.IsDir() {
 		return nil, nil

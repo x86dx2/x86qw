@@ -8,8 +8,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// Runtime, game and compatibility inventories (maintenance/tools/runtime_catalog.py
-// with the x86qw_runtime.catalogs loaders it rebinds).
+// Runtime, game and compatibility inventories.
 
 var (
 	inventoryID              = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
@@ -49,7 +48,7 @@ func hasAll(object *Object, fields []string) bool {
 	return true
 }
 
-// readCatalogObject mirrors x86qw_runtime.catalogs._read_json_object.
+// readCatalogObject reads an inventory file that must hold a JSON object.
 func readCatalogObject(path, label string) (*Object, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -86,7 +85,8 @@ func loadInventoryDocument(path, collection string) (*Object, error) {
 	return document, nil
 }
 
-// LoadInventory mirrors runtime_catalog.load_inventory.
+// LoadInventory loads and cross-checks the runtime, game and compatibility
+// inventories.
 func (p *Project) LoadInventory(componentCatalog *Object, publicCatalog *Object) (*Inventory, error) {
 	var inventory Inventory
 	for _, item := range []struct {
@@ -110,7 +110,8 @@ func (p *Project) LoadInventory(componentCatalog *Object, publicCatalog *Object)
 	return &inventory, nil
 }
 
-// idEntries mirrors _id_entries; it returns ids in document order.
+// idEntries indexes a list of entries by id; it returns ids in document
+// order.
 func idEntries(document *Object, key, label string) (map[string]*Object, []string, error) {
 	entries, ok := document.Value(key).([]any)
 	if !ok || len(entries) == 0 {
@@ -134,7 +135,7 @@ func idEntries(document *Object, key, label string) (map[string]*Object, []strin
 	return result, order, nil
 }
 
-// stringList mirrors _string_list.
+// stringList is value as a list of strings, empty only when allowEmpty.
 func stringList(value any, label string, allowEmpty bool) ([]string, error) {
 	raw, ok := value.([]any)
 	if !ok || (!allowEmpty && len(raw) == 0) {
@@ -147,7 +148,7 @@ func stringList(value any, label string, allowEmpty bool) ([]string, error) {
 	return values, nil
 }
 
-// hashSet mirrors set(values) for hashable JSON scalars.
+// hashSet is the set of values, false when one is not a scalar.
 func hashSet(values []any) (map[string]bool, bool) {
 	result := map[string]bool{}
 	for _, value := range values {
@@ -179,7 +180,8 @@ func equalHashSets(a, b map[string]bool) bool {
 	return true
 }
 
-// listContains mirrors `value in list` (Python ==).
+// listContains reports whether list holds a value equal to value, numbers
+// compared by value.
 func listContains(list any, value any) bool {
 	items, _ := list.([]any)
 	for _, item := range items {

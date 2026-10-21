@@ -83,7 +83,7 @@ func LoadCatalog(opts Options) (*Catalog, error) {
 		return nil, errorf("configuração TUF inválida: %v", err)
 	}
 	cfg.RemoteTargetsURL = baseURL + "targets/"
-	// Same bounds as the Python client (x86qw_runtime/trust.py).
+	// Size bounds per role.
 	cfg.RootMaxLength = 512 * 1024
 	cfg.TimestampMaxLength = 64 * 1024
 	cfg.SnapshotMaxLength = 2 * 1024 * 1024

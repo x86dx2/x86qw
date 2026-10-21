@@ -8,11 +8,11 @@ import (
 	"unicode/utf8"
 )
 
-// length counts characters like Python's len(str).
+// length counts characters (runes), not bytes.
 func length(value string) int { return utf8.RuneCountInString(value) }
 
-// Ported from x86qw_runtime/gameplay/planning.py; strings are part of the
-// observable behaviour (ezQuake console input) and must not drift.
+// The strings below are ezQuake console input: changing one changes what the
+// game runs.
 
 const (
 	frogbotAddWaitFrames = 8
@@ -25,7 +25,7 @@ var (
 	positiveInt     = regexp.MustCompile(`^[1-9][0-9]*$`)
 )
 
-// Options mirrors KtxLaunchOptions. Pointers mean "not given".
+// Options are the KTX launch options. Pointers mean "not given".
 type Options struct {
 	Bots            int
 	FillBots        bool
@@ -50,7 +50,7 @@ func DefaultOptions() Options {
 	return Options{BotSkill: "5", BotNamesProfile: "default"}
 }
 
-// BotOptionsRequested mirrors ktx_bot_options_requested.
+// BotOptionsRequested reports whether any bot option was asked for.
 func BotOptionsRequested(o Options) bool {
 	return o.Bots > 0 || o.FillBots || o.BotSkill != "5" || o.BotTeam != nil ||
 		o.BotWeapon != nil || o.BotHealth != nil || o.BotBreakOnDeath != nil
@@ -256,7 +256,8 @@ func botManagementAliases(mode Mode, o Options) ([]string, error) {
 		"tempalias x86qw_ktx_bot_help exec x86qw-ktx-help-bots.cfg"), q.err
 }
 
-// ChunkedSetupPlan mirrors ktx_chunked_setup_alias_plan.
+// ChunkedSetupPlan splits setup commands into aliases of at most maximum
+// characters and returns their definitions and the command that runs them.
 func ChunkedSetupPlan(commands []string, maximum int) ([]string, string, error) {
 	var q quoter
 	var chunks [][]string
@@ -373,7 +374,7 @@ func teamSequence(mode Mode, o Options) []string {
 	return result
 }
 
-// LaunchCommands mirrors ktx_launch_commands (post-map setup).
+// LaunchCommands are the KTX commands run after the map loads.
 func LaunchCommands(mode Mode, mapName string, assets map[string]bool, o Options) ([]string, error) {
 	var commands []string
 	for _, requirement := range ActiveRequirements(mode, o) {

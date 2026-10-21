@@ -16,9 +16,10 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/state"
 )
 
-// Ported from manager.py repair_plan / repair.
+// Repair plans and restores managed content.
 
-// legacyStableIdentities mirrors MACOS_STABLE_BINARY_IDENTITIES.
+// legacyStableIdentities maps old macOS stable ezQuake binaries to the
+// upstream binary a repair restores.
 var legacyStableIdentities = map[string]string{
 	"2ccea8f214c91e5fc92b5cb195c81ac584f75a551d11a58de56e5e7951eec7ed": "e24524761d8ff10c57a8ecbb2fdc7ce29d1bd78641cfaecf49644d8881e2422a",
 }
@@ -38,7 +39,7 @@ type clientIssue struct {
 	available bool
 }
 
-// RepairAssessment mirrors RepairAssessment.
+// RepairAssessment is what a repair found wrong.
 type RepairAssessment struct {
 	invalidComponents []string
 	supportInvalid    bool
@@ -192,7 +193,8 @@ func assessRepair(in plan.Input) (*RepairAssessment, error) {
 	return assessment, nil
 }
 
-// inferState mirrors infer_install_state for a missing state.json.
+// inferState rebuilds the state of an installation whose state.json is
+// missing, from what is installed.
 func inferState(in plan.Input, installed map[string]bool) map[string]any {
 	var ids []string
 	for _, id := range in.Inventory.IDs() {
@@ -394,8 +396,8 @@ func Repair(ctx context.Context, in plan.Input) (*Result, error) {
 	return result, nil
 }
 
-// repairStateDocument mirrors write_install_state with the state's own
-// known components and capabilities.
+// repairStateDocument writes state.json again with the state's own known
+// components and capabilities.
 func repairStateDocument(in plan.Input, base map[string]any) ([]byte, error) {
 	recorded := []any{}
 	var recordedIDs []string

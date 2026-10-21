@@ -12,7 +12,7 @@ import (
 	"golang.org/x/term"
 )
 
-// confirm mirrors manage.confirm for interactive terminals.
+// confirm asks for a yes on an interactive terminal.
 func confirm(env *environment) content.Confirm {
 	return func(message string) error {
 		if env.stdin == nil || !term.IsTerminal(int(env.stdin.Fd())) {
@@ -68,7 +68,7 @@ func runAdd(env *environment, args []string) (int, error) {
 	options := content.AddOptions{Confirm: confirm(env)}
 	flags.BoolVar(&options.DryRun, "dry-run", false, "somente valida a definicao")
 	flags.BoolVar(&options.Yes, "yes", false, "confirma sem terminal interativo")
-	// argparse accepts the positional definition before or after flags.
+	// The positional definition may come before or after the flags.
 	var positional []string
 	var rest []string
 	for _, arg := range args {

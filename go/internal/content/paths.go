@@ -15,7 +15,7 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// MaxArtifactBytes mirrors x86qw_runtime.io.downloader.MAX_ARTIFACT_BYTES.
+// MaxArtifactBytes is the largest artifact a download accepts.
 const MaxArtifactBytes = 512 * 1024 * 1024
 
 var (
@@ -23,10 +23,10 @@ var (
 	upper  = cases.Upper(language.Und)
 )
 
-// Casefold mirrors str.casefold().
+// Casefold applies Unicode full case folding.
 func Casefold(value string) string { return folder.String(value) }
 
-// posixPath mirrors PurePosixPath: empty and "." components collapse.
+// posixPath is a parsed POSIX path: empty and "." components collapse.
 type posixPath struct {
 	absolute bool
 	parts    []string
@@ -69,7 +69,8 @@ func (p posixPath) asPosix() string {
 	return joined
 }
 
-// pathSuffix mirrors PurePath.suffix (CPython 3.13).
+// pathSuffix is the name's last extension, "" when the dot leads or ends
+// the name.
 func pathSuffix(name string) string {
 	index := strings.LastIndex(name, ".")
 	if index > 0 && index < len(name)-1 {
@@ -78,7 +79,7 @@ func pathSuffix(name string) string {
 	return ""
 }
 
-// pathStem mirrors PurePath.stem.
+// pathStem is the name without its last extension.
 func pathStem(name string) string {
 	if suffix := pathSuffix(name); suffix != "" {
 		return name[:len(name)-len(suffix)]
@@ -88,9 +89,9 @@ func pathStem(name string) string {
 
 func posixName(value string) string { return purePosix(value).name() }
 
-// safePath is the _safe_path of runtime_catalog, upstreams and
-// component_releases: PurePosixPath semantics, so only absolute paths and
-// ".." are rejected after the backslash/colon screen.
+// safePath checks a relative path of the runtime, upstream and release
+// inventories: after the backslash/colon screen, only absolute paths and
+// ".." components are rejected.
 func safePath(value any, label string) (string, error) {
 	text, ok := value.(string)
 	if !ok || text == "" || strings.ContainsAny(text, `\:`) {
@@ -136,7 +137,8 @@ func otherCategory(r rune) bool {
 	return !unicode.In(r, unicode.L, unicode.M, unicode.N, unicode.P, unicode.S, unicode.Z)
 }
 
-// ValidatePortableRelativePath mirrors validate_portable_relative_path.
+// ValidatePortableRelativePath refuses a relative path that is unsafe or
+// would not survive on Windows, macOS and Linux.
 func ValidatePortableRelativePath(value any, label string) (string, error) {
 	text, ok := value.(string)
 	invalid := !ok || text == ""
@@ -206,33 +208,33 @@ func pyRepr(value any) string {
 	return reprScalar(value)
 }
 
-// isFile mirrors Path.is_file() (follows symlinks).
+// isFile reports whether path is a regular file (following symlinks).
 func isFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular()
 }
 
-// isDir mirrors Path.is_dir() (follows symlinks).
+// isDir reports whether path is a directory (following symlinks).
 func isDir(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
 }
 
-// isSymlink mirrors Path.is_symlink().
+// isSymlink reports whether path is a symlink.
 func isSymlink(path string) bool {
 	info, err := os.Lstat(path)
 	return err == nil && info.Mode()&os.ModeSymlink != 0
 }
 
-// exists mirrors Path.exists() (follows symlinks).
+// exists reports whether path exists (following symlinks).
 func exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
 
-// rglobFiles mirrors sorted(p for p in root.rglob("*") if p.is_file()) as
-// POSIX paths relative to root. Symlinked directories are not descended,
-// but symlinks to files count, exactly like CPython 3.13.
+// rglobFiles lists every file under root, sorted, as POSIX paths relative to
+// root. Symlinked directories are not descended, but symlinks to files
+// count.
 func rglobFiles(root string) ([]string, error) {
 	var files []string
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {

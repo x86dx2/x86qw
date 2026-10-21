@@ -38,8 +38,8 @@ type preparedClient struct {
 	receipt *receipt.Receipt
 }
 
-// prepareRelease fetches and stages one catalog release, like manager.py
-// configure_release + ensure_archive + prepare_runtime.
+// prepareRelease fetches, checks and stages one catalog release of a
+// client.
 func (t *Transaction) prepareRelease(ctx context.Context, spec catalog.ClientSpec, channel string, release catalog.Package) (*preparedClient, error) {
 	pin := download.Artifact{URLs: release.URLs, Size: release.Size, SHA256: release.SHA256}
 	cacheRoot, err := download.CacheDir()
@@ -168,7 +168,8 @@ func (t *Transaction) prepareRelease(ctx context.Context, spec catalog.ClientSpe
 	return &preparedClient{path: prepared, receipt: rec}, nil
 }
 
-// checkRuntimeOwnership mirrors check_runtime_destination_ownership.
+// checkRuntimeOwnership refuses a runtime destination the installation
+// does not own.
 func (t *Transaction) checkRuntimeOwnership(spec catalog.ClientSpec, channel string) error {
 	runtimePath := t.path(spec.Runtime(channel))
 	receiptPath := t.path(spec.Receipt(channel))
@@ -411,7 +412,9 @@ func clientRowTarget(item string) (catalog.ClientSpec, string, bool) {
 	return catalog.ClientSpec{}, "", false
 }
 
-// inspectMacApp mirrors macos.inspect_ezquake_bundle.
+// inspectMacApp checks an ezQuake app bundle (its files, the universal
+// binary and, on macOS, the code signature) and returns its version and the
+// binary's digest.
 func inspectMacApp(app string) (string, string, error) {
 	binaryPath := filepath.Join(app, "Contents", "MacOS", "ezQuake")
 	if !regular(binaryPath) || !regular(filepath.Join(app, "Contents", "_CodeSignature", "CodeResources")) {
@@ -437,7 +440,8 @@ func inspectMacApp(app string) (string, string, error) {
 	return version, digest, err
 }
 
-// inspectPortableBinary mirrors host.inspect_portable_binary's header checks.
+// inspectPortableBinary checks that a client binary's header fits the
+// platform.
 func inspectPortableBinary(path, platform string) (string, error) {
 	header, err := readHeader(path, 64)
 	if err != nil {

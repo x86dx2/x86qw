@@ -15,7 +15,7 @@ import (
 
 const safeAreaKey = "NSPrefersDisplaySafeAreaCompatibilityMode"
 
-// StableBinaryIdentities mirrors MACOS_STABLE_BINARY_IDENTITIES: for a stable
+// StableBinaryIdentities are, for a stable
 // artifact, the upstream binary hash and the hash of the bundle that legacy
 // x86QW versions re-signed locally.
 var StableBinaryIdentities = map[string]struct{ Upstream, Legacy string }{
@@ -47,7 +47,8 @@ func readPlist(app string) (*Value, []byte, error) {
 	return root, payload, nil
 }
 
-// UsesFullDisplay mirrors app_uses_full_display.
+// UsesFullDisplay reports whether the bundle's Info.plist asks for the full
+// display (no safe area).
 func UsesFullDisplay(app string) (bool, error) {
 	root, _, err := readPlist(app)
 	if err != nil {
@@ -104,7 +105,8 @@ func codesign(args ...string) error {
 	return nil
 }
 
-// IsSandboxed mirrors app_is_sandboxed (codesign entitlements probe).
+// IsSandboxed reports whether the bundle is signed with the sandbox
+// entitlement (a codesign probe).
 func IsSandboxed(app string) (bool, error) {
 	if !IsDarwin() {
 		return false, nil
@@ -138,7 +140,8 @@ func IsSandboxed(app string) (bool, error) {
 	return isBool && sandboxed, nil
 }
 
-// NeedsPreparation mirrors macos_app_needs_preparation.
+// NeedsPreparation reports whether a bundle is sandboxed or keeps the safe
+// area, on macOS only.
 func NeedsPreparation(app string) (bool, error) {
 	if !IsDarwin() {
 		return false, nil
@@ -151,7 +154,7 @@ func NeedsPreparation(app string) (bool, error) {
 	return !full, err
 }
 
-// PrepareNightly mirrors prepare_nightly_bundle: enable the full display,
+// PrepareNightly enables the full display,
 // ad-hoc re-sign without the sandbox and verify. Only on macOS.
 func PrepareNightly(app string) (bool, error) {
 	if !IsDarwin() {
@@ -184,7 +187,9 @@ func PrepareNightly(app string) (bool, error) {
 	return true, nil
 }
 
-// StableHasLegacyRewrite mirrors macos_stable_has_legacy_x86qw_rewrite.
+// StableHasLegacyRewrite reports whether a stable bundle is the one legacy
+// x86QW versions rewrote: the known legacy binary, the full display and no
+// sandbox.
 func StableHasLegacyRewrite(app, artifactSHA, binarySHA string) (bool, error) {
 	identities, ok := StableBinaryIdentities[artifactSHA]
 	if !ok || binarySHA != identities.Legacy {
@@ -201,7 +206,7 @@ func StableHasLegacyRewrite(app, artifactSHA, binarySHA string) (bool, error) {
 	return !sandboxed, err
 }
 
-// RuntimeAction mirrors macos_runtime_action: "restore-upstream" for the
+// RuntimeAction is "restore-upstream" for the
 // legacy re-signed stable bundle, "prepare-nightly" for an unprepared
 // nightly, "" otherwise.
 func RuntimeAction(app, channel, artifactSHA, binarySHA string) (string, error) {

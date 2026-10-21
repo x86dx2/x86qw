@@ -13,8 +13,8 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/launchguard"
 )
 
-// Supervisor ported from x86qw_runtime/supervisor/core.run_processes. Go has
-// no guardian: each runtime is exec'd directly in its own session after its
+// The supervisor has no guardian process: each runtime is exec'd directly
+// in its own session after its
 // bytes are re-checked against the verified inventory hash (held open
 // through process creation on Windows, see launchguard).
 

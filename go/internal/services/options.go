@@ -20,7 +20,7 @@ type Common struct {
 	BackgroundLog   string
 }
 
-// HostOptions mirrors the `host` argparse namespace.
+// HostOptions are the options of `host`.
 type HostOptions struct {
 	Common
 	Selection, Game, Mode, Map          string
@@ -73,14 +73,14 @@ func parseInstance(value string) (Instance, error) {
 	return instance, nil
 }
 
-// ProxyOptions mirrors the `proxy` namespace.
+// ProxyOptions are the options of `proxy`.
 type ProxyOptions struct {
 	Common
 	ProxyBind string
 	ProxyPort int
 }
 
-// QtvOptions mirrors the `qtv` namespace.
+// QtvOptions are the options of `qtv`.
 type QtvOptions struct {
 	Common
 	Bind, Hostname, Upstream string
@@ -90,7 +90,7 @@ type QtvOptions struct {
 	QtvPasswordFile          string
 }
 
-// StatusOptions mirrors the `status` namespace.
+// StatusOptions are the options of `status`.
 type StatusOptions struct {
 	Common
 	Stop, Yes bool

@@ -14,7 +14,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// Upstream freshness (check_component_updates.py and manage.py check).
+// Upstream freshness: `x86qw-content check`.
 
 var hex40Strict = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
@@ -38,7 +38,7 @@ func IsReferenceStrategy(strategy string) bool {
 	return strategy == "reference-snapshot" || strategy == "reference-overlay"
 }
 
-// CheckUpdates mirrors check_component_updates.check_updates.
+// CheckUpdates compares each release with its upstream.
 func (p *Project) CheckUpdates(releases *Object, online bool) ([]UpdateResult, error) {
 	// Whether a moved nQuake revision changes a component depends on the
 	// files it consumes, which Check and Update compare per component; here
@@ -99,7 +99,7 @@ func (p *Project) CheckUpdates(releases *Object, online bool) ([]UpdateResult, e
 // DeltaItem is one distribution change.
 type DeltaItem struct{ Path, Status, Reason string }
 
-// DistributionDelta mirrors manage.distribution_delta.
+// DistributionDelta lists how the assets differ from the manifest.
 func DistributionDelta(assets []Asset, manifest *Object) ([]DeltaItem, error) {
 	files, ok := manifest.Value("files").(*Object)
 	if !ok {
@@ -158,7 +158,7 @@ func nquakeURLRevision(url string) string {
 	return ""
 }
 
-// SummarizeDelta mirrors manage.summarize_delta; the nQuake files are
+// SummarizeDelta summarizes a delta; the nQuake files are
 // counted by kind of change.
 func SummarizeDelta(delta []DeltaItem) []string {
 	var others []string
@@ -180,7 +180,7 @@ func SummarizeDelta(delta []DeltaItem) []string {
 	return others
 }
 
-// ReferenceRevision mirrors manage.reference_revision.
+// ReferenceRevision is the one nQuake revision the assets come from.
 func ReferenceRevision(assets []Asset) (string, error) {
 	revisions := map[string]bool{}
 	for _, asset := range assets {
@@ -198,7 +198,7 @@ func ReferenceRevision(assets []Asset) (string, error) {
 	return revision, nil
 }
 
-// GitBlobSHA1 mirrors manage.git_blob_sha1.
+// GitBlobSHA1 is the Git blob hash of the file at path.
 func GitBlobSHA1(path string) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {

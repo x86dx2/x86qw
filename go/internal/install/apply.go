@@ -80,7 +80,7 @@ func loadRecord(root, id string) (*receipt.Record, map[string]string, error) {
 }
 
 // InstallOverlay publishes managed (a tree mapped onto the root) as the new
-// payload of component id, like manager.py install_component_overlay_transaction:
+// payload of component id:
 // existing files that are not owned with a matching hash are kept and dropped
 // from the payload; files removed between versions are deleted only when
 // their hash still matches the old inventory.

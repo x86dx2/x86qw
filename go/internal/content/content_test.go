@@ -65,7 +65,7 @@ func TestPortablePaths(t *testing.T) {
 			t.Errorf("caminho portável rejeitado: %q: %v", value, err)
 		}
 	}
-	// _safe_path keeps PurePosixPath semantics: "//" and "." collapse.
+	// safePath collapses "//" and ".".
 	if _, err := safePath("a//./b", "path"); err != nil {
 		t.Errorf("safePath diverge de PurePosixPath: %v", err)
 	}

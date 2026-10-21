@@ -54,8 +54,8 @@ func TestRootPolicyRejectsDeviations(t *testing.T) {
 	}
 }
 
-// TestParityWithCheckedOutProjection authenticates the same projection that
-// `maintenance/manage.py verify` authenticates with the Python client.
+// TestParityWithCheckedOutProjection authenticates the checked-out projection
+// the way x86qw-content verify does.
 func TestParityWithCheckedOutProjection(t *testing.T) {
 	projection := repoPath(t, "site", "public", "api", "v1", "trust")
 	// The checkout is checked at its own expiry, not today: CI must not
