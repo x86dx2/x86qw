@@ -1,23 +1,23 @@
-# Licença do conteúdo próprio
+# License of the project's own content
 
-O código Go, os presets, patches, configurações, documentação, testes,
-metadados e demais arquivos criados pelo projeto x86QW são identificados como
-`MIT` quando não houver um aviso mais específico. A licença canônica está em
-[LICENSE](../LICENSE), e o aviso de distribuição em [NOTICE](../NOTICE).
+The Go code, presets, patches, configurations, documentation, tests,
+metadata and other files the x86QW project creates are identified as
+`MIT` when no more specific notice applies. The canonical license is in
+[LICENSE](../LICENSE), and the distribution notice in [NOTICE](../NOTICE).
 
-Isso não relicencia componentes upstream. Clientes, engines, mods, ferramentas,
-dados-base e PAKs continuam com seus avisos e termos de origem; a proveniência
-por componente está em [maintenance/docs/provenance.md](../maintenance/docs/provenance.md)
-e nos inventários. O `license_url` de um pacote de componente aponta para a
-licença da fonte correspondente, não para a do x86QW. As entradas da CLI
-`x86qw-cli` apontam para o `LICENSE` deste repositório.
+This does not relicense upstream components. Clients, engines, mods, tools,
+base data and PAKs keep their own notices and terms; the provenance of each
+component is in [maintenance/docs/provenance.md](../maintenance/docs/provenance.md)
+and in the inventories. A component package's `license_url` points to the
+license of its source, not to x86QW's. The entries of the `x86qw-cli` CLI
+point to this repository's `LICENSE`.
 
-Cada release `x86qw-cli-*` publica os binários com `SHA256SUMS` e um atestado
-de proveniência do build no GitHub; os pacotes de conteúdo são verificados por
-tamanho e SHA-256 contra o catálogo assinado. Esses registros documentam como
-os bytes foram produzidos; eles não alteram a licença dos payloads upstream nem
-substituem os avisos de origem.
+Each `x86qw-cli-*` release publishes the binaries with `SHA256SUMS` and a
+build provenance attestation on GitHub; content packages are verified by
+size and SHA-256 against the signed catalog. These records document how the
+bytes were produced; they do not change the license of the upstream payloads
+nor replace their notices.
 
-As releases históricas `x86qw-installer-*` (a linha Python 0.x e 1.0)
-publicaram também `candidate.json`, `sbom.spdx.json` e `provenance.json`; elas
-permanecem imutáveis.
+The historical `x86qw-installer-*` releases (the Python 0.x and 1.0 line)
+also published `candidate.json`, `sbom.spdx.json` and `provenance.json`; they
+stay immutable.

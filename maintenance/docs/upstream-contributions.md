@@ -1,36 +1,37 @@
-# Contribuições aos upstreams
+# Contributions to upstreams
 
-O x86QW preserva upstreams sem misturar correções independentes. Um PR só é enviado quando existe Git público oficial, a mudança é genérica para o upstream e pode ser demonstrada fora da distribuição x86QW.
+x86QW keeps upstreams without mixing in independent fixes. A PR is only sent when there is an official public Git repository, the change is generic for the upstream and it can be shown outside the x86QW distribution.
 
-| Projeto | Git público | Mudança x86QW | Destino |
+| Project | Public Git | x86QW change | Destination |
 | --- | --- | --- | --- |
-| ezQuake | `QW-Group/ezquake-source` | pular a tentativa QVM quando `sv_progtype` seleciona PR1 explicitamente | [PR #1149](https://github.com/QW-Group/ezquake-source/pull/1149), draft, aguardando CI/review |
-| ezQuake | `QW-Group/ezquake-source` | tornar idempotente o registro do mesmo objeto/função durante `vid_restart` | [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150), draft, aguardando CI/review |
-| KTX | `QW-Group/ktx` | definição antecipada de `k_defmap` | não enviar; a correção pertence ao launcher x86QW |
-| nQuake | `nQuake/distfiles` | `bounce2.wav` ausente após modularização | não enviar; o arquivo já existe no KTX do snapshot e a correção pertence à composição x86QW |
-| Final Arena | não localizado | patches futuros de fonte | manter no x86QW até surgir upstream oficial |
-| Pro-X | não existe fonte pública | ENT de compatibilidade | não enviar como código; o autor reteve a fonte deliberadamente |
-| Team Fortress 2.9 | não localizado | remoção de binds remotos forçados | manter patch pronto e documentado |
-| TD2 2.22 | não localizado | correções de compatibilidade QuakeC | manter patch pronto e documentado |
+| ezQuake | `QW-Group/ezquake-source` | skip the QVM attempt when `sv_progtype` explicitly selects PR1 | [PR #1149](https://github.com/QW-Group/ezquake-source/pull/1149), draft, waiting for CI/review |
+| ezQuake | `QW-Group/ezquake-source` | make registering the same object/function idempotent during `vid_restart` | [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150), draft, waiting for CI/review |
+| KTX | `QW-Group/ktx` | early definition of `k_defmap` | do not send; the fix belongs to the x86QW launcher |
+| nQuake | `nQuake/distfiles` | `bounce2.wav` missing after modularization | do not send; the file already exists in the snapshot's KTX and the fix belongs to the x86QW composition |
+| Final Arena | not found | future source patches | keep in x86QW until an official upstream appears |
+| Pro-X | no public source exists | compatibility ENT | do not send as code; the author withheld the source deliberately |
+| Team Fortress 2.9 | not found | removal of forced remote binds | keep the patch ready and documented |
+| TD2 2.22 | not found | QuakeC compatibility fixes | keep the patch ready and documented |
 
-## Regras de envio
+## Submission rules
 
-- criar um branch por problema, a partir do branch padrão atual do upstream;
-- não incluir branding, configuração ou caminhos x86QW em correção genérica;
-- descrever versão, ambiente, passos de reprodução, comportamento anterior e posterior;
-- anexar teste automatizado quando a base permitir; caso contrário, registrar matriz manual;
-- não combinar limpeza, formatação e mudança funcional;
-- referenciar o changelog do mod no x86QW como histórico, não como justificativa exclusiva;
-- acompanhar CI e review até merge ou decisão explícita do mantenedor.
+- create one branch per problem, from the upstream's current default branch;
+- include no x86QW branding, configuration or paths in a generic fix;
+- describe version, environment, reproduction steps, behavior before and after;
+- attach an automated test when the codebase allows it; otherwise, record a manual matrix;
+- do not combine cleanup, formatting and a functional change;
+- refer to the mod's changelog in x86QW as history, not as the only justification;
+- follow CI and review until merge or an explicit decision by the maintainer.
 
-## Estado em 30 de julho de 2026
+## State on July 30, 2026
 
-- os dois PRs partem do `master` atual `a86996a3` e não contêm branding,
-  configuração ou arquivos x86QW;
-- ambos passaram por inspeção de diff e `git diff --check`;
-- o host de reprodução não possui CMake, portanto a compilação será validada
-  pelo CI do upstream; o GitHub ainda não havia iniciado checks no momento do
-  envio;
-- os demais mods não receberam PR porque não foi localizado um Git público que
-  represente exatamente a versão distribuída. `QW-Group/Quake-Custom-Team-Fortress`
-  é Custom TF, não o Team Fortress 2.9 preservado aqui.
+- both PRs start from the current `master` `a86996a3` and hold no x86QW
+  branding, configuration or files;
+- both went through diff inspection and `git diff --check`;
+- the reproduction host has no CMake, so the build will be validated by the
+  upstream's CI; GitHub had not started checks yet at the time of
+  submission;
+- the other mods got no PR because no public Git repository was found that
+  represents exactly the distributed version.
+  `QW-Group/Quake-Custom-Team-Fortress` is Custom TF, not the Team Fortress
+  2.9 kept here.

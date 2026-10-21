@@ -6,53 +6,56 @@ product
 
 ## Users
 
-Pessoas descobrindo QuakeWorld e jogadores veteranos que desejam instalar,
-atualizar, jogar e hospedar partidas sem memorizar a CLI. O fluxo principal deve
-orientar iniciantes e continuar rápido para quem já conhece jogos, modos, mapas e
-serviços.
+People discovering QuakeWorld and veteran players who want to install,
+update, play and host matches without memorizing the CLI. The main flow must
+guide beginners and stay quick for those who already know games, modes, maps
+and services.
 
 ## Product Purpose
 
-Oferecer uma distribuição QuakeWorld moderna, reproduzível e auditável, com um
-app de terminal que revela as opções relevantes no momento certo. O app é uma
-porta de entrada para os mesmos comandos automatizáveis; ele não substitui nem
-altera a semântica das flags públicas, e as ações que ele não faz sozinho rodam
-os comandos `x86qw` equivalentes.
+Offer a modern, reproducible and auditable QuakeWorld distribution, with a
+terminal app that reveals the relevant options at the right moment. The app is
+a front door to the same automatable commands; it neither replaces nor changes
+the semantics of the public flags, and the actions it does not perform itself
+run the equivalent `x86qw` commands.
 
 ## Brand Personality
 
-Direta, competitiva e confiável. A interface deve transmitir a velocidade do jogo
-e a precisão de uma ferramenta bem mantida, sem sacrificar legibilidade.
+Direct, competitive and reliable. The interface should convey the speed of the
+game and the precision of a well-kept tool, without sacrificing legibility.
 
 ## Anti-references
 
-Não imitar launchers gráficos dentro do terminal, menus retrô decorativos,
-estética gamer neon, árvores profundas sem contexto ou assistentes que escondem
-as flags efetivamente usadas. Não exigir mouse nem depender de cor para comunicar
-estado.
+Do not imitate graphical launchers inside the terminal, decorative retro menus,
+neon gamer aesthetics, deep trees without context or wizards that hide the
+flags actually used. Do not require a mouse nor depend on color to communicate
+state.
 
 ## Design Principles
 
-- Começar pela intenção: no instalador, jogar, hospedar ou os dois; no app,
-  Jogar, Servidores e Hospedar antes da manutenção.
-- Usar divulgação progressiva: perguntar somente o que se aplica à escolha atual.
-- Uma tela por vez, em sanfona, com o rodapé fixo dizendo as teclas daquele
-  estado; nada muda de lugar enquanto a tela se atualiza.
-- Diálogos usam espaço para mudar, Enter para confirmar e Esc para cancelar.
-- Mostrar o que vai acontecer e pedir confirmação antes de instalar, atualizar,
-  desinstalar ou encerrar uma stack de hospedagem.
-- Permitir consultar a stack ativa, seus endpoints e parâmetros não sensíveis
-  sem interromper nem alterar os serviços, e oferecer uma ação separada e
-  confirmada para encerrá-la.
-- Permitir primeiro ou segundo plano sem criar dois modelos de lifecycle: ambos
-  usam o mesmo lock, journal, readiness e cleanup.
-- Mostrar o comando e a receita equivalentes ao que foi escolhido, sem senhas.
-- Preservar os comandos existentes como contrato estável para usuários avançados e automação.
+- Start from intent: in the installer, play, host or both; in the app, Play,
+  Servers and Host before maintenance.
+- Use progressive disclosure: ask only what applies to the current choice.
+- One screen at a time, as an accordion, with a fixed footer saying that
+  state's keys; nothing moves while the screen updates.
+- Dialogs use space to change, Enter to confirm and Esc to cancel.
+- Show what is going to happen and ask for confirmation before installing,
+  updating, uninstalling or stopping a hosting stack.
+- Let people look at the running stack, its endpoints and non-sensitive
+  parameters without interrupting or changing the services, and offer a
+  separate, confirmed action to stop it.
+- Allow foreground or background without creating two lifecycle models: both
+  use the same lock, journal, readiness and cleanup.
+- Show the command and the recipe equivalent to what was chosen, without
+  passwords.
+- Keep the existing commands as a stable contract for advanced users and
+  automation.
 
 ## Accessibility & Inclusion
 
-Garantir operação completa por teclado, foco visível, informação independente de
-cor, suporte a `NO_COLOR` e a terminais sem glifos Unicode (`X86QW_GLYPHS=ascii`),
-e português ou inglês conforme o sistema. Sem terminal, a CLI imprime a ajuda e
-cada comando diz o que precisa. A interface deve funcionar em terminais Unix e
-Windows e permanecer legível em larguras reduzidas.
+Guarantee full keyboard operation, visible focus, information independent of
+color, support for `NO_COLOR` and for terminals without Unicode glyphs
+(`X86QW_GLYPHS=ascii`), and English, or Portuguese when the system is set to
+it. Without a terminal, the CLI prints its help and each command says what it
+needs. The interface must work on Unix and Windows terminals and stay legible
+at reduced widths.

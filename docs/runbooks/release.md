@@ -1,77 +1,81 @@
-# Release da CLI e operação TUF
+# CLI release and TUF operations
 
-Tudo aqui roda com as ferramentas Go do repositório. Comandos partem da raiz
-do checkout.
+Everything here runs with the repository's Go tools. Commands start from the
+root of the checkout.
 
-## O que é automático
+## What is automatic
 
-| O quê | Quando | Workflow |
+| What | When | Workflow |
 | --- | --- | --- |
-| Deploy do site | a cada merge em `main` que toca `site/public` | `site-deploy.yml` |
-| Renovação do timestamp (lease de 30 dias) | segunda, 06:41 UTC | `tuf-timestamp-auto-renewal.yml` |
-| Monitor da cadeia pública | de hora em hora | `tuf-monitor.yml` |
+| Site deploy | on every merge into `main` that touches `site/public` | `site-deploy.yml` |
+| Timestamp renewal (30-day lease) | Monday, 06:41 UTC | `tuf-timestamp-auto-renewal.yml` |
+| Monitor of the public chain | every hour | `tuf-monitor.yml` |
 
-- O deploy publica o que está em `main`, nunca volta o timestamp TUF para uma
-  versão anterior e recusa uma versão já publicada com outros bytes. Quando
-  passa a servir uma CLI nova, marca a release dela como *latest*.
-- A renovação usa a chave online da role timestamp, publica, confere e abre um
-  PR que registra o timestamp novo em `main`. Recusa rodar se produção e `main`
-  divergem. Toda falha abre uma issue P0.
-- O monitor falha (e abre uma issue P0) quando o timestamp tem menos de 72
-  horas, snapshot ou targets menos de 14 dias, a root menos de 60 dias, quando
-  produção não serve `main` há mais de uma hora ou quando ele mesmo parou.
+- The deploy publishes what is in `main`, never rolls the TUF timestamp back
+  to an earlier version and refuses a version already published with other
+  bytes. When it starts serving a new CLI, it marks that CLI's release as
+  *latest*.
+- The renewal uses the timestamp role's online key, publishes, checks and
+  opens a PR that records the new timestamp in `main`. It refuses to run if
+  production and `main` diverge. Every failure opens a P0 issue.
+- The monitor fails (and opens a P0 issue) when the timestamp has less than 72
+  hours left, snapshot or targets less than 14 days, the root less than 60
+  days, when production has not served `main` for more than an hour or when
+  the monitor itself stopped.
 
-## Publicar uma versão da CLI
+## Publish a CLI version
 
-1. Publique os binários:
+1. Publish the binaries:
 
    ```sh
    gh workflow run go-release.yml --ref main -f version=X.Y.Z
    ```
 
-   O ambiente `cli-release` pede aprovação (revisor `x86dx2`). O workflow
-   testa, compila os cinco binários, gera `SHA256SUMS`, atesta a proveniência
-   e publica `x86qw-cli-X.Y.Z` como *prerelease*.
+   The `cli-release` environment asks for approval (reviewer `x86dx2`). The
+   workflow tests, builds the five binaries, generates `SHA256SUMS`, attests
+   the provenance and publishes `x86qw-cli-X.Y.Z` as a *prerelease*.
 
-2. Prepare o checkout, no Mac que guarda as chaves offline:
+2. Prepare the checkout, on the Mac that keeps the offline keys:
 
    ```sh
    git switch -c release/cli-X.Y.Z origin/main
    go -C go run ./cmd/x86qw-release prepare --version X.Y.Z
    ```
 
-   O `prepare` baixa os binários e confere cada um contra o `SHA256SUMS`,
-   regrava o catálogo (com `generated_at` novo), o `product.json`, os
-   bootstraps `install.sh` e `install.ps1` e a versão citada no `README.md` e no
-   `index.html`. Depois assina a próxima geração TUF (a maior entre o checkout
-   e a produção, mais um), remove a anterior do checkout e roda
-   `x86qw-content verify`.
+   `prepare` downloads the binaries and checks each one against
+   `SHA256SUMS`, rewrites the catalog (with a new `generated_at`),
+   `product.json`, the `install.sh` and `install.ps1` bootstraps and the
+   version named in `README.md` and in `index.html`. Then it signs the next
+   TUF generation (the higher of checkout and production, plus one), removes
+   the previous one from the checkout and runs `x86qw-content verify`.
 
-3. Revise o diff, faça o commit, abra o PR e espere a CI.
-4. Faça o merge (squash). O deploy roda sozinho, e a release vira *latest*.
-5. Confira: `go -C go run ./cmd/x86qw-release monitor --checkout`.
+3. Review the diff, commit, open the PR and wait for CI.
+4. Merge (squash). The deploy runs by itself, and the release becomes
+   *latest*.
+5. Check: `go -C go run ./cmd/x86qw-release monitor --checkout`.
 
-O teste `TestCheckoutNamesOneRelease` falha se o catálogo, os bootstraps, o
-`README.md` e a página citarem versões diferentes da CLI.
+The `TestCheckoutNamesOneRelease` test fails if the catalog, the bootstraps,
+`README.md` and the page name different CLI versions.
 
-## Publicar conteúdo
+## Publish content
 
-Depois de `x86qw-content update`, `add` ou `build --register` e de
-`x86qw-content publish`, o catálogo mudou e precisa de uma geração TUF nova
-antes do PR:
+After `x86qw-content update`, `add` or `build --register` and
+`x86qw-content publish`, the catalog changed and needs a new TUF generation
+before the PR:
 
 ```sh
 go -C go run ./cmd/x86qw-release sign
 go -C go run ./cmd/x86qw-content verify
 ```
 
-Sem isso, o `verify` acusa "catálogo local diverge do target TUF".
+Without it, `verify` reports "the local catalog differs from the TUF target;
+sign it with x86qw-release sign".
 
-## Renovar snapshot e targets
+## Renew snapshot and targets
 
-Snapshot e targets valem 90 dias a partir da assinatura e só se renovam com as
-chaves offline. Toda release da CLI ou de conteúdo já os renova. Sem release,
-no mesmo Mac:
+Snapshot and targets are valid for 90 days from signing and are only renewed
+with the offline keys. Every CLI or content release already renews them.
+Without a release, on the same Mac:
 
 ```sh
 git switch -c ops/tuf-renew origin/main
@@ -79,63 +83,64 @@ go -C go run ./cmd/x86qw-release sign
 go -C go run ./cmd/x86qw-content verify
 ```
 
-Depois disso: PR, merge e deploy automático. O monitor avisa 14 dias antes do
-vencimento.
+After that: PR, merge and automatic deploy. The monitor warns 14 days before
+expiry.
 
 ## Root
 
-A root v1 vence em 2027-08-10, e o monitor avisa 60 dias antes. Renovar a
-root exige as chaves root offline e uma `2.root.json` assinada pela root atual
-e pela nova; o cliente segue a cadeia de roots publicadas a partir da que traz
-embutida (`go/internal/trust/root.json`). Ainda não há comando para isso:
-planeje o trabalho antes de junho de 2027.
+Root v1 expires on 2027-08-10, and the monitor warns 60 days before. Renewing
+the root needs the offline root keys and a `2.root.json` signed by the
+current root and the new one; the client follows the chain of published roots
+from the one it embeds (`go/internal/trust/root.json`). There is no command
+for it yet: plan the work before June 2027.
 
-## Quando algo falha
+## When something fails
 
-- **A renovação recusou porque produção diverge de `main`.** Rode
-  `gh workflow run site-deploy.yml` e, quando terminar,
+- **The renewal refused because production diverges from `main`.** Run
+  `gh workflow run site-deploy.yml` and, when it finishes,
   `gh workflow run tuf-timestamp-auto-renewal.yml`.
-- **Um deploy falhou e `main` tem mudanças do site que não estão no ar.** A
-  próxima renovação também publica o `site/public` de `main`, mas não espere
-  por ela: rode `gh workflow run site-deploy.yml`.
-- **O deploy recusou: "production serves timestamp N and main M".** A renovação
-  publicou e o PR que registra o timestamp ainda não entrou. Espere o merge
-  dele; o deploy roda de novo.
-- **A renovação publicou, mas o PR de registro nem abriu** (o run falha em
-  "Record the published timestamp on main"; o branch `bot/tuf-timestamp-vN`
-  existe sem PR). Produção fica à frente de `main` e todo deploy recusa até o
-  registro entrar. Abra o PR à mão, espere a CI e faça o merge:
+- **A deploy failed and `main` has site changes that are not live.** The next
+  renewal also publishes `main`'s `site/public`, but do not wait for it: run
+  `gh workflow run site-deploy.yml`.
+- **The deploy refused: "production serves timestamp N and main M".** The
+  renewal published and the PR that records the timestamp has not merged
+  yet. Wait for its merge; the deploy runs again.
+- **The renewal published, but the record PR never opened** (the run fails at
+  "Record the published timestamp on main"; the `bot/tuf-timestamp-vN` branch
+  exists without a PR). Production stays ahead of `main` and every deploy
+  refuses until the record merges. Open the PR by hand, wait for CI and
+  merge:
 
   ```sh
   gh pr create --base main --head bot/tuf-timestamp-vN \
-    --title "chore(trust): record published TUF timestamp vN" --body "Registro manual."
+    --title "chore(trust): record published TUF timestamp vN" --body "Manual record."
   ```
 
-  Desde #383 o PR é aberto pelo token do próprio job (o repositório permite que
-  o Actions crie PRs) e o `RELEASE_GH_TOKEN` só faz o push do branch, cujos
-  checks obrigatórios rodam no `push`. Antes disso, a falta de permissão de PR
-  nesse token deixou a v56 sem registro (#355).
-- **O PR da renovação (`bot/tuf-timestamp-vN`) falhou na CI e ficou aberto.**
-  Produção segue à frente de `main` até ele entrar. Corrija o que a CI apontou
-  no próprio branch e faça o merge; o deploy e o monitor voltam ao normal.
-- **O deploy recusou: "timestamps N diferentes".** Um PR assinou a mesma
-  versão que a renovação publicou. No branch do PR, rode
-  `go -C go run ./cmd/x86qw-release sign` de novo e atualize o PR.
-- **O timestamp de produção está para vencer.** Rode a renovação manualmente.
-  Se a chave online falhar, `x86qw-release sign` gera uma geração nova com as
-  chaves offline.
-- **O monitor diz que produção não serve `main`.** Veja o último run do
-  *Deploy site*; rode-o de novo pelo `workflow_dispatch`.
-- **Chave comprometida.** Siga o [runbook de comprometimento](trust-compromise.md).
+  Since #383 the PR is opened by the job's own token (the repository lets
+  Actions create PRs) and `RELEASE_GH_TOKEN` only pushes the branch, whose
+  required checks run on `push`. Before that, the missing PR permission on
+  that token left v56 unrecorded (#355).
+- **The renewal PR (`bot/tuf-timestamp-vN`) failed CI and stayed open.**
+  Production stays ahead of `main` until it merges. Fix what CI pointed out on
+  the branch itself and merge; the deploy and the monitor go back to normal.
+- **The deploy refused: "main and production have different timestamps N".**
+  A PR signed the same version the renewal published. On the PR's branch, run
+  `go -C go run ./cmd/x86qw-release sign` again and update the PR.
+- **The production timestamp is about to expire.** Run the renewal by hand.
+  If the online key fails, `x86qw-release sign` produces a new generation with
+  the offline keys.
+- **The monitor says production does not serve `main`.** Look at the last
+  *Deploy site* run; run it again through `workflow_dispatch`.
+- **Compromised key.** Follow the [compromise runbook](trust-compromise.md).
 
-## Chaves e ambientes
+## Keys and environments
 
-- As chaves offline (root, targets, snapshot, timestamp) ficam em
-  `.tuf-production/keys`, só no Mac do mantenedor e fora do Git.
-- A chave online da role timestamp é o segredo `TUF_TIMESTAMP_KEY_B64` do
-  repositório. Ela não assina root, targets nem snapshot.
-- O ambiente `cli-release` exige aprovação e só aceita branches protegidos; ele
-  publica binários.
-- O ambiente `release` não pede aprovação, também só aceita branches
-  protegidos e guarda `CLOUDFLARE_API_TOKEN` e `RELEASE_GH_TOKEN`; o deploy e a
-  renovação usam esse ambiente.
+- The offline keys (root, targets, snapshot, timestamp) live in
+  `.tuf-production/keys`, only on the maintainer's Mac and outside Git.
+- The timestamp role's online key is the repository secret
+  `TUF_TIMESTAMP_KEY_B64`. It does not sign root, targets or snapshot.
+- The `cli-release` environment requires approval and only accepts protected
+  branches; it publishes binaries.
+- The `release` environment asks for no approval, also only accepts protected
+  branches and keeps `CLOUDFLARE_API_TOKEN` and `RELEASE_GH_TOKEN`; the deploy
+  and the renewal use that environment.
