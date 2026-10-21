@@ -111,8 +111,10 @@ planeje o trabalho antes de junho de 2027.
     --title "chore(trust): record published TUF timestamp vN" --body "Registro manual."
   ```
 
-  A causa usual é o `RELEASE_GH_TOKEN` sem permissão *Pull requests: Read and
-  write* (aconteceu com a v56, #355).
+  Desde #383 o PR é aberto pelo token do próprio job (o repositório permite que
+  o Actions crie PRs) e o `RELEASE_GH_TOKEN` só faz o push do branch, cujos
+  checks obrigatórios rodam no `push`. Antes disso, a falta de permissão de PR
+  nesse token deixou a v56 sem registro (#355).
 - **O PR da renovação (`bot/tuf-timestamp-vN`) falhou na CI e ficou aberto.**
   Produção segue à frente de `main` até ele entrar. Corrija o que a CI apontou
   no próprio branch e faça o merge; o deploy e o monitor voltam ao normal.
