@@ -13,7 +13,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/pyjson"
 )
 
-// Human `status` and `status --stop`, ported from services.py.
+// Human `status` and `status --stop`.
 
 var statusParameterLabels = [][2]string{
 	{"game", "Jogo"}, {"mode", "Modo"}, {"map", "Mapa"}, {"bots", "Bots"}, {"bot_skill", "Habilidade"},
@@ -155,7 +155,7 @@ func printSession(c *Console, target string, data map[string]any, ownsLock bool)
 	}
 }
 
-// ShowStatus mirrors show_service_status; it reports whether a service
+// ShowStatus prints the active services; it reports whether a service
 // controller is confirmed alive.
 func ShowStatus(c *Console, target string) (bool, error) {
 	c.Banner("visualizar serviços ativos", target)
@@ -225,7 +225,7 @@ func ShowStatus(c *Console, target string) (bool, error) {
 	return active, nil
 }
 
-// RequestStop mirrors request_service_stop: publish stop.request for the
+// RequestStop publishes stop.request for the
 // confirmed controller and wait until it releases the lock.
 func RequestStop(target string, timeout time.Duration) error {
 	lockPath := filepath.Join(target, ".x86qw", "sessions", "active.lock")

@@ -12,6 +12,8 @@ dist/**/*.mvd filter=lfs diff=lfs merge=lfs -text
 dist/**/*.zip filter=lfs diff=lfs merge=lfs -text
 dist/servers/**/x86qw/runtime/** filter=lfs diff=lfs merge=lfs -text
 dist/services/**/x86qw/runtime/** filter=lfs diff=lfs merge=lfs -text
+dist/**/upstream/** filter=lfs diff=lfs merge=lfs -text
+dist/**/*.qwd filter=lfs diff=lfs merge=lfs -text
 
 # Project-authored metadata and overlays remain reviewable as text.
 dist/manifest.json diff merge text

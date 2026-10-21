@@ -93,7 +93,7 @@ func TestRoundTripIsCanonical(t *testing.T) {
 	}
 }
 
-func TestEncodeMatchesPythonEdgeCases(t *testing.T) {
+func TestEncodeEdgeCases(t *testing.T) {
 	document := `{"b": [], "a": {}, "s": "ação   \u0001 \" \\ / \t <>&", "n": [0, -0, 12345678901234567890, 1.5, 1e20, 1e-7, 0.0001, true, false, null], "x": {"z": 1, "y": [[], {}]}}`
 	value, err := Decode([]byte(document), LastWins)
 	if err != nil {
@@ -127,7 +127,7 @@ func TestDuplicateKeys(t *testing.T) {
 	}
 }
 
-func TestPythonEquality(t *testing.T) {
+func TestNumericEquality(t *testing.T) {
 	if !Eq(true, Number("1")) || !Eq(Number("1.0"), Number("1")) || Eq("1", Number("1")) {
 		t.Fatal("igualdade numérica diverge do Python")
 	}

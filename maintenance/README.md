@@ -35,8 +35,8 @@ x86qw-content commit --push
   pacote obrigatório `x86qw-core-id1` em `maintenance/build/packages/`;
 - `publish`: publica/verifica GitHub Releases e GitLab Generic Packages nos
   repositórios `x86qw`, que são os únicos destinos da distribuição.
-  Somente o instalador corrente recebe o selo Latest; os demais artefatos são
-  identificados como conteúdo;
+  Pacotes de conteúdo nunca recebem o selo Latest, que pertence à release da
+  CLI;
 - `commit`: adiciona ao Git somente `dist/`, inventarios, receitas e o catalogo.
 
 `update --commit --push` existe para automacao, mas a rotina recomendada e
@@ -52,6 +52,11 @@ x86qw-content commit --push
 # após revisão, checks verdes e aprovação separada:
 x86qw-content publish
 ```
+
+O catálogo que `update`, `add` ou `build --register` mudou só vale depois de
+assinado: rode `go -C go run ./cmd/x86qw-release sign` e `x86qw-content verify`
+antes do PR. O merge publica o site; o passo a passo está no
+[runbook de release](../docs/runbooks/release.md#publicar-conteúdo).
 
 As comparacoes com upstreams publicos usam a API HTTPS oficial do GitHub e URLs
 publicas de releases e downloads. `check` e `update` nao exigem conta, token ou
@@ -191,8 +196,8 @@ definição ou `url` HTTPS, nunca ambos. Toda URL persistente exige `managed:
 true`, não aceita credenciais, fragmento ou query e precisa corresponder
 exatamente a uma das autoridades descritas acima. Um
 caminho remoto que já existe no manifesto é imutável: URL, tamanho, SHA-256,
-owner, consumer e package não podem mudar no lugar. Novos bundles do instalador
-entram apenas pelo fluxo de release imutável, nunca por `add`.
+owner, consumer e package não podem mudar no lugar. A CLI entra apenas pela
+release `x86qw-cli`, nunca por `add`.
 
 Levar componentes a uma revisão nova do nQuake usa uma transição explícita e
 resistente a plano obsoleto na mesma definição, que nomeia cada componente
@@ -223,9 +228,8 @@ Fontes locais precisam estar declaradas exatamente em `project_sources`,
 `project_inputs`, `project_overrides` ou `project_archive_overrides` do BOM
 proposto. A cópia usa temporário exclusivo, modo `0600` no POSIX, hash durante
 streaming, `fsync` e `replace` atômico; assim, o staging por hardlink não altera
-o `dist/` vivo e uma mudança da fonte depois do plano é rejeitada. DACL privada
-para esse temporário no Windows permanece no PR 4 e na
-[issue #47](https://github.com/x86dx2/x86qw/issues/47). Destinos usam nomes
+o `dist/` vivo e uma mudança da fonte depois do plano é rejeitada. No Windows,
+esse temporário herda a ACL da pasta do checkout. Destinos usam nomes
 portáveis e colisões por caixa ou normalização Unicode e symlinks intermediários
 são rejeitados.
 O contrato comum usa `/` somente como separador, rejeita caracteres inválidos e
@@ -240,7 +244,7 @@ os objetos completos `component` e `release`, `replace: true` quando aplicável 
 a lista `profiles`. O `--dry-run` monta e valida esses inventários em memória
 antes de qualquer rede. Ao alterar um perfil, `add` preserva automaticamente sua
 assinatura anterior e registra a nova em `inventory/components.json`. Esse
-histórico permite que `./x86qw.sh upgrade` reconheça instalações que pularam
+histórico permite que `x86qw upgrade` reconheça instalações que pularam
 releases intermediárias.
 
 Para atualizar um componente existente, envie o objeto completo com

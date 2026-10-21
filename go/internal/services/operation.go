@@ -67,7 +67,8 @@ func (op *Operation) passwordFields() []passwordField {
 	return nil
 }
 
-// resolvePasswords mirrors services.resolve_passwords.
+// resolvePasswords reads each password from its file or, when asked, from
+// the terminal.
 func (op *Operation) resolvePasswords() error {
 	for _, field := range op.passwordFields() {
 		if *field.file != "" {
@@ -99,7 +100,7 @@ func (op *Operation) resolvePasswords() error {
 	return nil
 }
 
-// warnExternalBind mirrors services.warn_external_bind.
+// warnExternalBind warns when a service listens beyond this machine.
 func (op *Operation) warnExternalBind() {
 	c := op.Console
 	warnQtv := func(address, password string, upstream bool) {
@@ -133,7 +134,8 @@ func (op *Operation) warnExternalBind() {
 
 var backgroundSecretFields = []string{"password", "spectator_password", "rcon_password", "qtv_password"}
 
-// readBackgroundRequest mirrors read_background_request (secrets via stdin).
+// readBackgroundRequest reads the background controller's private request
+// (its secrets) from stdin.
 func (op *Operation) readBackgroundRequest() error {
 	invalid := errorf("O controlador em segundo plano não recebeu uma configuração privada válida.")
 	payload, err := io.ReadAll(io.LimitReader(op.Stdin, 65537))
@@ -410,7 +412,7 @@ func validateTarget(target string) error {
 	return nil
 }
 
-// cleanupSession mirrors cleanup_current_session for this controller.
+// cleanupSession removes what this controller's session published.
 func cleanupSession(journal *Journal, temporary []*TemporaryConfig, materialized []*Materialized, c *Console) error {
 	var failure error
 	for _, config := range temporary {
@@ -445,7 +447,7 @@ func cleanupSession(journal *Journal, temporary []*TemporaryConfig, materialized
 	return failure
 }
 
-// activateBackgroundLog mirrors sessions.activate_background_log.
+// activateBackgroundLog opens the background log under .x86qw/logs.
 func activateBackgroundLog(target, relative string) (*os.File, error) {
 	parts := strings.Split(relative, "/")
 	if len(parts) != 3 || parts[0] != ".x86qw" || parts[1] != "logs" || !strings.HasPrefix(parts[2], "service-") ||
@@ -527,7 +529,8 @@ func (op *Operation) secrets() map[string]any {
 	return values
 }
 
-// launchBackground mirrors launch_background_controller.
+// launchBackground starts the controller in the background and waits until
+// the session is up.
 func (op *Operation) launchBackground(hosted *Hosted) int {
 	c := op.Console
 	target := op.common().Target

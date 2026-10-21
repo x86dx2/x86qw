@@ -50,7 +50,8 @@ func RulesetArguments(ruleset string) []string {
 	return args
 }
 
-// Build mirrors the argument construction of gameplay.play_local.
+// Build assembles the ezQuake arguments of a local match and, when the mode
+// needs them, the commands of its KTX cfg.
 func Build(game Game, mode *Mode, mapName string, assets map[string]bool, o Options, ruleset string) (*Launch, error) {
 	args := RulesetArguments(ruleset)
 	_, hasProfile := rulesetConfigs[ruleset]

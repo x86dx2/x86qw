@@ -286,7 +286,7 @@ func TestCheckAndUpdateAgainstFakeUpstreams(t *testing.T) {
 		t.Fatalf("check: %v\n%s", err, out.String())
 	}
 	// Release artifacts that are packaged but not mirrored in dist/manifest.json
-	// are reported as new distribution files, exactly like manage.py check.
+	// are reported as new distribution files.
 	unmirrored := unmirroredReleaseArtifacts(t, project)
 	expectedCode := 0
 	if len(unmirrored) > 0 {

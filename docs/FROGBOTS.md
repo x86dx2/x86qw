@@ -1,7 +1,7 @@
 # Nomes dos Frogbots
 
 O x86QW oferece quatro perfis de identidade para os Frogbots do KTX. O perfil é
-escolhido no menu ou com `--bot-names`; nomes são dados declarativos e
+escolhido na tela Jogar do app ou com `--bot-names`; nomes são dados declarativos e
 não alteram regras, atributos ou inteligência dos bots.
 
 | Perfil | Comportamento |
@@ -14,16 +14,15 @@ não alteram regras, atributos ou inteligência dos bots.
 Exemplos:
 
 ```sh
-./x86qw.sh play ktx --mode duel --map dm6 --bots 1 --bot-names x86qw
-./x86qw.sh play ktx --mode duel --map dm6 --bots 1 --bot-names one-piece
-./x86qw.sh play ktx --mode 2on2 --map dm6 --bots 2 --bot-names personal
-./x86qw.sh host ktx --mode 2on2 --map dm6 --bots 2 --bot-names x86qw
+x86qw play ktx --mode duel --map dm6 --bots 1 --bot-names x86qw
+x86qw play ktx --mode duel --map dm6 --bots 1 --bot-names one-piece
+x86qw play ktx --mode 2on2 --map dm6 --bots 2 --bot-names personal
+x86qw host ktx --mode 2on2 --map dm6 --bots 2 --bot-names x86qw
 ```
 
-O menu interativo destaca `KTX Default` inicialmente. `x86QW aleatório` e
-`One Piece (opcional)` continuam disponíveis. Na CLI, `default` permanece o
-padrão por compatibilidade, portanto uma execução que não informe `--bot-names`
-fica sem customização.
+O app começa em `KTX padrão`, e `x86QW aleatórios`, `One Piece` e `lista
+pessoal` continuam disponíveis. Na CLI, `default` também é o padrão, portanto
+uma execução que não informe `--bot-names` fica sem customização.
 
 ## Lista x86QW
 
@@ -120,7 +119,7 @@ pessoal e evita os limites de tamanho e de aliases do console. No servidor
 dedicado, as mesmas escolhas entram na configuração efêmera já protegida pelo
 journal da sessão.
 
-Nos modos com quantidade fixa de jogadores, o menu oferece somente completar
+Nos modos com quantidade fixa de jogadores, o app oferece somente completar
 as vagas restantes depois do jogador humano. Duel adiciona um bot; 2on2 adiciona
 três; 3on3 adiciona cinco; 2on2on2 adiciona cinco; 4on4 adiciona sete. A CLI
 aplica a mesma validação.
@@ -134,16 +133,16 @@ respeitada tanto na abertura quanto nos bots inseridos depois com `INS`.
 jogadores. `2on2on2` é a formação de três equipes com dois jogadores. Os aliases
 `3v3` e `2v2v2` continuam aceitos pela CLI. `3on3on3` e `4on4on4` mantêm três
 equipes de três e quatro jogadores. A composição fica em `catalog/modes.json`, no campo `bot_teams`, e
-é consumida pelo menu, pelo launcher local e pelo servidor dedicado.
+é consumida pelo app, pela partida local e pelo servidor dedicado.
 
 Modos abertos, como FFA e Practice, conservam as opções de preenchimento e
 quantidade personalizada. A entrada de vários bots é espaçada por frames do servidor.
-Escolha **Aleatória** no menu, ou use `--bot-skill random`, para sortear uma
+Escolha `random` na habilidade, no app, ou use `--bot-skill random`, para sortear uma
 habilidade independente de 1 a 20 a cada bot inserido, inclusive por `fill`.
 
 ## Mapas e recursos
 
-O menu não confunde “mapa instalado” com “mapa utilizável pela configuração
+O app não confunde “mapa instalado” com “mapa utilizável pela configuração
 atual”. A lista exibida é a interseção entre os BSPs presentes e os recursos
 declarados pelo modo:
 
@@ -173,7 +172,7 @@ diretivas e a estrutura das rotas oficiais antes de gerar um pacote.
 
 As opções `--bot-weapon`, `--bot-health` e
 `--[no-]bot-break-on-death` pertencem exclusivamente ao ThunderWalker ToT.
-Quando não são informadas, prevalece a configuração específica do mapa; o menu
+Quando não são informadas, prevalece a configuração específica do mapa; o app
 permite escolher explicitamente o valor padrão, ativado ou desativado.
 
 ## Teclas da sessão

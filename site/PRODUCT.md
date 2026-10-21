@@ -38,8 +38,9 @@ Versão, contagens, comandos, jogos, runtimes e plataformas vêm da projeção
 gerada `public/api/v1/product.json`. A fonte é o conjunto canônico em
 `maintenance/inventory/` e o catálogo de pacotes, inclusive os binários da CLI
 `x86qw`.
-Textos do site não podem manter números divergentes: os testes comparam a página
-com essa projeção e a validação integral rejeita um JSON desatualizado.
+Textos do site não podem manter números divergentes: um teste Go compara as
+contagens e a versão da CLI citadas na página com essa projeção e com o catálogo,
+e a validação integral rejeita um JSON desatualizado.
 
 O produto atual oferece cinco jogos, KTX com modos e Frogbots, hospedagem por
 MVDSV, relay QTV e proxy QWFWD. O cliente macOS é universal; os três serviços
@@ -47,8 +48,8 @@ no macOS são arm64. Linux amd64 e Windows x64 possuem cliente e serviços.
 
 ## Design Principles
 
-- Começar pelo jogo: a primeira dobra nomeia os títulos, o menu de partida e o
-  comando. Infraestrutura vem depois da evidência de que isto joga.
+- Começar pelo jogo: a primeira dobra nomeia os títulos, o app e o comando.
+  Infraestrutura vem depois da evidência de que isto joga.
 - Destacar vantagens concretas: cinco jogos numa árvore, `play` / `host` / `hub`,
   catálogo com SHA-256 e TUF, stable e nightly lado a lado, PAKs que continuam
   sendo do dono.

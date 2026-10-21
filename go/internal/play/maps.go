@@ -39,7 +39,7 @@ func directory(name string) bool {
 	return err == nil && info.IsDir()
 }
 
-// LocalMapNames mirrors gameplay.local_map_names: .bsp files and maps inside
+// LocalMapNames lists the .bsp files and the maps inside
 // .pak/.pk3 packages of id1 and the game directory, sorted case-insensitively.
 func LocalMapNames(root, gamedir string) ([]string, error) {
 	found := map[string]bool{}
@@ -148,7 +148,8 @@ var (
 	routeCommands = map[string]bool{"race_add_route_node": true, "race_route_add_end": true, "race_route_add_start": true, "race_set_node_size": true, "race_set_route_falsestart_mode": true, "race_set_route_name": true, "race_set_route_timeout": true, "race_set_route_weapon_mode": true, "race_set_teleport_flags_by_name": true}
 )
 
-// validPersonalAsset mirrors gameplay.valid_personal_ktx_asset.
+// validPersonalAsset reports whether name is a usable personal KTX asset: a
+// regular text file of at most 1 MiB with suffix.
 func validPersonalAsset(name, suffix string) bool {
 	info, err := os.Lstat(name)
 	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > 1<<20 {
@@ -220,8 +221,8 @@ func validPersonalAsset(name, suffix string) bool {
 	return false
 }
 
-// splitLines splits like Python's str.splitlines for the separators that can
-// appear after the control-character filter (\n, \r, \r\n, \x85).
+// splitLines splits at the line separators that can appear after the
+// control-character filter (\n, \r, \r\n, \x85).
 func splitLines(text string) []string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")

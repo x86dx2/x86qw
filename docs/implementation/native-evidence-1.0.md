@@ -1,4 +1,8 @@
-# Runbook — evidência nativa
+# Evidência nativa da linha 1.0 (histórico)
+
+> Este documento descreve o harness Python que produzia a evidência M3 das
+> releases 1.0.x. Ele foi removido com o Python (#328) e não se aplica à CLI
+> 2.x; fica aqui como registro.
 
 O executor `maintenance/tools/native_macos_harness.py` é o único caminho que pode
 produzir um handoff `macOS-ARM64` aprovado. Ele exige Mac M3 (macOS arm64), Apple M3,

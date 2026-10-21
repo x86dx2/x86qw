@@ -5,7 +5,8 @@ import (
 	"strconv"
 )
 
-// Helpers mirroring the Python predicates the validators rely on.
+// Predicates the validators rely on: numbers compare by value, and a bool
+// counts as 0 or 1.
 
 // IsStr reports isinstance(value, str).
 func IsStr(value any) bool {
@@ -69,7 +70,7 @@ func rat(value any) *big.Rat {
 	return nil
 }
 
-// Compare compares two numeric values like Python (bool counts as int).
+// Compare compares two numeric values (a bool counts as an integer).
 // ok is false when either side is not numeric or is NaN/Infinity.
 func Compare(a, b any) (int, bool) {
 	left, right := rat(a), rat(b)
@@ -84,7 +85,8 @@ func IntCmp(value any, constant int64) (int, bool) {
 	return Compare(value, Number(strconv.FormatInt(constant, 10)))
 }
 
-// Eq mirrors Python ==.
+// Eq reports whether a and b are equal JSON values: numbers by value (true
+// equals 1, NaN equals nothing), lists in order, objects key by key.
 func Eq(a, b any) bool {
 	if IsNumber(a) && IsNumber(b) {
 		if n, ok := a.(Number); ok && n == "NaN" {
@@ -145,12 +147,12 @@ func Eq(a, b any) bool {
 	return false
 }
 
-// EqInt mirrors value == constant.
+// EqInt reports whether value equals the integer constant.
 func EqInt(value any, constant int64) bool {
 	return Eq(value, Number(strconv.FormatInt(constant, 10)))
 }
 
-// Truthy mirrors bool(value).
+// Truthy reports whether value is not null, false, zero or empty.
 func Truthy(value any) bool {
 	switch typed := value.(type) {
 	case nil:
@@ -173,8 +175,8 @@ func Truthy(value any) bool {
 	return true
 }
 
-// Repr is a best-effort str(value) used where Python feeds str() into a
-// regular expression; only scalars can ever match those patterns.
+// Repr renders a scalar as the text the validation patterns match; lists and
+// objects never match them.
 func Repr(value any) string {
 	switch typed := value.(type) {
 	case nil:
@@ -225,7 +227,7 @@ func StrList(value any) ([]string, bool) {
 	return result, true
 }
 
-// Hashable reports whether value can be a dict/set key in Python.
+// Hashable reports whether value is a scalar, the only kind HashKey takes.
 func Hashable(value any) bool {
 	switch value.(type) {
 	case []any, *Object:
@@ -234,7 +236,8 @@ func Hashable(value any) bool {
 	return true
 }
 
-// HashKey returns a key such that Python-equal hashable values collide.
+// HashKey returns a key under which equal scalars (1, 1.0 and true)
+// collide.
 func HashKey(value any) string {
 	switch typed := value.(type) {
 	case nil:
@@ -250,8 +253,8 @@ func HashKey(value any) string {
 	return "?"
 }
 
-// UniqueHashable mirrors len(values) == len(set(values)); ok is false when
-// set() would raise TypeError.
+// UniqueHashable reports whether values has no duplicates; ok is false when
+// one is not a scalar.
 func UniqueHashable(values []any) (unique bool, ok bool) {
 	seen := map[string]bool{}
 	for _, value := range values {

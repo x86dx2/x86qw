@@ -1,5 +1,5 @@
-// Package state reads and writes .x86qw/state.json exactly like
-// x86qw_runtime/state.py (formats 1 and 2).
+// Package state reads and writes .x86qw/state.json (formats 1 and 2), byte
+// for byte as existing installations have it.
 package state
 
 import (
@@ -26,7 +26,8 @@ var (
 	componentID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$`)
 	// Profiles accepted in persisted state.
 	Profiles = map[string]bool{"none": true, "custom": true, "essential": true, "recommended": true, "complete": true}
-	// legacyReplacements and legacyRemovals mirror manager.py.
+	// legacyReplacements and legacyRemovals are the component ids renamed or
+	// dropped since the nQuake era.
 	legacyReplacements = map[string]string{"nquake-bootstrap": "x86qw-client-bootstrap", "nquake-ktx": "ktx"}
 	legacyRemovals     = map[string]bool{"nquake-sounds": true}
 )
@@ -205,7 +206,7 @@ func (s *State) Document() map[string]any {
 	return copied
 }
 
-// Migrate mirrors migrations.migrate_install_state: legacy component ids
+// Migrate brings a state document up to date: legacy component ids
 // replaced or dropped, format 2, fingerprint recomputed, one
 // installation_version marker (targetVersion when given).
 func (s *State) Migrate(targetVersion string) map[string]any {

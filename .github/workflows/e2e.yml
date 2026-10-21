@@ -1,0 +1,80 @@
+name: End-to-end
+
+# Installs for real every night on Linux and macOS:
+# - the Go network tests: the catalog over TUF, an essential install,
+#   cancel and retry, match resolution, host instances;
+# - the served install.sh bootstrap, from the checkout.
+# Windows has its own workflow, because the site challenges GitHub's
+# Windows runners.
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "site/public/install.sh"
+      - "go/cmd/x86qw-release/templates/install.sh"
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: e2e ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          lfs: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      - name: Network and real-install tests
+        working-directory: go
+        env:
+          X86QW_NETWORK_TESTS: "1"
+          X86QW_REAL_INSTALL: "1"
+          X86QW_NO_MACOS_PREFERENCES: "1"
+        run: go test -count=1 -timeout 45m ./internal/setup/... ./cmd/x86qw/...
+      - name: The served install.sh installs the essential profile
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/x86qw"
+          bash site/public/install.sh --target "$target" --profile essential
+          # This branch's CLI then adopts the installation, so the checks
+          # below run the code under test, not the published release.
+          go -C go build -o "$RUNNER_TEMP/x86qw-branch" ./cmd/x86qw
+          "$RUNNER_TEMP/x86qw-branch" setup --target "$target"
+          "$target/x86qw.sh" verify
+          "$target/x86qw.sh" doctor
+          "$target/x86qw.sh" uninstall --yes
+
+  report:
+    name: Report a failed night
+    needs: e2e
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const marker = '<!-- x86qw-e2e-alert -->';
+            const { owner, repo } = context.repo;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const body = `${marker}\nThe nightly end-to-end install failed: ${runUrl}`;
+            const { data: open } = await github.rest.issues.listForRepo({ owner, repo, state: 'open', labels: 'P1', per_page: 100 });
+            const existing = open.find((issue) => !issue.pull_request && (issue.body || '').includes(marker));
+            if (existing) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: existing.number, body });
+            } else {
+              await github.rest.issues.create({ owner, repo, title: 'Nightly end-to-end install failed', labels: ['P1'], body });
+            }

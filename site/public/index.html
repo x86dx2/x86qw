@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="x86QW: cinco jogos de QuakeWorld, um menu, uma partida. KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2 para macOS, Linux e Windows.">
+    <meta name="description" content="x86QW: cinco jogos de QuakeWorld, um app, uma partida. KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2 para macOS, Linux e Windows.">
     <meta name="theme-color" content="#201e1e">
     <meta property="og:type" content="website">
     <meta property="og:locale" content="pt_BR">
     <meta property="og:site_name" content="x86QW">
     <meta property="og:title" content="x86QW — cinco jogos, uma partida">
-    <meta property="og:description" content="KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2. Play, host e hub no mesmo menu.">
+    <meta property="og:description" content="KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2. Jogar, hospedar e achar servidores no mesmo app.">
     <meta property="og:url" content="https://qw.x86.com.br/">
     <meta property="og:image" content="https://qw.x86.com.br/assets/social-card.png">
     <meta property="og:image:type" content="image/png">
@@ -18,7 +18,7 @@
     <meta property="og:image:alt" content="x86QW: cinco jogos em uma distribuição auditável de QuakeWorld">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="x86QW — cinco jogos, uma partida">
-    <meta name="twitter:description" content="KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2. Play, host e hub no mesmo menu.">
+    <meta name="twitter:description" content="KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2. Jogar, hospedar e achar servidores no mesmo app.">
     <meta name="twitter:image" content="https://qw.x86.com.br/assets/social-card.png">
     <meta name="twitter:image:alt" content="x86QW: cinco jogos em uma distribuição auditável de QuakeWorld">
     <title>x86QW — cinco jogos, uma partida</title>
@@ -54,9 +54,9 @@
 
     <main id="conteudo" tabindex="-1">
       <section class="hero" id="topo" aria-labelledby="hero-title">
-        <p class="kicker">x86QW <span class="release-product-version">2.3.2</span> · validado no Apple M3</p>
-        <h1 id="hero-title">Cinco jogos. Um menu. Uma partida.</h1>
-        <p class="hero-lead">KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2 no mesmo ezQuake e no mesmo menu em português. Jogue, hospede e entre sem montar a árvore na mão.</p>
+        <p class="kicker">x86QW <span class="release-product-version">2.3.2</span> · em uso pelo mantenedor</p>
+        <h1 id="hero-title">Cinco jogos. Um app. Uma partida.</h1>
+        <p class="hero-lead">KTX, Final Arena, Pro-X, Team Fortress e Total Destruction 2 no mesmo ezQuake e no mesmo app, em português ou inglês. Jogue, hospede e entre em servidores sem montar a árvore na mão.</p>
         <div class="hero-actions">
           <a class="button button-primary" href="#jogos">Ver os jogos</a>
           <a class="button button-quiet" href="#instalar">Instalar owner-only</a>
@@ -82,7 +82,7 @@
           </li>
           <li>
             <p class="game-name">Final Arena <span>1.20</span></p>
-            <p>Duelos em fila: o vencedor permanece. Servidor local ou dedicado pelo mesmo menu.</p>
+            <p>Duelos em fila: o vencedor permanece. Servidor local ou dedicado pelo mesmo app.</p>
           </li>
           <li>
             <p class="game-name">Pro-X <span>1.1</span></p>
@@ -101,21 +101,21 @@
 
       <section class="capabilities section" id="capacidades" aria-labelledby="capabilities-title">
         <header class="section-intro">
-          <h2 id="capabilities-title">Partida, host e hub no mesmo menu.</h2>
-          <p>A CLI em português cobre o ciclo completo: jogar, hospedar, entrar, atualizar e conferir. Stable e nightly coexistem.</p>
+          <h2 id="capabilities-title">Partida, servidores e host no mesmo app.</h2>
+          <p>O app e a CLI cobrem o ciclo completo: jogar, hospedar, entrar, atualizar e conferir. Stable e nightly coexistem.</p>
         </header>
         <dl class="capability-list">
           <div>
             <dt><code>play</code> Jogar</dt>
-            <dd>Modos, mapas e ruleset assistido a partir do menu. Frogbots e Coach de Quad só onde o QVM permite.</dd>
+            <dd>Modos, mapas e ruleset escolhidos na tela Jogar. Frogbots e Coach de Quad só onde o QVM permite.</dd>
           </div>
           <div>
             <dt><code>host</code> Hospedar</dt>
-            <dd>MVDSV em primeiro ou segundo plano, com preflight, journal e encerramento coordenado.</dd>
+            <dd>Várias instâncias de MVDSV numa sessão, em primeiro ou segundo plano, com pré-voo, journal e encerramento coordenado.</dd>
           </div>
           <div>
             <dt><code>hub</code> Entrar</dt>
-            <dd>Servidores, observação e QTV. A biblioteca guarda favoritos e recentes.</dd>
+            <dd>Servidores públicos, espectador e QTV. Favoritos primeiro; links <code>qw://</code> e demos abrem direto no ezQuake.</dd>
           </div>
           <div>
             <dt><code>update</code> Atualizar</dt>
@@ -137,8 +137,8 @@
           <div class="install-copy">
             <p class="install-kicker">Distribuição em validação individual</p>
             <h2 id="install-title">Um comando. Nenhum clone.</h2>
-            <p>A versão <span class="release-product-version">2.3.2</span> foi validada para uso do próprio mantenedor em um Mac Apple M3 e ainda não oferece suporte público geral. A classificação técnica é <code>owner-only</code>; a audiência <code>external-public</code> ainda não foi autorizada.</p>
-            <p class="install-requirements"><strong>Antes de começar:</strong> nada a instalar além do sistema. macOS e Linux usam <code>curl</code>; o Windows usa o PowerShell incluído. O bootstrap baixa a CLI nativa x86QW por HTTPS e confere tamanho e SHA-256; um download truncado não executa nada.</p>
+            <p>A versão <span class="release-product-version">2.3.2</span> é a que o próprio mantenedor usa, num Mac Apple M3, e ainda não oferece suporte público geral. A classificação técnica é <code>owner-only</code>; a audiência <code>external-public</code> ainda não foi autorizada.</p>
+            <p class="install-requirements"><strong>Antes de começar:</strong> nada a instalar além do sistema. macOS e Linux usam <code>curl</code>; o Windows usa o PowerShell incluído. O bootstrap baixa a CLI nativa x86QW por HTTPS e confere tamanho e SHA-256 antes de executá-la; no macOS e no Linux, um download truncado do script não executa nada.</p>
           </div>
           <div class="install-command" aria-label="Comandos de instalação">
             <div class="install-command-row">
@@ -169,15 +169,15 @@
           <ol class="install-flow" aria-label="Fluxo de instalação">
             <li>
               <span>1</span>
-              <div><strong>Confirme o destino</strong><p>O sistema atual é detectado automaticamente; <code>--platform</code> prepara um cliente diferente.</p></div>
+              <div><strong>Diga o que quer</strong><p>Jogar, hospedar ou os dois. Quem só joga não recebe os programas de servidor.</p></div>
             </li>
             <li>
               <span>2</span>
-              <div><strong>Escolha o ritmo</strong><p>Stable para releases oficiais; nightly para acompanhar o desenvolvimento. Os dois coexistem.</p></div>
+              <div><strong>Ajuste o que importa</strong><p>Os <span class="release-component-count">21</span> componentes, nick, teclas, vídeo, servidor e pasta. O pré-voo confere disco, catálogo e portas antes de escrever.</p></div>
             </li>
             <li>
               <span>3</span>
-              <div><strong>Escolha os componentes</strong><p>Os <span class="release-component-count">21</span> componentes e os presets só entram com a sua confirmação.</p></div>
+              <div><strong>Jogue ou hospede</strong><p>O app abre em Jogar, Servidores e Hospedar. Cancelar no meio devolve a pasta ao que era.</p></div>
             </li>
           </ol>
         </div>
@@ -259,11 +259,11 @@
           <p>Capacidades e limites descritos sem transformar evidência interna em promessa pública.</p>
         </header>
         <div class="readiness">
-          <p><strong>Uso validado:</strong> versão <span class="release-product-version">2.3.2</span> para o próprio mantenedor em Apple M3. Linux, Windows e os serviços permanecem em preview até receberem evidência nativa equivalente.</p>
-          <p><strong>Conteúdo disponível:</strong> <span class="release-package-count">29</span> pacotes, <span class="release-component-count">21</span> componentes, cinco jogos, KTX com 24 modos e Frogbots, além de MVDSV, QTV e QWFWD. Stable e nightly podem coexistir.</p>
+          <p><strong>Uso registrado:</strong> versão <span class="release-product-version">2.3.2</span> em uso pelo próprio mantenedor num Apple M3. Não há registro de validação nativa em Linux e Windows; essas plataformas e os serviços seguem em preview.</p>
+          <p><strong>Conteúdo disponível:</strong> <span class="release-package-count">28</span> pacotes, <span class="release-component-count">21</span> componentes, cinco jogos, KTX com 24 modos e Frogbots, além de MVDSV, QTV e QWFWD. Stable e nightly podem coexistir.</p>
           <p><strong>Integridade verificável:</strong> o instalador autentica o catálogo com TUF e só aceita arquivos que correspondem ao tamanho e ao SHA-256 publicados. GitHub Releases e GitLab Generic Packages funcionam como mirrors.</p>
           <p><strong>Limite do macOS:</strong> o cliente stable preserva o bundle upstream, que não possui Developer ID nem notarização comprovada. Por isso, esse suporte continua condicional.</p>
-          <p><strong>Operação conservadora:</strong> senhas não entram na linha de comando; serviços usam loopback por padrão e a stack ativa pode ser inspecionada e encerrada de forma coordenada.</p>
+          <p><strong>Operação conservadora:</strong> senhas não entram na linha de comando; <code>x86qw host</code> usa loopback por padrão, o servidor do instalador avisa que aceita a rede e oferece “Só nesta máquina”, e a stack ativa pode ser inspecionada e encerrada de forma coordenada.</p>
         </div>
       </section>
     </main>

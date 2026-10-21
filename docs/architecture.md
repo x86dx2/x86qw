@@ -7,253 +7,193 @@ versionada fica ao lado, em `x86qw-platform.architecture.json`.
 ## Contratos públicos
 
 ```text
-https://qw.x86.com.br/                    site do projeto
-https://qw.x86.com.br/install.sh          bootstrap macOS/Linux
-https://qw.x86.com.br/install.ps1         bootstrap Windows
-https://qw.x86.com.br/api/v1/catalog.json catálogo do instalador
-https://qw.x86.com.br/api/v1/product.json fatos públicos do produto
-https://github.com/x86dx2/x86qw/tree/main/dist distribuição canônica
-https://github.com/x86dx2/x86qw/releases      releases oficiais
-https://gitlab.com/x86dx2/x86qw               código e pacotes de contingência
+https://qw.x86.com.br/                          site do projeto
+https://qw.x86.com.br/install.sh                bootstrap macOS/Linux
+https://qw.x86.com.br/install.ps1               bootstrap Windows
+https://qw.x86.com.br/api/v1/catalog.json       catálogo de pacotes
+https://qw.x86.com.br/api/v1/product.json       fatos públicos do produto
+https://qw.x86.com.br/api/v1/trust/             repositório TUF (metadata/ e targets/)
+https://github.com/x86dx2/x86qw/releases        CLI (x86qw-cli-*) e pacotes de conteúdo
+https://gitlab.com/x86dx2/x86qw/-/packages      mirror de contingência dos pacotes
 ```
 
-Dentro de um checkout, o instalador lê o catálogo versionado, materializa os
-componentes diretamente de `dist/distributions/nquake` e `dist/mods` e usa `distribution_path`
-somente para artefatos upstream indivisíveis, como os clientes ezQuake. As URLs
-HTTPS dos pacotes derivados são fallbacks para instalações sem as fontes locais.
-O bundle público ativa `--online-only`: ignora fontes e artefatos locais, consulta
-o catálogo publicado e grava a CLI permanente e seu recibo em `.x86qw/cli/`.
-Os launchers `dist/installer/bin/x86qw.sh` e `x86qw.cmd` são fontes versionadas incluídas
-no bundle e apenas copiadas para a raiz da instalação.
-`.x86qw/` é exclusivamente o plano de controle. MVDSV ocupa a raiz operacional
-tradicional (`mvdsv` ou `mvdsv.exe`), QTV ocupa `qtv/`, QWFWD ocupa `qwfwd/` e
-as licenças ficam em `docs/licenses/`. Os pacotes carregam variantes numa área
-de staging, mas o instalador seleciona exatamente uma plataforma antes do
-overlay; o staging e `BUILD.json` nunca chegam ao destino. O contrato começa em
-uma árvore nova e não migra o layout anterior.
-Os bundles publicados ficam em `dist/installer/packages/<versão>/`; o link
-relativo `dist/installer/packages/latest` aponta para a maior versão disponível. O
-catálogo conserva as versões oficiais iniciadas em `0.1.0`, marca exatamente uma
-como `current` e os bootstraps permanecem fixados nessa versão e em seu SHA-256.
+## Código
 
-## Repositórios
+Todo o código vive em `go/`, num único módulo:
 
-- `x86dx2/x86qw`: distribuição completa em `dist/`, catálogo, instalador, site,
-  validações, GitHub Releases e GitLab Generic Packages. Não existe repositório
-  de distribuição paralelo. Os pacotes de componentes são builds reproduzíveis
-  das fontes canônicas e não são versionados novamente na árvore Git.
-  Os dois PAKs registrados permanecem em `dist/game-data/id1`; o builder produz
-  `x86qw-core-id1` como pacote de dados-base separado, com tamanho e SHA-256 no
-  catálogo. Eles não entram no bundle do instalador.
+- `cmd/x86qw`: a CLI e o app. Cada comando registra grupo, sinopse e opções;
+  `internal/cliargs` é o único parser.
+- `internal/setup` e `internal/setup/tui`: o instalador e o app (Bubble Tea).
+  O app fala com um `setup.Backend`; `setup.Real` usa a instalação de verdade e
+  `setup.Demo` serve à demonstração e aos testes.
+- `internal/install`, `internal/plan`, `internal/maint`: instalação,
+  planos de update/upgrade/repair, desinstalação, limpeza, perfil, biblioteca
+  e migração.
+- `internal/play`, `internal/services`, `internal/hub`: partidas locais e
+  links, MVDSV/QTV/QWFWD com journal e lock, e o QuakeWorld Hub.
+- `internal/trust`, `internal/download`, `internal/archive`,
+  `internal/atomicfile`: catálogo autenticado por TUF, downloads limitados,
+  extração segura e escrita atômica.
+- `cmd/x86qw-content` e `internal/content`: verificação, atualização, build e
+  publicação do `dist/`.
+- `cmd/x86qw-release` e `internal/tufsign`: release da CLI, assinatura TUF,
+  montagem do site e monitor da cadeia pública.
 
-O GitHub é o remoto principal e `gitlab.com/x86dx2/x86qw` mantém a cópia de
-contingência do código e dos pacotes. `maintenance/manage.py publish` envia
-todos os artefatos exclusivamente aos projetos `x86qw`. Ele envia somente artefatos já catalogados, baixa
-cada cópia pública, confere tamanho e SHA-256 e só então registra a segunda URL.
-O pacote usa a identidade `x86qw-installer`, os assets e tags seguem a convenção
-`x86qw-installer-X.Y.Z` e os títulos humanos usam `x86QW Installer X.Y.Z`.
-Somente a release do instalador marcada como `current` recebe o selo **Latest**
-do GitHub. Clientes, dados-base e mods usam títulos `x86QW Content · ...` e são
-sempre publicados com `make_latest=false`; continuam acessíveis por suas tags e
-pelo catálogo, sem se apresentar como uma nova versão do instalador.
+## A instalação
 
-Customizações próprias fazem parte da distribuição, não são constantes
-escondidas no instalador. Para o TD2, elas ficam em
-`dist/mods/td2/2.22/x86qw/` e são declaradas como `project_sources` no BOM. GitHub é a
-origem principal dessa camada e GitLab mantém a mesma árvore como contingência.
-O bootstrap geral segue o mesmo contrato em `dist/mods/x86qw/core/`: ele
-substitui explicitamente o `autoexec.cfg` da referência, instala documentação
-atual e cria somente modelos de configuração pessoal.
+A CLI publicada é um binário estático por plataforma. O bootstrap baixa o da
+release `x86qw-cli-*` fixado por tamanho e SHA-256 e executa `x86qw setup`.
+Numa instalação:
 
-O catálogo de pacotes canônico é `site/public/api/v1/catalog.json`, exatamente o arquivo
-servido pelo Worker. Manter o site no mesmo repositório elimina sincronização e
-permite que uma única validação cubra publicação e consumo. Os arquivos grandes
-ficam na árvore Git por meio do Git LFS. Releases e Generic Packages hospedam
-os clientes espelhados e os pacotes derivados necessários fora de um checkout.
+```text
+x86qw.sh / x86qw.cmd     lançador que executa a CLI instalada
+.x86qw/cli/x86qw         a CLI e seu recibo (receipt)
+.x86qw/state.json        estado: perfil, componentes e versões
+.x86qw/components/       recibo e inventário de cada componente
+.x86qw/clients/          recibos do ezQuake por plataforma e canal
+.x86qw/setup/            escolhas do instalador e senha de rcon
+.x86qw/sessions/         locks e journals das sessões
+ezQuake Stable.app,      cliente stable e nightly (app no macOS, AppImage no
+ezquake-*.AppImage/.exe  Linux, executável no Windows)
+ezquake/configs/         configurações do cliente
+id1/                     PAKs registrados
+qw/ arena/ prox/         conteúdo dos jogos (KTX, Final Arena, Pro-X,
+fortress/ td2/           Team Fortress e TD2)
+mvdsv  qtv/  qwfwd/      servidor e serviços, quando a instalação hospeda
+docs/licenses/           licenças dos componentes
+```
 
-Capacidades, runtimes, jogos e compatibilidade são declarados em
-`maintenance/inventory/`. A projeção pública
-`site/public/api/v1/product.json` combina esses contratos com `VERSION` e o
-catálogo de pacotes; `verify` rejeita qualquer projeção ou texto factual
-divergente.
+`.x86qw/` é o plano de controle. Os pacotes carregam variantes por plataforma
+numa área de staging; a CLI seleciona exatamente uma antes de copiar. Depois de
+qualquer alteração de componentes, ela gera `qw/pak.lst` em ordem
+determinística, registra o arquivo em recibo próprio e rejeita divergências na
+verificação. O ezQuake sempre recebe `-nohome`, evitando que um `~/.ezquake`
+externo sobreponha a instalação.
 
-## Fronteiras do runtime instalado
+Uma CLI mais nova que abre o app de uma instalação passa a ser a CLI dela; uma
+versão mais antiga ou de desenvolvimento nunca substitui a instalada.
 
-A PR 6 migra incrementalmente regras reutilizáveis dos entrypoints e de
-`maintenance.tools` para `x86qw_runtime`. O sentido permitido é manutenção,
-builders e fachadas instaladas consumirem o runtime; `x86qw_runtime` não pode
-importar `maintenance`, `dist` ou os entrypoints. O zipapp leva somente módulos
-runtime e projeções declarativas necessárias, sem a árvore `maintenance/`.
+## Repositório
 
-No recorte histórico `23194fd..49594cd`, o runtime já possuía versioning e
-erros, download limitado, scanner/extrator de arquivos, escrita atômica,
-modelos de catálogo, estado, recibos, migração, transações, UI, gameplay,
-identidade de processo e supervisor/readiness. Essa fronteira foi integrada
-incrementalmente pela PR 64 e publicada na release `0.7.3`; fachadas antigas
-permanecem apenas onde a compatibilidade de imports ainda precisa ser
-preservada.
+- `x86dx2/x86qw` guarda a distribuição completa em `dist/`, os inventários, o
+  catálogo, o código, o site e a documentação. Arquivos grandes ficam no Git
+  LFS. Os pacotes de componentes são builds reproduzíveis das fontes canônicas
+  e não são versionados de novo na árvore.
+- Os dois PAKs registrados ficam em `dist/game-data/id1`; o builder produz o
+  pacote de dados-base `x86qw-core-id1`, com tamanho e SHA-256 no catálogo.
+- Customizações próprias fazem parte da distribuição: para o TD2, ficam em
+  `dist/mods/td2/2.22/x86qw/` e são declaradas como `project_sources` no BOM; o
+  bootstrap de conteúdo segue o mesmo contrato em `dist/mods/x86qw/core/`.
 
-A frente da PR 6 permanece pausada como trilha auditável: mutações da própria
-CLI, defaults, remoções residuais, migrações mutáveis e uninstall ainda
-precisam entrar em planos explícitos para a linha 1.0. As extensões locais
-desse trabalho não estão publicadas. A decisão, a evidência focal e os riscos
-estão no
-[ADR 0005](adr/0005-fronteiras-incrementais-x86qw-runtime.md) e na
-[nota de implementação](implementation/runtime-boundaries-pr6.md). A release
-pública `0.7.3` contém somente as fronteiras já validadas; ela permanece
-imutável.
+O catálogo canônico é `site/public/api/v1/catalog.json`, exatamente o arquivo
+servido. Capacidades, runtimes, jogos e compatibilidade são declarados em
+`maintenance/inventory/`; a projeção pública `site/public/api/v1/product.json`
+combina esses contratos com o catálogo, e `x86qw-content verify` rejeita uma
+projeção divergente. A lista de comandos de `capabilities.json` é a mesma de
+`x86qw help`, e um teste compara as duas.
+
+`x86qw-content publish` envia os pacotes de conteúdo ao GitHub Releases e ao
+GitLab Generic Packages, baixa cada cópia pública, confere tamanho e SHA-256 e
+só então registra a segunda URL. Pacotes de conteúdo nunca recebem o selo
+**Latest**; a release da CLI é publicada como prerelease e vira Latest quando o
+site passa a servi-la.
 
 ## Regra de entrada de componentes
 
-`maintenance/inventory/component-policy.json` é a fronteira geral da distribuição.
-`maintenance/inventory/components.json` decompõe o conteúdo de referência em BOM,
-perfis, dependências, origens e destinos. O coletor rejeita caminhos fora dessas
-declarações e a validação offline rejeita arquivos sem consumidor ou componente.
+`maintenance/inventory/component-policy.json` é a fronteira geral da
+distribuição. `maintenance/inventory/components.json` decompõe o conteúdo em
+BOM, perfis, dependências, origens e destinos. O coletor rejeita caminhos fora
+dessas declarações e a validação rejeita arquivos sem consumidor ou componente.
 Pesquisar ou avaliar um recurso não o torna parte do x86QW.
 
-`maintenance/inventory/component-releases.json` mantém a camada de atualização separada: versão
-atual, estratégia, upstream, artefatos consumidos e hashes. Assim uma release
-como KTX pode avançar sem renomear ou reconstruir componentes alheios.
+`maintenance/inventory/component-releases.json` mantém a camada de atualização
+separada: versão atual, estratégia, upstream, artefatos consumidos e hashes.
+Assim uma release como KTX pode avançar sem renomear ou reconstruir componentes
+alheios.
 
 Todo conteúdo canônico fica sob `dist/`: `clients/ezquake/stable/` contém as
 releases oficiais, `clients/ezquake/nightly/` contém os snapshots de
 desenvolvimento, `distributions/nquake/` contém somente o conteúdo incorporado
 da distribuição de referência, `mods/` mantém upstreams e ajustes próprios e
-`game-data/id1/` mantém os PAKs registrados. ZIPs derivados
-ficam temporariamente em `maintenance/build/packages/`, fora do Git.
-
-O fluxo de um componente customizado possui duas entradas independentes:
-
-```text
-dist/<origem incorporada> + dist/<ajuste x86QW>
-                       -> instalador local -> quake-world/
-                       -> maintenance/build/packages/<pacote> -> mirrors de entrega
-```
+`game-data/id1/` mantém os PAKs registrados. ZIPs derivados ficam
+temporariamente em `maintenance/build/packages/`, fora do Git.
 
 Quando um componente for proposto, a ordem é: implementar a ação consumidora,
 declarar o componente na política, adicionar testes e só então habilitar seu
 download. Remover a ação consumidora exige remover também seus arquivos do
 acervo.
 
-Atualizações são detectadas por `maintenance/manage.py check`. O comando
-`update` aplica apenas atualizações mecanicamente seguras; releases independentes
-exigem uma definição revisada em `add` e `publish` continua explícito. Um adaptador
-deve consumir somente arquivos declarados, verificar hashes internos e produzir
-um novo pacote imutável. Cada mod escolhe uma composição verificável: merge de
-arquivos para KTX, snapshot integral para Final Arena, substituição completa
-para Pro-X, assets de referência com gamecode atualizado para Team Fortress e
-pacote independente para TD2. As harmonizações x86QW são sempre aplicadas por
-último. No KTX, toda divergência compartilhada precisa constar, com hashes e
-resolução, em `dist/mods/ktx/1.47/x86qw/policy/merge-policy.json`; em Team Fortress, o
+Atualizações são detectadas por `x86qw-content check`. `update` aplica apenas
+atualizações mecanicamente seguras; releases independentes exigem uma definição
+revisada em `add`, e `publish` continua explícito. Cada mod escolhe uma
+composição verificável: merge de arquivos para KTX, snapshot integral para
+Final Arena, substituição completa para Pro-X, assets de referência com
+gamecode atualizado para Team Fortress e pacote independente para TD2. As
+harmonizações x86QW são sempre aplicadas por último. No KTX, toda divergência
+compartilhada precisa constar, com hashes e resolução, em
+`dist/mods/ktx/1.47/x86qw/policy/merge-policy.json`; em Team Fortress, o
 builder retira do PAK montado o gamecode 2.8 e a mídia estritamente duplicada
-antes de adicionar o `qwprogs.dat` 2.9 extraído do ZIP original. Uma mudança não
-declarada interrompe o build.
+antes de adicionar o `qwprogs.dat` 2.9 extraído do ZIP original. Uma mudança
+não declarada interrompe o build.
 
 ## Fluxo de publicação
 
 ```text
-fonte fixada -> dist/ -> Git LFS -> catálogo -> instalador de desenvolvimento
-                     -> maintenance/build/packages/ -> mirrors -> instalador público
-CLI + catálogos runtime mínimos -> bundle do instalador -> GitHub/GitLab -> bootstrap curl/PowerShell
-dist/game-data/id1 -> pacote x86qw-core-id1 -> GitHub/GitLab -> instalação inicial
+fonte fixada -> dist/ -> Git LFS -> catálogo -> x86qw-release sign -> TUF
+                     -> maintenance/build/packages/ -> GitHub + GitLab
+go/cmd/x86qw -> go-release.yml -> x86qw-cli-X.Y.Z -> x86qw-release prepare -> bootstraps + catálogo
+merge em main -> site-deploy.yml -> qw.x86.com.br
 
-metadado HTTPS -> limite + deadline -> memória efêmera
+metadado HTTPS -> limite + deadline -> memória
 pacote HTTPS   -> tamanho + SHA-256 -> staging privado -> promoção atômica
 ```
 
-As receitas versionadas ficam em `maintenance/recipes/`. O gerenciador valida
-origem, tamanho, SHA-256 e membros mínimos. Atualizações são montadas em staging
-e somente substituem a árvore canônica quando catálogo, inventários, receitas e
-payloads formam um estado coerente.
-
-O Worker serve o site e o catálogo. O bundle público contém `x86qw.pyz`, os
-launchers, `installer.json` e a ponte mínima que permite à CLI 0.1.3 iniciar o
-zipapp. A ponte só existe na extração temporária; o zipapp incorpora um manifesto runtime mínimo:
-não leva PAKs, pacotes de mods, fontes, gamecodes
-nem os inventários de desenvolvimento. Para componentes, o instalador valida e
-materializa as fontes em `dist/` quando presentes; caso contrário, baixa o ZIP
-derivado de uma URL registrada. Nos dois caminhos, gera o mesmo inventário de
-arquivos gerenciados antes de alterar `quake-world/`.
-
-Depois de qualquer alteração de componentes, o instalador gera `qw/pak.lst`
-com uma ordem determinística, registra o arquivo em recibo próprio e rejeita
-divergências na verificação. Os launchers sempre passam `-nohome`, evitando que
-um diretório `~/.ezquake` externo sobreponha a distribuição autocontida.
+O passo a passo de release, renovação TUF e recuperação está no
+[runbook de release](runbooks/release.md).
 
 ## Fronteira de bytes remotos
 
-O zipapp e as ferramentas Python recebem HTTP exclusivamente por contratos
-tipados em `maintenance/tools/downloader.py`; o bootstrap PowerShell incorpora
-uma projeção mínima antes de o zipapp existir. Artefatos persistentes são fixados por tamanho
-e SHA-256; metadados dinâmicos permanecem efêmeros e não existe contrato
-autorizado a promover payload não fixado. Stable, nightly e nQuake descobertos só herdam uma
-identidade quando caminho, URL e tamanho coincidem com o manifesto revisado;
-candidatos novos exigem intake pinado antes do download persistente. Esse intake
-vincula destino, namespace, consumidor e pacote a uma release proposta, fonte
-preservada, pacote público proposto ou referência nQuake. Pacotes ezQuake também
+`internal/download` é a única entrada de bytes HTTP persistentes, na CLI e nas
+ferramentas. Artefatos persistentes são fixados por tamanho e SHA-256;
+metadados dinâmicos usam leitura limitada e nunca viram conteúdo gerenciado.
+Stable, nightly e nQuake descobertos só herdam uma identidade quando caminho,
+URL e tamanho coincidem com o manifesto revisado; candidatos novos exigem
+definição revisada antes do download persistente. Pacotes ezQuake também
 precisam coincidir exatamente com
-`clients/ezquake/<canal>/<versão>/<plataforma>-<arquitetura>/<arquivo>`.
-Os limites atuais são 512 MiB para artefatos, 2 MiB para o catálogo, 1 MiB para
-o Hub e 4 MiB para descoberta HTTP. Referências, commits e árvores do nQuake passam pela
-API oficial do GitHub sob esse limite, com um deadline compartilhado e rejeição
-de árvore truncada ou schema divergente.
+`clients/ezquake/<canal>/<versão>/<plataforma>-<arquitetura>/<arquivo>`, e os
+caminhos que vêm do upstream são validados como relativos e portáveis antes de
+qualquer pasta ser criada.
 
-O deadline monotônico cobre tentativas, leituras e backoff. Retry é restrito a
-falhas transitórias. Temporários recebem modo `0600` no POSIX, `flush` e `fsync`
-antes de uma substituição atômica, preservando o destino final anterior até a
-promoção. No código corretivo da PR 4, arquivos e diretórios privados
-gerenciados no Windows nascem com DACL protegida e somente o usuário atual e
-`LOCAL SYSTEM`; o bootstrap PowerShell cria seu diretório de trabalho com a
-mesma política antes da primeira escrita. Arquivos de senha externos são
-validados pelo mesmo limite, sem terem owner, DACL ou conteúdo modificados. A
-matriz nativa Windows comprovou essa mudança com Python 3.10 e 3.13; o smoke de
-runtime sob conta padrão permanece pendente. A mudança foi publicada na release
-pública `0.7.3`. Consulte o
-[`ADR 0003`](adr/0003-dacl-privada-windows.md). Os
-endereços são resolvidos em subprocesso limitado e cancelável; candidatos TCP
-usam conexão não bloqueante e o cancelamento de TLS/headers executa `shutdown`
-antes do fechamento. A janela de coleta pertence ao deadline, mas um reap
-patologicamente lento do sistema operacional pode terminar depois do retorno,
-já sem DNS ou socket ativo. Os
-bootstraps aplicam uma projeção mínima desse contrato antes de o zipapp estar
-disponível. O comando público Unix limita a escrita com `head`, valida o status
-do pipeline e o tamanho antes de executar o script, portanto não executa um
-prefixo produzido por pipeline com falha nem um stream excessivo sem
-`Content-Length`. Respostas
-intermediárias de redirect são fechadas sem drenar o corpo,
-e URLs da fronteira HTTP são redigidas nos diagnósticos sem expor credenciais,
-caminho, query ou fragmento. A descoberta aceita somente coordenadas ou URLs
-canônicas de repositórios públicos do GitHub.
+Os limites são 512 MiB para artefatos, 2 MiB para o catálogo e 1 MiB para o
+Hub. Toda URL inicial, redirecionada e final usa HTTPS; um deadline cobre
+tentativas, leituras e backoff, e o retry fica restrito a falhas transitórias.
+Temporários recebem modo `0600` no POSIX e são sincronizados antes de uma
+substituição atômica, preservando o destino anterior até a promoção. URLs
+persistentes em catálogo, manifesto e inventários passam pelo mesmo validador
+HTTPS e não aceitam credenciais, query, fragmento, espaços ou controles.
 
-Catálogo, manifesto, inventários de releases e upstreams e definições de intake
-usam o mesmo validador HTTPS; qualquer URL persistente também rejeita query. O
-`curl` usado somente para upload no GitLab inicia com `--disable`, exige HTTPS e
-não segue redirects. Ele continua sendo uma operação de publicação de saída a
-ser substituída pela promoção imutável do PR 10, não uma rota de ingestão.
+## Confiança
 
-Metadado limitado não é metadado autenticado. Assinatura, expiração e proteção
-contra rollback/freeze permanecem na
-[issue #48](https://github.com/x86dx2/x86qw/issues/48). Consulte o
-[`ADR 0001`](adr/0001-fronteira-limitada-de-bytes-remotos.md).
+O catálogo é autenticado por TUF com chaves Ed25519. A root, embutida na CLI e
+versionada em `maintenance/trust/root.json`, define quatro papéis: root e
+targets com threshold 2 de 3, snapshot e timestamp com threshold 1 de 2. A CLI
+guarda os metadados confiáveis no cache local e rejeita rollback, metadados
+vencidos e um timestamp que reutilize uma versão com outros bytes. Os detalhes
+estão no [threat model](THREAT-MODEL.md) e no
+[runbook de chaves](runbooks/key-management.md).
 
 ## Segurança e recuperação
 
-- a validação operacional é executada diretamente no Mac e não depende de
-  workflows, runners ou secrets externos;
-- toda URL inicial, redirecionada e final de artefato usa HTTPS;
-- nomes de arquivo não podem conter caminhos;
 - nenhum artefato persistente é aceito sem tamanho e SHA-256 prévios;
-- cada resposta possui limite explícito e deadline monotônico total;
+- cada resposta possui limite explícito e deadline total;
 - bytes só chegam ao destino final após validação e promoção atômica;
-- versões publicadas não são substituídas, apenas descontinuadas no catálogo;
-- GitHub e GitLab hospedam o mesmo repositório com Git LFS; os registries são
-  canais adicionais de entrega. R2 não faz parte da arquitetura atual.
-- senhas de serviço podem vir de prompt sem eco ou arquivo privado e nunca
-  entram na linha de comando dos filhos;
-- no código corretivo da PR 4, objetos privados Windows usam DACL protegida
-  com acesso somente ao usuário atual e a `LOCAL SYSTEM`; o contrato Windows é
-  preservado, mas não é executado como smoke neste fluxo;
-- preflight de portas ocorre antes do primeiro processo; readiness e rollback
+- versões publicadas não são substituídas, apenas deixam de ser a atual no
+  catálogo;
+- senhas de serviço vêm de prompt sem eco ou arquivo privado e nunca entram na
+  linha de comando dos filhos;
+- no Windows, objetos privados usam DACL protegida com acesso somente ao
+  usuário atual e a `LOCAL SYSTEM`;
+- o pré-voo de portas ocorre antes do primeiro processo; readiness e rollback
   encerram startups parciais;
-- `.x86qw/sessions/` registra journals privados e remove após crash somente
+- `.x86qw/sessions/` registra journals privados e, após crash, remove somente
   arquivos criados pela sessão cujo hash ainda coincide.

@@ -32,7 +32,7 @@ var (
 // generatedRecords are receipts for derived files, not catalog components.
 var generatedRecords = map[string]bool{"package-order": true, "play-support": true, "maps": true, "presets": true}
 
-// qwPackagePriority mirrors QW_PACKAGE_PRIORITY in manager.py.
+// qwPackagePriority is the load order of the managed PK3s in qw/pak.lst.
 var qwPackagePriority = []string{
 	"ktx.pk3", "models.pk3", "scoreboard_flags.pk3", "nquake.pk3", "textures.pk3",
 	"qrp_maps_textures_1.pk3", "qrp_maps_textures_2.pk3", "qrp_maps_textures_3.pk3",
@@ -46,13 +46,13 @@ type Report struct {
 	Files      int
 }
 
-// Verify checks an installation the way `x86qw verify` does in Python:
+// Verify checks an installation the way `x86qw verify` reports it:
 // original PAKs, managed ezQuake clients, state/component agreement,
 // every managed file hash and the qw/pak.lst load order.
 //
-// Not yet ported: structural PK3 scanning (hash only), macOS code-signature
-// checks and legacy nQuake/metadata layouts (those installations are
-// migrated by the Python CLI first).
+// Not checked: PK3 structure (hash only), macOS code signatures and legacy
+// nQuake/metadata layouts, which this version neither installs nor
+// verifies.
 func Verify(root string) (*Report, error) {
 	report := &Report{}
 	for _, pak := range []struct{ path, sha string }{{"id1/pak0.pak", pak0SHA256}, {"id1/pak1.pak", pak1SHA256}} {
@@ -98,7 +98,7 @@ func Verify(root string) (*Report, error) {
 	}
 	for _, record := range records {
 		if record.ID == "play-support" {
-			continue // checked against the derived gamecode below, as in Python
+			continue // checked against the derived gamecode below
 		}
 		count, err := verifyRecord(root, record)
 		if err != nil {
@@ -348,7 +348,7 @@ func fileSHA256(name string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-// CheckPaks mirrors check_paks: the original id1 PAKs.
+// CheckPaks checks the original id1 PAKs.
 func CheckPaks(root string) error {
 	for _, pak := range []struct{ path, sha string }{{"id1/pak0.pak", pak0SHA256}, {"id1/pak1.pak", pak1SHA256}} {
 		if err := checkPak(filepath.Join(root, pak.path), pak.sha); err != nil {
@@ -358,8 +358,8 @@ func CheckPaks(root string) error {
 	return nil
 }
 
-// VerifyComponent mirrors verify_component: the managed files of one
-// component, returning their count and the receipt's selection.
+// VerifyComponent checks the managed files of one component, returning
+// their count and the receipt's selection.
 func VerifyComponent(root, component string) (int, string, error) {
 	record, err := receipt.Load(filepath.Join(root, receipt.ComponentsDir, component))
 	if err != nil {
@@ -369,7 +369,7 @@ func VerifyComponent(root, component string) (int, string, error) {
 	return count, record.Receipt.Get("selection"), err
 }
 
-// VerifyPlaySupport mirrors verify_local_play_support.
+// VerifyPlaySupport checks the play-support files of the installed games.
 func VerifyPlaySupport(root string, games []Game) error {
 	issues, _, err := PlaySupportIssues(root, games)
 	if err != nil {
@@ -389,8 +389,8 @@ type Runtime struct {
 	BinarySHA string
 }
 
-// HostRuntimes mirrors host_runtimes: the verified stable and nightly
-// clients of the host platform, refusing a macOS bundle that needs repair.
+// HostRuntimes are the verified stable and nightly clients of the host
+// platform, refusing a macOS bundle that needs repair.
 func HostRuntimes(root string) ([]Runtime, error) {
 	var spec *catalog.ClientSpec
 	for index := range catalog.ClientSpecs {

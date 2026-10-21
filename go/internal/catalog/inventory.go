@@ -6,8 +6,8 @@ import (
 	"fmt"
 )
 
-// ComponentsJSON is maintenance/inventory/components.json, which the Python
-// bundle ships as _x86qw/components.json. A test keeps the copies identical.
+// ComponentsJSON is maintenance/inventory/components.json, embedded in the
+// CLI. A test keeps the copies identical.
 //
 //go:embed components.json
 var ComponentsJSON []byte

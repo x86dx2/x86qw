@@ -1,7 +1,7 @@
-// Package tufsign is the offline signing ceremony for the public TUF
-// repository (port of maintenance/tools/generate_trust_metadata.py and
-// tuf_timestamp_renewal.py). Keys are the existing PKCS#8 Ed25519 PEMs in
-// .tuf-production/keys/<role>-<n>.pem; root never changes here.
+// Package tufsign signs the public TUF repository: new generations with the
+// offline keys and timestamp renewals with the online one. Keys are the
+// existing PKCS#8 Ed25519 PEMs in .tuf-production/keys/<role>-<n>.pem; root
+// never changes here.
 package tufsign
 
 import (
@@ -139,7 +139,7 @@ func Generate(keyDir, rootPath, catalogPath, output string, version int64, now t
 	if _, err := os.Stat(output); err == nil {
 		return fmt.Errorf("repositório de saída já existe: %s", output)
 	}
-	// TUF serializes expiries at second precision; python-tuf rejects more.
+	// TUF serializes expiries at second precision; other clients reject more.
 	now = now.UTC().Truncate(time.Second)
 	root, rootBytes, err := LoadRoot(rootPath)
 	if err != nil {

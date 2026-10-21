@@ -11,7 +11,8 @@ func ColoredNameBytes(name string) string {
 	return string(raw)
 }
 
-// BotNameBinarySettings mirrors ktx_bot_name_binary_settings.
+// BotNameBinarySettings are the bot name settings in the colored byte form
+// a dedicated server takes, one per prefix and requested bot.
 func BotNameBinarySettings(o Options, mode *Mode) ([][2]string, error) {
 	settings, err := BotNameSettings(o, mode)
 	if err != nil || len(settings) == 0 {

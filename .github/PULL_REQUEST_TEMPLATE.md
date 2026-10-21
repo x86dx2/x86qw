@@ -6,33 +6,13 @@
 
 <!-- Qual problema ou issue motivou a mudança? -->
 
-## Escopo
-
-- Incluído:
-- Fora de escopo:
-
-## Estado após esta PR
-
-Baseline:
-Issue concluída:
-Contrato introduzido:
-Testes portáveis:
-Teste nativo Mac M3:
-Plataformas não executadas:
-Riscos restantes:
-Próxima issue desbloqueada:
-Branches que podem ser apagadas:
-
 ## Validação
 
 - [ ] `go -C go test ./...` e `go -C go run ./cmd/x86qw-content verify`
-- [ ] CLI pública relevante analisada com `--help`
-- [ ] `cd site && npm ci && npm run deploy:dry-run` quando aplicável
-- [ ] Validação executada diretamente no Mac local, com comandos e resultados registrados
-- [ ] Limitações de Linux, Windows e macOS Intel declaradas sem alegar execução
-- [ ] Gates externos necessários estão identificados, executáveis e fail-closed; nenhum teste portátil é apresentado como evidência nativa
-- [ ] Links Markdown locais resolvidos a partir do diretório de cada documento
-- [ ] `PROJECT-STATUS.md`, `ROADMAP.md` e README continuam coerentes
+- [ ] Comandos afetados conferidos com `x86qw COMANDO --help`
+- [ ] `cd site && npm test && npm run deploy:dry-run`, quando o site muda
+- [ ] Sistema em que a mudança foi usada:
+- [ ] README e `docs/` continuam descrevendo o que o código faz
 
 ## Distribuição e proveniência
 
@@ -41,11 +21,6 @@ Branches que podem ser apagadas:
 - [ ] Upstream e customização x86QW permanecem separados
 - [ ] Artefatos publicados existentes não foram alterados
 
-## Evidência
-
-<!-- Saída resumida, screenshots quando úteis e detalhes de compatibilidade.
-     Declare a plataforma local sem apresentar compatibilidade como execução. Remova segredos. -->
-
 ## Risco e reversão
 
-<!-- O que pode regredir e como desfazer com segurança? -->
+<!-- O que pode regredir e como desfazer com segurança? Remova segredos de logs. -->

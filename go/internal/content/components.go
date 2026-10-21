@@ -11,7 +11,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
-// Development component catalog (maintenance/tools/components.py).
+// The development component catalog (maintenance/inventory/components.json).
 
 var (
 	componentID      = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
@@ -22,7 +22,7 @@ var (
 	profileNames     = []string{"essential", "recommended", "complete"}
 )
 
-// ProfileFingerprint mirrors profile_fingerprint.
+// ProfileFingerprint is the digest of a profile's selected components.
 func ProfileFingerprint(selected []string) string {
 	sorted := append([]string(nil), selected...)
 	sort.Strings(sorted)
@@ -33,7 +33,7 @@ func ProfileFingerprint(selected []string) string {
 	return hex.EncodeToString(digest.Sum(nil))
 }
 
-// Components mirrors components.load_catalog on maintenance/inventory/components.json.
+// Components loads maintenance/inventory/components.json.
 func (p *Project) Components() (*Object, error) {
 	if !p.componentsDone {
 		p.componentsDone = true
@@ -46,7 +46,7 @@ func (p *Project) Components() (*Object, error) {
 	return p.components, p.componentsErr
 }
 
-// LoadComponentCatalog mirrors components.load_catalog.
+// LoadComponentCatalog loads and validates a component catalog.
 func LoadComponentCatalog(path string) (*Object, error) {
 	value, err := ReadJSON(path)
 	if err != nil {
@@ -69,7 +69,7 @@ func objects(value any) []*Object {
 	return result
 }
 
-// listOrDefault mirrors component.get(key, []).
+// listOrDefault is the list at key, or an empty list when it is absent.
 func listOrDefault(object *Object, key string) (any, bool) {
 	if !object.Has(key) {
 		return []any{}, true
@@ -84,7 +84,7 @@ func hasZipSuffix(value string) bool {
 	return strings.HasSuffix(folded, ".pk3") || strings.HasSuffix(folded, ".zip")
 }
 
-// ValidateComponentCatalog mirrors components.validate_catalog.
+// ValidateComponentCatalog checks a component catalog document.
 func ValidateComponentCatalog(value any) error {
 	catalog, ok := value.(*Object)
 	if !ok || !pyjson.EqInt(catalog.Value("format"), 1) || !pyjson.Eq(catalog.Value("project"), "x86qw") {
@@ -548,7 +548,7 @@ func validateDependencyGraph(order []string, dependencies map[string][]string, m
 	return nil
 }
 
-// ComponentsByID mirrors components_by_id.
+// ComponentsByID indexes the catalog's components by id.
 func ComponentsByID(catalog *Object) map[string]*Object {
 	result := map[string]*Object{}
 	for _, component := range objects(catalog.Value("components")) {
@@ -570,7 +570,8 @@ func ComponentIDs(catalog *Object) []string {
 	return result
 }
 
-// ResolveDependencies mirrors resolve_dependencies.
+// ResolveDependencies is selected with every dependency, each before the
+// components that require it.
 func ResolveDependencies(catalog *Object, selected []string) ([]string, error) {
 	components := ComponentsByID(catalog)
 	var resolved []string
@@ -620,7 +621,7 @@ func excluded(path string, exclusions any) bool {
 	return false
 }
 
-// SourceRoots mirrors source_roots.
+// SourceRoots are the source roots the components declare for origin.
 func SourceRoots(catalog *Object, origin string) []string {
 	roots := map[string]bool{}
 	for _, component := range objects(catalog.Value("components")) {
@@ -638,7 +639,8 @@ func SourceRoots(catalog *Object, origin string) []string {
 	return result
 }
 
-// ComponentForSource mirrors component_for_source (origin "" = any).
+// ComponentForSource is the component that owns a source path (origin "" =
+// any).
 func ComponentForSource(catalog *Object, path, origin string) (string, error) {
 	unique := map[string]bool{}
 	var first string
@@ -667,7 +669,7 @@ func ComponentForSource(catalog *Object, path, origin string) (string, error) {
 	return first, nil
 }
 
-// DestinationForSource mirrors destination_for_source.
+// DestinationForSource is where a component installs a source path.
 func DestinationForSource(component *Object, path, origin string) (string, string, error) {
 	var matches [][2]string
 	for _, entry := range objects(component.Value("sources")) {
@@ -696,7 +698,8 @@ func DestinationForSource(component *Object, path, origin string) (string, strin
 	return matches[0][0], matches[0][1], nil
 }
 
-// ValidateTreePartition mirrors validate_tree_partition.
+// ValidateTreePartition requires every path to belong to exactly one
+// component and groups them by component.
 func ValidateTreePartition(catalog *Object, paths []string, origin string) (map[string][]string, error) {
 	components := ComponentsByID(catalog)
 	partition := map[string][]string{}

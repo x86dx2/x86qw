@@ -14,8 +14,8 @@ import (
 
 // Verify corruptions. These tests clone the checkout with APFS/reflink
 // copies, corrupt one fact per case and require the verifier to reject it
-// with the message the retired manage.py verify printed for the same case
-// (testdata/verify-corruptions.json). They need a hydrated dist/ and take
+// with the message testdata/verify-corruptions.json records for the case.
+// They need a hydrated dist/ and take
 // minutes, so they only run with X86QW_CONTENT_CORRUPTIONS=1.
 
 func repoRoot(t *testing.T) string {
