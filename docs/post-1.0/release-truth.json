@@ -12,12 +12,12 @@
   },
   "authorities": {
     "source": {
-      "meaning": "estado versionado na main",
+      "meaning": "versioned state on main",
       "baseline": "0.7.13",
       "observed_version_file": "dist/installer/VERSION"
     },
     "candidate_release": {
-      "meaning": "bytes construídos uma vez e promovidos por digest",
+      "meaning": "bytes built once and promoted by digest",
       "tag": "x86qw-installer-1.0.0",
       "version": "1.0.0",
       "product_commit": "e12ed081b968f820f47200e4be954a4f444056a1",
@@ -33,7 +33,7 @@
       }
     },
     "deployment": {
-      "meaning": "site, catálogo, product, bootstraps e TUF realmente servidos",
+      "meaning": "site, catalog, product, bootstraps and TUF actually served",
       "tuf": {
         "root_version": 2,
         "timestamp_version": 18,
@@ -52,7 +52,7 @@
       }
     },
     "development": {
-      "meaning": "HEAD atual e seus checks",
+      "meaning": "current HEAD and its checks",
       "head": "dc080acacba7d70ced0cb311f08a81259bf5a9bd",
       "required_contexts": 7,
       "green_contexts": 6,
@@ -89,28 +89,28 @@
   "conflicts": [
     {
       "id": "RT-01",
-      "statement": "release receipt public_acceptance aponta RC1 enquanto evidência final está separada",
+      "statement": "the release receipt's public_acceptance points at RC1 while the final evidence is separate",
       "severity": "P1",
       "gate": "0C",
       "state": "BLOCKED"
     },
     {
       "id": "RT-02",
-      "statement": "README/site source/product/CLI não projetam a mesma audiência e baseline",
+      "statement": "README/site source/product/CLI do not project the same audience and baseline",
       "severity": "P1",
       "gate": "0C",
       "state": "BLOCKED"
     },
     {
       "id": "RT-03",
-      "statement": "ownership/SBOM final possui 87/87 itens unclassified/NOASSERTION",
+      "statement": "the final ownership/SBOM has 87/87 items unclassified/NOASSERTION",
       "severity": "P1",
       "gate": "0C",
       "state": "BLOCKED"
     },
     {
       "id": "RT-04",
-      "statement": "cleanup --personal-data não cobre qw/demos como prometido",
+      "statement": "cleanup --personal-data does not cover qw/demos as promised",
       "severity": "P1",
       "gate": "0C/EP-1",
       "state": "BLOCKED"
@@ -141,6 +141,6 @@
       "catalog.json",
       "CLI status/version"
     ],
-    "rule": "projeções devem derivar do ledger e nunca elevar audiência, suporte ou evidência"
+    "rule": "projections must derive from the ledger and never raise audience, support or evidence"
   }
 }
