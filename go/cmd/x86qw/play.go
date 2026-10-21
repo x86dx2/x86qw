@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/play"
 )
@@ -35,7 +36,7 @@ func playParser(r *playRequest, f *playFlags) *cliargs.Parser {
 	p.String(&r.mode, "MODO", "modo KTX: duel, 2on2, 4on4, ffa, ctf, race...", "--mode")
 	p.String(&r.mapName, "MAPA", "mapa", "--map")
 	p.Choice(&r.ruleset, play.RulesetKeys, "ruleset do cliente", "--ruleset")
-	p.Choice(&r.channel, []string{"stable", "nightly"}, "canal do ezQuake", "--channel")
+	p.Choice(&r.channel, catalog.Channels, "canal do ezQuake", "--channel")
 	p.Value(func(value string) error {
 		f.botsGiven = true
 		return intFlag(value, 1, 31, &f.bots)

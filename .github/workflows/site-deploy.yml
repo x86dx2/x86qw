@@ -87,6 +87,7 @@ jobs:
           version="$(jq -r '[.packages[] | select(.package == "x86qw-cli") | .version] | unique | if length == 1 then .[0] else error("mais de uma versão da CLI") end' site/public/api/v1/catalog.json)"
           tag="x86qw-cli-${version}"
           if [ "$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)" = true ]; then
-            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --prerelease=false --latest
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --prerelease=false --latest \
+              --notes "CLI nativa x86QW ${version}, servida por https://qw.x86.com.br. Verifique os binários pelo SHA256SUMS ou com \`gh attestation verify ARQUIVO --repo ${GITHUB_REPOSITORY}\`."
             echo "$tag marcada como latest"
           fi
