@@ -199,3 +199,18 @@ func TestUninstallWithYesKeepsWhatIsYours(t *testing.T) {
 		}
 	}
 }
+
+// A development build adopting an installation says it keeps the CLI the
+// installation has, never that it now uses itself.
+func TestSetupKeepsANewerCLIWhenADevBuildAdopts(t *testing.T) {
+	root := fixtureInstall(t)
+	var stdout, stderr bytes.Buffer
+	run([]string{"setup", root}, &stdout, &stderr)
+	out := stdout.String() + stderr.String()
+	if strings.Contains(out, "agora usa a CLI x86QW 0.0.0-dev") || strings.Contains(out, "✓ A instalação") {
+		t.Fatalf("a adoção por um build de desenvolvimento afirmou ter trocado a CLI: %s", out)
+	}
+	if receipt, _ := os.ReadFile(filepath.Join(root, ".x86qw", "cli", "receipt")); !strings.Contains(string(receipt), "2.3.2") {
+		t.Fatalf("o recibo da CLI mudou: %s", receipt)
+	}
+}
