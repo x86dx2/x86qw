@@ -167,6 +167,9 @@ type Backend interface {
 	StartService(ctx context.Context, target, kind string, options Options) error
 	// StopServer stops the running session.
 	StopServer(ctx context.Context, target string) error
+	// Tool runs an x86qw command (doctor, verify, upgrade…) and returns
+	// what it printed; err says it failed, the output stays.
+	Tool(ctx context.Context, args []string) (string, error)
 }
 
 // Report is what a repair found and did.

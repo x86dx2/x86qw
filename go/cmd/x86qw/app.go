@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -47,6 +46,15 @@ func realBackend(catalogFile, platform string) *setup.Real {
 			}
 			return nil
 		},
+		// The tools print into the app's floating panel, never on the
+		// terminal it owns.
+		Capture: func(args []string) (string, error) {
+			var buffer bytes.Buffer
+			if code := run(args, &buffer, &buffer); code != output.ExitSuccess {
+				return buffer.String(), errors.New(lastLines(buffer.String(), 3))
+			}
+			return buffer.String(), nil
+		},
 	}
 }
 
@@ -84,8 +92,7 @@ func lastLines(text string, count int) string {
 	return strings.Join(lines, " · ")
 }
 
-// runApp opens the interface on root, at start ("" is home), and opens it
-// again after each report it hands to the command line.
+// runApp opens the interface on root, at start ("" is home).
 func runApp(backend *setup.Real, root, start string, stdout, stderr io.Writer) int {
 	if install.Installed(root) && cli.Replaces(buildinfo.Version, root, false) {
 		// A newer CLI opening the app publishes itself, as re-running the
@@ -104,34 +111,15 @@ func runApp(backend *setup.Real, root, start string, stdout, stderr io.Writer) i
 			}
 		}
 	}
-	// The language and theme chosen in the app survive the trips through
-	// the command line.
-	lang, theme := interfaceLanguage(), ""
-	for {
-		appOpen = true
-		result, err := tui.Run(tui.Config{Backend: backend, Target: root, Lang: lang, Theme: theme, Start: start})
-		appOpen = false
-		if err != nil {
-			fmt.Fprintf(stderr, "✗ %v\n", err)
-			return output.ExitFailure
-		}
-		if result.Next == nil {
-			return output.ExitSuccess
-		}
-		code := run(result.Next, stdout, stderr)
-		if !result.Back {
-			return code
-		}
-		if result.Lang != "" {
-			lang = result.Lang
-		}
-		theme = result.Theme
-		fmt.Fprint(stdout, "\n"+tui.T(lang, "back.enter"))
-		if _, err := bufio.NewReader(stdin).ReadString('\n'); err != nil {
-			return code
-		}
-		start = ""
+	// Everything, the tools included, runs inside the app.
+	appOpen = true
+	err := tui.Run(tui.Config{Backend: backend, Target: root, Lang: interfaceLanguage(), Start: start})
+	appOpen = false
+	if err != nil {
+		fmt.Fprintf(stderr, "✗ %v\n", err)
+		return output.ExitFailure
 	}
+	return output.ExitSuccess
 }
 
 // interfaceLanguage follows the locale: English unless it is Portuguese.

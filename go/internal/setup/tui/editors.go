@@ -54,6 +54,10 @@ func (m *Model) closeModal(keep bool) tea.Cmd {
 	if m.modal == nil {
 		return nil
 	}
+	if m.modal.kind == "tool" {
+		m.modal, m.toolPanel = nil, nil
+		return nil
+	}
 	if !keep {
 		m.opts, m.dns, m.dnsPending = m.modal.before, m.modal.dns, m.modal.dnsPending
 		m.game.match = m.modal.match
@@ -177,6 +181,8 @@ func (m *Model) modalTitle() string {
 		return m.t("sec.recipe")
 	case "tools":
 		return m.t("h.tools")
+	case "tool":
+		return m.t("tool." + m.toolPanel.spec.name)
 	case "solo":
 		return m.t("host.solo")
 	case "m.game", "m.mode", "m.opts", "m.map", "m.rules":
@@ -194,6 +200,9 @@ func (m *Model) modalKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		m.modal.capture = ""
 		return nil
+	}
+	if m.modal.kind == "tool" {
+		return m.toolKey(key)
 	}
 	if picker(m.modal.kind) {
 		switch key {
@@ -414,6 +423,8 @@ func (m *Model) modalRows() []formRow {
 		return m.gameModalRows()
 	}
 	switch m.modal.kind {
+	case "tool":
+		return m.toolRowsView()
 	case "tools":
 		return m.toolRows()
 	case "solo":
@@ -934,14 +945,27 @@ func (m *Model) modalView() ([]string, []hit, *[2]int) {
 	if m.hover == "close" {
 		cancelStyle = t.Style(t.Text).Bold(true)
 	}
-	ok := okStyle.Render(" ↵ " + m.t("k.ok") + " ")
-	cancel := cancelStyle.Render(" esc " + m.t("k.cancel") + " ")
-	tail := edge.Render("─") + ok + edge.Render("─") + cancel + edge.Render("─╯")
+	okLabel, cancelLabel := m.t("k.ok"), m.t("k.cancel")
+	if m.modal.kind == "tool" {
+		// A tool's panel: enter presses the button in focus; without one
+		// esc is the only way out.
+		okLabel, cancelLabel = "", m.t("k.close")
+		if actions := m.toolActions(); len(actions) > 0 {
+			okLabel = strings.ToLower(m.t("tool." + m.toolPanel.spec.name + "." + actions[min(m.modal.focus, len(actions)-1)].id))
+		}
+	}
+	ok := ""
+	if okLabel != "" {
+		ok = okStyle.Render(" ↵ "+okLabel+" ") + edge.Render("─")
+	}
+	cancel := cancelStyle.Render(" esc " + cancelLabel + " ")
+	tail := edge.Render("─") + ok + cancel + edge.Render("─╯")
 	out = append(out, edge.Render("╰"+strings.Repeat("─", max(0, width-1-lipgloss.Width(tail))))+tail)
 	bottom := len(out) - 1
 	cancelX := width - 2 - lipgloss.Width(cancel)
-	okX := cancelX - 1 - lipgloss.Width(ok)
-	outHits = append(outHits, hit{y: bottom, x0: okX, x1: okX + lipgloss.Width(ok), id: "confirm-modal"},
+	// ok carries the edge after it, which is no part of the button.
+	okX := cancelX - lipgloss.Width(ok)
+	outHits = append(outHits, hit{y: bottom, x0: okX, x1: okX + max(0, lipgloss.Width(ok)-1), id: "confirm-modal"},
 		hit{y: bottom, x0: cancelX, x1: cancelX + lipgloss.Width(cancel), id: "close"})
 	for _, h := range hits {
 		y := h.y - offset

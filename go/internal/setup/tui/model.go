@@ -41,16 +41,6 @@ type Config struct {
 	Start string
 }
 
-// Result is how the interface ended: the x86qw command to run next, if
-// any, and whether the interface should open again after it, in the
-// language and theme it had.
-type Result struct {
-	Next  []string
-	Back  bool
-	Lang  Lang
-	Theme string
-}
-
 // Layout and timing.
 const (
 	maxWidth      = 74 // the widest the body grows
@@ -68,11 +58,10 @@ const (
 
 // Model is the installer program.
 type Model struct {
-	cfg     Config
-	next    []string // the x86qw command to run once the interface closes
-	ticking bool     // the tick loop is scheduled
-	back    bool     // and open again once it ends
-	game    gameState
+	cfg       Config
+	ticking   bool    // the tick loop is scheduled
+	toolPanel *report // a tool open in its floating panel
+	game      gameState
 	// cancelling is a cancelled installation still rolling back.
 	cancelling bool
 	// reloading is a finished installation being read again.
@@ -285,7 +274,7 @@ func (m *Model) tick() tea.Cmd {
 
 // spinning is a spinner or a progress bar on screen.
 func (m *Model) spinning() bool {
-	return (m.screen == scConfigure && m.preOn && !m.preDone) || m.screen == scInstall || (m.screen == scPanel && m.busy) || m.game.acting != "" || m.reloading ||
+	return (m.screen == scConfigure && m.preOn && !m.preDone) || m.screen == scInstall || (m.screen == scPanel && m.busy) || m.game.acting != "" || m.reloading || (m.toolPanel != nil && m.toolPanel.busy != "") ||
 		m.game.serversLoading || (m.screen == scMatch && m.game.catalog == nil) || (m.screen == scHost && !m.game.stackLoaded) ||
 		(m.catalog == nil && m.err == nil)
 }
@@ -335,6 +324,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	switch msg := msg.(type) {
+	case toolMsg:
+		return m, m.toolDone(msg)
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
 		clear(m.tops)
@@ -846,6 +837,9 @@ func (m *Model) click(id string) tea.Cmd {
 	case id == "close":
 		return m.closeModal(false)
 	case id == "confirm-modal":
+		if m.modal != nil && m.modal.kind == "tool" {
+			return m.toolKey("enter")
+		}
 		return m.closeModal(true)
 	case id == "lang":
 		return m.keyPress(tea.KeyPressMsg(keyFor("ctrl+l")))
@@ -1133,6 +1127,20 @@ func (m *Model) footerHints() [][2]string {
 		case "stop":
 			return [][2]string{{"enter", m.t("stop.again")}}
 		}
+		if strings.HasPrefix(m.armed, "tool.") {
+			return [][2]string{{"enter", m.t("tool.again")}}
+		}
+	}
+	if m.modal != nil && m.modal.kind == "tool" {
+		items := [][2]string{{"↑↓", m.t("k.scroll")}}
+		actions := m.toolActions()
+		if len(actions) > 1 {
+			items = append(items, [2]string{"←→", m.t("k.choose")})
+		}
+		if len(actions) > 0 {
+			items = append(items, [2]string{"enter", strings.ToLower(m.t("tool." + m.toolPanel.spec.name + "." + actions[min(m.modal.focus, len(actions)-1)].id))})
+		}
+		return append(items, [2]string{"esc", m.t("k.close")})
 	}
 	if m.modal != nil {
 		items := [][2]string{{"↑↓", m.t("k.choose")}}
@@ -1243,17 +1251,10 @@ func DefaultTarget() string {
 	return filepath.Join(home, "Games", "x86qw")
 }
 
-// Run shows the interface until it quits and says what comes next.
-func Run(cfg Config) (Result, error) {
-	final, err := tea.NewProgram(New(cfg)).Run()
-	if m, ok := final.(*Model); ok && err == nil {
-		theme := "dark"
-		if !m.theme.Dark {
-			theme = "light"
-		}
-		return Result{Next: m.next, Back: m.back, Lang: m.lang, Theme: theme}, nil
-	}
-	return Result{}, err
+// Run shows the interface until it quits.
+func Run(cfg Config) error {
+	_, err := tea.NewProgram(New(cfg)).Run()
+	return err
 }
 
 // preflightOutcome is the worst state among the finished checks.

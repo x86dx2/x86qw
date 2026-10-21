@@ -1061,20 +1061,13 @@ func (m *Model) soloRows() []formRow {
 	}
 }
 
-// tools are the commands that print a report: the app leaves the
-// screen to run them, then comes back.
-var tools = []string{"doctor", "verify", "upgrade", "changes", "library", "profile", "cleanup", "ui", "help"}
-
+// toolRows list the tools; each opens its floating panel (tools.go).
 func (m *Model) toolRows() []formRow {
 	var rows []formRow
-	for _, tool := range tools {
-		tool := tool
-		rows = append(rows, formRow{id: "tool." + tool, kind: rowAction, label: m.t("tool." + tool), desc: m.t("tool." + tool + ".d"), activate: func() {
-			m.next, m.back = []string{tool, "--target", m.target()}, true
-			if tool == "help" {
-				m.next = []string{"help"}
-			}
-			m.pending = tea.Quit
+	for index := range tools {
+		spec := &tools[index]
+		rows = append(rows, formRow{id: "tool." + spec.name, kind: rowAction, label: m.t("tool." + spec.name), desc: m.t("tool." + spec.name + ".d"), activate: func() {
+			m.pending = m.openTool(spec)
 		}})
 	}
 	return rows
