@@ -1,16 +1,16 @@
-# TUF — SLO e recuperação
+# TUF — SLO and recovery
 
-## Estado corrente
+## Current state
 
-Em 2026-08-28T02:32:21Z, a cadeia pública autenticou root v1, timestamp v30,
-snapshot/targets v29 e 75 pacotes. O timestamp expira em
-2026-09-27T02:15:12Z, fora da janela de alerta de 6 horas. O snapshot expira
-depois do timestamp, em 2026-11-26T02:07:54Z. O monitor público retornou
-saudável nos domínios canônico e alias. A correção histórica da versão da
-root está registrada na [errata TUF](ERRATA-TUF-ROOT-VERSION.md).
+At 2026-08-28T02:32:21Z, the public chain authenticated root v1, timestamp v30,
+snapshot/targets v29 and 75 packages. The timestamp expires at
+2026-09-27T02:15:12Z, outside the 6-hour alert window. The snapshot expires
+after the timestamp, at 2026-11-26T02:07:54Z. The public monitor came back
+healthy on the canonical and alias domains. The historical correction of the
+root version is recorded in the [TUF erratum](ERRATA-TUF-ROOT-VERSION.md).
 
-A cerimônia owner-only v29/v30 renovou snapshot e timestamp sem alterar
-catálogo, root ou targets:
+The owner-only v29/v30 ceremony renewed snapshot and timestamp without changing
+catalog, root or targets:
 
 - handoff/source run: 33135065604; artifact 9671745396;
 - renewal run: 33135314707; artifact 9671800710;
@@ -20,59 +20,58 @@ catálogo, root ou targets:
 - renewal report SHA-256:
   fe90b29ca4aa49f3b3c5a33897edd67b7069685d1622f3ae8d85f348a172e7cb.
 
-O recovery drill técnico foi registrado no run 31900793093, artifact 9251029392,
-com status drill-passed, expiry failure detected e recovery verified. A
-publicação timestamp-only passou no run 31900914825, artifact 9251063517, e a
-verificação pública confirmou TUF, bootstraps e product. A issue #152 foi
-encerrada como alerta operacional resolvido.
+The technical recovery drill was recorded in run 31900793093, artifact 9251029392,
+with status drill-passed, expiry failure detected and recovery verified. The
+timestamp-only publication passed in run 31900914825, artifact 9251063517, and
+the public verification confirmed TUF, bootstraps and product. Issue #152 was
+closed as a resolved operational alert.
 
-No modo owner-only o timestamp vive 30 dias e o snapshot 90 dias, para o
-snapshot sobreviver ao timestamp. O alerta de 6 horas e o fail-closed para
-mutação remota não mudam. Antes de catálogo `external-public` a política
-volta a snapshot 7 dias e timestamp 24 horas, com chaves separadas.
+In owner-only mode the timestamp lives 30 days and the snapshot 90 days, so the
+snapshot outlives the timestamp. The 6-hour alert and the fail-closed for remote
+mutation do not change. Before an `external-public` catalog the policy goes back
+to a 7-day snapshot and a 24-hour timestamp, with separate keys.
 
-## SLO vigente/proposto
+## Current/proposed SLO
 
-Os números abaixo continuam PROPOSAL até decisão operacional formal:
+The numbers below remain a PROPOSAL until a formal operational decision:
 
-| Sinal | Meta proposta | Alerta | Ação |
+| Signal | Proposed target | Alert | Action |
 | --- | --- | --- | --- |
-| timestamp dentro da validade | 100% das verificações | 6 h antes do expiry | abrir incidente e congelar promoção |
-| cadeia autenticada | 100% por consulta válida | qualquer falha | fail closed, comparar mirror e root |
-| reachability do endpoint | medir por vantage independente | falha transitória | observar, registrar e usar fallback previsto |
-| recovery | exercício periódico com custódia independente | ausência de evidência | manter external-public=NO-GO |
-| divergência de bytes | zero | primeira divergência | não sobrescrever; preservar receipts |
-| recuperação de produção | RTO definido e exercitado | ausência de owner/backup | manter external-public=NO-GO |
+| timestamp within validity | 100% of checks | 6 h before expiry | open an incident and freeze promotion |
+| authenticated chain | 100% per valid query | any failure | fail closed, compare mirror and root |
+| endpoint reachability | measure from an independent vantage | transient failure | observe, record and use the planned fallback |
+| recovery | periodic exercise with independent custody | missing evidence | keep external-public=NO-GO |
+| byte divergence | zero | first divergence | do not overwrite; keep the receipts |
+| production recovery | RTO defined and exercised | missing owner/backup | keep external-public=NO-GO |
 
-## Gap operacional residual
+## Residual operational gap
 
-O drill técnico/local e o drill protegido provaram o protocolo de expiração,
-renovação limitada e recuperação sem publicação indevida. Eles não provam ainda
-custódia humana independente, backup custodian, owner de RTO de produção,
-cadência recorrente de exercícios ou sucessão. Esses gaps continuam sendo
-requisitos de EP-3 e mantêm external-public=NO-GO; o issue #148 foi encerrado
-após registrar a capacidade técnica, sem provar custódia independente ou
-autorização para abrir a audiência.
+The technical/local drill and the protected drill proved the protocol for
+expiry, bounded renewal and recovery without improper publication. They do not
+yet prove independent human custody, a backup custodian, a production RTO
+owner, a recurring exercise cadence or succession. These gaps remain EP-3
+requirements and keep external-public=NO-GO; issue #148 was closed after
+recording the technical capability, without proving independent custody or
+authorization to open the audience.
 
-Os monitores que observaram leases antigas dentro da janela de 6 horas ficam
-arquivados como histórico. A lease v28 atual e a projeção corrente foram
-verificadas de forma independente após o deploy.
+The monitors that observed old leases inside the 6-hour window stay archived as
+history. The current v28 lease and the current projection were verified
+independently after the deploy.
 
-## Runbook resumido
+## Short runbook
 
-1. Confirmar alerta em uma rede independente e salvar timestamp, endpoint, root
-   e hora UTC.
-2. Colocar promoção/publicação em freeze; não trocar URL nem desabilitar TUF.
-3. Comparar timestamp, snapshot, targets e root com o receipt custodiado.
-4. Se apenas a lease expirou, executar o caminho limitado aprovado para
-   timestamp; se root/targets divergirem, parar e exigir cerimônia de rotação.
-5. Restaurar metadata a partir do artefato custodiado, verificar assinaturas,
-   versões e expirações antes de publicar.
-6. Repetir a verificação pública, registrar Checker, incidente e RTO.
-7. Manter external-public=NO-GO até a revisão pós-incidente e a custódia
-   independente fecharem as causas.
+1. Confirm the alert from an independent network and save the timestamp,
+   endpoint, root and UTC time.
+2. Freeze promotion/publication; do not change the URL nor disable TUF.
+3. Compare timestamp, snapshot, targets and root with the custodied receipt.
+4. If only the lease expired, run the approved bounded path for the
+   timestamp; if root/targets diverge, stop and require a rotation ceremony.
+5. Restore the metadata from the custodied artifact, verify signatures,
+   versions and expirations before publishing.
+6. Repeat the public verification, record the Checker, incident and RTO.
+7. Keep external-public=NO-GO until the post-incident review and independent
+   custody close the causes.
 
-Nenhuma renovação deve ser executada fora do workflow protegido sem autorização
-operacional equivalente. Sustentabilidade e recuperação repetível continuam
-gates external-public; o trabalho owner-only pode avançar enquanto S0-M3
-permanecer verde.
+No renewal may be run outside the protected workflow without equivalent
+operational authorization. Sustainability and repeatable recovery remain
+external-public gates; owner-only work may advance while S0-M3 stays green.

@@ -1,52 +1,52 @@
-# RFC de integração QWLeague
+# QWLeague integration RFC
 
-**Estado:** `BLOCKED_EXTERNAL` — discovery read-only; não há autorização para
-fila, conta, token, registro de protocolo, OAuth, webhook ou mutação remota.
+**State:** `BLOCKED_EXTERNAL` — read-only discovery; there is no authorization
+for a queue, account, token, protocol registration, OAuth, webhook or remote
+mutation.
 
-## Fatos observados
+## Observed facts
 
-- somente a home e o sitemap públicos foram usados como fonte nesta avaliação;
-- não há contrato oficial verificado de API, OAuth ou webhook;
-- portanto não é possível declarar provider, disponibilidade, autenticação ou
-  SLA para x86QW;
-- a integração não é dependência de `external-public` e não desbloqueia
+- only the public home and sitemap were used as sources in this assessment;
+- there is no verified official contract for an API, OAuth or webhook;
+- so it is not possible to declare a provider, availability, authentication or
+  SLA for x86QW;
+- the integration is not a dependency of `external-public` and does not unblock
   feature work.
 
-## Proposta de fronteira
+## Proposed boundary
 
-Se o mantenedor priorizar a fase `1.3 ecosystem`, o primeiro corte deve ser
-read-only: descobrir partidas/servidores e mostrar dados públicos apenas
-quando um contrato oficial, versão, limites e autorização forem fornecidos.
-Nenhuma ação deve iniciar jogo, entrar em fila ou persistir credenciais sem uma
-decisão própria.
+If the maintainer prioritizes the `1.3 ecosystem` phase, the first cut must be
+read-only: discover matches/servers and show public data only once an official
+contract, version, limits and authorization are provided. No action may start a
+game, join a queue or persist credentials without a decision of its own.
 
-| Área | Proposta | Bloqueio |
+| Area | Proposal | Block |
 | --- | --- | --- |
-| descoberta | endpoint oficial e schema versionado | contrato/API ausente |
-| autenticação | OAuth/documentação do provedor | nenhuma criação ou token nesta fase |
-| atualização | polling/stream com timeout e backoff | SLA/rate limit ausente |
-| launch | resumo, validação host/port e confirmação humana | protocolo oficial ausente |
-| demos/QTV | link público somente | permissão, retenção e privacidade não definidas |
-| telemetria | mínima, opt-in, sem token | DPIA/política não definida |
+| discovery | official endpoint and versioned schema | contract/API missing |
+| authentication | the provider's OAuth/documentation | no creation or token in this phase |
+| updates | polling/stream with timeout and backoff | SLA/rate limit missing |
+| launch | summary, host/port validation and human confirmation | official protocol missing |
+| demos/QTV | public link only | permission, retention and privacy undefined |
+| telemetry | minimal, opt-in, no token | DPIA/policy undefined |
 
-## Critérios para sair de `BLOCKED_EXTERNAL`
+## Criteria to leave `BLOCKED_EXTERNAL`
 
-1. contrato oficial publicado e versionado;
-2. autorização escrita do provedor para o uso pretendido;
-3. modelo de dados, rate limit, erro, disponibilidade e privacidade;
-4. teste com fixture pública, sem credenciais reais;
-5. ameaça, validação de host/port e rejeição de metacaracteres;
-6. ADR próprio em `2.0` se o uso alterar a fronteira do produto;
-7. Checker independente e rollback documentado.
+1. an official contract, published and versioned;
+2. the provider's written authorization for the intended use;
+3. data model, rate limit, errors, availability and privacy;
+4. a test with a public fixture, without real credentials;
+5. threats, host/port validation and rejection of metacharacters;
+6. its own ADR in `2.0` if the use changes the product boundary;
+7. an independent Checker and a documented rollback.
 
-## Não-escopo
+## Non-scope
 
-Não criar conta, entrar em queue, obter token, registrar webhook, reutilizar
-cookie/API interna, publicar no QWLeague ou prometer integração funcional. Não
-há issue remota criada por esta RFC.
+Do not create an account, join a queue, obtain a token, register a webhook,
+reuse a cookie/internal API, publish on QWLeague or promise a working
+integration. No remote issue was created by this RFC.
 
-## Dependências
+## Dependencies
 
-Esta RFC depende de gates 0A–0D apenas para governança documental, mas não
-depende de EP-1–EP-5. A execução de qualquer código pertence ao backlog local
-`POST-016` e à fase `1.3`.
+This RFC depends on gates 0A–0D only for documentation governance, but does not
+depend on EP-1–EP-5. Running any code belongs to the local backlog item
+`POST-016` and to phase `1.3`.

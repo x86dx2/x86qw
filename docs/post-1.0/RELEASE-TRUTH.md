@@ -1,73 +1,73 @@
 # Release truth
 
-Este documento define qual autoridade responde a cada pergunta sobre a
-release. Quando duas fontes divergem, o estado é `BLOCKED`; a última fonte
-consultada não ganha precedência por ser mais recente.
+This document defines which authority answers each question about the
+release. When two sources disagree, the state is `BLOCKED`; the last source
+consulted does not take precedence for being the most recent.
 
-## Hierarquia de autoridade
+## Authority hierarchy
 
-1. bytes publicados e digest conferido em mais de uma fonte (`E2`);
-2. candidato e commit de produto vinculados pelo workflow;
-3. receipt final e evidência M3 do candidato exato (`E3`);
-4. metadata TUF autenticada pela root incorporada;
-5. run/artefacto de CI e documentação derivada.
+1. published bytes and a digest checked in more than one source (`E2`);
+2. candidate and product commit bound by the workflow;
+3. final receipt and M3 evidence of the exact candidate (`E3`);
+4. TUF metadata authenticated by the embedded root;
+5. CI run/artifact and derived documentation.
 
-Nenhuma release note ou issue substitui uma autoridade de bytes. O
-[JSON desta fotografia histórica](release-truth.json) é um índice, não um novo
-catálogo TUF. A autoridade corrente é o endpoint vivo
-`https://qw.x86.com.br/api/v1/release-truth.json`; o arquivo
-[`release-truth-current.json`](release-truth-current.json) é seu ponteiro e
-[`release-truth-projection-seed.json`](release-truth-projection-seed.json) é
-somente a última semente offline versionada.
+No release note or issue replaces a byte authority. The
+[JSON of this historical snapshot](release-truth.json) is an index, not a new
+TUF catalog. The current authority is the live endpoint
+`https://qw.x86.com.br/api/v1/release-truth.json`; the file
+[`release-truth-current.json`](release-truth-current.json) is its pointer and
+[`release-truth-projection-seed.json`](release-truth-projection-seed.json) is
+only the last versioned offline seed.
 
-## Identidade observada
+## Observed identity
 
-| Campo | Valor | Evidência |
+| Field | Value | Evidence |
 | --- | --- | --- |
-| tag | `x86qw-installer-1.0.0` | release auditada |
-| commit de produto | `e12ed081b968f820f47200e4be954a4f444056a1` | candidate/promoção |
-| instalador | `600825` bytes; `d3274e6aa2f1e3078ac5000ffae8b97c9efd329f3c2a87499bf1c57e5f388cb8` | E2 GitHub/GitLab |
-| candidate | `17405` bytes; `0bde0550895cab24abf8a3ee974da011e031fea11279148a41635e173cbdcc21` | candidato exato |
-| native | `25/25` no Apple M3 | E3 |
-| rebuild | não observado | E4 ausente |
-| mirror | GitHub/GitLab iguais para o instalador | E2; redundância operacional ainda não provada |
+| tag | `x86qw-installer-1.0.0` | audited release |
+| product commit | `e12ed081b968f820f47200e4be954a4f444056a1` | candidate/promotion |
+| installer | `600825` bytes; `d3274e6aa2f1e3078ac5000ffae8b97c9efd329f3c2a87499bf1c57e5f388cb8` | E2 GitHub/GitLab |
+| candidate | `17405` bytes; `0bde0550895cab24abf8a3ee974da011e031fea11279148a41635e173cbdcc21` | exact candidate |
+| native | `25/25` on the Apple M3 | E3 |
+| rebuild | not observed | E4 missing |
+| mirror | GitHub/GitLab equal for the installer | E2; operational redundancy not yet proven |
 
-## Estado por dimensão
+## State per dimension
 
-| Dimensão | Estado | Regra |
+| Dimension | State | Rule |
 | --- | --- | --- |
-| artefato | VERIFIED FACT | usar tag, commit, bytes e digests acima |
-| validação | VERIFIED FACT no M3; BLOCKED nas plataformas não-M3 | não extrapolar E3 |
-| audiência owner-only | VALID_FOR_SINGLE_USER_M3 | candidato exato, M3 e lifecycle single-user verificados |
-| audiência external-public | NO-GO | exige EP-0–EP-5 e autorização explícita |
-| TUF técnico | HEALTHY | root v1, timestamp v30, snapshot/targets v29 e monitor saudável |
-| release operacional | CONVERGED_CANDIDATE_DEPLOYMENT | projeção 33136179763, bootstraps/product/catalog/release-truth verificados |
+| artifact | VERIFIED FACT | use the tag, commit, bytes and digests above |
+| validation | VERIFIED FACT on the M3; BLOCKED on non-M3 platforms | do not extrapolate E3 |
+| owner-only audience | VALID_FOR_SINGLE_USER_M3 | exact candidate, M3 and single-user lifecycle verified |
+| external-public audience | NO-GO | needs EP-0–EP-5 and explicit authorization |
+| technical TUF | HEALTHY | root v1, timestamp v30, snapshot/targets v29 and healthy monitor |
+| operational release | CONVERGED_CANDIDATE_DEPLOYMENT | projection 33136179763, bootstraps/product/catalog/release-truth verified |
 
-## Contradições abertas
+## Open contradictions
 
-| ID | Contradição | Como resolver | Estado |
+| ID | Contradiction | How to resolve | State |
 | --- | --- | --- | --- |
-| RT-01 | receipt final `public_acceptance` aponta para RC1; evidência final está em arquivo separado | manter separado no owner-only; reconciliar somente em uma promoção external-public | ACCEPTED_OWNER_ONLY |
-| RT-02 | source/release/deployment/development e audiência apresentam drift | projeção corrente e site foram atualizados e verificados | RESOLVED_DEPLOYMENT_VERIFIED |
-| RT-03 | ownership/SBOM `87/87` `unclassified`/`NOASSERTION` | classificar cada item, ou declarar exceção aprovada com expiry | DEFERRED_EXTERNAL |
-| RT-04 | mirror de pacote único não prova redundância operacional | manter igualdade GitHub/GitLab e registrar risco | DEFERRED_CONDITIONAL_UPGRADE |
-| RT-05 | fotografias históricas divergem deliberadamente do estado atual | reauditar documentos current sem apagar snapshots datados | DOCUMENTED_HISTORICAL |
+| RT-01 | the final receipt's `public_acceptance` points at RC1; the final evidence is in a separate file | keep it separate in owner-only; reconcile only in an external-public promotion | ACCEPTED_OWNER_ONLY |
+| RT-02 | source/release/deployment/development and audience drift | the current projection and the site were updated and verified | RESOLVED_DEPLOYMENT_VERIFIED |
+| RT-03 | ownership/SBOM `87/87` `unclassified`/`NOASSERTION` | classify every item, or declare an approved exception with an expiry | DEFERRED_EXTERNAL |
+| RT-04 | a single package mirror does not prove operational redundancy | keep GitHub/GitLab equality and record the risk | DEFERRED_CONDITIONAL_UPGRADE |
+| RT-05 | historical snapshots deliberately differ from the current state | re-audit current documents without erasing dated snapshots | DOCUMENTED_HISTORICAL |
 
-## Regras para consumidores
+## Rules for consumers
 
-- `latest` não é uma autoridade suficiente: resolve via catálogo TUF e
-  receipt/candidato verificados;
-- `owner-only`, `external-public`, `supported`, `conditional` e `preview` não
-  são sinônimos;
-- não informar headers HTTP, Core Web Vitals, OAuth, webhook ou suporte nativo
-  sem uma evidência específica;
-- mudanças nos bytes exigem candidato novo e invalidam a cadeia anterior;
-- uma mudança somente documental não cria `1.0.1`.
+- `latest` is not a sufficient authority: resolve through the TUF catalog and
+  the verified receipt/candidate;
+- `owner-only`, `external-public`, `supported`, `conditional` and `preview` are
+  not synonyms;
+- do not report HTTP headers, Core Web Vitals, OAuth, webhook or native support
+  without specific evidence;
+- byte changes need a new candidate and invalidate the earlier chain;
+- a documentation-only change does not create `1.0.1`.
 
-## Evidências relacionadas
+## Related evidence
 
 - [baseline](AUDIT-BASELINE.md);
-- [release final existente](../releases/1.0.0-owner-only-publication-2026-08-15.md);
-- [aceitação M3](../releases/1.0.0-owner-only-public-acceptance-m3-2026-08-15.json);
-- [runbook de release](../runbooks/release.md);
+- [existing final release](../releases/1.0.0-owner-only-publication-2026-08-15.md);
+- [M3 acceptance](../releases/1.0.0-owner-only-public-acceptance-m3-2026-08-15.json);
+- [release runbook](../runbooks/release.md);
 - [JSON](release-truth.json).
