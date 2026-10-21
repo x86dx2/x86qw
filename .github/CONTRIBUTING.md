@@ -1,32 +1,32 @@
-# Contribuindo com o x86QW
+# Contributing to x86QW
 
-Obrigado por ajudar a manter QuakeWorld jogável, verificável e compreensível. O x86QW é simultaneamente distribuição, CLI, catálogo e portal; por isso, uma mudança pequena pode atravessar mais de um contrato.
+Thank you for helping keep QuakeWorld playable, verifiable and understandable. x86QW is a distribution, a CLI, a catalog and a portal at the same time; that is why a small change can cross more than one contract.
 
-## Antes de começar
+## Before you start
 
-- procure uma [issue existente](https://github.com/x86dx2/x86qw/issues);
-- para novos runtimes, jogos, mods ou mudanças de arquitetura, abra primeiro uma proposta;
-- vulnerabilidades seguem a [política de segurança](SECURITY.md), nunca uma issue pública;
-- não use a presença de um artefato no catálogo como prova de que ele foi testado naquela plataforma.
+- look for an [existing issue](https://github.com/x86dx2/x86qw/issues);
+- for new runtimes, games, mods or architecture changes, open a proposal first;
+- vulnerabilities follow the [security policy](SECURITY.md), never a public issue;
+- do not take an artifact's presence in the catalog as proof that it was tested on that platform.
 
-## Princípios do repositório
+## Repository principles
 
-1. **Origem comprovável.** Todo byte incorporado precisa de origem, versão e consumidor declarados.
-2. **Upstream intacto.** Arquivos originais e customizações x86QW permanecem em camadas separadas.
-3. **Reprodução antes de conveniência.** Pacotes publicados são imutáveis e verificados por tamanho e SHA-256.
-4. **Estado pessoal é pessoal.** Configurações e saves do jogador não são tratados como conteúdo gerenciado.
-5. **Rede explícita.** `x86qw host` escuta em loopback até você pedir outra interface; o servidor do instalador diz que aceita a rede e oferece "Só nesta máquina".
+1. **Provable origin.** Every byte brought in needs a declared origin, version and consumer.
+2. **Intact upstream.** Original files and x86QW customizations stay in separate layers.
+3. **Reproduction before convenience.** Published packages are immutable and verified by size and SHA-256.
+4. **Personal state is personal.** The player's settings and saves are not treated as managed content.
+5. **Explicit network.** `x86qw host` listens on loopback until you ask for another interface; the server the installer builds says that it accepts the network and offers "Only this machine".
 
-## Fluxo recomendado
+## Recommended flow
 
 ```sh
 git clone https://github.com/x86dx2/x86qw.git
 cd x86qw
 git lfs pull
-git switch -c tipo/descricao-curta
+git switch -c type/short-description
 ```
 
-Faça uma mudança por contexto. Antes de enviar:
+Make one change per context. Before sending it:
 
 ```sh
 go -C go test ./...
@@ -35,53 +35,53 @@ go -C go run ./cmd/x86qw help
 cd site && npm test && npm run deploy:dry-run
 ```
 
-`x86qw-content verify` valida distribuição, inventários, receitas, catálogo, TUF e Git LFS. Em cada PR, a CI roda os testes Go em Linux (com race detector, staticcheck e govulncheck) e em Windows, compila a CLI para as cinco plataformas, verifica a distribuição e valida o site. Um e2e noturno instala de verdade em Linux, macOS e Windows. Nada disso substitui usar a mudança numa máquina real; diga no PR em que sistema você a usou.
+`x86qw-content verify` validates the distribution, inventories, recipes, catalog, TUF and Git LFS. On every PR, CI runs the Go tests on Linux (with the race detector, staticcheck and govulncheck) and on Windows, builds the CLI for the five platforms, checks the distribution and validates the site. A nightly e2e installs for real on Linux, macOS and Windows. None of that replaces using the change on a real machine; say in the PR which system you used it on.
 
-## Onde alterar
+## Where to change things
 
-| Intenção | Diretório principal | Contrato relacionado |
+| Intent | Main directory | Related contract |
 |---|---|---|
-| Cliente, mod ou conteúdo distribuído | `dist/` | `maintenance/inventory/` |
-| Origem, versão ou receita | `maintenance/` | `dist/manifest.json` |
-| CLI, app ou bootstrap | `go/` | catálogo e testes Go |
-| Portal ou API pública | `site/` | `site/tests/` |
-| Arquitetura e operação | `docs/` | fatos públicos do produto |
+| Client, mod or distributed content | `dist/` | `maintenance/inventory/` |
+| Origin, version or recipe | `maintenance/` | `dist/manifest.json` |
+| CLI, app or bootstrap | `go/` | catalog and Go tests |
+| Portal or public API | `site/` | `site/tests/` |
+| Architecture and operation | `docs/` | public product facts |
 
-Não edite pacotes publicados para “corrigir” uma versão existente. Gere uma nova versão por meio do fluxo de manutenção. Uma mudança no catálogo precisa de uma geração TUF nova (`go -C go run ./cmd/x86qw-release sign`), o que só o mantenedor faz; veja o [runbook de release](../docs/runbooks/release.md).
+Do not edit published packages to "fix" an existing version. Produce a new version through the maintenance flow. A change to the catalog needs a new TUF generation (`go -C go run ./cmd/x86qw-release sign`), which only the maintainer does; see the [release runbook](../docs/runbooks/release.md).
 
-## Adicionando conteúdo
+## Adding content
 
-Uma proposta de conteúdo precisa responder:
+A content proposal needs to answer:
 
-- qual é o upstream e a versão exata;
-- qual licença ou termo permite o uso pretendido;
-- qual componente consome cada arquivo;
-- como a atualização futura será detectada;
-- em quais plataformas o resultado foi usado;
-- se há conflito com conteúdo já preservado.
+- what the upstream and the exact version are;
+- which license or terms allow the intended use;
+- which component consumes each file;
+- how future updates will be detected;
+- on which platforms the result was used;
+- whether it conflicts with content already preserved.
 
-Veja [manutenção da distribuição](../maintenance/README.md), [proveniência](../maintenance/docs/provenance.md) e [arquitetura](../docs/architecture.md).
+See [distribution maintenance](../maintenance/README.md), [provenance](../maintenance/docs/provenance.md) and [architecture](../docs/architecture.md).
 
 ## Pull requests
 
-Um bom PR contém:
+A good PR has:
 
-- problema e resultado em linguagem direta;
-- o que ficou de fora, quando relevante;
-- os comandos executados e o que deu;
-- origem e licença de novos assets;
-- capturas quando houver mudança visual;
-- notas de compatibilidade quando aplicável.
+- the problem and the result in plain language;
+- what was left out, when relevant;
+- the commands run and what they gave;
+- origin and license of new assets;
+- screenshots when something visual changes;
+- compatibility notes when applicable.
 
-Os PRs entram por squash, com commits assinados e os checks obrigatórios verdes. Merges que mexem em `site/public` vão ao ar na hora.
+PRs are squash-merged, with signed commits and the required checks green. Merges that touch `site/public` go live right away.
 
 ## Commits
 
-Prefira mensagens imperativas e específicas:
+Prefer imperative, specific messages:
 
 ```text
 Keep QTV on loopback by default
 Show the profile summary before installing
 ```
 
-Não inclua caches, builds locais, diretórios de instalação ou credenciais. Compile binários de teste fora do repositório (`go build -o /tmp/x86qw ./cmd/x86qw`).
+Do not include caches, local builds, installation folders or credentials. Build test binaries outside the repository (`go build -o /tmp/x86qw ./cmd/x86qw`).

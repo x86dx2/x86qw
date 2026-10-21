@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" role="img" aria-labelledby="t d">
-<title id="t">x86QW — QuakeWorld, reassembled</title><desc id="d">Marca x86QW em uma arena técnica.</desc>
+<title id="t">x86QW — QuakeWorld, reassembled</title><desc id="d">The x86QW mark in a technical arena.</desc>
 <defs><linearGradient id="b" x2="1" y2="1"><stop stop-color="#090c16"/><stop offset=".55" stop-color="#111629"/><stop offset="1" stop-color="#1b1023"/></linearGradient><linearGradient id="a" x2="1" y2="1"><stop stop-color="#7894ff"/><stop offset=".48" stop-color="#4767ff"/><stop offset="1" stop-color="#ef6a57"/></linearGradient><pattern id="g" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#8ea2ff" stroke-opacity=".08"/></pattern><filter id="glow"><feGaussianBlur stdDeviation="10" result="x"/><feMerge><feMergeNode in="x"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
 <rect x="1" y="1" width="1198" height="438" rx="24" fill="url(#b)" stroke="#6979c4" stroke-opacity=".35" stroke-width="2"/><rect x="2" y="2" width="1196" height="436" rx="23" fill="url(#g)"/>
 <path d="M-80 390L260 50M30 470L370 130M870 470l340-340M1000 470l280-280M0 338h1200M0 354h1200" stroke="#7188ed" stroke-opacity=".12" fill="none"/>

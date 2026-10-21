@@ -1,6 +1,6 @@
 ---
 name: x86QW
-description: QuakeWorld moderno, reproduzível e auditável para três sistemas.
+description: Modern, reproducible and auditable QuakeWorld for three systems.
 colors:
   bg: "oklch(1 0 0)"
   surface: "oklch(0.97 0.006 28)"
@@ -67,154 +67,154 @@ components:
 
 ## Overview
 
-**Creative North Star: "Inventário que executa"**
+**Creative North Star: "An inventory that runs"**
 
-Uma pessoa abre o x86QW no browser, à luz do dia, com o terminal ao lado, e
-precisa decidir em poucos segundos se esta distribuição joga de verdade, o que
-entra no disco e se a origem dá para conferir. A interface se comporta como um
-inventário vivo: nome, versão, proveniência e um comando. Sem painel de largada,
-sem arena, sem cartaz de competição.
+Someone opens x86QW in the browser, in daylight, with the terminal beside it, and
+needs to decide in a few seconds whether this distribution really plays, what
+lands on the disk and whether its origin can be checked. The interface behaves like a
+living inventory: name, version, provenance and a command. No starting grid,
+no arena, no tournament poster.
 
-A composição é clara, tipográfica e assimétrica só quando o conteúdo pede.
-Uma faixa de tungsténio reserva o gesto visual para o comando de instalação.
-O restante é papel, tinta e evidência.
+The composition is light, typographic and asymmetric only when the content asks for it.
+A tungsten band keeps the visual gesture for the install command.
+The rest is paper, ink and evidence.
 
 **Key Characteristics:**
 
-- Uma família tipográfica com contraste de peso, não de costume.
-- Jogos e versões como o cartaz; o comando como o único campo escuro.
-- Evidência técnica apresentada como conteúdo editorial, nunca como ornamento.
-- Cantos discretos, linhas de 1px e nenhuma sombra decorativa.
-- Movimento limitado ao retorno de estado (copiar, catálogo).
+- One type family, with contrast of weight, not of costume.
+- Games and versions as the poster; the command as the only dark field.
+- Technical evidence presented as editorial content, never as ornament.
+- Discreet corners, 1px lines and no decorative shadow.
+- Motion limited to state feedback (copy, catalog).
 
 ## Colors
 
-A paleta é restrained: branco real, tinta com um traço de óxido, e óxido
-verdadeiro só para estado. Neutros herdam o matiz 28 em chroma mínima para
-não parecer cinza morto nem papel creme.
+The palette is restrained: true white, ink with a trace of oxide, and true
+oxide only for state. Neutrals inherit hue 28 at minimal chroma so they
+look neither like dead gray nor like cream paper.
 
 ### Primary
 
-- **Tinta:** texto, wordmark, botão principal. Quase preta, levemente óxido.
-- **Tungsténio:** faixa exclusiva do comando de instalação.
+- **Ink:** text, wordmark, primary button. Almost black, slightly oxide.
+- **Tungsten:** the band reserved for the install command.
 
 ### Secondary
 
-- **Óxido:** foco visível, catálogo em preparação, confirmação de cópia.
-  Nunca wordmark, nunca decoração, nunca eyebrow.
+- **Oxide:** visible focus, catalog in preparation, copy confirmation.
+  Never the wordmark, never decoration, never an eyebrow.
 
 ### Tertiary
 
-- **Sucesso / Erro:** estados raros do catálogo, sempre acompanhados por texto.
+- **Success / Error:** rare catalog states, always paired with text.
 
 ### Neutral
 
-- **Papel:** fundo principal, chroma 0.
-- **Superfície:** painéis de estado, chroma mínima rumo ao óxido.
-- **Linha:** divisores de 1px.
-- **Tinta secundária:** corpo auxiliar, contraste ≥ 4.5:1.
+- **Paper:** main background, chroma 0.
+- **Surface:** status panels, minimal chroma towards oxide.
+- **Line:** 1px dividers.
+- **Secondary ink:** supporting body text, contrast ≥ 4.5:1.
 
 ### Named Rules
 
-**The Signal Rule.** Óxido comunica estado, foco ou decisão; nunca é marca.
+**The Signal Rule.** Oxide communicates state, focus or a decision; it is never branding.
 
-**The Daylight Rule.** O conteúdo principal permanece legível sob luz ambiente
-comum; contraste mínimo é 4.5:1 e texto comum prioritário busca 7:1.
+**The Daylight Rule.** The main content stays readable under ordinary ambient
+light; the minimum contrast is 4.5:1 and priority body text aims for 7:1.
 
-**The One Band Rule.** Só o bloco de instalação usa superfície escura.
+**The One Band Rule.** Only the install block uses a dark surface.
 
 ## Typography
 
-**Family:** Atkinson Hyperlegible (com Arial e sans-serif), pesos 400 e 700.
+**Family:** Atkinson Hyperlegible (with Arial and sans-serif), weights 400 and 700.
 
-**Character:** letras e números distintos em versões, hashes e instruções.
-Hierarquia vem de tamanho e peso, não de uma segunda família condensada.
+**Character:** distinct letters and digits in versions, hashes and instructions.
+Hierarchy comes from size and weight, not from a second, condensed family.
 
 ### Hierarchy
 
 - **Display** (700, `clamp(2.4rem, 5vw, 4rem)`, 1.05, `-0.03em`): H1.
-- **Headline** (700, `clamp(1.85rem, 3.2vw, 2.75rem)`, 1.15): H2 de secção.
-- **Title** (700, `clamp(1.35rem, 2vw, 1.75rem)`, 1.2): nomes de jogo e H3.
-- **Body** (400, `1rem`, 1.6): explicações com largura máxima entre 65 e 75ch.
-- **Label** (700, `0.95rem`): sinais curtos em sentence case.
+- **Headline** (700, `clamp(1.85rem, 3.2vw, 2.75rem)`, 1.15): section H2.
+- **Title** (700, `clamp(1.35rem, 2vw, 1.75rem)`, 1.2): game names and H3.
+- **Body** (400, `1rem`, 1.6): explanations, with a maximum width between 65 and 75ch.
+- **Label** (700, `0.95rem`): short signals in sentence case.
 
 ### Named Rules
 
-**The Single Family Rule.** Display e corpo usam Atkinson. Monoespaçada
-só em comandos literais.
+**The Single Family Rule.** Display and body use Atkinson. Monospace
+only in literal commands.
 
-**The Compression Rule.** Letter-spacing de títulos nunca abaixo de `-0.04em`.
-Caixa alta não é gramática de secção.
+**The Compression Rule.** Heading letter-spacing never below `-0.04em`.
+Upper case is not section grammar.
 
 ## Elevation
 
-O sistema é plano por padrão. Profundidade vem de cor e divisores de um pixel;
-não há sombras. Um elemento deve parecer interativo por estado, contraste e
-foco, não por flutuar.
+The system is flat by default. Depth comes from color and one-pixel dividers;
+there are no shadows. An element should look interactive through state, contrast and
+focus, not by floating.
 
 ### Named Rules
 
-**The Grounded Rule.** Sombras decorativas são proibidas. Bordas e mudança de
-superfície resolvem separação; foco usa um contorno óxido de 3px (branco sobre
-a faixa escura).
+**The Grounded Rule.** Decorative shadows are forbidden. Borders and a change of
+surface handle separation; focus uses a 3px oxide outline (white on
+the dark band).
 
 ## Components
 
 ### Buttons
 
-- **Shape:** retangular e preciso, curva 3px.
-- **Primary:** tinta, texto branco, altura mínima 3.25rem, peso 700.
-- **Hover / Focus:** hover escurece a tinta; foco recebe contorno óxido de 3px.
-  Sem `translateY`.
-- **Secondary:** branco, linha e tinta; nunca usa sombra.
+- **Shape:** rectangular and precise, 3px radius.
+- **Primary:** ink, white text, minimum height 3.25rem, weight 700.
+- **Hover / Focus:** hover darkens the ink; focus gets a 3px oxide outline.
+  No `translateY`.
+- **Secondary:** white, line and ink; never uses a shadow.
 
 ### Chips
 
-- **Style:** usados apenas para estado real, com ponto de sinal e texto explícito.
-- **State:** cor complementa a mensagem, mas nunca substitui o rótulo escrito.
+- **Style:** used only for real state, with a signal dot and explicit text.
+- **State:** color complements the message but never replaces the written label.
 
 ### Cards / Containers
 
-- **Corner Style:** painéis funcionais usam 6px; grandes seções permanecem retas.
-- **Background:** Superfície para estado; tungsténio só no comando.
-- **Shadow Strategy:** nenhuma sombra.
-- **Border:** linha integral de 1px somente quando define um controle ou painel.
+- **Corner Style:** functional panels use 6px; large sections stay square.
+- **Background:** Surface for state; tungsten only for the command.
+- **Shadow Strategy:** no shadow.
+- **Border:** a full 1px line only when it defines a control or a panel.
 
 ### Inputs / Fields
 
-- **Style:** ainda não existem campos no site público; futuros campos devem herdar 3px e superfície branca.
-- **Focus:** contorno óxido de 3px com offset de 4px.
+- **Style:** the public site has no fields yet; future fields should inherit 3px and a white surface.
+- **Focus:** a 3px oxide outline with a 4px offset.
 
 ### Navigation
 
-Cabeçalho branco no topo, marca à esquerda, ação Instalar e estado do catálogo
-à direita. Sem âncoras de secção que só duplicam o scroll.
+A white header at the top, brand on the left, the Install action and the catalog status
+on the right. No section anchors that only duplicate scrolling.
 
 ### Catalog Status
 
-Painel ligado ao catálogo público. Exibe carregando, preparação, publicado ou erro
-com texto equivalente; o ponto colorido é sempre redundante.
+A panel tied to the public catalog. It shows loading, preparation, published or error
+with equivalent text; the colored dot is always redundant.
 
 ### Command Band
 
-Faixa de tungsténio de largura total. Dois comandos copyáveis, um por shell.
-É o único campo cromático comprometido da página.
+A full-width tungsten band. Two copyable commands, one per shell.
+It is the page's only committed color field.
 
 ## Do's and Don'ts
 
 ### Do:
 
-- **Do** começar a página pelos cinco jogos e pelo comando.
-- **Do** usar óxido apenas para informação ativa, foco e cópia.
-- **Do** manter títulos abaixo de 4rem e espaçamento de letras nunca menor que `-0.04em`.
-- **Do** preservar foco visível, navegação por teclado e movimento reduzido.
-- **Do** mostrar estado, licença, origem e hash com linguagem direta e verificável.
+- **Do** start the page with the five games and the command.
+- **Do** use oxide only for active information, focus and copy.
+- **Do** keep headings below 4rem and letter-spacing never under `-0.04em`.
+- **Do** keep visible focus, keyboard navigation and reduced motion.
+- **Do** show status, license, origin and hash in direct, verifiable language.
 
 ### Don't:
 
-- **Don't** usar nostalgia pixelada excessiva, estética gamer neon/cyberpunk, landing SaaS ou metáfora de arena/largada.
-- **Don't** usar gradiente em texto, glassmorphism, listras diagonais ou glow.
-- **Don't** repetir grades de cartões idênticos com ícone, título e parágrafo.
-- **Don't** aplicar cantos acima de 16px, combinar borda com sombra, ou pintar o wordmark de acento.
-- **Don't** usar cor como único indicador ou esconder o estado incompleto da distribuição.
-- **Don't** usar fonte condensada, eyebrows em caixa alta em cada secção, ou numeração 01/02/03 fora do fluxo real de instalação.
+- **Don't** use heavy pixel nostalgia, neon/cyberpunk gamer aesthetics, a SaaS landing page or an arena/starting-grid metaphor.
+- **Don't** use gradient text, glassmorphism, diagonal stripes or glow.
+- **Don't** repeat grids of identical cards with an icon, a title and a paragraph.
+- **Don't** use corners above 16px, combine a border with a shadow, or paint the wordmark in the accent.
+- **Don't** use color as the only indicator or hide the distribution's incomplete state.
+- **Don't** use a condensed font, upper-case eyebrows on every section, or 01/02/03 numbering outside the real install flow.

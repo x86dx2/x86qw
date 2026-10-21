@@ -1,86 +1,86 @@
-name: Relatar um bug
-description: Informe uma falha reproduzível no instalador, CLI, jogo, serviço ou portal.
+name: Report a bug
+description: Report a reproducible failure in the installer, CLI, a game, a service or the portal.
 title: "bug: "
 labels: ["bug", "triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        Obrigado pelo relato. Remova senhas, tokens, IPs privados e caminhos pessoais. Vulnerabilidades devem usar o canal privado da aba Security.
+        Thank you for the report. Remove passwords, tokens, private IPs and personal paths. Vulnerabilities must use the private channel on the Security tab.
   - type: dropdown
     id: area
     attributes:
-      label: Área afetada
+      label: Affected area
       options:
-        - Instalação ou bootstrap
-        - CLI e lifecycle
-        - ezQuake ou gameplay
-        - KTX e modos
-        - Outro jogo ou mod
+        - Install or bootstrap
+        - CLI and lifecycle
+        - ezQuake or gameplay
+        - KTX and modes
+        - Another game or mod
         - MVDSV / host
         - QTV
         - QWFWD / proxy
-        - Portal ou catálogo
-        - Manutenção / build / release
+        - Portal or catalog
+        - Maintenance / build / release
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: Versão do x86QW
-      description: Saída de x86qw version ou versão do instalador.
+      label: x86QW version
+      description: Output of x86qw version or the installer version.
       placeholder: "0.3.0"
     validations:
       required: true
   - type: input
     id: platform
     attributes:
-      label: Plataforma
+      label: Platform
       placeholder: "macOS 15 arm64, Ubuntu 24.04 amd64, Windows 11 x64..."
     validations:
       required: true
   - type: textarea
     id: problem
     attributes:
-      label: O que aconteceu?
-      description: Descreva o comportamento observado e o resultado esperado.
+      label: What happened?
+      description: Describe the behavior you saw and the result you expected.
     validations:
       required: true
   - type: textarea
     id: reproduce
     attributes:
-      label: Como reproduzir
+      label: How to reproduce
       placeholder: |
-        1. Instale o perfil...
-        2. Execute...
-        3. Observe...
+        1. Install the profile...
+        2. Run...
+        3. See...
     validations:
       required: true
   - type: textarea
     id: diagnostics
     attributes:
-      label: Diagnóstico sanitizado
-      description: Anexe ou descreva o resultado de `x86qw doctor --bundle`. O zip contém NOTICE.txt e doctor.json já redigidos. Não inclua senhas, tokens ou caminhos pessoais extras.
+      label: Sanitized diagnosis
+      description: Attach or describe the result of `x86qw doctor --bundle`. The zip holds NOTICE.txt and doctor.json, already redacted. Do not include passwords, tokens or extra personal paths.
       render: shell
   - type: dropdown
     id: channel
     attributes:
-      label: Canal do cliente
+      label: Client channel
       options:
         - Stable
         - Nightly
-        - Ambos
-        - Não se aplica
+        - Both
+        - Not applicable
     validations:
       required: true
   - type: checkboxes
     id: checks
     attributes:
-      label: Confirmações
+      label: Confirmations
       options:
-        - label: Procurei issues existentes e não encontrei o mesmo problema.
+        - label: I searched the existing issues and did not find the same problem.
           required: true
-        - label: Revisei o conteúdo e removi credenciais e dados pessoais.
+        - label: I reviewed the content and removed credentials and personal data.
           required: true
-        - label: Este relato não descreve uma vulnerabilidade ainda não corrigida.
+        - label: This report does not describe a vulnerability that is not fixed yet.
           required: true

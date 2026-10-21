@@ -7,9 +7,9 @@ const SITE_JS = fileURLToPath(new URL('../public/assets/site.js', import.meta.ur
 
 const makeNode = (header = false) => {
   const nodes = {
-    '.catalog-label': { textContent: header ? 'Verificando' : 'Consultando o catálogo' },
+    '.catalog-label': { textContent: header ? 'Checking' : 'Querying the catalog' },
     '.catalog-value': { textContent: '—' },
-    '.catalog-detail': { textContent: 'Lendo o contrato público em tempo real.' },
+    '.catalog-detail': { textContent: 'Reading the public contract live.' },
   };
   return {
     dataset: { state: 'loading' },
@@ -41,11 +41,11 @@ test('catalog failure is announced in text instead of color alone', async () => 
   await loadSiteScript();
 
   assert.equal(header.dataset.state, 'error');
-  assert.equal(header.nodes['.catalog-label'].textContent, 'Catálogo indisponível');
-  assert.match(header.attributes['aria-label'], /Não foi possível confirmar/);
+  assert.equal(header.nodes['.catalog-label'].textContent, 'Catalog unavailable');
+  assert.match(header.attributes['aria-label'], /Could not confirm/);
   assert.equal(status.dataset.state, 'error');
-  assert.equal(status.nodes['.catalog-label'].textContent, 'Catálogo indisponível');
-  assert.equal(status.nodes['.catalog-value'].textContent, 'Não foi possível confirmar o estado');
+  assert.equal(status.nodes['.catalog-label'].textContent, 'Catalog unavailable');
+  assert.equal(status.nodes['.catalog-value'].textContent, 'Could not confirm the status');
 });
 
 test('live status reads product.json instead of the full catalog', async () => {
@@ -76,8 +76,8 @@ test('live status reads product.json instead of the full catalog', async () => {
 
   assert.deepEqual(requested, [{ url: '/api/v1/product.json', cache: 'no-store' }]);
   assert.equal(header.dataset.state, 'ready');
-  assert.equal(header.nodes['.catalog-label'].textContent, 'Catálogo publicado');
+  assert.equal(header.nodes['.catalog-label'].textContent, 'Catalog published');
   assert.equal(status.dataset.state, 'ready');
-  assert.equal(status.nodes['.catalog-value'].textContent, '29 pacotes auditados');
-  assert.match(status.nodes['.catalog-detail'].textContent, /KTX atual: 1\.47/);
+  assert.equal(status.nodes['.catalog-value'].textContent, '29 audited packages');
+  assert.match(status.nodes['.catalog-detail'].textContent, /Current KTX: 1\.47/);
 });

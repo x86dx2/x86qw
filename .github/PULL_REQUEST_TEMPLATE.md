@@ -1,26 +1,26 @@
-## Resultado
+## Result
 
-<!-- O que muda para jogador, operador ou mantenedor? -->
+<!-- What changes for the player, the operator or the maintainer? -->
 
-## Contexto
+## Context
 
-<!-- Qual problema ou issue motivou a mudança? -->
+<!-- Which problem or issue led to the change? -->
 
-## Validação
+## Validation
 
-- [ ] `go -C go test ./...` e `go -C go run ./cmd/x86qw-content verify`
-- [ ] Comandos afetados conferidos com `x86qw COMANDO --help`
-- [ ] `cd site && npm test && npm run deploy:dry-run`, quando o site muda
-- [ ] Sistema em que a mudança foi usada:
-- [ ] README e `docs/` continuam descrevendo o que o código faz
+- [ ] `go -C go test ./...` and `go -C go run ./cmd/x86qw-content verify`
+- [ ] Affected commands checked with `x86qw COMMAND --help`
+- [ ] `cd site && npm test && npm run deploy:dry-run`, when the site changes
+- [ ] System the change was used on:
+- [ ] README and `docs/` still describe what the code does
 
-## Distribuição e proveniência
+## Distribution and provenance
 
-- [ ] Nenhum novo byte distribuído
-- [ ] Ou: origem, versão, licença, consumidor, tamanho e SHA-256 foram registrados
-- [ ] Upstream e customização x86QW permanecem separados
-- [ ] Artefatos publicados existentes não foram alterados
+- [ ] No new distributed byte
+- [ ] Or: origin, version, license, consumer, size and SHA-256 were recorded
+- [ ] Upstream and x86QW customization stay separate
+- [ ] Existing published artifacts were not changed
 
-## Risco e reversão
+## Risk and rollback
 
-<!-- O que pode regredir e como desfazer com segurança? Remova segredos de logs. -->
+<!-- What could regress and how to undo it safely? Remove secrets from logs. -->
