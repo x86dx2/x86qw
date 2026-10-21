@@ -11,12 +11,12 @@
   },
   "authorities": {
     "source": {
-      "meaning": "estado versionado da fonte current",
+      "meaning": "versioned state of the current source",
       "baseline": "1.0.4",
       "version_file": "dist/installer/VERSION"
     },
     "candidate_release": {
-      "meaning": "bytes construídos uma vez e promovidos por digest",
+      "meaning": "bytes built once and promoted by digest",
       "tag": "x86qw-installer-1.0.0",
       "version": "1.0.0",
       "target_commit": "e12ed081b968f820f47200e4be954a4f444056a1",
@@ -39,14 +39,14 @@
       }
     },
     "deployment": {
-      "meaning": "site, bootstraps, product, catálogo e TUF realmente servidos",
+      "meaning": "site, bootstraps, product, catalog and TUF actually served",
       "live_observation": {
         "observed_at_utc": "2026-08-28T02:32:21Z",
         "product_version": "1.0.0",
         "catalog_current_installer": "1.0.0",
         "release_truth_endpoint": "200",
         "product_release_audience": "owner-only",
-        "root_site_hero": "x86QW 1.0.0 · validado no Apple M3",
+        "root_site_hero": "x86QW 1.0.0 · validated on the Apple M3",
         "root_mentions_owner_only": true,
         "state": "CONVERGED_CANDIDATE_DEPLOYMENT",
         "root_runner_probe": "200_OWNER_ONLY"
@@ -78,7 +78,7 @@
       }
     },
     "development": {
-      "meaning": "HEAD atual e seus checks",
+      "meaning": "current HEAD and its checks",
       "head": "962fb2b2cc27560e982c2255d9299a55f16acdd1",
       "validate_run": 33135951867,
       "required_protected_contexts": 3,
@@ -91,57 +91,57 @@
     "exact_legacy_installer_sha256": "114604400e1fd18c4180624314d4bc8ca9b6d4559ed26cfe8d0a767287f2aa32",
     "final_cli_version": "1.0.0",
     "result": "NOT_REQUIRED_FOR_FRESH_PUBLIC_BASELINE",
-    "message": "A migração foi bloqueada por conflitos preservados: .x86qw: the historical installer version is not authenticated",
+    "message": "The migration was blocked by preserved conflicts: .x86qw: the historical installer version is not authenticated",
     "evidence_level": "E1",
-    "qualification": "não bloqueia funcionalidades nem a primeira publicação limpa; reabrir somente se houver promessa de upgrade histórico"
+    "qualification": "does not block features or the first clean publication; reopen only if there is a historical upgrade promise"
   },
   "conflicts": [
     {
       "id": "RT-01",
       "severity": "P1",
-      "statement": "receipt public_acceptance aponta RC1 enquanto a evidência M3 final está separada",
+      "statement": "the receipt's public_acceptance points at RC1 while the final M3 evidence is separate",
       "gate": "0C",
       "state": "ACCEPTED_OWNER_ONLY"
     },
     {
       "id": "RT-02",
       "severity": "P1",
-      "statement": "site live, release-truth, product e catálogo refletem a projeção owner-only do candidato",
+      "statement": "the live site, release-truth, product and catalog reflect the candidate's owner-only projection",
       "gate": "0C",
       "state": "RESOLVED_DEPLOYMENT_VERIFIED"
     },
     {
       "id": "RT-03",
       "severity": "P1",
-      "statement": "ownership/SBOM final possui 87/87 itens unclassified/NOASSERTION",
+      "statement": "the final ownership/SBOM has 87/87 items unclassified/NOASSERTION",
       "gate": "0C",
       "state": "DEFERRED_EXTERNAL"
     },
     {
       "id": "RT-04",
       "severity": "P1",
-      "statement": "cleanup --personal-data não cobre qw/demos prometidos",
+      "statement": "cleanup --personal-data does not cover the promised qw/demos",
       "gate": "0C/EP-1",
       "state": "DEFERRED_CONDITIONAL_UPGRADE"
     },
     {
       "id": "RT-05",
       "severity": "P1",
-      "statement": "migração do instalador público 0.7.13 exato não reproduz a aprovação do harness M3",
+      "statement": "migration from the exact public 0.7.13 installer does not reproduce the M3 harness approval",
       "gate": "EP-1",
       "state": "NOT_REQUIRED_FOR_FRESH_PUBLIC_BASELINE"
     },
     {
       "id": "RT-06",
       "severity": "P1_OPERATIONAL",
-      "statement": "timestamp v22 foi renovado, publicado e verificado; sustentabilidade independente permanece em #148",
+      "statement": "timestamp v22 was renewed, published and verified; independent sustainability stays in #148",
       "gate": "0B",
       "state": "HEALTHY_TECHNICAL_DEFERRED_EXTERNAL_CUSTODY"
     },
     {
       "id": "RT-07",
       "severity": "P1",
-      "statement": "product.json live expõe release_audience e /api/v1/release-truth.json responde 200",
+      "statement": "the live product.json exposes release_audience and /api/v1/release-truth.json answers 200",
       "gate": "0C",
       "state": "RESOLVED_DEPLOYMENT_VERIFIED"
     }
@@ -233,7 +233,7 @@
   "projection_policy": {
     "source_of_truth": "docs/post-1.0/release-truth-projection-seed.json",
     "public_projection": "/api/v1/release-truth.json",
-    "rule": "nenhuma superfície pode elevar audiência, suporte ou evidência; artifact availability não equivale a external-public"
+    "rule": "no surface may raise audience, support or evidence; artifact availability does not equal external-public"
   },
   "open_gates": [
     "0B-sustainable-custody-backup-RTO",

@@ -2,52 +2,52 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "Plataforma x86QW",
-    "subtitle": "Catálogos declarativos, gates de publicação e execução recuperável",
+    "title": "x86QW Platform",
+    "subtitle": "Declarative catalogs, publication gates and recoverable execution",
     "output": "x86qw-platform.html",
     "viewBox": [1200, 740]
   },
   "components": [
-    { "id": "upstreams", "type": "external", "label": "Projetos upstream", "sublabel": "releases + snapshots", "pos": [20, 100], "size": [140, 64] },
-    { "id": "dist", "type": "backend", "label": "dist/ canônico", "sublabel": "fontes + overlays + hashes", "pos": [190, 100], "size": [150, 64], "tag": "versionado" },
-    { "id": "control", "type": "database", "label": "Catálogos declarativos", "sublabel": "runtimes + jogos + capacidades", "pos": [390, 100], "size": [160, 64], "tag": "fonte única" },
-    { "id": "ci", "type": "security", "label": "CI + gates", "sublabel": "Linux · Windows · e2e noturno", "pos": [600, 100], "size": [150, 64], "tag": "bloqueante" },
-    { "id": "packages", "type": "messagebus", "label": "Pacotes reproduzíveis", "sublabel": "ZIPs de componentes + CLI", "pos": [800, 100], "size": [150, 64], "tag": "SHA-256" },
-    { "id": "mirrors", "type": "cloud", "label": "Mirrors de entrega", "sublabel": "GitHub Releases + GitLab", "pos": [1000, 100], "size": [160, 64], "tag": "imutáveis" },
+    { "id": "upstreams", "type": "external", "label": "Upstream projects", "sublabel": "releases + snapshots", "pos": [20, 100], "size": [140, 64] },
+    { "id": "dist", "type": "backend", "label": "canonical dist/", "sublabel": "sources + overlays + hashes", "pos": [190, 100], "size": [150, 64], "tag": "versioned" },
+    { "id": "control", "type": "database", "label": "Declarative catalogs", "sublabel": "runtimes + games + capabilities", "pos": [390, 100], "size": [160, 64], "tag": "single source" },
+    { "id": "ci", "type": "security", "label": "CI + gates", "sublabel": "Linux · Windows · nightly e2e", "pos": [600, 100], "size": [150, 64], "tag": "blocking" },
+    { "id": "packages", "type": "messagebus", "label": "Reproducible packages", "sublabel": "component ZIPs + CLI", "pos": [800, 100], "size": [150, 64], "tag": "SHA-256" },
+    { "id": "mirrors", "type": "cloud", "label": "Delivery mirrors", "sublabel": "GitHub Releases + GitLab", "pos": [1000, 100], "size": [160, 64], "tag": "immutable" },
 
-    { "id": "players", "type": "external", "label": "Jogadores e admins", "sublabel": "macOS · Linux · Windows", "pos": [30, 390], "size": [160, 64] },
-    { "id": "edge", "type": "cloud", "label": "Cloudflare edge", "sublabel": "site + bootstraps + catálogo", "pos": [240, 390], "size": [170, 64], "tag": "Static Assets" },
-    { "id": "cli", "type": "frontend", "label": "Instalador + CLI", "sublabel": "CLI x86qw em Go", "pos": [470, 390], "size": [170, 64], "tag": "versionada" },
-    { "id": "play", "type": "frontend", "label": "Gameplay local", "sublabel": "ezQuake stable/nightly", "pos": [710, 390], "size": [170, 64], "tag": "play · hub" },
-    { "id": "state", "type": "database", "label": "Estado + journal", "sublabel": "perfil v2 · recibos · sessões", "pos": [470, 570], "size": [170, 64], "tag": "recuperável" },
-    { "id": "host", "type": "backend", "label": "MVDSV dedicado", "sublabel": "cinco jogos instalados", "pos": [710, 570], "size": [170, 64], "tag": "host" },
-    { "id": "relays", "type": "messagebus", "label": "QTV + QWFWD", "sublabel": "stream HTTP + proxy UDP", "pos": [960, 570], "size": [170, 64], "tag": "opcionais" }
+    { "id": "players", "type": "external", "label": "Players and admins", "sublabel": "macOS · Linux · Windows", "pos": [30, 390], "size": [160, 64] },
+    { "id": "edge", "type": "cloud", "label": "Cloudflare edge", "sublabel": "site + bootstraps + catalog", "pos": [240, 390], "size": [170, 64], "tag": "Static Assets" },
+    { "id": "cli", "type": "frontend", "label": "Installer + CLI", "sublabel": "x86qw CLI in Go", "pos": [470, 390], "size": [170, 64], "tag": "versioned" },
+    { "id": "play", "type": "frontend", "label": "Local gameplay", "sublabel": "ezQuake stable/nightly", "pos": [710, 390], "size": [170, 64], "tag": "play · hub" },
+    { "id": "state", "type": "database", "label": "State + journal", "sublabel": "profile v2 · receipts · sessions", "pos": [470, 570], "size": [170, 64], "tag": "recoverable" },
+    { "id": "host", "type": "backend", "label": "Dedicated MVDSV", "sublabel": "five installed games", "pos": [710, 570], "size": [170, 64], "tag": "host" },
+    { "id": "relays", "type": "messagebus", "label": "QTV + QWFWD", "sublabel": "HTTP stream + UDP proxy", "pos": [960, 570], "size": [170, 64], "tag": "optional" }
   ],
   "boundaries": [
-    { "kind": "region", "label": "Pipeline de distribuição x86QW", "wraps": ["dist", "control", "ci", "packages"] },
-    { "kind": "region", "label": "Entrega pública", "wraps": ["mirrors"] },
+    { "kind": "region", "label": "x86QW distribution pipeline", "wraps": ["dist", "control", "ci", "packages"] },
+    { "kind": "region", "label": "Public delivery", "wraps": ["mirrors"] },
     { "kind": "region", "label": "qw.x86.com.br", "wraps": ["edge"] },
-    { "kind": "security-group", "label": "Instalação autocontida do jogador", "wraps": ["cli", "play", "state", "host", "relays"] }
+    { "kind": "security-group", "label": "Player's self-contained installation", "wraps": ["cli", "play", "state", "host", "relays"] }
   ],
   "connections": [
     { "from": "upstreams", "to": "dist", "variant": "emphasis" },
     { "from": "dist", "to": "control", "variant": "emphasis" },
     { "from": "control", "to": "ci", "label": "verify", "variant": "security" },
-    { "from": "ci", "to": "packages", "label": "gates verdes", "variant": "emphasis", "labelAt": [775, 178] },
+    { "from": "ci", "to": "packages", "label": "green gates", "variant": "emphasis", "labelAt": [775, 178] },
     { "from": "packages", "to": "mirrors", "variant": "emphasis" },
-    { "from": "control", "to": "edge", "label": "projeta product.json", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "via": [[470, 245], [325, 245]], "labelAt": [400, 235] },
+    { "from": "control", "to": "edge", "label": "projects product.json", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "via": [[470, 245], [325, 245]], "labelAt": [400, 235] },
     { "from": "players", "to": "edge", "label": "HTTPS" },
-    { "from": "edge", "to": "cli", "label": "bootstrap + catálogo", "variant": "emphasis", "labelAt": [440, 468] },
-    { "from": "mirrors", "to": "cli", "label": "pacotes por plataforma", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "via": [[995, 285], [555, 285]], "labelAt": [775, 275] },
+    { "from": "edge", "to": "cli", "label": "bootstrap + catalog", "variant": "emphasis", "labelAt": [440, 468] },
+    { "from": "mirrors", "to": "cli", "label": "per-platform packages", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "via": [[995, 285], [555, 285]], "labelAt": [775, 275] },
     { "from": "cli", "to": "play", "label": "play · hub", "variant": "emphasis" },
-    { "from": "cli", "to": "state", "label": "registra", "variant": "security", "fromSide": "bottom", "toSide": "top", "labelAt": [595, 512] },
+    { "from": "cli", "to": "state", "label": "records", "variant": "security", "fromSide": "bottom", "toSide": "top", "labelAt": [595, 512] },
     { "from": "cli", "to": "host", "label": "host", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v" },
-    { "from": "host", "to": "relays", "label": "MVD + encaminhamento", "variant": "dashed", "labelAt": [920, 556] }
+    { "from": "host", "to": "relays", "label": "MVD + forwarding", "variant": "dashed", "labelAt": [920, 556] }
   ],
   "cards": [
-    { "dot": "cyan", "title": "Fonte única", "items": ["dist/ preserva os bytes; inventários declaram runtimes, jogos, plataformas e capacidades", "product.json projeta versão, contagens e suporte sem números duplicados"] },
-    { "dot": "emerald", "title": "Publicação bloqueada", "items": ["Pull requests rodam testes Go em Linux e Windows e validam LFS, catálogo, TUF e site", "A CLI sai por workflow aprovado; o site entra no ar a cada merge"] },
-    { "dot": "rose", "title": "Instalação recuperável", "items": ["Perfis e seleções custom migram para state.json v2 sem perder componentes", "Journal privado reconcilia crash e preserva todo arquivo pessoal ou modificado"] },
-    { "dot": "amber", "title": "Execução imutável", "items": ["play e host validam conteúdo; instalação, update, upgrade ou repair preparam payload", "MVDSV inicia antes de QTV e QWFWD; falha parcial encerra todos os filhos"] }
+    { "dot": "cyan", "title": "Single source", "items": ["dist/ keeps the bytes; inventories declare runtimes, games, platforms and capabilities", "product.json projects the version, counts and support without duplicated numbers"] },
+    { "dot": "emerald", "title": "Gated publication", "items": ["Pull requests run the Go tests on Linux and Windows and validate LFS, catalog, TUF and site", "The CLI ships through an approved workflow; the site goes live on every merge"] },
+    { "dot": "rose", "title": "Recoverable installation", "items": ["Profiles and custom selections migrate to state.json v2 without losing components", "A private journal reconciles crashes and keeps every personal or modified file"] },
+    { "dot": "amber", "title": "Immutable execution", "items": ["play and host validate content; install, update, upgrade or repair prepare the payload", "MVDSV starts before QTV and QWFWD; a partial failure stops every child"] }
   ]
 }
