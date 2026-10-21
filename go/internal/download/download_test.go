@@ -131,3 +131,20 @@ func TestReportsProgressUpToTheSize(t *testing.T) {
 		}
 	}
 }
+
+// TestContextCarriesTheClient: an install passes only ctx down to Fetch,
+// so a client injected there must be used when Options sets none.
+func TestContextCarriesTheClient(t *testing.T) {
+	body := "from the context"
+	srv, options := server(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(body)) })
+	size, digest := pin(body)
+	artifact := Artifact{URLs: []string{srv.URL + "/c.zip"}, Size: size, SHA256: digest}
+	ctx := WithClient(context.Background(), options.Client)
+	if err := Fetch(ctx, artifact, filepath.Join(t.TempDir(), "c.zip"), Options{Deadline: 10 * time.Second, Attempts: 1}); err != nil {
+		t.Fatalf("o cliente do contexto deveria confiar no servidor de teste: %v", err)
+	}
+	// Without it, the default client refuses the test certificate.
+	if err := Fetch(context.Background(), artifact, filepath.Join(t.TempDir(), "d.zip"), Options{Deadline: 10 * time.Second, Attempts: 1}); err == nil {
+		t.Fatal("o cliente padrão aceitou um certificado de teste")
+	}
+}
