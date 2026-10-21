@@ -313,143 +313,169 @@ func (m *Model) details(id string) [][2]string {
 	if strings.HasPrefix(id, "m.") {
 		return m.matchDetails(id)
 	}
-	if id == "h.solo" {
-		qtv, qwfwd := m.opts.Server.QTVPort, m.opts.Server.QWFWDPort
-		if qtv == 0 {
-			qtv = setup.DefaultQTVPort
-		}
-		if qwfwd == 0 {
-			qwfwd = setup.DefaultQWFWDPort
-		}
-		return [][2]string{{"QTV", fmt.Sprintf("TCP %d · %s", qtv, m.t("qtv.d"))}, {"QWFWD", fmt.Sprintf("UDP %d · %s", qwfwd, m.t("qwfwd.d"))}}
-	}
-	o := m.opts
 	switch id {
+	case "h.solo":
+		return m.soloServiceDetails()
 	case "comps":
-		var names []string
-		for _, sel := range setup.Selected(m.catalog, o) {
-			for _, component := range m.catalog.Components {
-				if component.ID == sel {
-					names = append(names, m.label("component", component.ID, component.Label))
-				}
-			}
-		}
-		pack := m.t("p." + o.Content)
-		if !o.Intent.WantsClient() {
-			pack = m.t("needed.host")
-		}
-		total := m.totalBytes()
-		return [][2]string{
-			{m.t("d.bundle"), pack},
-			{m.t("d.items"), strings.Join(names, " · ")},
-			{m.t("d.size"), fmt.Sprintf("%s %s · %s %s", m.size(total), m.t("rev.download"), m.size(setup.OnDisk(total)), m.t("rev.disk"))},
-		}
+		return m.componentDetails()
 	case "config":
-		k := o.Keys
-		layout := strings.ToUpper(k.Preset)
-		if k.Preset == "custom" {
-			layout = m.t("l.custom")
-		}
-		keys := fmt.Sprintf("%s · %s %s  %s %s  %s %s  %s %s  %s %s", layout,
-			keyLabel(k.Forward), m.t("a.fwd"), keyLabel(k.Back), m.t("a.back"), keyLabel(k.Left), m.t("a.left"),
-			keyLabel(k.Right), m.t("a.right"), keyLabel(k.Jump), m.t("a.jump"))
-		axis := m.t("d.axis.normal")
-		if o.Mouse.Invert {
-			axis = m.t("d.axis.inverted")
-		}
-		resolution := m.t("res.auto")
-		if o.Video.Width > 0 {
-			resolution = fmt.Sprintf("%d×%d", o.Video.Width, o.Video.Height)
-		}
-		experience := m.ruleset(o.Experience)
-		return [][2]string{
-			{m.t("nick"), o.Nick},
-			{m.t("tab.keys"), keys},
-			{m.t("tab.mouse"), fmt.Sprintf("%s · %d dpi · %s %s · %s", m.num(o.Mouse.Sensitivity), o.Mouse.DPI, m.num(o.Mouse.CentimetersPer360()), m.t("cm360"), axis)},
-			{m.t("tab.exp"), experience},
-			{m.t("d.video"), fmt.Sprintf("%s · %s · FOV %d°", resolution, m.t("d."+o.Video.Display), o.Video.FOV)},
-			{m.t("d.sound"), fmt.Sprintf("%d%%", o.Volume)},
-		}
+		return m.configDetails()
 	case "server":
-		sv := o.Server
-		rows := [][2]string{{m.t("srv.name"), sv.Name}, {m.t("d.address"), m.connectHost()}}
-		for index, instance := range sv.Instances {
-			bots := m.t("bots.off")
-			if instance.Bots {
-				bots = m.t("bots.on")
-			}
-			label := ""
-			if index == 0 {
-				label = m.t("srv.inst")
-			}
-			rows = append(rows, [2]string{label, fmt.Sprintf("#%d  UDP %d · %s · %s · %s", index+1, sv.BasePort+index, m.mode(instance.Mode).Label, instance.Map, bots)})
-		}
-		services := []string{}
-		if sv.QTVPort != 0 {
-			services = append(services, fmt.Sprintf("QTV TCP %d", sv.QTVPort))
-		}
-		if sv.QWFWDPort != 0 {
-			services = append(services, fmt.Sprintf("QWFWD UDP %d", sv.QWFWDPort))
-		}
-		if len(services) == 0 {
-			services = []string{m.t("off")}
-		}
-		access := m.t("access.public")
-		if sv.Local {
-			access = m.t("access.local")
-		}
-		slots := sv.Slots
-		if slots == 0 {
-			slots = setup.DefaultSlots
-		}
-		access += fmt.Sprintf(" · %d %s", slots, m.t("access.slots.n"))
-		if !sv.NoRecord {
-			access += " · " + m.t("access.recording")
-		}
-		var locked []string
-		if sv.Password != "" {
-			locked = append(locked, m.t("access.password"))
-		}
-		if sv.Spectators != "" {
-			locked = append(locked, m.t("access.spectator"))
-		}
-		passwords := m.t("access.none")
-		if len(locked) > 0 {
-			passwords = strings.Join(locked, " · ")
-		}
-		return append(rows, [2]string{m.t("tab.access"), access}, [2]string{m.t("access.passwords"), passwords},
-			[2]string{m.t("tab.services"), strings.Join(services, " · ")}, [2]string{m.t("rcon"), sv.Rcon})
+		return m.serverDetails()
 	case "integ":
-		in := o.Integration
-		mark := func(on bool, key string) string {
-			if on {
-				return m.glyphs.Ok + " " + m.t(key)
-			}
-			return m.glyphs.Fail + " " + m.t(key)
-		}
-		can := setup.SupportedIntegration()
-		var marks []string
-		for _, item := range []struct {
-			offered, on bool
-			key         string
-		}{{can.Shortcuts, in.Shortcuts, "i.short"}, {can.Path, in.Path, "i.path"}, {can.QWLinks, in.QWLinks, "i.qw"}, {can.Demos, in.Demos, "i.demo"}} {
-			if item.offered {
-				marks = append(marks, mark(item.on, item.key))
-			}
-		}
-		var rows [][2]string
-		for index := 0; index < len(marks); index += 2 {
-			line := marks[index]
-			if index+1 < len(marks) {
-				line = padRight(line, 30) + marks[index+1]
-			}
-			rows = append(rows, [2]string{"", line})
-		}
-		return rows
+		return m.integrationDetails()
 	case "folder":
-		return [][2]string{{"", shortPath(o.Target)}}
+		return [][2]string{{"", shortPath(m.opts.Target)}}
 	}
 	return nil
+}
+
+// soloServiceDetails are the ports QTV and QWFWD would take on their own.
+func (m *Model) soloServiceDetails() [][2]string {
+	qtv, qwfwd := m.opts.Server.QTVPort, m.opts.Server.QWFWDPort
+	if qtv == 0 {
+		qtv = setup.DefaultQTVPort
+	}
+	if qwfwd == 0 {
+		qwfwd = setup.DefaultQWFWDPort
+	}
+	return [][2]string{{"QTV", fmt.Sprintf("TCP %d · %s", qtv, m.t("qtv.d"))}, {"QWFWD", fmt.Sprintf("UDP %d · %s", qwfwd, m.t("qwfwd.d"))}}
+}
+
+// componentDetails are the package, its components and its size.
+func (m *Model) componentDetails() [][2]string {
+	o := m.opts
+	var names []string
+	for _, sel := range setup.Selected(m.catalog, o) {
+		for _, component := range m.catalog.Components {
+			if component.ID == sel {
+				names = append(names, m.label("component", component.ID, component.Label))
+			}
+		}
+	}
+	pack := m.t("p." + o.Content)
+	if !o.Intent.WantsClient() {
+		pack = m.t("needed.host")
+	}
+	total := m.totalBytes()
+	return [][2]string{
+		{m.t("d.bundle"), pack},
+		{m.t("d.items"), strings.Join(names, " · ")},
+		{m.t("d.size"), fmt.Sprintf("%s %s · %s %s", m.size(total), m.t("rev.download"), m.size(setup.OnDisk(total)), m.t("rev.disk"))},
+	}
+}
+
+// configDetails are the player's nick, keys, mouse, ruleset, video and sound.
+func (m *Model) configDetails() [][2]string {
+	o := m.opts
+	k := o.Keys
+	layout := strings.ToUpper(k.Preset)
+	if k.Preset == "custom" {
+		layout = m.t("l.custom")
+	}
+	keys := fmt.Sprintf("%s · %s %s  %s %s  %s %s  %s %s  %s %s", layout,
+		keyLabel(k.Forward), m.t("a.fwd"), keyLabel(k.Back), m.t("a.back"), keyLabel(k.Left), m.t("a.left"),
+		keyLabel(k.Right), m.t("a.right"), keyLabel(k.Jump), m.t("a.jump"))
+	axis := m.t("d.axis.normal")
+	if o.Mouse.Invert {
+		axis = m.t("d.axis.inverted")
+	}
+	resolution := m.t("res.auto")
+	if o.Video.Width > 0 {
+		resolution = fmt.Sprintf("%d×%d", o.Video.Width, o.Video.Height)
+	}
+	return [][2]string{
+		{m.t("nick"), o.Nick},
+		{m.t("tab.keys"), keys},
+		{m.t("tab.mouse"), fmt.Sprintf("%s · %d dpi · %s %s · %s", m.num(o.Mouse.Sensitivity), o.Mouse.DPI, m.num(o.Mouse.CentimetersPer360()), m.t("cm360"), axis)},
+		{m.t("tab.exp"), m.ruleset(o.Experience)},
+		{m.t("d.video"), fmt.Sprintf("%s · %s · FOV %d°", resolution, m.t("d."+o.Video.Display), o.Video.FOV)},
+		{m.t("d.sound"), fmt.Sprintf("%d%%", o.Volume)},
+	}
+}
+
+// serverDetails are the server's name, address, instances, access,
+// passwords, services and rcon.
+func (m *Model) serverDetails() [][2]string {
+	sv := m.opts.Server
+	rows := [][2]string{{m.t("srv.name"), sv.Name}, {m.t("d.address"), m.connectHost()}}
+	for index, instance := range sv.Instances {
+		bots := m.t("bots.off")
+		if instance.Bots {
+			bots = m.t("bots.on")
+		}
+		label := ""
+		if index == 0 {
+			label = m.t("srv.inst")
+		}
+		rows = append(rows, [2]string{label, fmt.Sprintf("#%d  UDP %d · %s · %s · %s", index+1, sv.BasePort+index, m.mode(instance.Mode).Label, instance.Map, bots)})
+	}
+	services := []string{}
+	if sv.QTVPort != 0 {
+		services = append(services, fmt.Sprintf("QTV TCP %d", sv.QTVPort))
+	}
+	if sv.QWFWDPort != 0 {
+		services = append(services, fmt.Sprintf("QWFWD UDP %d", sv.QWFWDPort))
+	}
+	if len(services) == 0 {
+		services = []string{m.t("off")}
+	}
+	access := m.t("access.public")
+	if sv.Local {
+		access = m.t("access.local")
+	}
+	slots := sv.Slots
+	if slots == 0 {
+		slots = setup.DefaultSlots
+	}
+	access += fmt.Sprintf(" · %d %s", slots, m.t("access.slots.n"))
+	if !sv.NoRecord {
+		access += " · " + m.t("access.recording")
+	}
+	var locked []string
+	if sv.Password != "" {
+		locked = append(locked, m.t("access.password"))
+	}
+	if sv.Spectators != "" {
+		locked = append(locked, m.t("access.spectator"))
+	}
+	passwords := m.t("access.none")
+	if len(locked) > 0 {
+		passwords = strings.Join(locked, " · ")
+	}
+	return append(rows, [2]string{m.t("tab.access"), access}, [2]string{m.t("access.passwords"), passwords},
+		[2]string{m.t("tab.services"), strings.Join(services, " · ")}, [2]string{m.t("rcon"), sv.Rcon})
+}
+
+// integrationDetails mark what the system integration will do, two per
+// row, offering only what this system supports.
+func (m *Model) integrationDetails() [][2]string {
+	in := m.opts.Integration
+	mark := func(on bool, key string) string {
+		if on {
+			return m.glyphs.Ok + " " + m.t(key)
+		}
+		return m.glyphs.Fail + " " + m.t(key)
+	}
+	can := setup.SupportedIntegration()
+	var marks []string
+	for _, item := range []struct {
+		offered, on bool
+		key         string
+	}{{can.Shortcuts, in.Shortcuts, "i.short"}, {can.Path, in.Path, "i.path"}, {can.QWLinks, in.QWLinks, "i.qw"}, {can.Demos, in.Demos, "i.demo"}} {
+		if item.offered {
+			marks = append(marks, mark(item.on, item.key))
+		}
+	}
+	var rows [][2]string
+	for index := 0; index < len(marks); index += 2 {
+		line := marks[index]
+		if index+1 < len(marks) {
+			line = padRight(line, 30) + marks[index+1]
+		}
+		rows = append(rows, [2]string{"", line})
+	}
+	return rows
 }
 
 // setupPage lists the choices as an accordion: one line per section, and
