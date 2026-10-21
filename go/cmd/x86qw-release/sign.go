@@ -3,14 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/theupdateframework/go-tuf/v2/metadata"
+	"github.com/theupdateframework/go-tuf/v2/metadata/fetcher"
 	"github.com/x86dx2/x86qw/go/internal/trust"
 	"github.com/x86dx2/x86qw/go/internal/tufsign"
 )
@@ -63,16 +62,7 @@ func liveTimestamp(baseURL string) (int64, error) {
 		return catalog.Roles["timestamp"].Version, nil
 	}
 	fmt.Fprintf(os.Stderr, "aviso: produção não autenticou (%v); lendo só a versão do timestamp\n", err)
-	client := &http.Client{Timeout: time.Minute}
-	response, err := client.Get(strings.TrimSuffix(baseURL, "/") + "/metadata/timestamp.json")
-	if err != nil {
-		return 0, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("timestamp de produção: HTTP %d", response.StatusCode)
-	}
-	payload, err := io.ReadAll(io.LimitReader(response.Body, 64*1024))
+	payload, err := fetchLive(baseURL, "metadata/timestamp.json")
 	if err != nil {
 		return 0, err
 	}
@@ -88,6 +78,37 @@ func liveTimestamp(baseURL string) (int64, error) {
 		return 0, fmt.Errorf("timestamp de produção sem assinatura válida: %w", err)
 	}
 	return timestamp.Signed.Version, nil
+}
+
+// fetchLive downloads a file of the public TUF repository the way the
+// client does: Cloudflare challenges other clients from CI runners.
+func fetchLive(baseURL, name string) ([]byte, error) {
+	f := fetcher.NewDefaultFetcher()
+	f.SetHTTPUserAgent(trust.UserAgent)
+	return f.DownloadFile(strings.TrimSuffix(baseURL, "/")+"/"+name, 64*1024, time.Minute)
+}
+
+// runLiveTimestamp: x86qw-release live-timestamp --out FILE
+//
+// Saves the timestamp.json production serves, for the workflows to compare.
+func runLiveTimestamp(args []string) int {
+	flags := flag.NewFlagSet("live-timestamp", flag.ExitOnError)
+	baseURL := flags.String("base-url", trust.DefaultBaseURL, "repositório TUF público")
+	out := flags.String("out", "", "onde gravar")
+	flags.Parse(args)
+	if *out == "" {
+		flags.Usage()
+		return 2
+	}
+	payload, err := fetchLive(*baseURL, "metadata/timestamp.json")
+	if err == nil {
+		err = os.WriteFile(*out, payload, 0o644)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "x86qw-release live-timestamp:", err)
+		return 1
+	}
+	return 0
 }
 
 // signInPlace signs the checkout's catalog as generation version (or the
