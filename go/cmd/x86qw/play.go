@@ -68,13 +68,13 @@ func playParser(r *playRequest, f *playFlags) *cliargs.Parser {
 		f.healthGiven = true
 		return intFlag(value, 1, 300, &f.health)
 	}, "N", "bot health (1 to 300)", "--bot-health")
-	p.Bool(&f.breakOn, "bots drop their backpack on death", "--bot-break-on-death")
+	p.Bool(&f.breakOn, "bots drop their backpack when they die", "--bot-break-on-death")
 	p.Bool(&f.breakOff, "bots keep their backpack", "--no-bot-break-on-death")
 	p.Exclusive("--bot-break-on-death", "--no-bot-break-on-death")
 	p.Choice(&f.names, []string{"default", "x86qw", "one-piece", "personal"}, "bot names", "--bot-names")
-	p.Choice(&f.hook, []string{"smooth", "fast", "classic", "crhook", "off"}, "CTF grappling hook", "--ctf-hook")
+	p.Choice(&f.hook, []string{"smooth", "fast", "classic", "crhook", "off"}, "CTF hook", "--ctf-hook")
 	p.Choice(&f.runes, []string{"on", "off"}, "CTF runes", "--ctf-runes")
-	p.Bool(&f.based, "CTF spawns at the base", "--ctf-based-spawn")
+	p.Bool(&f.based, "CTF players spawn at their base", "--ctf-based-spawn")
 	p.Choice(&f.raceStyle, []string{"solo", "simultaneous", "match"}, "Race style", "--race-style")
 	p.Choice(&f.raceScoring, []string{"win", "scaled", "formula1"}, "Race scoring", "--race-scoring")
 	p.Value(func(value string) error {
