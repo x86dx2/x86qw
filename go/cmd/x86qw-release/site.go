@@ -5,23 +5,23 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/x86dx2/x86qw/go/internal/tufsign"
 )
 
 // noStoreHeaders keeps mutable API documents out of the CDN cache.
 const noStoreHeaders = "\n/api/v1/product.json\n  Cache-Control: no-store, no-cache, must-revalidate\n  CDN-Cache-Control: no-store\n  Access-Control-Allow-Origin: *\n"
 
-// runSite assembles the deployable site from site/public: every file except
-// the TUF history, only the current TUF generation (the timestamp's
-// snapshot and targets, the root and the authorized catalog target), deploy
-// provenance and the no-store headers. It replaces render_release_site.py,
-// assemble_site_release.py and build_deploy_provenance.py.
+// runSite assembles the deployable site from site/public: every file, the
+// current TUF generation alone (timestamp, its snapshot and targets, the
+// root and the catalog target), the provenance documents version and
+// api/v1/health, which exist only in the deploy, and the no-store headers.
 //
 //	x86qw-release site --source site/public --out DIR --commit SHA [--validate-run N --deploy-run N]
 func runSite(args []string) int {
@@ -42,69 +42,6 @@ func runSite(args []string) int {
 	}
 	fmt.Println("site montado em", *out)
 	return 0
-}
-
-func readSigned(path string) (map[string]any, error) {
-	payload, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var document struct {
-		Signed map[string]any `json:"signed"`
-	}
-	if err := json.Unmarshal(payload, &document); err != nil {
-		return nil, err
-	}
-	return document.Signed, nil
-}
-
-func metaVersion(signed map[string]any, name string) (int64, error) {
-	meta, _ := signed["meta"].(map[string]any)
-	entry, _ := meta[name].(map[string]any)
-	version, ok := entry["version"].(float64)
-	if !ok {
-		return 0, fmt.Errorf("metadata sem versão de %s", name)
-	}
-	return int64(version), nil
-}
-
-// currentGeneration lists the trust files the live repository needs.
-func currentGeneration(trust string) ([]string, error) {
-	timestamp, err := readSigned(filepath.Join(trust, "metadata", "timestamp.json"))
-	if err != nil {
-		return nil, err
-	}
-	snapshotVersion, err := metaVersion(timestamp, "snapshot.json")
-	if err != nil {
-		return nil, err
-	}
-	snapshotName := fmt.Sprintf("metadata/%d.snapshot.json", snapshotVersion)
-	snapshot, err := readSigned(filepath.Join(trust, filepath.FromSlash(snapshotName)))
-	if err != nil {
-		return nil, err
-	}
-	targetsVersion, err := metaVersion(snapshot, "targets.json")
-	if err != nil {
-		return nil, err
-	}
-	targetsName := fmt.Sprintf("metadata/%d.targets.json", targetsVersion)
-	targets, err := readSigned(filepath.Join(trust, filepath.FromSlash(targetsName)))
-	if err != nil {
-		return nil, err
-	}
-	entries, _ := targets["targets"].(map[string]any)
-	catalog, _ := entries["catalog/catalog.json"].(map[string]any)
-	hashes, _ := catalog["hashes"].(map[string]any)
-	digest, _ := hashes["sha256"].(string)
-	if len(digest) != 64 {
-		return nil, errors.New("targets sem o hash do catálogo")
-	}
-	files := []string{"metadata/timestamp.json", snapshotName, targetsName, "targets/catalog/" + digest + ".catalog.json"}
-	roots, _ := filepath.Glob(filepath.Join(trust, "metadata", "*.root.json"))
-	for _, root := range roots {
-		files = append(files, "metadata/"+filepath.Base(root))
-	}
-	return files, nil
 }
 
 func copyTree(source, destination string, skip func(string) bool) error {
@@ -153,7 +90,7 @@ func assembleSite(source, out, commit string, validateRun, deployRun int64) erro
 		return fmt.Errorf("destino já existe: %s", out)
 	}
 	trust := filepath.Join(source, "api", "v1", "trust")
-	generation, err := currentGeneration(trust)
+	generation, err := tufsign.ReadGeneration(trust)
 	if err != nil {
 		return err
 	}
@@ -162,7 +99,7 @@ func assembleSite(source, out, commit string, validateRun, deployRun int64) erro
 	}); err != nil {
 		return err
 	}
-	for _, relative := range generation {
+	for _, relative := range generation.Files() {
 		data, err := os.ReadFile(filepath.Join(trust, filepath.FromSlash(relative)))
 		if err != nil {
 			return err

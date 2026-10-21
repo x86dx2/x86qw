@@ -28,6 +28,7 @@ const (
 	CatalogPath       = "site/public/api/v1/catalog.json"
 	ProductPath       = "site/public/api/v1/product.json"
 	TrustRootPath     = "maintenance/trust/root.json"
+	TrustDir          = "site/public/api/v1/trust"
 	TrustMetadataDir  = "site/public/api/v1/trust/metadata"
 	TrustTargetsDir   = "site/public/api/v1/trust/targets"
 	ManifestPath      = "dist/manifest.json"

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/theupdateframework/go-tuf/v2/metadata"
+	"github.com/x86dx2/x86qw/go/internal/tufsign"
 )
 
 func repoPath(t *testing.T, parts ...string) string {
@@ -57,6 +58,12 @@ func TestRootPolicyRejectsDeviations(t *testing.T) {
 // `maintenance/manage.py verify` authenticates with the Python client.
 func TestParityWithCheckedOutProjection(t *testing.T) {
 	projection := repoPath(t, "site", "public", "api", "v1", "trust")
+	// The checkout is checked at its own expiry, not today: CI must not
+	// fail because a week passed. The monitor watches the live lease.
+	generation, err := tufsign.ReadGeneration(projection)
+	if err != nil {
+		t.Fatal(err)
+	}
 	files := map[string][]byte{}
 	for _, dir := range []string{"metadata", "targets"} {
 		base := filepath.Join(projection, dir)
@@ -83,6 +90,7 @@ func TestParityWithCheckedOutProjection(t *testing.T) {
 			metadataPrefix: "https://local.x86qw.invalid/trust/metadata/",
 			targetsPrefix:  "https://local.x86qw.invalid/trust/targets/",
 		},
+		RefTime: generation.Expires.Add(-time.Second),
 	})
 	if err != nil {
 		t.Fatalf("projeção do checkout não autenticou: %v", err)
@@ -120,6 +128,18 @@ func TestRejectsExpiredTimestamp(t *testing.T) {
 	}
 	if !IsTrustError(err) {
 		t.Fatalf("erro deveria ser de trust: %T", err)
+	}
+}
+
+// RefTime is the clock x86qw-content verify uses for a checked-out chain.
+func TestRefTimeReplacesTheClock(t *testing.T) {
+	repo := newTestRepo(t)
+	expired := time.Now().Add(-time.Hour)
+	repo.publish(publishSpec{version: 3, timestampExpires: expired})
+	options := repo.options("")
+	options.RefTime = expired.Add(-time.Second)
+	if _, err := LoadCatalog(options); err != nil {
+		t.Fatalf("antes de vencer o timestamp vale: %v", err)
 	}
 }
 

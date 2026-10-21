@@ -28,9 +28,9 @@ jobs:
         with:
           go-version-file: go/go.mod
           cache-dependency-path: go/go.sum
-      - name: Check authenticated public lease
+      - name: Check the public lease and that production serves main
         working-directory: go
-        run: go run ./cmd/x86qw-release monitor --warning-hours 72
+        run: go run ./cmd/x86qw-release monitor --warning-hours 72 --checkout --checkout-time "$(git log -1 --format=%cI)"
       - name: Fail closed if the monitor itself went stale
         # A manual run is the explicit recovery path after a cadence incident:
         # the authenticated lease check above must pass, then this run becomes
@@ -75,12 +75,12 @@ jobs:
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
             const body = [
               marker,
-              'The scheduled public TUF monitor failed, found a lease inside the 72-hour warning window, or detected a gap since the last successful run.',
+              'The scheduled public TUF monitor failed: a lease is inside its warning window (timestamp 72 hours, snapshot and targets 14 days, root 60 days), production has not served main for over an hour, or the monitor itself stopped running.',
               '',
               `Workflow run: ${runUrl}`,
               `Commit: ${context.sha}`,
               '',
-              'Inspect the authenticated metadata and follow the TUF renewal/recovery runbook. Do not renew or publish from this alert automatically.',
+              'Inspect the run log and follow docs/runbooks/release.md. Do not renew or publish from this alert automatically.',
             ].join('\n');
             const { data: openIssues } = await github.rest.issues.listForRepo({
               owner,

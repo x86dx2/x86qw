@@ -1,21 +1,19 @@
 package content
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/theupdateframework/go-tuf/v2/metadata"
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 	"github.com/x86dx2/x86qw/go/internal/trust"
+	"github.com/x86dx2/x86qw/go/internal/tufsign"
 )
 
 // Local TUF authentication of the checked-out catalog
@@ -69,8 +67,10 @@ func jsonFiles(dir string) []string {
 	return files
 }
 
-// VerifyLocalTUFCatalog mirrors verify_local_tuf_catalog and returns the
-// status phrase printed by verify.
+// VerifyLocalTUFCatalog authenticates the checked-out catalog against the
+// checked-out TUF projection and returns the status phrase verify prints.
+// Expiry is checked one second before the chain's earliest expiry, so the
+// check does not depend on the date; the monitor watches the live lease.
 func (p *Project) VerifyLocalTUFCatalog() (string, error) {
 	rootBytes, err := os.ReadFile(p.Path(TrustRootPath))
 	if err == nil {
@@ -94,22 +94,32 @@ func (p *Project) VerifyLocalTUFCatalog() (string, error) {
 		return "", errors.New("projeção pública de TUF incompleta")
 	}
 	names := map[string]bool{}
-	snapshot, targets := false, false
 	for _, file := range metadataFiles {
-		name := filepath.Base(file)
-		if !isSymlink(file) {
-			names[name] = true
+		if isSymlink(file) {
+			return "", fmt.Errorf("metadata TUF não pode ser link: %s", filepath.Base(file))
 		}
-		snapshot = snapshot || strings.HasSuffix(name, ".snapshot.json")
-		targets = targets || strings.HasSuffix(name, ".targets.json")
+		names[filepath.Base(file)] = true
 	}
-	if !names["timestamp.json"] || !names["1.root.json"] || !snapshot || !targets {
+	if !names["timestamp.json"] || !names["1.root.json"] {
 		return "", errors.New("projeção pública de TUF não contém root/timestamp/snapshot/targets")
+	}
+	projection := p.Path(TrustDir)
+	generation, err := tufsign.ReadGeneration(projection)
+	if err != nil {
+		return "", fmt.Errorf("projeção pública de TUF incompleta: %v", err)
+	}
+	stale, err := tufsign.Stale(projection)
+	if err != nil {
+		return "", err
+	}
+	if len(stale) > 0 {
+		return "", fmt.Errorf("a projeção TUF guarda gerações antigas (%s); rode x86qw-release prune", strings.Join(stale, ", "))
 	}
 	authenticated, err := trust.LoadCatalog(trust.Options{
 		BaseURL: "https://local.x86qw.invalid/trust/",
 		Root:    rootBytes,
-		Fetcher: localTUFFetcher{root: p.Path("site/public/api/v1/trust")},
+		Fetcher: localTUFFetcher{root: projection},
+		RefTime: generation.Expires.Add(-time.Second),
 	})
 	if err != nil {
 		return "", err
@@ -125,35 +135,12 @@ func (p *Project) VerifyLocalTUFCatalog() (string, error) {
 	if remote, err = pyjson.Decode(authenticated.Raw, pyjson.LastWins); err != nil {
 		return "", err
 	}
-	if pyjson.Eq(local, remote) {
-		return "autenticada localmente", nil
+	if !pyjson.Eq(local, remote) {
+		return "", errors.New("catálogo local diverge do target TUF; assine-o com x86qw-release sign")
 	}
-	// The checkout may preserve a historical catalog while the deployment
-	// target is newer; accept it only when a signed targets role pins it.
-	root, err := metadata.Root().FromBytes(rootBytes)
-	if err != nil {
-		return "", errors.New("catálogo fonte não pôde ser autenticado contra targets históricos")
+	status := fmt.Sprintf("geração %d autenticada localmente, vale até %s", generation.Timestamp, generation.Expires.UTC().Format(time.DateOnly))
+	if !time.Now().Before(generation.Expires) {
+		status += " (vencida: renove)"
 	}
-	digest := sha256.Sum256(localBytes)
-	localDigest := hex.EncodeToString(digest[:])
-	candidates, _ := filepath.Glob(filepath.Join(metadataDir, "*.targets.json"))
-	sort.Strings(candidates)
-	for _, candidate := range candidates {
-		raw, err := os.ReadFile(candidate)
-		if err != nil {
-			return "", errors.New("catálogo fonte não pôde ser autenticado contra targets históricos")
-		}
-		signed, err := metadata.Targets().FromBytes(raw)
-		if err != nil {
-			return "", errors.New("catálogo fonte não pôde ser autenticado contra targets históricos")
-		}
-		if root.VerifyDelegate(metadata.TARGETS, signed) != nil {
-			continue
-		}
-		target, ok := signed.Signed.Targets[trust.CatalogTarget]
-		if ok && target.Length == int64(len(localBytes)) && hex.EncodeToString(target.Hashes["sha256"]) == localDigest {
-			return "deployment autenticado; catálogo fonte autenticado por targets histórico " + filepath.Base(candidate), nil
-		}
-	}
-	return "", errors.New("catálogo local diverge do target TUF e não possui targets fonte autenticados")
+	return status, nil
 }

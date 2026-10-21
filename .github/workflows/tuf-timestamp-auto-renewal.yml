@@ -3,6 +3,8 @@ name: Renew public TUF timestamp
 # The online timestamp key re-signs timestamp.json weekly with a 30-day lease,
 # so the public chain always has more than three weeks of margin. Snapshot and
 # targets stay offline-signed; the monitor warns 14 days before they expire.
+# It runs unattended: the release environment has no reviewer, and a run that
+# fails opens an issue.
 on:
   schedule:
     - cron: "41 6 * * 1"
@@ -10,9 +12,11 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
+# Shared with the site deploy: one of them deploys at a time.
 concurrency:
-  group: x86qw-tuf-timestamp-auto-renewal
+  group: x86qw-site-deploy
   cancel-in-progress: false
 
 jobs:
@@ -82,7 +86,7 @@ jobs:
       - name: Verify the public chain and the published timestamp
         run: |
           set -euo pipefail
-          "$RUNNER_TEMP/x86qw-release" monitor --warning-hours 72
+          (cd go && "$RUNNER_TEMP/x86qw-release" monitor --warning-hours 72)
           curl -fsS --proto '=https' -H 'Cache-Control: no-cache' \
             "https://qw.x86.com.br/api/v1/trust/metadata/timestamp.json?confirm=${GITHUB_RUN_ID}" \
             -o "$RUNNER_TEMP/published.json"
@@ -112,3 +116,22 @@ jobs:
             -f merge_method=squash \
             -f commit_title="chore(trust): record published TUF timestamp v${version} (#${number})"
           gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${branch}"
+      - name: Open an issue when the renewal fails
+        if: failure()
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title: 'TUF timestamp renewal failed',
+              labels: ['P0', 'owner-only'],
+              body: [
+                `The weekly timestamp renewal failed: ${runUrl}`,
+                '',
+                'If it refused because production diverges from main, deploy main with the "Deploy site" workflow and run the renewal again.',
+                'The live timestamp keeps its current lease until then; `x86qw-release monitor` shows how long.',
+              ].join('\n'),
+            });
