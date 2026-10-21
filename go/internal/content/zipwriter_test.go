@@ -22,7 +22,7 @@ func publishedCache(t *testing.T) []string {
 	}
 	paths, _ := filepath.Glob(filepath.Join(dir, "*.zip"))
 	if len(paths) == 0 {
-		t.Skip("cache de pacotes publicados indisponível")
+		t.Skip("published package cache unavailable")
 	}
 	return paths
 }
@@ -55,14 +55,14 @@ func TestZipLayoutRebuildsPublishedPackages(t *testing.T) {
 			entries = append(entries, ZipEntry{Name: file.Name, Data: data})
 		}
 		if entries[len(entries)-1].Name != "_x86qw/component.json" {
-			t.Errorf("%s: component.json não é o último membro", filepath.Base(path))
+			t.Errorf("%s: component.json is not the last member", filepath.Base(path))
 		}
 		rebuilt, err := BuildZip(entries)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(rebuilt, published) {
-			t.Errorf("%s: layout ZIP diverge do publicado", filepath.Base(path))
+			t.Errorf("%s: ZIP layout differs from the published one", filepath.Base(path))
 		}
 	}
 }

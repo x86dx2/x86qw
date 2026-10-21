@@ -40,12 +40,12 @@ var (
 // What is left is a diff to review and merge; the merge deploys the site.
 func runPrepare(args []string) int {
 	flags := flag.NewFlagSet("prepare", flag.ExitOnError)
-	version := flags.String("version", "", "versão da CLI já publicada em x86qw-cli-VERSÃO")
-	assets := flags.String("assets", "", "binários já baixados (padrão: baixa da release)")
-	keys := flags.String("keys", "", "diretório das chaves offline (padrão: "+keysDir+")")
+	version := flags.String("version", "", "CLI version already published as x86qw-cli-VERSION")
+	assets := flags.String("assets", "", "binaries already downloaded (default: download from the release)")
+	keys := flags.String("keys", "", "offline keys folder (default: "+keysDir+")")
 	flags.Parse(args)
 	if _, err := semver.Parse(*version); err != nil {
-		fmt.Fprintln(os.Stderr, "x86qw-release prepare: --version: uma versão SemVer, como 2.4.0")
+		fmt.Fprintln(os.Stderr, "x86qw-release prepare: --version: a SemVer version, such as 2.4.0")
 		return 2
 	}
 	repo, err := repoRoot()
@@ -106,7 +106,7 @@ func prepare(repo, version, assets, keys string) error {
 	if err := project.Verify(os.Stdout, content.VerifyOptions{SkipGit: true}); err != nil {
 		return err
 	}
-	fmt.Printf("CLI %s pronta no checkout com a geração TUF %d: revise o diff e abra o PR.\n", version, generation)
+	fmt.Printf("CLI %s ready in the checkout with TUF generation %d: review the diff and open the PR.\n", version, generation)
 	return nil
 }
 
@@ -129,7 +129,7 @@ func download(version, dir string) error {
 		}
 		if response.StatusCode != http.StatusOK {
 			response.Body.Close()
-			return fmt.Errorf("%s: HTTP %d; a release x86qw-cli-%s foi publicada?", name, response.StatusCode, version)
+			return fmt.Errorf("%s: HTTP %d; was release x86qw-cli-%s published?", name, response.StatusCode, version)
 		}
 		file, err := os.Create(filepath.Join(dir, name))
 		if err == nil {
@@ -165,7 +165,7 @@ func checkSums(version, dir string) (*pins, error) {
 	for _, target := range Targets {
 		name := assetName(version, target)
 		if listed[name] != p.SHA256[target] {
-			return nil, fmt.Errorf("%s não confere com o SHA256SUMS da release", name)
+			return nil, fmt.Errorf("%s does not match the release's SHA256SUMS", name)
 		}
 	}
 	return p, nil

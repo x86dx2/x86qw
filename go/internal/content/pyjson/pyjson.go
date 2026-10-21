@@ -154,7 +154,7 @@ func (e *DuplicateKeyError) Error() string { return "duplicate catalog field: " 
 // Decode parses one JSON document like json.loads(text).
 func Decode(data []byte, mode DuplicateMode) (any, error) {
 	if !utf8.Valid(data) {
-		return nil, errors.New("JSON não é UTF-8 válido")
+		return nil, errors.New("JSON is not valid UTF-8")
 	}
 	if bytes.HasPrefix(data, []byte("\xef\xbb\xbf")) {
 		return nil, errors.New("Unexpected UTF-8 BOM (decode using utf-8-sig)")
@@ -523,7 +523,7 @@ func numberText(n Number) (string, error) {
 	if n.IsInt() {
 		value, ok := new(big.Int).SetString(string(n), 10)
 		if !ok {
-			return "", fmt.Errorf("número JSON inválido: %s", n)
+			return "", fmt.Errorf("invalid JSON number: %s", n)
 		}
 		return value.String(), nil
 	}

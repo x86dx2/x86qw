@@ -46,39 +46,39 @@ type LFSPointer struct {
 // ParseLFSPointer returns the object id and size of a canonical pointer.
 func ParseLFSPointer(payload []byte) (string, int64, error) {
 	if len(payload) > maxPointerBytes {
-		return "", 0, errors.New("ponteiro LFS excede o limite estrutural")
+		return "", 0, errors.New("LFS pointer exceeds the structural limit")
 	}
 	for _, b := range payload {
 		if b > 0x7f {
-			return "", 0, errors.New("ponteiro LFS não é ASCII")
+			return "", 0, errors.New("LFS pointer is not ASCII")
 		}
 	}
 	lines := strings.Split(strings.TrimSuffix(string(payload), "\n"), "\n")
 	if len(lines) != 3 || lines[0] != lfsPointerVersion || strings.Contains(string(payload), "\r") {
-		return "", 0, errors.New("ponteiro LFS não canônico")
+		return "", 0, errors.New("non-canonical LFS pointer")
 	}
 	fields := map[string]string{}
 	for _, line := range lines[1:] {
 		name, value, found := strings.Cut(line, " ")
 		if _, seen := fields[name]; !found || seen || value == "" {
-			return "", 0, errors.New("ponteiro LFS malformado")
+			return "", 0, errors.New("malformed LFS pointer")
 		}
 		fields[name] = value
 	}
 	oid := fields["oid"]
 	if !strings.HasPrefix(oid, "sha256:") || !hex64.MatchString(oid[7:]) {
-		return "", 0, errors.New("ponteiro LFS sem SHA-256 canônico")
+		return "", 0, errors.New("LFS pointer without a canonical SHA-256")
 	}
 	sizeText := fields["size"]
 	size, err := strconv.ParseInt(sizeText, 10, 64)
 	if err != nil || sizeText == "" || strings.Trim(sizeText, "0123456789") != "" || (len(sizeText) > 1 && sizeText[0] == '0') {
-		return "", 0, errors.New("ponteiro LFS sem tamanho decimal canônico")
+		return "", 0, errors.New("LFS pointer without a canonical decimal size")
 	}
 	if size > maxLFSObjectBytes {
-		return "", 0, errors.New("objeto LFS excede o limite de download")
+		return "", 0, errors.New("LFS object exceeds the download limit")
 	}
 	if len(fields) != 2 {
-		return "", 0, errors.New("ponteiro LFS contém campos inesperados")
+		return "", 0, errors.New("LFS pointer has unexpected fields")
 	}
 	return oid[7:], size, nil
 }
@@ -87,7 +87,7 @@ func ParseLFSPointer(payload []byte) (string, int64, error) {
 func LFSPointers(root string) ([]LFSPointer, error) {
 	distribution := filepath.Join(root, "dist")
 	if info, err := os.Lstat(distribution); err != nil || !info.IsDir() {
-		return nil, errors.New("a árvore dist não existe ou é um symlink")
+		return nil, errors.New("the dist tree does not exist or is a symlink")
 	}
 	var pointers []LFSPointer
 	err := filepath.WalkDir(distribution, func(path string, entry os.DirEntry, err error) error {
@@ -121,10 +121,10 @@ func LFSPointers(root string) ([]LFSPointer, error) {
 // LFSMediaURL is the immutable GitHub media URL of one path at commit.
 func LFSMediaURL(repository, commit, relative string) (string, error) {
 	if !repositoryID.MatchString(repository) {
-		return "", errors.New("repositório GitHub inválido")
+		return "", errors.New("invalid GitHub repository")
 	}
 	if !commitID.MatchString(commit) {
-		return "", errors.New("commit candidato inválido")
+		return "", errors.New("invalid candidate commit")
 	}
 	return "https://media.githubusercontent.com/media/" + repository + "/" + commit + "/" + quotePath(relative), nil
 }
@@ -132,7 +132,7 @@ func LFSMediaURL(repository, commit, relative string) (string, error) {
 func verifyLFSObject(path string, size int64, oid string) error {
 	info, err := os.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() {
-		return fmt.Errorf("objeto LFS ausente ou não regular: %s", path)
+		return fmt.Errorf("LFS object missing or not regular: %s", path)
 	}
 	file, err := os.Open(path)
 	if err != nil {
@@ -144,7 +144,7 @@ func verifyLFSObject(path string, size int64, oid string) error {
 		return err
 	}
 	if info.Size() != size || hex.EncodeToString(hash.Sum(nil)) != oid {
-		return fmt.Errorf("objeto LFS divergente: %s", path)
+		return fmt.Errorf("LFS object differs: %s", path)
 	}
 	return nil
 }
@@ -167,7 +167,7 @@ func MaterializeLFS(ctx context.Context, root, repository, commit string, fetch 
 		return 0, err
 	}
 	if len(pointers) == 0 {
-		return 0, errors.New("nenhum ponteiro LFS foi encontrado em dist")
+		return 0, errors.New("no LFS pointer was found in dist")
 	}
 	created := 0
 	for _, pointer := range pointers {

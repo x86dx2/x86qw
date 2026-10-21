@@ -25,7 +25,7 @@ func TestCheckoutKeepsOnlyItsGeneration(t *testing.T) {
 		t.Fatal(err)
 	}
 	if g.Timestamp < g.Snapshot || g.Snapshot < g.Targets || len(g.Catalog) != 64 || g.Expires.IsZero() {
-		t.Fatalf("geração inconsistente: %+v", g)
+		t.Fatalf("inconsistent generation: %+v", g)
 	}
 	for _, file := range g.Files() {
 		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(file))); err != nil {
@@ -33,7 +33,7 @@ func TestCheckoutKeepsOnlyItsGeneration(t *testing.T) {
 		}
 	}
 	if stale, err := Stale(dir); err != nil || len(stale) > 0 {
-		t.Fatalf("a projeção guarda gerações antigas: %v %v", stale, err)
+		t.Fatalf("the projection keeps old generations: %v %v", stale, err)
 	}
 }
 
@@ -63,9 +63,9 @@ func TestPruneDropsOnlyOldGenerations(t *testing.T) {
 	slices.Sort(removed)
 	slices.Sort(old)
 	if err != nil || !slices.Equal(removed, old) {
-		t.Fatalf("removidos %v, esperados %v: %v", removed, old, err)
+		t.Fatalf("removed %v, expected %v: %v", removed, old, err)
 	}
 	if _, err := ReadGeneration(dir); err != nil {
-		t.Fatalf("a geração atual não sobreviveu: %v", err)
+		t.Fatalf("the current generation did not survive: %v", err)
 	}
 }

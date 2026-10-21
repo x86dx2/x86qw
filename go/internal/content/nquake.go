@@ -57,27 +57,27 @@ func LoadNQuakeInventory(path string) (*NQuakeInventory, error) {
 		return nil, err
 	}
 	invalid := func(detail string) (*NQuakeInventory, error) {
-		return nil, fmt.Errorf("inventario nQuake invalido (%s): %s", detail, path)
+		return nil, fmt.Errorf("invalid nQuake inventory (%s): %s", detail, path)
 	}
 	if !sameKeys(document.Keys(), "format", "project", "repository", "revision", "unused", "files") ||
 		!pyjson.EqInt(document.Value("format"), 1) || !pyjson.Eq(document.Value("project"), "x86qw") {
-		return invalid("identidade")
+		return invalid("identity")
 	}
 	inventory := &NQuakeInventory{Files: map[string]NQuakeFile{}}
 	inventory.Repository, _ = document.Value("repository").(string)
 	inventory.Revision, _ = document.Value("revision").(string)
 	if err := persistentURL(inventory.Repository, "nQuake repository"); err != nil || !hex40Strict.MatchString(inventory.Revision) {
-		return invalid("repository ou revision")
+		return invalid("repository or revision")
 	}
 	seen := map[string]bool{}
 	for _, rule := range objects(document.Value("unused")) {
 		path, pathOK := rule.Value("path").(string)
 		reason, reasonOK := rule.Value("reason").(string)
 		if !sameKeys(rule.Keys(), "path", "reason") || !pathOK || !reasonOK || strings.TrimSpace(reason) == "" || seen[path] {
-			return invalid("regra unused")
+			return invalid("unused rule")
 		}
 		if _, err := ValidatePortableRelativePath(path, "nQuake unused path"); err != nil {
-			return invalid("regra unused " + path)
+			return invalid("unused rule " + path)
 		}
 		seen[path] = true
 		inventory.Unused = append(inventory.Unused, NQuakeRule{path, reason})
@@ -89,13 +89,13 @@ func LoadNQuakeInventory(path string) (*NQuakeInventory, error) {
 	for _, path := range files.Keys() {
 		entry, ok := files.Value(path).(*Object)
 		if !ok || !sameKeys(entry.Keys(), "size", "sha256", "git_sha1") {
-			return invalid("arquivo " + path)
+			return invalid("file " + path)
 		}
 		digest, _ := entry.Value("sha256").(string)
 		blob, _ := entry.Value("git_sha1").(string)
 		if !pyjson.IsExactInt(entry.Value("size")) || int64Of(entry.Value("size")) < 0 ||
 			!sha256Pattern.MatchString(digest) || !hex40Strict.MatchString(blob) {
-			return invalid("arquivo " + path)
+			return invalid("file " + path)
 		}
 		inventory.Files[path] = NQuakeFile{int64Of(entry.Value("size")), digest, blob}
 	}
@@ -144,16 +144,16 @@ func ValidateNQuakeInventory(inventory *NQuakeInventory, catalog *Object) error 
 		}
 		switch {
 		case owner != "" && rule != nil:
-			return fmt.Errorf("arquivo nQuake consumido por %s e declarado nao usado: %s", owner, path)
+			return fmt.Errorf("nQuake file consumed by %s and declared unused: %s", owner, path)
 		case owner == "" && rule == nil:
-			return fmt.Errorf("arquivo nQuake sem componente nem motivo em %s: %s", NQuakeInventoryPath, path)
+			return fmt.Errorf("nQuake file with neither a component nor a reason in %s: %s", NQuakeInventoryPath, path)
 		case rule != nil:
 			used[rule.Path] = true
 		}
 	}
 	for _, rule := range inventory.Unused {
 		if !used[rule.Path] {
-			return fmt.Errorf("regra nao usada do nQuake nao corresponde a nenhum arquivo: %s", rule.Path)
+			return fmt.Errorf("unused nQuake rule matches no file: %s", rule.Path)
 		}
 	}
 	return nil
@@ -247,16 +247,16 @@ func (p *Project) fetchNQuakeUpstream(revision string, tree []GitTreeEntry) (*NQ
 	url := "https://raw.githubusercontent.com/" + nquakeRepository + "/" + revision + "/manifest.json"
 	response, err := p.Metadata(http.MethodGet, url, nquakeManifestBytes, 60*time.Second, nil)
 	if err != nil {
-		return nil, fmt.Errorf("manifest.json do nQuake indisponivel: %v", err)
+		return nil, fmt.Errorf("the nQuake manifest.json is unavailable: %v", err)
 	}
 	value, err := pyjson.Decode(response.Data, pyjson.RejectDuplicates)
 	document, ok := value.(*Object)
 	if err != nil || !ok || !pyjson.EqInt(document.Value("schema"), 1) {
-		return nil, fmt.Errorf("manifest.json do nQuake invalido em %s", revision[:12])
+		return nil, fmt.Errorf("invalid nQuake manifest.json at %s", revision[:12])
 	}
 	groups, ok := document.Value("packages").(*Object)
 	if !ok {
-		return nil, fmt.Errorf("manifest.json do nQuake sem pacotes em %s", revision[:12])
+		return nil, fmt.Errorf("the nQuake manifest.json has no packages at %s", revision[:12])
 	}
 	upstream := &NQuakeUpstream{Revision: revision, Files: map[string]NQuakeFile{}}
 	packages := map[string]bool{}
@@ -264,17 +264,17 @@ func (p *Project) fetchNQuakeUpstream(revision string, tree []GitTreeEntry) (*NQ
 		packages[name] = true
 		group, ok := groups.Value(name).(*Object)
 		if !ok {
-			return nil, fmt.Errorf("pacote invalido no manifest.json do nQuake: %s", name)
+			return nil, fmt.Errorf("invalid package in the nQuake manifest.json: %s", name)
 		}
 		for _, entry := range objects(group.Value("files")) {
 			relative, _ := entry.Value("path").(string)
 			path, err := ValidatePortableRelativePath(name+"/"+relative, "nQuake manifest path")
 			digest, _ := entry.Value("sha256").(string)
 			if err != nil || !pyjson.IsExactInt(entry.Value("size")) || int64Of(entry.Value("size")) < 0 || !sha256Pattern.MatchString(digest) {
-				return nil, fmt.Errorf("arquivo invalido no manifest.json do nQuake: %s/%s", name, relative)
+				return nil, fmt.Errorf("invalid file in the nQuake manifest.json: %s/%s", name, relative)
 			}
 			if _, seen := upstream.Files[path]; seen {
-				return nil, fmt.Errorf("arquivo repetido no manifest.json do nQuake: %s", path)
+				return nil, fmt.Errorf("repeated file in the nQuake manifest.json: %s", path)
 			}
 			upstream.Files[path] = NQuakeFile{Size: int64Of(entry.Value("size")), SHA256: digest}
 		}
@@ -285,17 +285,17 @@ func (p *Project) fetchNQuakeUpstream(revision string, tree []GitTreeEntry) (*NQ
 		file, listed := upstream.Files[entry.Path]
 		switch {
 		case listed && file.Size != entry.Size:
-			return nil, fmt.Errorf("manifest.json do nQuake diverge da arvore Git: %s", entry.Path)
+			return nil, fmt.Errorf("the nQuake manifest.json differs from the Git tree: %s", entry.Path)
 		case listed:
 			file.GitSHA1 = entry.SHA1
 			upstream.Files[entry.Path] = file
 		case !nquakeRepositoryMetadata(entry.Path, packages):
-			return nil, fmt.Errorf("manifest.json do nQuake nao lista um arquivo da arvore Git: %s", entry.Path)
+			return nil, fmt.Errorf("the nQuake manifest.json does not list a file of the Git tree: %s", entry.Path)
 		}
 	}
 	for path := range upstream.Files {
 		if !inTree[path] {
-			return nil, fmt.Errorf("manifest.json do nQuake lista um arquivo ausente da arvore Git: %s", path)
+			return nil, fmt.Errorf("the nQuake manifest.json lists a file missing from the Git tree: %s", path)
 		}
 	}
 	return upstream, nil
@@ -311,7 +311,7 @@ func sortedRuleChanges(changes map[string][3][]string) []string {
 	sort.Strings(rules)
 	for _, rule := range rules {
 		group := changes[rule]
-		lines = append(lines, fmt.Sprintf("%s: %d novo(s), %d alterado(s), %d removido(s)", rule, len(group[0]), len(group[1]), len(group[2])))
+		lines = append(lines, fmt.Sprintf("%s: %d new, %d changed, %d removed", rule, len(group[0]), len(group[1]), len(group[2])))
 	}
 	return lines
 }
@@ -354,10 +354,10 @@ func (p *Project) nquakeReport() (*NQuakeReport, *NQuakeInventory, error) {
 func (r *NQuakeReport) Lines() []string {
 	var lines []string
 	for _, line := range sortedRuleChanges(r.Unused) {
-		lines = append(lines, "[NQUAKE] nao usado pela distro, "+line)
+		lines = append(lines, "[NQUAKE] unused by the distribution, "+line)
 	}
 	for _, path := range r.Unclassified {
-		lines = append(lines, fmt.Sprintf("[CLASSIFICAR] %s: arquivo do nQuake sem componente nem motivo em %s", path, NQuakeInventoryPath))
+		lines = append(lines, fmt.Sprintf("[CLASSIFY] %s: nQuake file with neither a component nor a reason in %s", path, NQuakeInventoryPath))
 	}
 	return lines
 }

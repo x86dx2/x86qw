@@ -23,10 +23,10 @@ func TestCatalogRoundTripIsByteIdentical(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(out, raw) {
-		t.Fatal("round-trip do catálogo alterou bytes")
+		t.Fatal("the catalog round trip changed bytes")
 	}
 	stamped, err := withCLIPackages(raw, p.Version, p, "2030-01-02T03:04:05Z")
 	if err != nil || !bytes.Contains(stamped, []byte(`"generated_at": "2030-01-02T03:04:05Z"`)) {
-		t.Fatalf("generated_at não foi atualizado: %v", err)
+		t.Fatalf("generated_at was not updated: %v", err)
 	}
 }

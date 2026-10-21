@@ -59,12 +59,12 @@ func LoadInventory() (*Inventory, error) {
 func ParseInventory(raw []byte) (*Inventory, error) {
 	var inventory Inventory
 	if err := json.Unmarshal(raw, &inventory); err != nil {
-		return nil, fmt.Errorf("inventário de componentes inválido: %w", err)
+		return nil, fmt.Errorf("invalid component inventory: %w", err)
 	}
 	inventory.byID = map[string]Component{}
 	for _, component := range inventory.Components {
 		if _, dup := inventory.byID[component.ID]; dup {
-			return nil, fmt.Errorf("componente duplicado: %s", component.ID)
+			return nil, fmt.Errorf("duplicate component: %s", component.ID)
 		}
 		inventory.byID[component.ID] = component
 	}
@@ -101,13 +101,13 @@ func (i *Inventory) Resolve(selected []string) ([]string, error) {
 	add = func(id string) error {
 		component, ok := i.byID[id]
 		if !ok {
-			return fmt.Errorf("componente desconhecido: %s", id)
+			return fmt.Errorf("unknown component: %s", id)
 		}
 		if done[id] {
 			return nil
 		}
 		if visiting[id] {
-			return fmt.Errorf("dependência circular em %s", id)
+			return fmt.Errorf("circular dependency at %s", id)
 		}
 		visiting[id] = true
 		for _, dependency := range component.Requires {
@@ -138,7 +138,7 @@ func (i *Inventory) Desired(profile string, requested []string) ([]string, error
 	}
 	selection, ok := i.Profiles[profile]
 	if !ok {
-		return nil, fmt.Errorf("perfil desconhecido: %s", profile)
+		return nil, fmt.Errorf("unknown profile: %s", profile)
 	}
 	return i.Resolve(selection)
 }

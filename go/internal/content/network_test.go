@@ -292,18 +292,18 @@ func TestCheckAndUpdateAgainstFakeUpstreams(t *testing.T) {
 	if len(unmirrored) > 0 {
 		expectedCode = 2
 	}
-	summary := fmt.Sprintf("\n0 componente(s) e %d arquivo(s) envolvidos em mudancas.", len(unmirrored))
+	summary := fmt.Sprintf("\n0 component(s) and %d file(s) involved in changes.", len(unmirrored))
 	if code != expectedCode || !strings.Contains(out.String(), summary) {
-		t.Fatalf("check com upstreams atuais inesperado (exit %d):\n%s", code, out.String())
+		t.Fatalf("unexpected check with current upstreams (exit %d):\n%s", code, out.String())
 	}
 	for _, path := range unmirrored {
-		if !strings.Contains(out.String(), "[ATUALIZAR] "+path+" (novo)") {
-			t.Fatalf("artefato de release sem espelho não reportado: %s", path)
+		if !strings.Contains(out.String(), "[UPDATE] "+path+" (new)") {
+			t.Fatalf("release artifact without a mirror not reported: %s", path)
 		}
 	}
 	for _, request := range web.requests {
 		if strings.HasPrefix(request, "PUT") || strings.HasPrefix(request, "POST") || strings.HasPrefix(request, "PATCH") {
-			t.Fatalf("check fez uma escrita remota: %s", request)
+			t.Fatalf("check made a remote write: %s", request)
 		}
 	}
 
@@ -313,12 +313,12 @@ func TestCheckAndUpdateAgainstFakeUpstreams(t *testing.T) {
 	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true}); err != nil {
 		t.Fatalf("update --dry-run: %v\n%s", err, out.String())
 	}
-	expected := "[OK] O dist e os inventarios ja representam os upstreams atuais."
+	expected := "[OK] dist and the inventories already match the current upstreams."
 	if len(unmirrored) > 0 {
-		expected = fmt.Sprintf("[INFO] %d alteracao(oes) de arquivo.", len(unmirrored))
+		expected = fmt.Sprintf("[INFO] %d file change(s).", len(unmirrored))
 	}
 	if !strings.Contains(out.String(), expected) {
-		t.Fatalf("update --dry-run inesperado:\n%s", out.String())
+		t.Fatalf("unexpected update --dry-run:\n%s", out.String())
 	}
 
 	// A newer nightly is discovered but never trusted without a review.
@@ -331,22 +331,22 @@ func TestCheckAndUpdateAgainstFakeUpstreams(t *testing.T) {
 		t.Fatal(err)
 	}
 	if code != 2 {
-		t.Fatalf("check deveria sair 2 com nightly novo: %d", code)
+		t.Fatalf("check should exit 2 with a new nightly: %d", code)
 	}
 	report, err := pyjson.Decode(out.Bytes(), pyjson.RejectDuplicates)
 	if err != nil {
-		t.Fatalf("check --json inválido: %v\n%s", err, out.String())
+		t.Fatalf("invalid check --json: %v\n%s", err, out.String())
 	}
 	review, _ := pyjson.StrList(pyjson.Get(report, "review_required"))
 	if len(review) != 3 || !strings.Contains(review[0], "/nightly/20990101-000000_abcdef0/") {
-		t.Fatalf("review_required inesperado: %v", review)
+		t.Fatalf("unexpected review_required: %v", review)
 	}
 	update = NewProject(root)
 	update.HTTP = newer.client()
 	out.Reset()
 	err = update.Update(&out, UpdateOptions{Workers: 4, DryRun: true})
-	if err == nil || !strings.Contains(err.Error(), "exige(m) tamanho e SHA-256 revisados") {
-		t.Fatalf("update deveria recusar candidato sem pin: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "need a reviewed size and SHA-256") {
+		t.Fatalf("update should refuse a candidate without a pin: %v", err)
 	}
 }
 
@@ -369,8 +369,8 @@ func publishFixture(t *testing.T, payload []byte, withGitLab bool) (*Project, st
 		"platform", "any", "architecture", "any", "filename", filename, "size", intNumber(len(payload)),
 		"sha256", hex.EncodeToString(digest[:]), "origin_url", mirror, "license", "upstream-distfiles-terms",
 		"license_url", "https://github.com/nQuake/distfiles", "source_urls", []any{"https://github.com/nQuake/distfiles"},
-		"redistribution_reviewed", true, "urls", urls, "mirror_title", "x86QW Content · teste",
-		"mirror_notes", "Pacotes de teste.", "mirror_latest", false)
+		"redistribution_reviewed", true, "urls", urls, "mirror_title", "x86QW Content · test",
+		"mirror_notes", "Test packages.", "mirror_latest", false)
 	catalog := object("format", pyjson.Number("1"), "project", "x86qw", "generated_at", "2026-01-01T00:00:00Z", "packages", []any{pkg})
 	if err := WriteJSON(filepath.Join(root, CatalogPath), catalog); err != nil {
 		t.Fatal(err)
@@ -406,7 +406,7 @@ func TestPublishAgainstFakeMirrors(t *testing.T) {
 			if uploaded {
 				assets = append(assets, object("name", filename, "size", intNumber(len(payload)), "digest", "sha256:"+hex.EncodeToString(digest[:])))
 			}
-			writeJSONResponse(w, object("id", pyjson.Number("7"), "name", "x86QW Content · teste", "body", "Pacotes de teste.", "assets", orEmpty(assets)))
+			writeJSONResponse(w, object("id", pyjson.Number("7"), "name", "x86QW Content · test", "body", "Test packages.", "assets", orEmpty(assets)))
 		case full == gitlabURL && r.Method == http.MethodGet:
 			if gitlab == nil {
 				http.NotFound(w, r)
@@ -444,10 +444,10 @@ func TestPublishAgainstFakeMirrors(t *testing.T) {
 		t.Fatalf("publish --dry-run: %v", err)
 	}
 	if len(runner.commands) != 0 || gitlab != nil {
-		t.Fatalf("dry-run executou escrita: %v", runner.commands)
+		t.Fatalf("dry-run wrote: %v", runner.commands)
 	}
-	if !strings.Contains(out.String(), "[GITHUB x86dx2/x86qw] criar release nquake-test") {
-		t.Fatalf("plano inesperado:\n%s", out.String())
+	if !strings.Contains(out.String(), "[GITHUB x86dx2/x86qw] create release nquake-test") {
+		t.Fatalf("unexpected plan:\n%s", out.String())
 	}
 
 	out.Reset()
@@ -456,15 +456,15 @@ func TestPublishAgainstFakeMirrors(t *testing.T) {
 	}
 	if len(runner.commands) != 2 || !strings.HasPrefix(runner.commands[0], "gh release create nquake-test --repo x86dx2/x86qw") ||
 		!strings.HasPrefix(runner.commands[1], "gh release upload nquake-test ") {
-		t.Fatalf("comandos gh inesperados: %v", runner.commands)
+		t.Fatalf("unexpected gh commands: %v", runner.commands)
 	}
 	if !bytes.Equal(gitlab, payload) || gitlabToken != "glpat-test" {
-		t.Fatalf("upload GitLab inesperado: %q %q", gitlab, gitlabToken)
+		t.Fatalf("unexpected GitLab upload: %q %q", gitlab, gitlabToken)
 	}
 	catalog, _ := LoadJSONObject(project.Path(CatalogPath))
 	urls, _ := pyjson.StrList(objects(catalog.Value("packages"))[0].Value("urls"))
 	if len(urls) != 2 || urls[1] != gitlabURL || catalog.Value("generated_at") == "2026-01-01T00:00:00Z" {
-		t.Fatalf("catálogo não registrou o mirror GitLab: %v", urls)
+		t.Fatalf("catalog did not record the GitLab mirror: %v", urls)
 	}
 
 	// A second publication only verifies.
@@ -473,8 +473,8 @@ func TestPublishAgainstFakeMirrors(t *testing.T) {
 	if err := project.Publish(&out, false, false, false); err != nil {
 		t.Fatal(err)
 	}
-	if len(runner.commands) != 0 || !strings.Contains(out.String(), "catálogo já continha os 1 mirrors GitLab") {
-		t.Fatalf("republicação não foi idempotente: %v\n%s", runner.commands, out.String())
+	if len(runner.commands) != 0 || !strings.Contains(out.String(), "catalog already had the 1 GitLab mirrors") {
+		t.Fatalf("republishing was not idempotent: %v\n%s", runner.commands, out.String())
 	}
 }
 
@@ -490,8 +490,8 @@ func TestPublishRejectsChangedMirror(t *testing.T) {
 	}}
 	project.HTTP, project.Run = web.client(), (&recorder{}).run
 	err := project.Publish(&bytes.Buffer{}, false, true, false)
-	if err == nil || !strings.Contains(err.Error(), "divergente") {
-		t.Fatalf("mirror divergente aceito: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "differs") {
+		t.Fatalf("differing mirror accepted: %v", err)
 	}
 }
 
@@ -509,15 +509,15 @@ func TestGitLabUploadNeverFollowsRedirects(t *testing.T) {
 	project.Getenv = func(string) string { return "glpat-secret" }
 	err := project.uploadGitLab(project.Path(BuildsDir+"/components-test/"+filename), url)
 	if err == nil || !strings.Contains(err.Error(), "HTTP status 307") {
-		t.Fatalf("redirecionamento do upload aceito: %v", err)
+		t.Fatalf("upload redirect accepted: %v", err)
 	}
 	for _, request := range web.requests {
 		if strings.Contains(request, "evil.example") {
-			t.Fatalf("token seguiu o redirecionamento: %v", web.requests)
+			t.Fatalf("token followed the redirect: %v", web.requests)
 		}
 	}
 	if len(web.requests) != 1 {
-		t.Fatalf("requisições inesperadas: %v", web.requests)
+		t.Fatalf("unexpected requests: %v", web.requests)
 	}
 }
 
@@ -548,14 +548,14 @@ func TestCommitSequence(t *testing.T) {
 		"git push gitlab HEAD",
 	}
 	if strings.Join(runner.commands, "\n") != strings.Join(expected, "\n") {
-		t.Fatalf("sequência git inesperada:\n%s", strings.Join(runner.commands, "\n"))
+		t.Fatalf("unexpected git sequence:\n%s", strings.Join(runner.commands, "\n"))
 	}
 
 	clean := &recorder{}
 	project.Run = clean.run
 	var out bytes.Buffer
-	if err := project.Commit(&out, "", true); err != nil || len(clean.commands) != 1 || !strings.Contains(out.String(), "Nao ha alteracoes") {
-		t.Fatalf("commit sem mudanças: %v %v", err, clean.commands)
+	if err := project.Commit(&out, "", true); err != nil || len(clean.commands) != 1 || !strings.Contains(out.String(), "No changes") {
+		t.Fatalf("commit without changes: %v %v", err, clean.commands)
 	}
 }
 
@@ -585,11 +585,11 @@ func TestEachComponentIsCheckedOnItsOwn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check: %v\n%s", err, out.String())
 	}
-	if code != 1 || !strings.Contains(out.String(), "[INDISPONIVEL] pro-x: ") || !strings.Contains(out.String(), "[OK] ktx: ") {
-		t.Fatalf("pro-x indisponivel deveria afetar so pro-x (exit %d):\n%s", code, out.String())
+	if code != 1 || !strings.Contains(out.String(), "[UNAVAILABLE] pro-x: ") || !strings.Contains(out.String(), "[OK] ktx: ") {
+		t.Fatalf("pro-x unavailable should affect only pro-x (exit %d):\n%s", code, out.String())
 	}
 	if strings.Contains(out.String(), "mvdsv") || strings.Contains(out.String(), "ezquake") {
-		t.Fatalf("check selecionado reportou componentes fora da selecao:\n%s", out.String())
+		t.Fatalf("selected check reported components outside the selection:\n%s", out.String())
 	}
 
 	// A new nightly elsewhere still counts as an update, and the unavailable
@@ -598,7 +598,7 @@ func TestEachComponentIsCheckedOnItsOwn(t *testing.T) {
 	project.HTTP = limited(currentUpstreams(t, root, "20990101-000000_abcdef0"), archive).client()
 	out.Reset()
 	if code, err = project.Check(&out, &info, false, true, nil); err != nil || code != 2 {
-		t.Fatalf("check deveria sair 2 com nightly novo e pro-x indisponivel: %d %v", code, err)
+		t.Fatalf("check should exit 2 with a new nightly and pro-x unavailable: %d %v", code, err)
 	}
 	report, err := pyjson.Decode(out.Bytes(), pyjson.RejectDuplicates)
 	if err != nil {
@@ -609,7 +609,7 @@ func TestEachComponentIsCheckedOnItsOwn(t *testing.T) {
 		statuses[pyjson.Repr(item.Value("component"))] = pyjson.Repr(item.Value("status"))
 	}
 	if statuses["pro-x"] != "unavailable" || statuses["ktx"] != "current" || statuses["mvdsv"] != "current" {
-		t.Fatalf("status por componente inesperado: %v", statuses)
+		t.Fatalf("unexpected status per component: %v", statuses)
 	}
 
 	// Selecting a component outside ezQuake ignores the unreviewed nightly.
@@ -617,16 +617,16 @@ func TestEachComponentIsCheckedOnItsOwn(t *testing.T) {
 	project.HTTP = currentUpstreams(t, root, "20990101-000000_abcdef0").client()
 	out.Reset()
 	if code, err = project.Check(&out, &info, false, false, []string{"ktx"}); err != nil || code != 0 {
-		t.Fatalf("check ktx nao deveria ver o nightly do ezQuake: %d %v\n%s", code, err, out.String())
+		t.Fatalf("check ktx should not see the ezQuake nightly: %d %v\n%s", code, err, out.String())
 	}
 	update := NewProject(root)
 	update.HTTP = currentUpstreams(t, root, "20990101-000000_abcdef0").client()
 	out.Reset()
 	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true, Components: []string{"ktx"}}); err != nil {
-		t.Fatalf("update ktx nao deveria depender do ezQuake: %v\n%s", err, out.String())
+		t.Fatalf("update ktx should not depend on ezQuake: %v\n%s", err, out.String())
 	}
 	if !strings.Contains(out.String(), "[OK] ezQuake nightly: ") {
-		t.Fatalf("update ktx tocou o ezQuake:\n%s", out.String())
+		t.Fatalf("update ktx touched ezQuake:\n%s", out.String())
 	}
 
 	// Explicitly selecting an unavailable component fails; selecting
@@ -635,13 +635,13 @@ func TestEachComponentIsCheckedOnItsOwn(t *testing.T) {
 	update.HTTP = limited(currentUpstreams(t, root, ""), archive).client()
 	out.Reset()
 	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true, Components: []string{"pro-x"}}); err == nil {
-		t.Fatalf("update pro-x deveria falhar com upstream indisponivel:\n%s", out.String())
+		t.Fatalf("update pro-x should fail with the upstream unavailable:\n%s", out.String())
 	}
 	update = NewProject(root)
 	update.HTTP = limited(currentUpstreams(t, root, ""), archive).client()
 	out.Reset()
-	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true}); err != nil || !strings.Contains(out.String(), "[PULADO] pro-x: ") {
-		t.Fatalf("update geral deveria pular pro-x: %v\n%s", err, out.String())
+	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true}); err != nil || !strings.Contains(out.String(), "[SKIPPED] pro-x: ") {
+		t.Fatalf("a full update should skip pro-x: %v\n%s", err, out.String())
 	}
 
 	// nQuake down: its components are unavailable, ezQuake is still checked.
@@ -650,14 +650,14 @@ func TestEachComponentIsCheckedOnItsOwn(t *testing.T) {
 	project.HTTP = limited(currentUpstreams(t, root, ""), nquake).client()
 	out.Reset()
 	if code, err = project.Check(&out, &info, false, false, []string{"nquake-maps", "ezquake"}); err != nil || code != 1 {
-		t.Fatalf("check com nQuake fora: %d %v\n%s", code, err, out.String())
+		t.Fatalf("check with nQuake down: %d %v\n%s", code, err, out.String())
 	}
-	if !strings.Contains(out.String(), "[INDISPONIVEL] nquake-maps: ") || strings.Contains(out.String(), "[INDISPONIVEL] ezquake") {
-		t.Fatalf("nQuake fora deveria afetar so seus componentes:\n%s", out.String())
+	if !strings.Contains(out.String(), "[UNAVAILABLE] nquake-maps: ") || strings.Contains(out.String(), "[UNAVAILABLE] ezquake") {
+		t.Fatalf("nQuake down should affect only its components:\n%s", out.String())
 	}
 
-	if _, err := NewProject(root).Check(&out, &info, true, false, []string{"nao-existe"}); err == nil || !strings.Contains(err.Error(), "desconhecido") {
-		t.Fatalf("componente desconhecido deveria ser recusado: %v", err)
+	if _, err := NewProject(root).Check(&out, &info, true, false, []string{"does-not-exist"}); err == nil || !strings.Contains(err.Error(), "unknown") {
+		t.Fatalf("an unknown component should be refused: %v", err)
 	}
 }
 
@@ -678,7 +678,7 @@ func movedReference(web *fakeWeb, edit func([]byte) []byte) *fakeWeb {
 
 // appendComment changes the file without touching what x86QW replaces.
 func appendComment(data []byte) []byte {
-	return append(append([]byte{}, data...), "\n// nQuake mudou\n"...)
+	return append(append([]byte{}, data...), "\n// nQuake changed\n"...)
 }
 
 func TestEachComponentKeepsItsOwnNQuakeRevision(t *testing.T) {
@@ -691,7 +691,7 @@ func TestEachComponentKeepsItsOwnNQuakeRevision(t *testing.T) {
 	project.HTTP = movedReference(currentUpstreams(t, root, ""), appendComment).client()
 	code, err := project.Check(&out, &info, false, true, nil)
 	if err != nil || code != 2 {
-		t.Fatalf("check com nQuake movido: %d %v\n%s", code, err, out.String())
+		t.Fatalf("check with nQuake moved: %d %v\n%s", code, err, out.String())
 	}
 	report, err := pyjson.Decode(out.Bytes(), pyjson.RejectDuplicates)
 	if err != nil {
@@ -699,21 +699,21 @@ func TestEachComponentKeepsItsOwnNQuakeRevision(t *testing.T) {
 	}
 	changed, _ := pyjson.StrList(pyjson.Get(report, "reference", "changed_components"))
 	if len(changed) != 1 || changed[0] != "x86qw-client-bootstrap" {
-		t.Fatalf("componentes alterados pelo nQuake: %v", changed)
+		t.Fatalf("components changed by nQuake: %v", changed)
 	}
 	statuses := map[string]string{}
 	for _, item := range objects(pyjson.Get(report, "components")) {
 		statuses[pyjson.Repr(item.Value("component"))] = pyjson.Repr(item.Value("status"))
 	}
 	if statuses["x86qw-client-bootstrap"] != "update-available" || statuses["nquake-maps"] != "current" || statuses["team-fortress"] != "current" {
-		t.Fatalf("status por componente: %v", statuses)
+		t.Fatalf("status per component: %v", statuses)
 	}
 	for _, item := range objects(pyjson.Get(report, "distribution")) {
 		path := pyjson.Repr(item.Value("path"))
 		if _, ok := nquakePath(path); ok {
 			manifest, _ := LoadManifest(project.Path(ManifestPath))
 			if pyjson.Get(manifest, "files", path, "package") != "x86qw-client-bootstrap" {
-				t.Fatalf("arquivo nQuake de outro componente mudou: %s", path)
+				t.Fatalf("another component's nQuake file changed: %s", path)
 			}
 		}
 	}
@@ -724,21 +724,21 @@ func TestEachComponentKeepsItsOwnNQuakeRevision(t *testing.T) {
 	update.HTTP = movedReference(currentUpstreams(t, root, ""), appendComment).client()
 	out.Reset()
 	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true}); err != nil {
-		t.Fatalf("update geral com nQuake movido: %v\n%s", err, out.String())
+		t.Fatalf("full update with nQuake moved: %v\n%s", err, out.String())
 	}
 	releases, _ := update.Releases()
 	pinned := ReferenceRevisionOf(releases, "x86qw-client-bootstrap")[:12]
-	if !strings.Contains(out.String(), "[NQUAKE] x86qw-client-bootstrap: "+pinned+" -> 222222222222 (1 arquivo(s) do nQuake alterado(s); 3 customizacao(oes) x86QW reaplicada(s))") ||
-		!strings.Contains(out.String(), "nQuake: 11 origem alterada, 1 tamanho alterado") ||
-		!strings.Contains(out.String(), "[INFO] Inventario nQuake: ") {
-		t.Fatalf("update geral deveria mover so o bootstrap:\n%s", out.String())
+	if !strings.Contains(out.String(), "[NQUAKE] x86qw-client-bootstrap: "+pinned+" -> 222222222222 (1 nQuake file(s) changed; 3 x86QW customization(s) reapplied)") ||
+		!strings.Contains(out.String(), "nQuake: 11 origin changed, 1 size changed") ||
+		!strings.Contains(out.String(), "[INFO] nQuake inventory: ") {
+		t.Fatalf("a full update should move only the bootstrap:\n%s", out.String())
 	}
 	update = NewProject(root)
 	update.HTTP = movedReference(currentUpstreams(t, root, ""), appendComment).client()
 	out.Reset()
 	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true, Components: []string{"nquake-maps", "ktx"}}); err != nil ||
-		!strings.Contains(out.String(), "[OK] O dist e os inventarios ja representam os upstreams atuais.") {
-		t.Fatalf("componentes sem mudanca no nQuake deveriam ficar como estao: %v\n%s", err, out.String())
+		!strings.Contains(out.String(), "[OK] dist and the inventories already match the current upstreams.") {
+		t.Fatalf("components without nQuake changes should stay as they are: %v\n%s", err, out.String())
 	}
 
 	// A replacement that no longer applies stops only that component.
@@ -749,16 +749,16 @@ func TestEachComponentKeepsItsOwnNQuakeRevision(t *testing.T) {
 	update.HTTP = movedReference(currentUpstreams(t, root, ""), broken).client()
 	out.Reset()
 	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true}); err != nil ||
-		!strings.Contains(out.String(), "[PULADO] x86qw-client-bootstrap: nQuake 222222222222: a substituicao x86QW em non-gpl/qw/nquake_default.cfg nao se aplica mais") ||
+		!strings.Contains(out.String(), "[SKIPPED] x86qw-client-bootstrap: nQuake 222222222222: the x86QW replacement in non-gpl/qw/nquake_default.cfg no longer applies") ||
 		strings.Contains(out.String(), "  - nQuake:") {
-		t.Fatalf("update deveria pular so o bootstrap com substituicao quebrada: %v\n%s", err, out.String())
+		t.Fatalf("update should skip only the bootstrap with a broken replacement: %v\n%s", err, out.String())
 	}
 	update = NewProject(root)
 	update.HTTP = movedReference(currentUpstreams(t, root, ""), broken).client()
 	out.Reset()
 	err = update.Update(&out, UpdateOptions{Workers: 4, DryRun: true, Components: []string{"x86qw-client-bootstrap"}})
-	if err == nil || !strings.Contains(err.Error(), "revise text_replacements") {
-		t.Fatalf("update explicito do bootstrap deveria pedir revisao: %v\n%s", err, out.String())
+	if err == nil || !strings.Contains(err.Error(), "review text_replacements") {
+		t.Fatalf("an explicit bootstrap update should ask for review: %v\n%s", err, out.String())
 	}
 }
 
@@ -766,18 +766,18 @@ func TestEveryNQuakeFileIsClassified(t *testing.T) {
 	root := repoRoot(t)
 	requireHydrated(t, root)
 	web := currentUpstreams(t, root, "")
-	web.nquake.files["sv-maps/qw/maps/novo.bsp"] = NQuakeFile{3, sha256Hex([]byte("bsp")), gitBlob([]byte("bsp"))}
-	web.nquake.files["sv-novo/leia.txt"] = NQuakeFile{4, sha256Hex([]byte("novo")), gitBlob([]byte("novo"))}
+	web.nquake.files["sv-maps/qw/maps/new.bsp"] = NQuakeFile{3, sha256Hex([]byte("bsp")), gitBlob([]byte("bsp"))}
+	web.nquake.files["sv-new/readme.txt"] = NQuakeFile{4, sha256Hex([]byte("novo")), gitBlob([]byte("novo"))}
 	project := NewProject(root)
 	project.HTTP = web.client()
 	var out, info bytes.Buffer
 	code, err := project.Check(&out, &info, false, false, nil)
 	if err != nil || code != 2 {
-		t.Fatalf("check com arquivos novos no nQuake: %d %v\n%s", code, err, out.String())
+		t.Fatalf("check with new nQuake files: %d %v\n%s", code, err, out.String())
 	}
-	if !strings.Contains(out.String(), "[NQUAKE] nao usado pela distro, sv-maps: 1 novo(s), 0 alterado(s), 0 removido(s)") ||
-		!strings.Contains(out.String(), "[CLASSIFICAR] sv-novo/leia.txt: ") {
-		t.Fatalf("check deveria classificar as mudancas do nQuake:\n%s", out.String())
+	if !strings.Contains(out.String(), "[NQUAKE] unused by the distribution, sv-maps: 1 new, 0 changed, 0 removed") ||
+		!strings.Contains(out.String(), "[CLASSIFY] sv-new/readme.txt: ") {
+		t.Fatalf("check should classify the nQuake changes:\n%s", out.String())
 	}
 
 	// Unclassified files keep the inventory where it is; the rest of the
@@ -786,8 +786,8 @@ func TestEveryNQuakeFileIsClassified(t *testing.T) {
 	update.HTTP = web.client()
 	out.Reset()
 	if err := update.Update(&out, UpdateOptions{Workers: 4, DryRun: true}); err != nil ||
-		!strings.Contains(out.String(), "[CLASSIFICAR] sv-novo/leia.txt: ") || strings.Contains(out.String(), "[INFO] Inventario nQuake") {
-		t.Fatalf("update nao deveria avancar o inventario com arquivo nao classificado: %v\n%s", err, out.String())
+		!strings.Contains(out.String(), "[CLASSIFY] sv-new/readme.txt: ") || strings.Contains(out.String(), "[INFO] nQuake inventory") {
+		t.Fatalf("update should not advance the inventory with an unclassified file: %v\n%s", err, out.String())
 	}
 }
 
@@ -813,10 +813,10 @@ func TestSymbolicLinksInTheNQuakeTreeAreIgnored(t *testing.T) {
 	project.HTTP = web.client()
 	var out, info bytes.Buffer
 	code, err := project.Check(&out, &info, false, false, []string{"nquake-maps"})
-	if err != nil || code != 0 || !strings.Contains(out.String(), "[OK] Conteudo baseado no nQuake") && !strings.Contains(out.String(), "nquake-maps") {
-		t.Fatalf("symlink na arvore nQuake deveria ser ignorado: %d %v\n%s", code, err, out.String())
+	if err != nil || code != 0 || !strings.Contains(out.String(), "[OK] Content based on nQuake") && !strings.Contains(out.String(), "nquake-maps") {
+		t.Fatalf("a symlink in the nQuake tree should be ignored: %d %v\n%s", code, err, out.String())
 	}
-	if strings.Contains(out.String(), "INDISPONIVEL") {
-		t.Fatalf("symlink tornou o nQuake indisponivel:\n%s", out.String())
+	if strings.Contains(out.String(), "UNAVAILABLE") {
+		t.Fatalf("a symlink made nQuake unavailable:\n%s", out.String())
 	}
 }

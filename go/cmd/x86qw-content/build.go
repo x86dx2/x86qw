@@ -7,8 +7,8 @@ import (
 
 func runBuild(env *environment, args []string) (int, error) {
 	flags := flag.NewFlagSet("build", flag.ContinueOnError)
-	register := flags.Bool("register", false, "atualiza o catalogo com os builds")
-	projectRef := flags.String("project-ref", "", "SHA-1 do commit x86QW ligado ao ownership do candidato")
+	register := flags.Bool("register", false, "registers the builds in the catalog")
+	projectRef := flags.String("project-ref", "", "SHA-1 of the x86QW commit tied to the candidate's ownership")
 	if err := parseFlags("build", flags, args, env.stderr); err != nil {
 		return 0, err
 	}
@@ -19,5 +19,5 @@ func runBuild(env *environment, args []string) (int, error) {
 }
 
 func init() {
-	register("build", "monta pacotes deterministicos a partir do dist", runBuild)
+	register("build", "builds deterministic packages from dist", runBuild)
 }

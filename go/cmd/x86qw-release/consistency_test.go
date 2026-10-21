@@ -30,7 +30,7 @@ func TestCheckoutNamesOneRelease(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(got, want) {
-			t.Errorf("%s não fixa os binários da CLI %s do catálogo; rode x86qw-release prepare", name, p.Version)
+			t.Errorf("%s does not pin the catalog's CLI %s binaries; run x86qw-release prepare", name, p.Version)
 		}
 	}
 	tag := []byte("x86qw-cli-" + p.Version)
@@ -43,19 +43,19 @@ func TestCheckoutNamesOneRelease(t *testing.T) {
 		found := 0
 		for _, match := range append(releaseTag.FindAll(payload, -1), releaseSpan.FindAll(payload, -1)...) {
 			if !bytes.Equal(match, tag) && !bytes.Equal(match, span) {
-				t.Errorf("%s cita %s, mas o catálogo traz a CLI %s", document, match, p.Version)
+				t.Errorf("%s names %s, but the catalog has CLI %s", document, match, p.Version)
 			}
 			found++
 		}
 		if found == 0 {
-			t.Errorf("%s não cita a release da CLI", document)
+			t.Errorf("%s does not name the CLI release", document)
 		}
 	}
 }
 
 func TestReleaseNamesFollowTheVersion(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "page.html")
-	page := "release `x86qw-cli-2.3.2` e <span class=\"release-product-version\">2.3.2</span>, não x86qw-cli-2.3.2-rc.1"
+	page := "release `x86qw-cli-2.3.2` and <span class=\"release-product-version\">2.3.2</span>, not x86qw-cli-2.3.2-rc.1"
 	if err := os.WriteFile(path, []byte(page), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestReleaseNamesFollowTheVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(path)
-	if want := "release `x86qw-cli-2.4.0` e <span class=\"release-product-version\">2.4.0</span>, não x86qw-cli-2.4.0"; string(got) != want {
+	if want := "release `x86qw-cli-2.4.0` and <span class=\"release-product-version\">2.4.0</span>, not x86qw-cli-2.4.0"; string(got) != want {
 		t.Fatalf("%s", got)
 	}
 }

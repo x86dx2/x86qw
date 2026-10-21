@@ -27,7 +27,7 @@ func repoRoot(t *testing.T) string {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			t.Skip("checkout do repositório indisponível")
+			t.Skip("repository checkout unavailable")
 		}
 		dir = parent
 	}
@@ -36,7 +36,7 @@ func repoRoot(t *testing.T) string {
 func requireHydrated(t *testing.T, root string) {
 	t.Helper()
 	if IsGitLFSPointer(filepath.Join(root, "dist/game-data/id1/pak0.pak")) {
-		t.Skip("dist/ contém ponteiros Git LFS; execute git lfs checkout")
+		t.Skip("dist/ holds Git LFS pointers; run git lfs checkout")
 	}
 }
 
@@ -248,7 +248,7 @@ var mutations = []mutation{
 
 func TestVerifyRejectsCorruptions(t *testing.T) {
 	if os.Getenv("X86QW_CONTENT_CORRUPTIONS") != "1" {
-		t.Skip("defina X86QW_CONTENT_CORRUPTIONS=1 para corromper clones do checkout")
+		t.Skip("set X86QW_CONTENT_CORRUPTIONS=1 to corrupt clones of the checkout")
 	}
 	root := repoRoot(t)
 	requireHydrated(t, root)
@@ -261,7 +261,7 @@ func TestVerifyRejectsCorruptions(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := runGoVerify(cloneCheckout(t, root)); err != nil {
-		t.Fatalf("verify rejeita o checkout: %v", err)
+		t.Fatalf("verify rejects the checkout: %v", err)
 	}
 	for _, item := range mutations {
 		t.Run(item.name, func(t *testing.T) {
@@ -269,11 +269,11 @@ func TestVerifyRejectsCorruptions(t *testing.T) {
 			item.apply(t, clone)
 			_, err := runGoVerify(clone)
 			if err == nil {
-				t.Fatal("corrupção aceita")
+				t.Fatal("corruption accepted")
 			}
-			got := strings.ReplaceAll("[ERRO] "+err.Error(), clone+"/", "<root>/")
+			got := strings.ReplaceAll("[ERROR] "+err.Error(), clone+"/", "<root>/")
 			if got != want[item.name] {
-				t.Errorf("mensagem diverge:\nwant: %s\ngot:  %s", want[item.name], got)
+				t.Errorf("message differs:\nwant: %s\ngot:  %s", want[item.name], got)
 			}
 		})
 	}
@@ -287,7 +287,7 @@ func TestVerifyAcceptsCheckout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(output, "[OK] Catalogo:") {
-		t.Fatalf("resumo ausente: %s", output)
+	if !strings.Contains(output, "[OK] Catalog:") {
+		t.Fatalf("summary missing: %s", output)
 	}
 }

@@ -19,7 +19,7 @@ func TestPowerShellBootstrapIsASCII(t *testing.T) {
 		}
 		for index, b := range payload {
 			if b > 0x7f {
-				t.Fatalf("%s: byte não ASCII na posição %d", path, index)
+				t.Fatalf("%s: non-ASCII byte at position %d", path, index)
 			}
 		}
 	}

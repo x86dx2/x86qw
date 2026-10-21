@@ -39,7 +39,7 @@ func ValidateSelection(selected []string, ids map[string]bool) error {
 			known = append(known, id)
 		}
 		sort.Strings(known)
-		return managerError("componente(s) desconhecido(s): %s. Disponíveis: %s", strings.Join(unknown, ", "), strings.Join(known, ", "))
+		return managerError("unknown component(s): %s. Available: %s", strings.Join(unknown, ", "), strings.Join(known, ", "))
 	}
 	return nil
 }
@@ -89,7 +89,7 @@ func NQuakeOwners(manifest *Object, ids map[string]bool) map[string]bool {
 func KeepCurrent(assets []Asset, manifest *Object, ids map[string]bool, keep func(owner string) bool) ([]Asset, error) {
 	files, ok := manifest.Value("files").(*Object)
 	if !ok {
-		return nil, fmt.Errorf("manifesto sem arquivos")
+		return nil, fmt.Errorf("manifest has no files")
 	}
 	kept := map[string]bool{}
 	var result []Asset

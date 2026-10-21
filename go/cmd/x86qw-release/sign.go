@@ -22,9 +22,9 @@ import (
 // are renewed before they expire.
 func runSign(args []string) int {
 	flags := flag.NewFlagSet("sign", flag.ExitOnError)
-	keys := flags.String("keys", "", "diretório das chaves offline (padrão: "+keysDir+")")
-	version := flags.Int64("version", 0, "versão da geração (padrão: a maior entre o checkout e a produção, mais um)")
-	baseURL := flags.String("base-url", trust.DefaultBaseURL, "repositório TUF público")
+	keys := flags.String("keys", "", "offline keys folder (default: "+keysDir+")")
+	version := flags.Int64("version", 0, "generation version (default: the highest of the checkout and production, plus one)")
+	baseURL := flags.String("base-url", trust.DefaultBaseURL, "public TUF repository")
 	flags.Parse(args)
 	repo, err := repoRoot()
 	if err == nil {
@@ -34,7 +34,7 @@ func runSign(args []string) int {
 		fmt.Fprintln(os.Stderr, "x86qw-release sign:", err)
 		return 1
 	}
-	fmt.Printf("geração TUF %d assinada em %s\n", *version, trustDir)
+	fmt.Printf("TUF generation %d signed in %s\n", *version, trustDir)
 	return 0
 }
 
@@ -61,7 +61,7 @@ func liveTimestamp(baseURL string) (int64, error) {
 	if err == nil {
 		return catalog.Roles["timestamp"].Version, nil
 	}
-	fmt.Fprintf(os.Stderr, "aviso: produção não autenticou (%v); lendo só a versão do timestamp\n", err)
+	fmt.Fprintf(os.Stderr, "warning: production did not authenticate (%v); reading only the timestamp version\n", err)
 	payload, err := fetchLive(baseURL, "metadata/timestamp.json")
 	if err != nil {
 		return 0, err
@@ -75,7 +75,7 @@ func liveTimestamp(baseURL string) (int64, error) {
 		return 0, err
 	}
 	if err := root.VerifyDelegate(metadata.TIMESTAMP, timestamp); err != nil {
-		return 0, fmt.Errorf("timestamp de produção sem assinatura válida: %w", err)
+		return 0, fmt.Errorf("production timestamp without a valid signature: %w", err)
 	}
 	return timestamp.Signed.Version, nil
 }
@@ -93,8 +93,8 @@ func fetchLive(baseURL, name string) ([]byte, error) {
 // Saves the timestamp.json production serves, for the workflows to compare.
 func runLiveTimestamp(args []string) int {
 	flags := flag.NewFlagSet("live-timestamp", flag.ExitOnError)
-	baseURL := flags.String("base-url", trust.DefaultBaseURL, "repositório TUF público")
-	out := flags.String("out", "", "onde gravar")
+	baseURL := flags.String("base-url", trust.DefaultBaseURL, "public TUF repository")
+	out := flags.String("out", "", "where to write")
 	flags.Parse(args)
 	if *out == "" {
 		flags.Usage()
@@ -122,7 +122,7 @@ func signInPlace(repo, keys, baseURL string, version int64) (int64, error) {
 		version = next
 	}
 	if version < next {
-		return 0, fmt.Errorf("a geração %d já foi usada; use %d ou mais", version, next)
+		return 0, fmt.Errorf("generation %d was already used; use %d or higher", version, next)
 	}
 	work, err := os.MkdirTemp("", "x86qw-sign-")
 	if err != nil {
@@ -165,18 +165,18 @@ func runPrune(args []string) int {
 		fmt.Fprintln(os.Stderr, "x86qw-release prune:", err)
 		return 1
 	}
-	fmt.Printf("%d arquivos de gerações antigas removidos\n", len(removed))
+	fmt.Printf("%d files of old generations removed\n", len(removed))
 	return 0
 }
 
 // runRenew: x86qw-release renew-timestamp --current FILE --key PEM --out FILE [--lease-hours 720]
 func runRenew(args []string) int {
 	flags := flag.NewFlagSet("renew-timestamp", flag.ExitOnError)
-	current := flags.String("current", "", "timestamp atual (padrão: o do checkout)")
-	key := flags.String("key", "", "chave PEM da role timestamp")
-	root := flags.String("root", "", "root TUF (padrão: "+rootFile+")")
-	out := flags.String("out", "", "timestamp renovado")
-	lease := flags.Int("lease-hours", 720, "duração da lease")
+	current := flags.String("current", "", "current timestamp (default: the checkout's)")
+	key := flags.String("key", "", "PEM key of the timestamp role")
+	root := flags.String("root", "", "TUF root (default: "+rootFile+")")
+	out := flags.String("out", "", "renewed timestamp")
+	lease := flags.Int("lease-hours", 720, "lease duration")
 	flags.Parse(args)
 	if *key == "" || *out == "" {
 		flags.Usage()

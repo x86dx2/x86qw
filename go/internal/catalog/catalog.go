@@ -59,10 +59,10 @@ func Parse(raw []byte) (*Catalog, error) {
 		Packages []Package `json:"packages"`
 	}
 	if err := json.Unmarshal(raw, &document); err != nil {
-		return nil, fmt.Errorf("catálogo x86QW inválido: %w", err)
+		return nil, fmt.Errorf("invalid x86QW catalog: %w", err)
 	}
 	if document.Format != 1 || document.Project != "x86qw" || document.Packages == nil {
-		return nil, fmt.Errorf("catálogo x86QW usa identidade ou formato incompatível")
+		return nil, fmt.Errorf("the x86QW catalog uses an incompatible identity or format")
 	}
 	return &Catalog{Packages: document.Packages}, nil
 }
@@ -77,27 +77,27 @@ func (p Package) Revision() string {
 
 func (p Package) validateArtifact(label string) error {
 	if p.Size <= 0 {
-		return fmt.Errorf("tamanho inválido de %s", label)
+		return fmt.Errorf("invalid size for %s", label)
 	}
 	if !hex64.MatchString(p.SHA256) {
-		return fmt.Errorf("SHA-256 inválido de %s", label)
+		return fmt.Errorf("invalid SHA-256 for %s", label)
 	}
 	if len(p.URLs) == 0 {
-		return fmt.Errorf("mirrors inválidos de %s", label)
+		return fmt.Errorf("invalid mirrors for %s", label)
 	}
 	seen := map[string]bool{}
 	for _, raw := range p.URLs {
 		parsed, err := url.Parse(raw)
 		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" || seen[raw] {
-			return fmt.Errorf("mirror inválido de %s: %s", label, raw)
+			return fmt.Errorf("invalid mirror for %s: %s", label, raw)
 		}
 		seen[raw] = true
 		if name, _ := url.PathUnescape(path.Base(parsed.Path)); name != p.Filename {
-			return fmt.Errorf("nome inesperado em um mirror de %s", label)
+			return fmt.Errorf("unexpected name in a mirror of %s", label)
 		}
 	}
 	if !p.RedistributionReviewed {
-		return fmt.Errorf("o pacote %s ainda não foi liberado pelo x86QW", label)
+		return fmt.Errorf("package %s has not been released by x86QW yet", label)
 	}
 	return nil
 }
@@ -115,18 +115,18 @@ func (c *Catalog) ComponentPackage(id string, namespaces []string) (Package, err
 		}
 	}
 	if len(matches) != 1 {
-		return Package{}, fmt.Errorf("o catálogo deve publicar exatamente um pacote atual para %s", id)
+		return Package{}, fmt.Errorf("the catalog must publish exactly one current package for %s", id)
 	}
 	pkg := matches[0]
 	if !componentID.MatchString(pkg.Version) {
-		return Package{}, fmt.Errorf("versão inválida do componente %s", id)
+		return Package{}, fmt.Errorf("invalid version for component %s", id)
 	}
 	revision := pkg.Revision()
 	if !hex40.MatchString(revision) && !hex64.MatchString(revision) {
-		return Package{}, fmt.Errorf("revisão de origem inválida do componente %s", id)
+		return Package{}, fmt.Errorf("invalid source revision for component %s", id)
 	}
 	if pkg.Filename != id+"-"+pkg.Version+".zip" {
-		return Package{}, fmt.Errorf("identidade inconsistente do pacote %s", id)
+		return Package{}, fmt.Errorf("inconsistent identity for package %s", id)
 	}
 	return pkg, pkg.validateArtifact(id)
 }
@@ -148,19 +148,19 @@ func (c *Catalog) ClientReleases(spec ClientSpec, channel string) ([]Package, er
 			pattern = nightlyVersion
 		}
 		if !pattern.MatchString(pkg.Version) || pkg.Filename != expected {
-			return nil, fmt.Errorf("versão ou artefato inválido no catálogo x86QW: packages[%d]", index)
+			return nil, fmt.Errorf("invalid version or artifact in the x86QW catalog: packages[%d]", index)
 		}
 		if err := pkg.validateArtifact(fmt.Sprintf("packages[%d]", index)); err != nil {
 			return nil, err
 		}
 		if seen[pkg.Version] {
-			return nil, fmt.Errorf("o catálogo x86QW contém versões duplicadas de ezquake para %s", spec.Label)
+			return nil, fmt.Errorf("the x86QW catalog has duplicate ezquake versions for %s", spec.Label)
 		}
 		seen[pkg.Version] = true
 		releases = append(releases, pkg)
 	}
 	if len(releases) == 0 {
-		return nil, fmt.Errorf("nenhuma versão %s de ezquake está disponível para %s", channel, spec.Label)
+		return nil, fmt.Errorf("no %s version of ezquake is available for %s", channel, spec.Label)
 	}
 	sort.SliceStable(releases, func(a, b int) bool {
 		if channel == "nightly" {
@@ -267,9 +267,9 @@ func (c *Catalog) CLIPackage(goos, goarch string) (Package, bool, error) {
 		return Package{}, false, nil
 	case 1:
 		if !semver.Valid(matches[0].Version) {
-			return Package{}, false, fmt.Errorf("versão inválida da CLI x86QW no catálogo")
+			return Package{}, false, fmt.Errorf("invalid x86QW CLI version in the catalog")
 		}
 		return matches[0], true, matches[0].validateArtifact("x86qw-cli")
 	}
-	return Package{}, false, fmt.Errorf("o catálogo publica mais de uma CLI x86QW para %s/%s", platform, architecture)
+	return Package{}, false, fmt.Errorf("the catalog publishes more than one x86QW CLI for %s/%s", platform, architecture)
 }

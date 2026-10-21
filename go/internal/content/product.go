@@ -169,7 +169,7 @@ func (p *Project) EncodedProductCatalog() ([]byte, error) {
 }
 
 // ProductMismatch is the verify error for a stale product.json.
-const ProductMismatch = "site/public/api/v1/product.json diverge dos inventarios canonicos; execute 'x86qw-content product --write'"
+const ProductMismatch = "site/public/api/v1/product.json differs from the canonical inventories; run 'x86qw-content product --write'"
 
 // CheckProduct reports whether product.json matches the inventories.
 func (p *Project) CheckProduct() error {

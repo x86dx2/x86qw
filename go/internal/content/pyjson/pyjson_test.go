@@ -17,7 +17,7 @@ func repoRoot(t *testing.T) string {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			t.Skip("checkout do repositório indisponível")
+			t.Skip("repository checkout unavailable")
 		}
 		dir = parent
 	}
@@ -38,7 +38,7 @@ func contentFiles(t *testing.T, root string) []string {
 		files = append(files, filepath.Join(root, name))
 	}
 	if len(files) < 10 {
-		t.Fatalf("poucos documentos encontrados: %d", len(files))
+		t.Fatalf("too few documents found: %d", len(files))
 	}
 	return files
 }
@@ -85,11 +85,11 @@ func TestRoundTripIsCanonical(t *testing.T) {
 		value, _ := Decode(raw, LastWins)
 		encoded, _ := EncodeFile(value, name.sortKeys)
 		if !bytes.Equal(encoded, raw) {
-			t.Errorf("%s não sobrevive ao round trip byte a byte", name.path)
+			t.Errorf("%s does not survive the byte-for-byte round trip", name.path)
 		}
 	}
 	if canonical == 0 {
-		t.Fatal("nenhum documento canônico encontrado")
+		t.Fatal("no canonical document found")
 	}
 }
 
@@ -109,7 +109,7 @@ func TestEncodeEdgeCases(t *testing.T) {
 	}
 	sorted, _ := Encode(value, true)
 	if !strings.HasPrefix(string(sorted), "{\n  \"a\": {},\n  \"b\": [],") {
-		t.Fatalf("sort_keys incorreto: %s", sorted)
+		t.Fatalf("wrong sort_keys: %s", sorted)
 	}
 }
 
@@ -120,18 +120,18 @@ func TestDuplicateKeys(t *testing.T) {
 	}
 	encoded, _ := Encode(value, false)
 	if string(encoded) != "{\n  \"a\": 3,\n  \"b\": 2\n}" {
-		t.Fatalf("last-wins incorreto: %s", encoded)
+		t.Fatalf("wrong last-wins: %s", encoded)
 	}
 	if _, err := Decode([]byte(`{"a": 1, "a": 1}`), RejectDuplicates); err == nil {
-		t.Fatal("chave duplicada aceita")
+		t.Fatal("duplicate key accepted")
 	}
 }
 
 func TestNumericEquality(t *testing.T) {
 	if !Eq(true, Number("1")) || !Eq(Number("1.0"), Number("1")) || Eq("1", Number("1")) {
-		t.Fatal("igualdade numérica diverge do Python")
+		t.Fatal("numeric equality differs from Python")
 	}
 	if IsExactInt(true) || !IsInstanceInt(true) || IsExactInt(Number("1.0")) {
-		t.Fatal("predicados de int divergem do Python")
+		t.Fatal("int predicates differ from Python")
 	}
 }

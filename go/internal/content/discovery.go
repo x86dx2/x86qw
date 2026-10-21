@@ -74,7 +74,7 @@ func githubRepositoryName(repository string) (string, error) {
 	if safeGitHubRepository.MatchString(repository) {
 		return repository, nil
 	}
-	invalid := fmt.Errorf("o upstream precisa identificar um repositorio publico do GitHub")
+	invalid := fmt.Errorf("the upstream must name a public GitHub repository")
 	if repository == "" {
 		return "", invalid
 	}
@@ -110,7 +110,7 @@ func githubHeadRef(value string) (string, string, error) {
 	if !strings.Contains(normalized, "/") {
 		normalized = "heads/" + normalized
 	}
-	invalid := fmt.Errorf("referencia GitHub invalida")
+	invalid := fmt.Errorf("invalid GitHub reference")
 	if !safeGitHubRef.MatchString(normalized) || !strings.HasPrefix(normalized, "heads/") || normalized == "heads/" ||
 		strings.Contains(normalized, "..") || strings.Contains(normalized, "@{") || strings.Contains(normalized, "//") ||
 		strings.HasSuffix(normalized, "/") || strings.HasSuffix(normalized, ".") || strings.HasSuffix(normalized, ".lock") {
@@ -127,7 +127,7 @@ func githubHeadRef(value string) (string, string, error) {
 func (p *Project) githubAPIDocument(repository, endpoint string, deadline time.Time, label string) (*Object, error) {
 	remaining := time.Until(deadline)
 	if remaining <= 0 {
-		return nil, fmt.Errorf("o prazo total da consulta ao GitHub foi excedido")
+		return nil, fmt.Errorf("the GitHub query exceeded its total time limit")
 	}
 	response, err := p.Metadata(http.MethodGet, "https://api.github.com/repos/"+repository+"/"+endpoint, discoveryMaxBytes, remaining, githubAPIHeaders)
 	if err != nil {
@@ -136,14 +136,14 @@ func (p *Project) githubAPIDocument(repository, endpoint string, deadline time.T
 	value, err := pyjson.Decode(response.Data, pyjson.LastWins)
 	document, ok := value.(*Object)
 	if err != nil || !ok {
-		return nil, fmt.Errorf("a API do GitHub retornou %s invalido", label)
+		return nil, fmt.Errorf("the GitHub API returned an invalid %s", label)
 	}
 	return document, nil
 }
 
 func githubRefTarget(document *Object, repository, expectedRef string) (string, error) {
 	target, ok := document.Value("object").(*Object)
-	invalid := fmt.Errorf("a API do GitHub retornou uma referencia invalida")
+	invalid := fmt.Errorf("the GitHub API returned an invalid reference")
 	if !pyjson.Eq(document.Value("ref"), expectedRef) || !ok || !pyjson.Eq(target.Value("type"), "commit") {
 		return "", invalid
 	}
@@ -167,7 +167,7 @@ func (p *Project) GitHubRefRevision(repository, ref string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	document, err := p.githubAPIDocument(name, "git/ref/"+quotePath(apiRef), time.Now().Add(60*time.Second), "referencia do GitHub")
+	document, err := p.githubAPIDocument(name, "git/ref/"+quotePath(apiRef), time.Now().Add(60*time.Second), "GitHub reference")
 	if err != nil {
 		return "", err
 	}
@@ -209,7 +209,7 @@ func (p *Project) GitHubRecursiveTree(repository, branch string) (string, []GitT
 		return "", nil, err
 	}
 	deadline := time.Now().Add(60 * time.Second)
-	reference, err := p.githubAPIDocument(name, "git/ref/"+quotePath(apiRef), deadline, "referencia do GitHub")
+	reference, err := p.githubAPIDocument(name, "git/ref/"+quotePath(apiRef), deadline, "GitHub reference")
 	if err != nil {
 		return "", nil, err
 	}
@@ -217,7 +217,7 @@ func (p *Project) GitHubRecursiveTree(repository, branch string) (string, []GitT
 	if err != nil {
 		return "", nil, err
 	}
-	commit, err := p.githubAPIDocument(name, "git/commits/"+revision, deadline, "commit do GitHub")
+	commit, err := p.githubAPIDocument(name, "git/commits/"+revision, deadline, "GitHub commit")
 	if err != nil {
 		return "", nil, err
 	}
@@ -225,22 +225,22 @@ func (p *Project) GitHubRecursiveTree(repository, branch string) (string, []GitT
 	treeSHA, _ := pyjson.Get(commit, "tree", "sha").(string)
 	if !pyjson.Eq(commit.Value("sha"), revision) || !ok || !hex40Pattern.MatchString(treeSHA) ||
 		!pyjson.Eq(tree.Value("url"), "https://api.github.com/repos/"+name+"/git/trees/"+treeSHA) {
-		return "", nil, fmt.Errorf("a API do GitHub retornou um commit invalido")
+		return "", nil, fmt.Errorf("the GitHub API returned an invalid commit")
 	}
-	document, err := p.githubAPIDocument(name, "git/trees/"+treeSHA+"?recursive=1", deadline, "arvore recursiva do GitHub")
+	document, err := p.githubAPIDocument(name, "git/trees/"+treeSHA+"?recursive=1", deadline, "GitHub recursive tree")
 	if err != nil {
 		return "", nil, err
 	}
 	raw, ok := document.Value("tree").([]any)
 	if !pyjson.Eq(document.Value("sha"), treeSHA) || document.Value("truncated") != false || !ok || len(raw) > githubTreeMaxItems {
-		return "", nil, fmt.Errorf("a API do GitHub retornou uma arvore incompleta ou invalida")
+		return "", nil, fmt.Errorf("the GitHub API returned an incomplete or invalid tree")
 	}
 	var entries []GitTreeEntry
 	seen := map[string]bool{}
 	for _, item := range raw {
 		entry, ok := item.(*Object)
 		if !ok {
-			return "", nil, fmt.Errorf("a API do GitHub retornou uma entrada de arvore invalida")
+			return "", nil, fmt.Errorf("the GitHub API returned an invalid tree entry")
 		}
 		path, err := ValidatePortableRelativePath(entry.Value("path"), "GitHub tree path")
 		if err != nil {
@@ -250,11 +250,11 @@ func (p *Project) GitHubRecursiveTree(repository, branch string) (string, []GitT
 		sha, shaOK := entry.Value("sha").(string)
 		modes := map[string]map[string]bool{"blob": setOf("100644", "100755", "120000"), "tree": setOf("040000")}[kind]
 		if modes == nil || !inSet(entry.Value("mode"), modes) || !shaOK || !hex40Pattern.MatchString(sha) {
-			return "", nil, fmt.Errorf("a API do GitHub retornou uma entrada de arvore invalida")
+			return "", nil, fmt.Errorf("the GitHub API returned an invalid tree entry")
 		}
 		key := Casefold(path)
 		if seen[key] {
-			return "", nil, fmt.Errorf("a API do GitHub retornou caminhos de arvore duplicados")
+			return "", nil, fmt.Errorf("the GitHub API returned duplicate tree paths")
 		}
 		seen[key] = true
 		size := entry.Value("size")
@@ -262,7 +262,7 @@ func (p *Project) GitHubRecursiveTree(repository, branch string) (string, []GitT
 			low, _ := pyjson.IntCmp(size, 0)
 			high, _ := pyjson.IntCmp(size, MaxArtifactBytes)
 			if !pyjson.IsExactInt(size) || low < 0 || high > 0 {
-				return "", nil, fmt.Errorf("a API do GitHub retornou um tamanho de blob invalido")
+				return "", nil, fmt.Errorf("the GitHub API returned an invalid blob size")
 			}
 			// A symbolic link is never consumed; a consumed file that turns
 			// into one disappears from the entries and shows up as a change.
@@ -272,7 +272,7 @@ func (p *Project) GitHubRecursiveTree(repository, branch string) (string, []GitT
 			value, _ := size.(pyjson.Number).Int()
 			entries = append(entries, GitTreeEntry{path, sha, value})
 		} else if size != nil {
-			return "", nil, fmt.Errorf("a API do GitHub retornou tamanho em entrada sem blob")
+			return "", nil, fmt.Errorf("the GitHub API returned a size on a non-blob entry")
 		}
 	}
 	return revision, entries, nil
@@ -292,7 +292,7 @@ func (p *Project) GitHubLatestRelease(repository string) (string, error) {
 	parsed, _ := urlsplit(response.URL)
 	match := releaseTagPath.FindStringSubmatch(parsed.Path)
 	if match == nil {
-		return "", fmt.Errorf("o upstream nao publicou uma release latest: %s", name)
+		return "", fmt.Errorf("the upstream has not published a latest release: %s", name)
 	}
 	return unquote(match[1]), nil
 }
@@ -304,7 +304,7 @@ func (p *Project) GitHubCommitRevision(repository, abbreviation string) (string,
 		return "", err
 	}
 	if !regexp.MustCompile(`^[0-9a-f]{7,40}$`).MatchString(abbreviation) {
-		return "", fmt.Errorf("commit abreviado invalido: %s", abbreviation)
+		return "", fmt.Errorf("invalid abbreviated commit: %s", abbreviation)
 	}
 	response, err := p.Metadata(http.MethodGet, "https://github.com/"+name+"/commit/"+abbreviation, discoveryMaxBytes, 60*time.Second, nil)
 	if err != nil {
@@ -329,7 +329,7 @@ func (p *Project) GitHubCommitRevision(repository, abbreviation string) (string,
 		}
 	}
 	if len(revisions) != 1 {
-		return "", fmt.Errorf("nao foi possivel resolver publicamente o commit %s: %s", abbreviation, name)
+		return "", fmt.Errorf("could not resolve commit %s publicly: %s", abbreviation, name)
 	}
 	for revision := range revisions {
 		return revision, nil
@@ -346,7 +346,7 @@ func (p *Project) RemoteContentLength(url string) (int64, error) {
 	length := response.Header.Get("Content-Length")
 	value, err := strconv.ParseInt(length, 10, 64)
 	if !isDigits(length) || err != nil || value <= 0 {
-		return 0, fmt.Errorf("o upstream nao informou o tamanho do artefato: %s", safeURLForLog(url))
+		return 0, fmt.Errorf("the upstream did not report the artifact size: %s", safeURLForLog(url))
 	}
 	return value, nil
 }
