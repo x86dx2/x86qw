@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -382,6 +383,9 @@ func countInt(object *Object) int {
 	count, _ := value.Int()
 	if b, ok := getOr(object, "count", nil).(bool); ok && b {
 		count = 1
+	}
+	if count < math.MinInt32 || count > math.MaxInt32 {
+		return 0
 	}
 	return int(count)
 }

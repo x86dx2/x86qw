@@ -438,6 +438,11 @@ func (p *Project) syncCandidate(out io.Writer, candidate string, assets []Asset,
 	}
 	desired := map[string]bool{}
 	for _, asset := range assets {
+		// Paths come from upstream listings and the nQuake tree; refuse one
+		// that would leave the candidate.
+		if _, err := ValidatePortableRelativePath(asset.Path, "upstream asset path"); err != nil {
+			return nil, err
+		}
 		desired[asset.Path] = true
 		os.MkdirAll(filepath.Dir(joinPosix(candidate, asset.Path)), 0o755)
 	}
@@ -1083,6 +1088,9 @@ func (p *Project) updateEZQuakeCatalog(catalog *Object, assets []Asset, manifest
 	catalog.Set("packages", kept)
 	catalog.Set("generated_at", utcNow())
 	ezquakeRecipes := filepath.Join(recipes, "ezquake")
+	if _, err := ValidatePortableRelativePath(stableVersion, "ezQuake version"); err != nil || strings.Contains(stableVersion, "/") {
+		return "", "", fmt.Errorf("versão do ezQuake não serve de pasta: %q", stableVersion)
+	}
 	os.RemoveAll(ezquakeRecipes)
 	targetRoot := filepath.Join(ezquakeRecipes, stableVersion)
 	if err := os.MkdirAll(targetRoot, 0o755); err != nil {

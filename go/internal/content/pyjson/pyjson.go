@@ -330,7 +330,7 @@ func (d *decoder) hex4() (rune, error) {
 	if d.pos+4 > len(d.data) {
 		return 0, d.errorf("Invalid \\uXXXX escape")
 	}
-	value, err := strconv.ParseUint(string(d.data[d.pos:d.pos+4]), 16, 32)
+	value, err := strconv.ParseUint(string(d.data[d.pos:d.pos+4]), 16, 16)
 	if err != nil {
 		return 0, d.errorf("Invalid \\uXXXX escape")
 	}

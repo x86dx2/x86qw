@@ -349,6 +349,11 @@ func (p *Plan) Extract(destination string, executables ...string) error {
 }
 
 func extractMember(root string, member Member) error {
+	// validate already refused these names; this keeps the write local even
+	// if a future change skips it.
+	if !filepath.IsLocal(filepath.FromSlash(member.Name)) {
+		return fail("caminho ZIP inseguro: %q", member.Name)
+	}
 	target := filepath.Join(root, filepath.FromSlash(member.Name))
 	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 		return err
