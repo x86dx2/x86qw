@@ -115,8 +115,8 @@ func managedInstall(t *testing.T) string {
 	}
 	write(t, filepath.Join(root, filepath.FromSlash(spec.Receipt("nightly"))), string(client.Marshal()))
 	record(t, root, "nquake-maps", map[string]string{
-		"qw/maps/x86qw-a.bsp": "mapa a",
-		"qw/maps/x86qw-b.bsp": "mapa b",
+		"qw/maps/x86qw-a.bsp": "map a",
+		"qw/maps/x86qw-b.bsp": "map b",
 	})
 	write(t, filepath.Join(root, ".x86qw", "cli", "receipt"), `{"version":"2.3.2"}`)
 	write(t, filepath.Join(root, "x86qw.sh"), "#!/bin/sh\n")

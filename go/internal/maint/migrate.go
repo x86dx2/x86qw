@@ -26,7 +26,7 @@ type MigrationOp struct {
 // PlanMigration returns the planned operations and the new state bytes.
 func PlanMigration(target string) ([]MigrationOp, []byte, error) {
 	if lexists(filepath.Join(target, filepath.FromSlash(nquakeReceipt))) || legacyLayout(target) {
-		return nil, nil, errors.New("A migração deste layout pré-1.0 não está disponível nesta CLI; reexecute o bootstrap install.sh no mesmo destino.")
+		return nil, nil, errors.New("This CLI cannot migrate this pre-1.0 layout; run the install.sh bootstrap again on the same target.")
 	}
 	path := filepath.Join(target, filepath.FromSlash(stateRelative))
 	current, err := os.ReadFile(path)
@@ -38,7 +38,7 @@ func PlanMigration(target string) ([]MigrationOp, []byte, error) {
 	}
 	parsed, err := state.Parse(current)
 	if err != nil {
-		return nil, nil, errors.New("A migração foi bloqueada por conflitos preservados: .x86qw/state.json: " + err.Error())
+		return nil, nil, errors.New("The migration was blocked by preserved conflicts: .x86qw/state.json: " + err.Error())
 	}
 	migrated, err := state.MarshalDocument(parsed.Migrate(migrationTarget))
 	if err != nil {

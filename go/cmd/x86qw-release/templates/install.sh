@@ -16,7 +16,7 @@ case "$(uname -s)/$(uname -m)" in
   Darwin/x86_64) FILE="x86qw-${VERSION}-darwin-amd64"; SHA256="{{index .SHA256 "darwin-amd64"}}"; SIZE="{{index .Size "darwin-amd64"}}" ;;
   Linux/x86_64|Linux/amd64) FILE="x86qw-${VERSION}-linux-amd64"; SHA256="{{index .SHA256 "linux-amd64"}}"; SIZE="{{index .Size "linux-amd64"}}" ;;
   Linux/aarch64|Linux/arm64) FILE="x86qw-${VERSION}-linux-arm64"; SHA256="{{index .SHA256 "linux-arm64"}}"; SIZE="{{index .Size "linux-arm64"}}" ;;
-  *) echo "x86QW: sistema não suportado: $(uname -s)/$(uname -m)" >&2; exit 1 ;;
+  *) echo "x86QW: unsupported system: $(uname -s)/$(uname -m)" >&2; exit 1 ;;
 esac
 
 if command -v sha256sum >/dev/null 2>&1; then
@@ -24,26 +24,26 @@ if command -v sha256sum >/dev/null 2>&1; then
 elif command -v shasum >/dev/null 2>&1; then
   digest() { shasum -a 256 "$1" | cut -d' ' -f1; }
 else
-  echo "x86QW: sha256sum ou shasum é necessário para verificar o download." >&2; exit 1
+  echo "x86QW: sha256sum or shasum is required to verify the download." >&2; exit 1
 fi
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXX")
 trap 'rm -rf "$work"' EXIT INT TERM
 binary="$work/x86qw"
 
-echo "· Baixando x86QW ${VERSION} (${FILE})"
+echo "· Downloading x86QW ${VERSION} (${FILE})"
 curl --proto "$PROTOCOLS" --tlsv1.2 -fsSL --retry 3 --retry-all-errors --connect-timeout 15 --max-time 300 \
   -o "$binary" "${URL_BASE}/${FILE}"
 
 actual_size=$(wc -c < "$binary" | tr -d ' ')
 if [ "$actual_size" != "$SIZE" ]; then
-  echo "x86QW: tamanho inesperado (${actual_size}, esperado ${SIZE}); nada foi instalado." >&2; exit 1
+  echo "x86QW: unexpected size (${actual_size}, expected ${SIZE}); nothing was installed." >&2; exit 1
 fi
 if [ "$(digest "$binary")" != "$SHA256" ]; then
-  echo "x86QW: SHA-256 divergente; nada foi instalado." >&2; exit 1
+  echo "x86QW: SHA-256 mismatch; nothing was installed." >&2; exit 1
 fi
 chmod 0755 "$binary"
-echo "✓ Download verificado"
+echo "✓ Download verified"
 
 if (exec < /dev/tty) 2>/dev/null; then
   "$binary" setup "$@" < /dev/tty

@@ -17,12 +17,12 @@ func TestOwnedCachesAdoptsTheCLITrustMetadata(t *testing.T) {
 	t.Setenv("X86QW_CACHE_DIR", root)
 	owned, err := ownedCaches()
 	if err != nil || len(owned) != 1 || owned[0] != root {
-		t.Fatalf("cache só com metadata TUF deveria pertencer à CLI: %v %v", owned, err)
+		t.Fatalf("a cache with only TUF metadata should belong to the CLI: %v %v", owned, err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "notes.txt"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := ownedCaches(); err == nil {
-		t.Fatal("cache com arquivos alheios deveria ser preservado")
+		t.Fatal("a cache with foreign files should be kept")
 	}
 }

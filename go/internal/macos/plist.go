@@ -45,25 +45,25 @@ func (v *Value) Set(key string, value *Value) {
 // ParsePlist decodes an XML property list.
 func ParsePlist(payload []byte) (*Value, error) {
 	if bytes.HasPrefix(payload, []byte("bplist00")) {
-		return nil, errors.New("Info.plist binário não é suportado")
+		return nil, errors.New("binary Info.plist is not supported")
 	}
 	decoder := xml.NewDecoder(bytes.NewReader(payload))
 	decoder.Strict = true
 	for {
 		token, err := decoder.Token()
 		if err != nil {
-			return nil, fmt.Errorf("Info.plist inválido: %w", err)
+			return nil, fmt.Errorf("invalid Info.plist: %w", err)
 		}
 		if start, ok := token.(xml.StartElement); ok {
 			if start.Name.Local != "plist" {
-				return nil, errors.New("Info.plist inválido")
+				return nil, errors.New("invalid Info.plist")
 			}
 			value, err := parseNext(decoder)
 			if err != nil {
 				return nil, err
 			}
 			if value == nil {
-				return nil, errors.New("Info.plist vazio")
+				return nil, errors.New("empty Info.plist")
 			}
 			return value, nil
 		}
@@ -75,7 +75,7 @@ func parseNext(decoder *xml.Decoder) (*Value, error) {
 	for {
 		token, err := decoder.Token()
 		if err != nil {
-			return nil, fmt.Errorf("Info.plist inválido: %w", err)
+			return nil, fmt.Errorf("invalid Info.plist: %w", err)
 		}
 		switch t := token.(type) {
 		case xml.EndElement:
@@ -99,7 +99,7 @@ func elementText(decoder *xml.Decoder) (string, error) {
 		case xml.EndElement:
 			return builder.String(), nil
 		case xml.StartElement:
-			return "", errors.New("Info.plist inválido: elemento aninhado inesperado")
+			return "", errors.New("invalid Info.plist: unexpected nested element")
 		}
 	}
 }
@@ -118,7 +118,7 @@ func parseElement(decoder *xml.Decoder, start xml.StartElement) (*Value, error) 
 				return value, nil
 			case xml.StartElement:
 				if t.Name.Local != "key" {
-					return nil, errors.New("Info.plist inválido: chave ausente")
+					return nil, errors.New("invalid Info.plist: missing key")
 				}
 				key, err := elementText(decoder)
 				if err != nil {
@@ -126,7 +126,7 @@ func parseElement(decoder *xml.Decoder, start xml.StartElement) (*Value, error) 
 				}
 				item, err := parseNext(decoder)
 				if err != nil || item == nil {
-					return nil, errors.New("Info.plist inválido: valor ausente")
+					return nil, errors.New("invalid Info.plist: missing value")
 				}
 				value.Set(key, item)
 			}
@@ -155,7 +155,7 @@ func parseElement(decoder *xml.Decoder, start xml.StartElement) (*Value, error) 
 		}
 		return &Value{Kind: start.Name.Local, Text: text}, nil
 	}
-	return nil, fmt.Errorf("Info.plist usa tipo não suportado: %s", start.Name.Local)
+	return nil, fmt.Errorf("Info.plist uses an unsupported type: %s", start.Name.Local)
 }
 
 // MarshalPlist writes plistlib.dumps(fmt=FMT_XML, sort_keys=False) bytes.

@@ -19,17 +19,17 @@ func TestLinuxHandlersComeAndGo(t *testing.T) {
 	}
 	entry, _ := os.ReadFile(handlerEntryPath(home))
 	if !strings.Contains(string(entry), "x-scheme-handler/qw") || !strings.Contains(string(entry), "Exec="+root+"/x86qw.sh open --target "+root+" %u") {
-		t.Fatalf("entrada:\n%s", entry)
+		t.Fatalf("entry:\n%s", entry)
 	}
 	if err := SetHandlers(t.TempDir(), true, false); err == nil {
-		t.Fatal("outra instalação substituiu a entrada")
+		t.Fatal("another installation replaced the entry")
 	}
 	if err := SetHandlers(root, false, false); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{handlerEntryPath(home), demoMIMEPath(home)} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
-			t.Fatalf("%s deveria ter saído", path)
+			t.Fatalf("%s should be gone", path)
 		}
 	}
 }
@@ -48,18 +48,18 @@ func TestUpdatesRewriteEntriesFromEarlierVersions(t *testing.T) {
 	RefreshEntries(other, home)
 	for path, payload := range legacy {
 		if got, _ := os.ReadFile(path); string(got) != payload {
-			t.Fatalf("outra instalação reescreveu %s", path)
+			t.Fatalf("another installation rewrote %s", path)
 		}
 	}
 	RefreshEntries(root, home)
 	for path := range legacy {
 		if got, _ := os.ReadFile(path); !strings.Contains(string(got), "Exec="+launcher+" ") {
-			t.Fatalf("%s não foi reescrita:\n%s", path, got)
+			t.Fatalf("%s was not rewritten:\n%s", path, got)
 		}
 	}
 	empty := t.TempDir()
 	RefreshEntries(root, empty)
 	if _, err := os.Stat(filepath.Dir(DesktopEntryPath(empty))); !os.IsNotExist(err) {
-		t.Fatal("a atualização criou entradas que não existiam")
+		t.Fatal("the update created entries that did not exist")
 	}
 }
