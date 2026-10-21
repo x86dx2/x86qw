@@ -195,3 +195,19 @@ cópia isolada do gamecode pertence a `.x86qw/components/play-support/`, enquant
 O pacote 2.22 omite `saw_down.wav`, embora o gamecode o pré-carregue. O builder
 restaura esse nome a partir do `saw.wav` byte-idêntico que já existe no próprio
 upstream, validando tamanho e SHA-256 antes de montar o pacote.
+
+## Particularidades do catálogo
+
+- **ezQuake sem `package`.** As entradas do componente `ezquake` têm
+  `"package": null`: o cliente é escolhido por componente, canal (`stable` ou
+  `nightly`), plataforma e arquitetura (`catalog.ClientReleases`), e nada o
+  procura por id de pacote. Os outros componentes e a CLI são procurados pelo
+  `package`.
+- **CLI sem espelho GitLab.** Os binários `x86qw-cli` só têm a URL da release
+  no GitHub, onde também fica o atestado de proveniência
+  (`gh attestation verify`). Os pacotes de conteúdo têm a release do GitHub e o
+  espelho de pacotes do GitLab.
+- **Revisões do nQuake por componente.** Cada consumidor do nQuake fixa a sua
+  `reference_revision` em `component-releases.json`, então componentes podem
+  estar em revisões diferentes. O `update` move só o que mudou; o `verify`
+  mostra as revisões em uso.

@@ -36,7 +36,7 @@ func (a *setupArgs) parser(withRecipe bool) *cliargs.Parser {
 	targetFlag(p, &a.target)
 	p.Choice(&a.profile, []string{"essential", "recommended", "complete"}, "instala este perfil sem abrir o app", "--profile")
 	p.Choice(&a.platform, []string{"macos", "linux", "windows"}, "sistema da instalação (padrão: este)", "--platform")
-	p.Choice(&a.channel, []string{"stable", "nightly"}, "canal do ezQuake", "--channel")
+	p.Choice(&a.channel, catalog.Channels, "canal do ezQuake", "--channel")
 	catalogFileFlag(p, &a.catalogFile)
 	if withRecipe {
 		a.recipe = flag.NewFlagSet("setup", flag.ContinueOnError)

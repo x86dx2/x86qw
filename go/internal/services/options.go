@@ -138,12 +138,14 @@ func choicePointer(target **string, choices ...string) func(string) error {
 	}
 }
 
-func common(p *cliargs.Parser, c *Common, background bool) {
+// common declares what every service command takes; service adds what
+// only host, qtv and proxy do: the app screen and the background run.
+func common(p *cliargs.Parser, c *Common, service bool) {
 	p.String(&c.Target, "DESTINO", "pasta da instalação", "--target")
 	p.Bool(&c.Verbose, "detalhes técnicos", "-v", "--verbose")
 	p.Bool(&c.NoColor, "sem cores", "--no-color")
-	p.Bool(&c.Menu, "abre a tela de servidor do app", "--menu")
-	if background {
+	if service {
+		p.Bool(&c.Menu, "abre a tela de servidor do app", "--menu")
 		p.Bool(&c.Background, "roda em segundo plano", "--background")
 		p.Bool(&c.BackgroundChild, "", "--background-child")
 		p.String(&c.BackgroundLog, "ARQUIVO", "", "--background-log")
@@ -369,7 +371,6 @@ func statusParser(o *StatusOptions) *cliargs.Parser {
 	p.Bool(&o.Stop, "encerra a stack ativa", "--stop")
 	p.Bool(&o.Yes, "encerra sem perguntar", "--yes")
 	common(p, &o.Common, false)
-	p.Hidden("--menu")
 	return p
 }
 

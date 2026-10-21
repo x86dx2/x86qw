@@ -9,6 +9,7 @@ import (
 // TestOwnedCachesAdoptsTheCLITrustMetadata: cleanup and uninstall treat a
 // cache root that only holds the CLI's TUF metadata as the CLI's own.
 func TestOwnedCachesAdoptsTheCLITrustMetadata(t *testing.T) {
+	isolate(t)
 	root := filepath.Join(t.TempDir(), "x86qw")
 	if err := os.MkdirAll(filepath.Join(root, "tuf"), 0o700); err != nil {
 		t.Fatal(err)
