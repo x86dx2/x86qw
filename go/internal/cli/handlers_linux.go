@@ -28,11 +28,11 @@ func handlerEntry(root string) string {
 Type=Application
 Name=x86QW
 Comment=Abre servidores qw:// e demos QuakeWorld
-Exec="%s" open --target "%s" %%u
+Exec=%s open --target %s %%u
 NoDisplay=true
 Terminal=false
 MimeType=x-scheme-handler/qw;%s;
-`, filepath.Join(root, "x86qw.sh"), root, demoMIME)
+`, execArgument(filepath.Join(root, "x86qw.sh")), execArgument(root), demoMIME)
 }
 
 const demoMIMEPackage = `<?xml version="1.0" encoding="UTF-8"?>
@@ -51,7 +51,7 @@ func setHandlers(root string, links, demos bool) error {
 		return err
 	}
 	entry := handlerEntryPath(home)
-	if payload, err := os.ReadFile(entry); err == nil && !strings.Contains(string(payload), `Exec="`+filepath.Join(root, "x86qw.sh")+`"`) {
+	if payload, err := os.ReadFile(entry); err == nil && !launches(string(payload), root) {
 		return fmt.Errorf("Um atalho não gerenciado já ocupa %s.", entry)
 	}
 	if !links && !demos {

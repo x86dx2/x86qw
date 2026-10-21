@@ -61,7 +61,7 @@ jobs:
           set -euo pipefail
           target="$RUNNER_TEMP/x86qw"
           if [ "$RUNNER_OS" = Linux ]; then
-            sudo apt-get install -y -qq xdg-utils shared-mime-info >/dev/null
+            sudo apt-get install -y -qq xdg-utils shared-mime-info strace >/dev/null
           fi
           # A recipe on the installation applies its integration.
           "$target/x86qw.sh" setup --target "$target" --intent play --nick tester --content essential \
@@ -69,9 +69,22 @@ jobs:
           demo="$RUNNER_TEMP/final.mvd"
           printf 'demo bytes' > "$demo"
           if [ "$RUNNER_OS" = macOS ]; then
-            # Launch Services hands the demo to the applet, as a click does.
+            # Launch Services hands the demo and the link to the applet, as
+            # a click does; the link reaches ezQuake as +qwurl.
             open "$demo"
+            open "$LINK"
+            for _ in $(seq 120); do
+              ps -axo command | grep -F -- "+qwurl $LINK" | grep -v grep && break
+              sleep 0.25
+            done
+            ps -axo command | grep -F -- "+qwurl $LINK" | grep -qv grep
           else
+            # xdg-open runs the registered entry for the link, as a click
+            # does; it only looks up scheme handlers when DISPLAY is set, as
+            # in a desktop session. strace records the ezQuake it starts,
+            # which exits at once: there is no X server behind DISPLAY.
+            DISPLAY=:0 timeout 60 strace -f -qq -e trace=execve -s 256 -o "$RUNNER_TEMP/link.trace" xdg-open "$LINK" || true
+            grep -F -- "\"+qwurl\", \"$LINK\"" "$RUNNER_TEMP/link.trace"
             # The command the desktop entry registers, as xdg-open runs it,
             # with --dry-run so no ezQuake starts on the runner.
             handler="$(xdg-mime query default x-scheme-handler/qw)"

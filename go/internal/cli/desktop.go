@@ -17,16 +17,36 @@ func DesktopEntryPath(home string) string {
 }
 
 func desktopEntry(root string) string {
-	launcher := filepath.Join(root, "x86qw.sh")
 	return fmt.Sprintf(`[Desktop Entry]
 Type=Application
 Name=x86QW
 Comment=QuakeWorld moderno
-Exec="%s" play
+Exec=%s play
 Path=%s
 Terminal=true
 Categories=Game;ActionGame;
-`, launcher, root)
+`, execArgument(filepath.Join(root, "x86qw.sh")), root)
+}
+
+// execArgument writes one argument of an Exec line: bare when nothing in
+// it needs quoting, the form every launcher reads (xdg-open without a
+// desktop environment splits on spaces and keeps the quotes); quoted and
+// escaped as the Desktop Entry spec says otherwise.
+func execArgument(value string) string {
+	value = strings.ReplaceAll(value, "%", "%%")
+	if !strings.ContainsAny(value, " \t\n\"'\\><~|&;$*?#()`") {
+		return value
+	}
+	quoted := strings.NewReplacer(`"`, `\"`, "`", "\\`", "$", `\$`, `\`, `\\`).Replace(value)
+	// The string escape doubles each backslash once more.
+	return `"` + strings.ReplaceAll(quoted, `\`, `\\`) + `"`
+}
+
+// launches reports whether a desktop entry runs root's x86qw.sh, written
+// bare or always quoted, as entries were before 2.4.1.
+func launches(payload, root string) bool {
+	launcher := filepath.Join(root, "x86qw.sh")
+	return strings.Contains(payload, "Exec="+execArgument(launcher)+" ") || strings.Contains(payload, `Exec="`+launcher+`"`)
 }
 
 // ownsEntry reports whether the entry at path launches root.
@@ -35,7 +55,7 @@ func ownsEntry(path, root string) (bool, bool) {
 	if err != nil {
 		return false, false
 	}
-	return strings.Contains(string(payload), `Exec="`+filepath.Join(root, "x86qw.sh")+`"`), true
+	return launches(string(payload), root), true
 }
 
 // InstallDesktopEntry writes the entry for root.
