@@ -52,9 +52,7 @@ jobs:
       - name: Refuse a checkout that diverges from production
         run: |
           set -euo pipefail
-          curl -fsS --proto '=https' -H 'Cache-Control: no-cache' \
-            "https://qw.x86.com.br/api/v1/trust/metadata/timestamp.json?renewal=${GITHUB_RUN_ID}" \
-            -o "$RUNNER_TEMP/live-timestamp.json"
+          "$RUNNER_TEMP/x86qw-release" live-timestamp --out "$RUNNER_TEMP/live-timestamp.json"
           cmp "$RUNNER_TEMP/live-timestamp.json" site/public/api/v1/trust/metadata/timestamp.json
       - name: Renew timestamp.json with the online key
         env:
@@ -87,9 +85,7 @@ jobs:
         run: |
           set -euo pipefail
           (cd go && "$RUNNER_TEMP/x86qw-release" monitor --warning-hours 72)
-          curl -fsS --proto '=https' -H 'Cache-Control: no-cache' \
-            "https://qw.x86.com.br/api/v1/trust/metadata/timestamp.json?confirm=${GITHUB_RUN_ID}" \
-            -o "$RUNNER_TEMP/published.json"
+          "$RUNNER_TEMP/x86qw-release" live-timestamp --out "$RUNNER_TEMP/published.json"
           cmp "$RUNNER_TEMP/published.json" site/public/api/v1/trust/metadata/timestamp.json
       - name: Record the published timestamp on main
         env:
@@ -110,11 +106,19 @@ jobs:
           # Auto-merge stalls under the signed-commit rule; a squash merge
           # through the API is signed by GitHub once the checks are green.
           number="${url##*/}"
-          sleep 30
-          gh pr checks "$url" --required --watch --interval 30
-          gh api -X PUT "repos/${GITHUB_REPOSITORY}/pulls/${number}/merge" \
-            -f merge_method=squash \
-            -f commit_title="chore(trust): record published TUF timestamp v${version} (#${number})"
+          # Branch protection is strict: if main moves meanwhile, bring the
+          # branch up to date and wait for the checks again.
+          for attempt in 1 2 3; do
+            sleep 30
+            gh pr checks "$url" --required --watch --interval 30
+            if gh api -X PUT "repos/${GITHUB_REPOSITORY}/pulls/${number}/merge" \
+              -f merge_method=squash \
+              -f commit_title="chore(trust): record published TUF timestamp v${version} (#${number})"; then
+              break
+            fi
+            [ "$attempt" = 3 ] && exit 1
+            gh api -X PUT "repos/${GITHUB_REPOSITORY}/pulls/${number}/update-branch" || true
+          done
           gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${branch}"
       - name: Open an issue when the renewal fails
         if: failure()

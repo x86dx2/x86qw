@@ -95,6 +95,9 @@ planeje o trabalho antes de junho de 2027.
 - **A renovação recusou porque produção diverge de `main`.** Rode
   `gh workflow run site-deploy.yml` e, quando terminar,
   `gh workflow run tuf-timestamp-auto-renewal.yml`.
+- **Um deploy falhou e `main` tem mudanças do site que não estão no ar.** A
+  próxima renovação também publica o `site/public` de `main`, mas não espere
+  por ela: rode `gh workflow run site-deploy.yml`.
 - **O deploy recusou: "produção serve o timestamp N e main o M".** A renovação
   publicou e o PR que registra o timestamp ainda não entrou. Espere o merge
   dele; o deploy roda de novo.

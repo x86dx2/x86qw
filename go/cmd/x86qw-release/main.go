@@ -1,10 +1,11 @@
 // Command x86qw-release is the maintainer tooling for CLI releases and the
 // public TUF repository. Paths default to the checkout it runs in.
 //
-//	x86qw-release prepare --version V   puts a published CLI release into the checkout
+//	x86qw-release prepare|sign|prune|renew-timestamp|live-timestamp|site|monitor ... --version V   puts a published CLI release into the checkout
 //	x86qw-release sign                  signs the checked-out catalog as the next generation
 //	x86qw-release prune                 drops TUF files the current generation does not use
 //	x86qw-release renew-timestamp --key PEM --out FILE
+//	x86qw-release live-timestamp --out FILE   saves the timestamp production serves
 //	x86qw-release site --out DIR --commit SHA
 //	x86qw-release monitor [--checkout]
 package main
@@ -21,6 +22,7 @@ var commands = map[string]func(args []string) int{
 	"sign":            runSign,
 	"prune":           runPrune,
 	"renew-timestamp": runRenew,
+	"live-timestamp":  runLiveTimestamp,
 	"site":            runSite,
 	"monitor":         runMonitor,
 }

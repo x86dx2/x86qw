@@ -23,6 +23,8 @@ const (
 	CatalogTarget = "catalog/catalog.json"
 	// DefaultBaseURL is the public TUF repository (metadata/ and targets/).
 	DefaultBaseURL = "https://qw.x86.com.br/api/v1/trust/"
+	// UserAgent is how the client identifies itself to the repository.
+	UserAgent = "x86qw-go"
 
 	catalogMaxBytes = 2 * 1024 * 1024
 )
@@ -101,7 +103,7 @@ func LoadCatalog(opts Options) (*Catalog, error) {
 	base := opts.Fetcher
 	if base == nil {
 		df := fetcher.NewDefaultFetcher()
-		df.SetHTTPUserAgent("x86qw-go")
+		df.SetHTTPUserAgent(UserAgent)
 		base = df
 	}
 	observer := &observingFetcher{base: base}

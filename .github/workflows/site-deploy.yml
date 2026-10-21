@@ -52,9 +52,7 @@ jobs:
         run: |
           set -euo pipefail
           checkout=site/public/api/v1/trust/metadata/timestamp.json
-          curl -fsS --proto '=https' -H 'Cache-Control: no-cache' \
-            "https://qw.x86.com.br/api/v1/trust/metadata/timestamp.json?deploy=${GITHUB_RUN_ID}" \
-            -o "$RUNNER_TEMP/live-timestamp.json"
+          "$RUNNER_TEMP/x86qw-release" live-timestamp --out "$RUNNER_TEMP/live-timestamp.json"
           live="$(jq -r .signed.version "$RUNNER_TEMP/live-timestamp.json")"
           ours="$(jq -r .signed.version "$checkout")"
           if [ "$ours" -lt "$live" ]; then
