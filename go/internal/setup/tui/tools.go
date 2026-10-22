@@ -44,10 +44,8 @@ func onTarget(command string, extra ...string) func(m *Model) []string {
 
 var tools = []toolSpec{
 	{name: "doctor", report: onTarget("doctor")},
-	{name: "verify", report: onTarget("verify"), actions: []toolAction{{id: "repair", args: onTarget("repair", "--yes"), changes: true}}},
 	{name: "upgrade", report: onTarget("upgrade", "--dry-run"), actions: []toolAction{{id: "apply", args: onTarget("upgrade", "--yes"), changes: true}}},
 	{name: "changes", report: onTarget("changes"), actions: []toolAction{{id: "gitignore", args: onTarget("changes", "--sync-gitignore")}}},
-	{name: "library", report: onTarget("library")},
 	{name: "profile", report: onTarget("profile"), actions: []toolAction{
 		{id: "backup", args: func(m *Model) []string {
 			return []string{"profile", "--target", m.target(), "--backup", newBackup()}

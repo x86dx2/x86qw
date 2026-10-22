@@ -22,6 +22,7 @@ func toolNamed(name string) *toolSpec {
 func TestToolsRunInAFloatingPanel(t *testing.T) {
 	m := started(t, true)
 	m.lang = EN
+	toConsole(m)
 	m.focus = homeRow(m, "tools")
 	drive(m, key("enter"))
 	if m.modal == nil || m.modal.kind != "tools" {

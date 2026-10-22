@@ -334,7 +334,8 @@ func (m *Model) matchRows() []reviewRow {
 	g := m.game
 	match := g.match
 	game := m.gameInfo()
-	rows := []reviewRow{{"m.game", m.t("m.game"), game.Label}}
+	// The game's own facts come last and start shut: the choices come first.
+	var rows []reviewRow
 	if game.Modes {
 		summary := ""
 		if mode := m.matchMode(); mode != nil {
@@ -351,6 +352,10 @@ func (m *Model) matchRows() []reviewRow {
 		rules += " · ezQuake " + match.Channel
 	}
 	rows = append(rows, reviewRow{"m.rules", m.t("m.rules"), rules})
+	if m.opts.Intent.WantsClient() {
+		rows = append(rows, reviewRow{"m.player", m.t("m.player"), m.sectionSummary("config")})
+	}
+	rows = append(rows, reviewRow{"m.game", m.t("m.game"), game.Label})
 	return append(rows, reviewRow{"play", m.t("m.play"), ""})
 }
 
@@ -416,6 +421,8 @@ func (m *Model) matchDetails(id string) [][2]string {
 			rows = append(rows, [2]string{"", note})
 		}
 		return rows
+	case "m.player":
+		return [][2]string{{m.t("m.player"), m.sectionSummary("config")}, {"", m.t("m.player.d")}}
 	case "m.rules":
 		rows := [][2]string{{m.t("m.rules"), m.ruleset(match.Ruleset)}}
 		if _, ok := texts["rs."+match.Ruleset+".d"]; ok {
@@ -468,9 +475,11 @@ func (m *Model) gameDock(width int) *page {
 		note = m.spinner() + "  " + fmt.Sprintf(m.t("servers."+g.acting), g.subject)
 	}
 	if m.screen == scServers {
-		// The servers have no main action: the dock holds the note alone,
-		// one line, there from the start, so the list never moves.
+		// The servers' dock: a note line, always there so the list never
+		// moves, then the action of the focused server.
 		p.add(p.st(color).Render("  " + ansi.Truncate(note, width-4, "…")))
+		p.gap(1)
+		m.serverBar(p)
 		return p
 	}
 	if note != "" {
@@ -511,7 +520,27 @@ func (m *Model) gameDock(width int) *page {
 	return p
 }
 
+// serverBar is the servers' action row: the focused server's main action,
+// with the others beside it and their keys.
+func (m *Model) serverBar(p *page) {
+	server := m.focusedServer()
+	right := "ctrl+o " + m.t("k.observe") + "   ctrl+f " + m.t("k.favorite")
+	if server != nil && server.QTV != "" {
+		right = "ctrl+w " + m.t("k.qtv") + "   " + right
+	}
+	enabled := server != nil && m.game.acting == ""
+	label := m.t("k.join")
+	if server != nil {
+		label += " " + ansi.Truncate(server.Title, 40, "…")
+	}
+	m.primary(p, reviewRow{"act:join", label, ""}, true, enabled, m.actingHere(), right)
+}
+
 func (m *Model) activateMatch(id string) tea.Cmd {
+	if id == "m.player" {
+		// The player's section of the setup, with the way back to here.
+		return m.openSetupAt(scMatch, "m.player", "config")
+	}
 	if id != "play" {
 		m.openModal(id)
 		return nil
@@ -887,7 +916,7 @@ func (m *Model) toggleFavorite() tea.Cmd {
 // serversHints are the keys of the servers screen as it stands.
 func (m *Model) serversHints() [][2]string {
 	g := m.game
-	back := [2]string{"esc", m.t("k.home")}
+	back := [2]string{"esc", m.t("k.contexts")}
 	if g.filter.String() != "" {
 		back = [2]string{"esc", m.t("k.clear")}
 	}
@@ -975,7 +1004,7 @@ func (m *Model) hostPage(p *page) {
 		case "stopping":
 			p.lead(m.t("host.state.stopping"))
 		default:
-			p.lead(m.t("host.running"))
+			p.lead(fmt.Sprintf(m.t("host.running"), m.instancesUp(), m.connectHost()))
 		}
 		p.gap(1)
 		host := m.connectHost()
@@ -1096,28 +1125,6 @@ func (m *Model) openScreen(s screen) tea.Cmd {
 	return nil
 }
 
-// homeRows are the rows of home each app screen comes from.
-var homeRows = map[screen]string{scMatch: "play", scServers: "servers", scHost: "host"}
-
-// backHome returns from an app screen to its row of home, with what home
-// shows read again.
-func (m *Model) backHome() tea.Cmd {
-	from := m.screen
-	if m.existing == nil {
-		// Opened from the end of an install that could not be read back:
-		// its last step is home.
-		m.screen, m.focus = scDone, 0
-		return nil
-	}
-	m.screen, m.panelView = scPanel, ""
-	m.focusRow(homeRows[from])
-	cmds := []tea.Cmd{m.loadStack()}
-	if !m.game.serversLoading && time.Since(m.game.serversAt) > serversFresh {
-		cmds = append(cmds, m.loadServers())
-	}
-	return tea.Batch(cmds...)
-}
-
 // gameKey handles the keys of the app's screens.
 func (m *Model) gameKey(msg tea.KeyPressMsg) tea.Cmd {
 	key := msg.String()
@@ -1128,7 +1135,7 @@ func (m *Model) gameKey(msg tea.KeyPressMsg) tea.Cmd {
 		if m.screen == scMatch {
 			if m.game.catalog == nil {
 				if key == "esc" {
-					return m.backHome()
+					return m.toRail()
 				}
 				return nil
 			}
@@ -1138,7 +1145,7 @@ func (m *Model) gameKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		if m.screen == scHost && !m.game.stackLoaded {
 			if key == "esc" {
-				return m.backHome()
+				return m.toRail()
 			}
 			return nil
 		}
@@ -1158,7 +1165,7 @@ func (m *Model) gameKey(msg tea.KeyPressMsg) tea.Cmd {
 				return m.copyText(shellJoin(append([]string{"x86qw"}, m.game.match.Args(m.target())...)))
 			}
 		case "esc", "left", "backspace":
-			return m.backHome()
+			return m.toRail()
 		}
 	case scServers:
 		servers := m.visibleServers()
@@ -1187,7 +1194,7 @@ func (m *Model) gameKey(msg tea.KeyPressMsg) tea.Cmd {
 				m.focus = 0
 				return nil
 			}
-			return m.backHome()
+			return m.toRail()
 		default:
 			if m.game.filter.Key(msg) {
 				m.focus = 0

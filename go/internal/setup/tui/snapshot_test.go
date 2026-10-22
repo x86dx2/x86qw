@@ -130,6 +130,7 @@ func TestSnapshots(t *testing.T) {
 	m := New(Config{Backend: &setup.Demo{ExistingInstall: true}, Target: "/Users/x86/Games/x86qw", Lang: PT, Demo: true, Theme: "dark"})
 	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
 	drive(m, run(m.Init())...)
+	toConsole(m)
 	save(m, "dark-13-panel")
 	m.focus = homeRow(m, "update")
 	drive(m, key("enter"))

@@ -361,6 +361,9 @@ func (m *Model) clickRow(id string) tea.Cmd {
 			}
 		}
 	case scServers:
+		if id == "act:join" {
+			return m.joinServer(false)
+		}
 		if index, err := strconv.Atoi(strings.TrimPrefix(id, "srv")); err == nil && strings.HasPrefix(id, "srv") {
 			if m.focus == index {
 				return m.joinServer(false)
