@@ -5,19 +5,18 @@ import (
 	"bytes"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/x86dx2/x86qw/go/internal/download"
 )
 
 func publishedCache(t *testing.T) []string {
 	t.Helper()
 	dir := os.Getenv("X86QW_COMPONENT_CACHE")
 	if dir == "" {
-		output, err := exec.Command("getconf", "DARWIN_USER_CACHE_DIR").Output()
-		if err == nil {
-			dir = filepath.Join(strings.TrimSpace(string(output)), "x86qw", "components")
+		if root, err := download.CacheDir(); err == nil {
+			dir = filepath.Join(root, "components")
 		}
 	}
 	paths, _ := filepath.Glob(filepath.Join(dir, "*.zip"))
