@@ -239,3 +239,49 @@ func TestMaterializeSweepsWhatADeadSessionLeft(t *testing.T) {
 		}
 	}
 }
+
+// A session that died after the first journal write, halfway through the
+// links, is cleaned up on the next run: the members it published go, and a
+// personal file put where a member was still to go stays, as does a file
+// that was there before.
+func TestRecoveryRemovesAPayloadCutHalfway(t *testing.T) {
+	journal := testJournal(t)
+	gamedir := filepath.Join(journal.Target, "qw")
+	os.MkdirAll(filepath.Join(gamedir, "configs"), 0o755)
+	before := filepath.Join(gamedir, "configs", "member-0001.txt")
+	os.WriteFile(before, []byte("content 1"), 0o644)
+	pk3 := filepath.Join(gamedir, "ktx.pk3")
+	writePK3(t, pk3, payload(40))
+	if _, err := MaterializePK3(pk3, gamedir, "KTX", journal); err != nil {
+		t.Fatal(err)
+	}
+	// Back to the first write: every member still to be linked.
+	for _, item := range journal.list("materialized_files") {
+		if entry := item.(map[string]any); entry["created_by_session"] == true {
+			entry["state"] = "pending"
+		}
+	}
+	for _, name := range []string{"locs/member-0000.txt", "bots/maps/member-0002.txt", "sound/ktx/member-0003.txt"} {
+		os.Remove(filepath.Join(gamedir, filepath.FromSlash(name)))
+	}
+	personal := filepath.Join(gamedir, "locs", "member-0000.txt")
+	os.WriteFile(personal, []byte("content 0"), 0o644)
+	// No controller left to ask: the session is over.
+	journal.Data["controller"], journal.Data["status"] = nil, "starting"
+	if err := journal.write(); err != nil {
+		t.Fatal(err)
+	}
+	if err := RecoverSessions(journal.Target, func(string) {}); err != nil {
+		t.Fatal(err)
+	}
+	var left []string
+	filepath.WalkDir(gamedir, func(path string, entry os.DirEntry, err error) error {
+		if relative, _ := filepath.Rel(gamedir, path); err == nil && !entry.IsDir() {
+			left = append(left, filepath.ToSlash(relative))
+		}
+		return nil
+	})
+	if strings.Join(left, ",") != "configs/member-0001.txt,ktx.pk3,locs/member-0000.txt" {
+		t.Fatalf("left after recovery: %v", left)
+	}
+}
