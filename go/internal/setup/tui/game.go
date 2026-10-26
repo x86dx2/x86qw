@@ -792,7 +792,16 @@ func (m *Model) serversPage(p *page) {
 		p.add(p.st(t.Error).Render("  " + m.glyphs.Fail + "  " + m.explain(g.serversErr)))
 		return
 	}
-	p.lead(fmt.Sprintf(m.t("servers.lead"), len(g.servers)))
+	// The Hub lists only servers with someone on them: a list with nobody
+	// on any is the favorites and recents, there because the Hub is not.
+	switch {
+	case len(g.servers) == 0:
+		p.lead(m.t("servers.none"))
+	case !slices.ContainsFunc(g.servers, func(s setup.PublicServer) bool { return s.Humans+s.Bots > 0 }):
+		p.lead(m.t("servers.offline"))
+	default:
+		p.lead(fmt.Sprintf(m.t("servers.lead"), len(g.servers)))
+	}
 	p.gap(1)
 	filter := g.filter.String()
 	label := p.st(t.Gray).Render("  " + m.t("pick.search") + "  ")

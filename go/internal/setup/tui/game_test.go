@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -121,4 +122,29 @@ func TestMatchDrawsBeforeItsCatalog(t *testing.T) {
 	m.View()
 	m.click("row:play")
 	drive(m, key("enter"), key("p"))
+}
+
+// listed is the demo with servers of its own on the list.
+type listed struct {
+	*setup.Demo
+	servers []setup.PublicServer
+}
+
+func (l listed) Servers(context.Context, string) ([]setup.PublicServer, error) { return l.servers, nil }
+
+// A Hub where nobody plays says so. Favorites with nobody on them are what
+// stands in for a Hub that cannot be reached, and the lead says that.
+func TestServersLeadTellsAQuietHubFromAnUnreachableOne(t *testing.T) {
+	for want, servers := range map[string][]setup.PublicServer{
+		"Nobody is playing":      nil,
+		"The Hub is unreachable": {{Address: "fav.example:27500", Title: "fav.example:27500", Map: "-", Mode: "-", Favorite: true}},
+		"1 servers with players": {{Address: "a.example:27500", Title: "A", Map: "dm6", Mode: "duel", Humans: 2}},
+	} {
+		m := New(Config{Backend: listed{&setup.Demo{ExistingInstall: true, Speed: 200}, servers}, Target: shortTarget(t), Lang: EN, Start: "servers"})
+		drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
+		drive(m, run(m.Init())...)
+		if view := stripANSI(m.View().Content); !strings.Contains(view, want) {
+			t.Errorf("%q missing:\n%s", want, view)
+		}
+	}
 }

@@ -231,6 +231,8 @@ var texts = map[string][2]string{
 	"servers.title":     {"Servidores", "Servers"},
 	"servers.loading":   {"buscando servidores", "finding servers"},
 	"servers.lead":      {"%d servidores com jogadores agora. Enter entra na partida.", "%d servers with players now. Enter joins the match."},
+	"servers.none":      {"Ninguém está jogando no Hub agora.", "Nobody is playing on the Hub right now."},
+	"servers.offline":   {"O Hub não responde: estes são seus favoritos e recentes. Enter entra na partida.", "The Hub is unreachable, so these are your favorites and recents. Enter joins the match."},
 	"host.title":        {"Servidor", "Server"},
 	"host.lead":         {"Seu servidor KTX. Enter ajusta as instâncias; Iniciar sobe todas juntas.", "Your KTX server. Enter adjusts the instances; Start brings them all up together."},
 	"host.running":      {"no ar · %d instâncias · %s", "up · %d instances · %s"},

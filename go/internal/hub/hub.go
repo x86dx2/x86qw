@@ -263,7 +263,8 @@ func Active(rows []any) []any {
 	return active
 }
 
-// Servers fetches the Hub and falls back to the local library.
+// Servers fetches the Hub and falls back to the local library when the
+// Hub cannot be reached; a Hub where nobody plays lists no server.
 func Servers(ctx context.Context, root string) ([]Server, error) {
 	rows, err := Fetch(ctx, &http.Client{})
 	rows = Active(rows)
@@ -275,7 +276,10 @@ func Servers(ctx context.Context, root string) ([]Server, error) {
 			}
 		}
 	}
-	if err != nil || valid == 0 {
+	if err == nil && valid == 0 {
+		return []Server{}, nil
+	}
+	if err != nil {
 		if rows, err = Library(root); err != nil {
 			return nil, err
 		}

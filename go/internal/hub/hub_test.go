@@ -1,9 +1,16 @@
 package hub
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/x86dx2/x86qw/go/internal/maint"
 	"github.com/x86dx2/x86qw/go/internal/play"
 )
 
@@ -95,5 +102,37 @@ func TestListedServersCanBeJoined(t *testing.T) {
 	}
 	if _, err := play.OpenArguments(t.TempDir(), "qw://"+*servers[0].QTVStream+"/qtvplay"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// hubAnswer is the Hub's reply to every request; empty, no connection.
+type hubAnswer string
+
+func (h hubAnswer) RoundTrip(request *http.Request) (*http.Response, error) {
+	if h == "" {
+		return nil, errors.New("no connection")
+	}
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(string(h))), Header: http.Header{}, Request: request}, nil
+}
+
+// A Hub where nobody plays lists no server; the favorites and recents
+// stand in only for a Hub that cannot be reached.
+func TestTheLibraryStandsInOnlyForAnUnreachableHub(t *testing.T) {
+	saved := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = saved })
+	root := t.TempDir()
+	if err := maint.AddFavorite(root, "fav.example:27500", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	http.DefaultTransport = hubAnswer(`[{"server_type":"game","software_type":"mvdsv","address":"empty.example:27500","players":[]}]`)
+	if servers, err := Servers(context.Background(), root); err != nil || servers == nil || len(servers) != 0 {
+		t.Fatalf("quiet Hub: %+v %v", servers, err)
+	}
+	http.DefaultTransport = hubAnswer("")
+	if servers, err := Servers(context.Background(), root); err != nil || len(servers) != 1 || servers[0].Address != "fav.example:27500" {
+		t.Fatalf("unreachable Hub: %+v %v", servers, err)
+	}
+	if _, err := Servers(context.Background(), t.TempDir()); err == nil {
+		t.Fatal("an unreachable Hub without favorites or recents must say so")
 	}
 }

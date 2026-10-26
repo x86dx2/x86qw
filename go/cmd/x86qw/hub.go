@@ -30,6 +30,9 @@ func runHub(args []string, stdout, stderr io.Writer) int {
 		}
 		return output.ExitSuccess
 	}
+	if len(servers) == 0 {
+		fmt.Fprintln(stdout, "Nobody is playing on the Hub right now.")
+	}
 	for _, server := range servers {
 		fmt.Fprintf(stdout, "  %-28s %-6s %-10s %2d+%-2d %s\n", server.Address, server.Mode, server.Map, server.Players.Humans, server.Players.Bots, server.Title)
 	}
