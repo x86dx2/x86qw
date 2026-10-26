@@ -3,8 +3,6 @@
 package services
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"io"
 	"os"
@@ -17,11 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/play"
 	"github.com/x86dx2/x86qw/go/internal/pyjson"
-	"github.com/x86dx2/x86qw/go/internal/receipt"
 )
 
 // These tests supervise /bin/sleep and /bin/sh stand-ins; no game server is
@@ -181,22 +177,7 @@ func TestRecoveryEndsOnlyGroupsOfThisBoot(t *testing.T) {
 func TestALocalServerTakesHashedRcon(t *testing.T) {
 	journal := testJournal(t)
 	target := journal.Target
-	variant, err := install.HostVariant()
-	if err != nil {
-		t.Skip(err)
-	}
-	relative := runtimePaths["mvdsv"][variant]
-	binary := []byte("mvdsv stand-in")
-	os.WriteFile(filepath.Join(target, filepath.FromSlash(relative)), binary, 0o755)
-	digest := sha256.Sum256(binary)
-	inventory := receipt.MarshalInventory([]receipt.Entry{{Path: relative, SHA256: hex.EncodeToString(digest[:])}})
-	inventoryDigest := sha256.Sum256(inventory)
-	record := &receipt.Receipt{Keys: []string{"format", "component", "selection", "source", "inventory_sha256"},
-		Values: map[string]string{"format": "1", "component": "mvdsv", "selection": "1", "source": "test", "inventory_sha256": hex.EncodeToString(inventoryDigest[:])}}
-	dir := filepath.Join(target, filepath.FromSlash(receipt.ComponentsDir), "mvdsv")
-	os.MkdirAll(dir, 0o700)
-	os.WriteFile(filepath.Join(dir, "inventory"), inventory, 0o644)
-	os.WriteFile(filepath.Join(dir, "receipt"), record.Marshal(), 0o644)
+	fakeRuntime(t, target, "mvdsv")
 	os.MkdirAll(filepath.Join(target, "qw"), 0o755)
 	session := &Session{}
 	game := play.Game{ID: "ktx", Label: "KTX", Gamedir: "qw", PersonalConfig: "qw/x86qw-ktx-user.cfg"}
