@@ -345,16 +345,32 @@ func Purge(target string) (*Report, error) {
 			return nil, err
 		}
 		removeEmptyMetadata(target, true)
-		if lexists(filepath.Join(target, metadataDirectory)) || (kept == 0 && lexists(target)) {
+		if lexists(filepath.Join(target, metadataDirectory)) || (kept == 0 && !onlyRemovedAfterExit(target)) {
 			return nil, errors.New("What is left of the installation is not empty and was kept.")
 		}
-		if kept > 0 {
+		switch {
+		case kept > 0:
 			report.info("Kept %d items that x86QW did not make in %s.", kept, target)
-		} else {
+		case lexists(target):
+			report.success("Installation folder removed once this command ends: %s", target)
+		default:
 			report.success("Installation folder removed: %s", target)
 		}
 	}
 	return report, nil
+}
+
+// onlyRemovedAfterExit reports whether all that is left in target is what
+// this process set aside to remove once it ends: on Windows, the running
+// x86qw.exe.
+func onlyRemovedAfterExit(target string) bool {
+	entries, _ := os.ReadDir(target)
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), fmt.Sprintf("-quarantine.%d", os.Getpid())) {
+			return false
+		}
+	}
+	return true
 }
 
 // ownNames are the top-level names in target that x86QW and the games it
