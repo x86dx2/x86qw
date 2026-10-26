@@ -202,6 +202,10 @@ func realpath(path string) string {
 			return absolute
 		}
 	}
+	// A file removed while it runs: its folder still resolves.
+	if dir, err := filepath.EvalSymlinks(filepath.Dir(path)); err == nil {
+		return filepath.Join(dir, filepath.Base(path))
+	}
 	return path
 }
 

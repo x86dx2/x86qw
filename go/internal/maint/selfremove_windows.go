@@ -62,3 +62,7 @@ func removeWhenGone(pids []int, path string) bool {
 	command.Process.Release()
 	return true
 }
+
+// removesItself is never true on Windows, where a running executable cannot
+// be removed: it is set aside and goes once it exits.
+func removesItself(path string) bool { return false }

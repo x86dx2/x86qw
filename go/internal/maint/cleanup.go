@@ -208,8 +208,15 @@ func minimalRemovalPaths(paths []string) []string {
 func quarantineRemove(paths []string) error {
 	type moved struct{ original, aside string }
 	var done []moved
+	var running []string
 	for _, path := range paths {
 		if deferLauncher(path) {
+			continue
+		}
+		// The CLI removing itself goes in place, last: set aside, it would
+		// not match its own lock, which would then look abandoned.
+		if removesItself(path) {
+			running = append(running, path)
 			continue
 		}
 		aside := filepath.Join(filepath.Dir(path), fmt.Sprintf(".x86qw-%s-quarantine.%d", filepath.Base(path), os.Getpid()))
@@ -226,6 +233,9 @@ func quarantineRemove(paths []string) error {
 		if err := os.RemoveAll(item.aside); err != nil && !removeAfterExit(item.original, item.aside) {
 			errs = append(errs, err)
 		}
+	}
+	for _, path := range running {
+		errs = append(errs, os.Remove(path))
 	}
 	return errors.Join(errs...)
 }
