@@ -135,3 +135,14 @@ func TestOldAccentedNamesLoadPlain(t *testing.T) {
 		t.Fatalf("recipe: %+v %v", recipe, err)
 	}
 }
+
+// A comma separates the five keys of --keys, so it cannot be one of them:
+// the command that repeats the installation would not read back.
+func TestACommaIsNoKey(t *testing.T) {
+	o := Defaults(Play, "/tmp/x86qw")
+	o.Nick = "p"
+	o.Keys = Keys{Preset: "custom", Forward: "w", Back: "s", Left: "a", Right: "d", Jump: ","}
+	if err := o.Validate(); err == nil {
+		t.Fatalf("a comma key passed; the recipe reads %q", o.Recipe())
+	}
+}

@@ -41,7 +41,13 @@ func TestPrintedCommandsRunInPowerShell(t *testing.T) {
 		t.Fatal(err)
 	}
 	args := []string{"host", "--target", folder, "--servers", "duel:dm6,ffa:dm3+bots", "--server-name", "x86QW (KTX) #1 & co @home", "--base-port", "27500"}
-	for _, command := range [][]string{append([]string{program}, args...), append([]string{"x86qw"}, args...)} {
+	// A nick PowerShell would split at the dot, and a selection of no
+	// component, which Windows PowerShell 5.1 would drop as an empty argument.
+	o := Defaults(Play, folder)
+	o.Nick, o.Content, o.Components = "-x.y-", "custom", nil
+	recipe := o.Recipe()[1:]
+	for _, command := range [][]string{append([]string{program}, args...), append([]string{"x86qw"}, args...), append([]string{program}, recipe...)} {
+		args := command[1:]
 		line := ShellJoin(command)
 		shell := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", line)
 		shell.Env = append(os.Environ(), "X86QW_TEST_ECHO=1", "PATH="+folder+";"+os.Getenv("PATH"))

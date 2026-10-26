@@ -135,10 +135,11 @@ func PlainName(name string) string {
 
 // KeyName reports whether key can be bound in the client: one visible ASCII
 // character but the quote, or a key name such as space, uparrow or mouse2.
-// The console would run anything else after the bind as another command.
+// The console would run anything else after the bind as another command. A
+// comma separates the keys of --keys, so the recipe could not hold one.
 func KeyName(key string) bool {
 	if len(key) == 1 {
-		return key[0] > ' ' && key[0] < 0x7f && key[0] != '"'
+		return key[0] > ' ' && key[0] < 0x7f && key[0] != '"' && key[0] != ','
 	}
 	return key != "" && strings.IndexFunc(key, func(r rune) bool {
 		return (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_'
@@ -318,17 +319,23 @@ func (s Server) Validate() error {
 // pasted into: a POSIX shell, or on Windows PowerShell, where the installer
 // runs and a comma would split a list.
 func ShellJoin(args []string) string {
-	special, quote := " \t\"'$`\\!*?;&|<>()[]{}~#", func(arg string) string { return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'" }
+	// zsh looks up a word that starts with "=" as a command.
+	special, quote := " \t\"'$`\\!*?;&|<>()[]{}~#=", func(arg string) string { return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'" }
+	dashed := func(string) bool { return false }
 	if runtime.GOOS == "windows" {
 		// PowerShell takes the typographic quotes for ' too; doubled, any of them is literal.
 		special = " \t\"'$`;&|<>()[]{}@#,%‘’‚‛“”„"
 		quote = func(arg string) string {
 			return "'" + strings.NewReplacer("'", "''", "‘", "‘‘", "’", "’’", "‚", "‚‚", "‛", "‛‛").Replace(arg) + "'"
 		}
+		// It also splits a word that starts with a dash at a dot: -x.y- is -x .y-.
+		dashed = func(arg string) bool {
+			return strings.HasPrefix(arg, "-") && strings.TrimLeft(arg, "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") != ""
+		}
 	}
 	out := make([]string, len(args))
 	for index, arg := range args {
-		if arg == "" || strings.ContainsAny(arg, special) {
+		if arg == "" || strings.ContainsAny(arg, special) || dashed(arg) {
 			out[index] = quote(arg)
 		} else {
 			out[index] = arg
@@ -356,7 +363,13 @@ func (o Options) Recipe() []string {
 		if keys == "custom" || keys == "" {
 			keys = strings.Join([]string{o.Keys.Forward, o.Keys.Back, o.Keys.Left, o.Keys.Right, o.Keys.Jump}, ",")
 		}
-		args = append(args, "--nick", strings.TrimSpace(o.Nick), "--content", content, "--keys", keys,
+		// Windows PowerShell 5.1 drops an empty argument: no component is --content=.
+		contentArgs := []string{"--content", content}
+		if content == "" {
+			contentArgs = []string{"--content="}
+		}
+		args = append(append(args, "--nick", strings.TrimSpace(o.Nick)), contentArgs...)
+		args = append(args, "--keys", keys,
 			"--sensitivity", strconv.FormatFloat(o.Mouse.Sensitivity, 'f', -1, 64))
 		if o.Mouse.Invert {
 			args = append(args, "--invert-mouse")
