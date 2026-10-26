@@ -127,6 +127,19 @@ func TestDuplicateKeys(t *testing.T) {
 	}
 }
 
+// Python keeps a lone surrogate and then refuses to write it; Go would turn
+// it into U+FFFD, so "\ud800" and "\udc00" would become the same key.
+func TestUnpairedSurrogates(t *testing.T) {
+	for _, document := range []string{`"\ud800"`, `"\udc00"`, `"\ud800x"`, `"\ud800A"`, `"\udc00\ud800"`, `{"\ud800": 1, "\udc00": 2}`} {
+		if value, err := Decode([]byte(document), LastWins); err == nil {
+			t.Errorf("unpaired surrogate accepted: %s -> %q", document, value)
+		}
+	}
+	if value, err := Decode([]byte(`"😀"`), RejectDuplicates); err != nil || value != "😀" {
+		t.Fatalf("surrogate pair misread: %q %v", value, err)
+	}
+}
+
 func TestNumericEquality(t *testing.T) {
 	if !Eq(true, Number("1")) || !Eq(Number("1.0"), Number("1")) || Eq("1", Number("1")) {
 		t.Fatal("numeric equality differs from Python")
