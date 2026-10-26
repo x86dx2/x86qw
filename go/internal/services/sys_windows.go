@@ -234,7 +234,10 @@ func startDetached(arguments []string, dir string, output *os.File, hidden bool)
 		return rollback(err, true)
 	}
 	if hidden {
-		go hideWindows(uint32(pid))
+		// Opened while the command still holds pid, so it names no other process later.
+		if process, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(pid)); err == nil {
+			go hideWindows(uint32(pid), process)
+		}
 	}
 	return command, nil
 }
@@ -256,16 +259,11 @@ var (
 	})
 )
 
-// hideWindows hides what pid shows during its first seconds. MVDSV opens a
-// window of its own, visible from creation whatever the STARTUPINFO says,
-// and closing it ends the whole stack; MVDSV itself hides it the same way
-// when it starts minimized.
-func hideWindows(pid uint32) {
-	// The open handle keeps pid from naming another process meanwhile.
-	process, err := windows.OpenProcess(windows.SYNCHRONIZE, false, pid)
-	if err != nil {
-		return
-	}
+// hideWindows hides what pid, open as process, shows during its first
+// seconds, then closes process. MVDSV opens a window of its own, visible
+// from creation whatever the STARTUPINFO says, and closing it ends the
+// whole stack; MVDSV itself hides it the same way when it starts minimized.
+func hideWindows(pid uint32, process windows.Handle) {
 	defer windows.CloseHandle(process)
 	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
 		enumWindows.Call(hideWindow(), uintptr(pid))
