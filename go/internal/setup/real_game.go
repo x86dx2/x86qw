@@ -179,7 +179,8 @@ func (r *Real) Servers(ctx context.Context, target string) ([]PublicServer, erro
 			favorites[strings.ToLower(entry.Address)] = true
 		}
 	}
-	var out []PublicServer
+	// Empty, not nil, when nobody plays: the app fetches again only when stale.
+	out := []PublicServer{}
 	for _, server := range servers {
 		item := PublicServer{Address: server.Address, Title: server.Title, Map: server.Map, Mode: server.Mode,
 			Humans: server.Players.Humans, Bots: server.Players.Bots, Favorite: favorites[strings.ToLower(server.Address)]}
