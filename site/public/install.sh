@@ -27,12 +27,16 @@ else
   echo "x86QW: sha256sum or shasum is required to verify the download." >&2; exit 1
 fi
 
-work=$(mktemp -d "${TMPDIR:-/tmp}/x86qw-bootstrap.XXXXXX")
+# Some Linux systems mount /tmp noexec: there the binary runs from the user's cache.
+parent="${TMPDIR:-/tmp}"
+if [ "$(uname -s)" = Linux ]; then parent="${XDG_CACHE_HOME:-$HOME/.cache}"; mkdir -p "$parent"; fi
+work=$(mktemp -d "$parent/x86qw-bootstrap.XXXXXX")
 trap 'rm -rf "$work"' EXIT INT TERM
 binary="$work/x86qw"
 
 echo "· Downloading x86QW ${VERSION} (${FILE})"
-curl --proto "$PROTOCOLS" --tlsv1.2 -fsSL --retry 3 --retry-all-errors --connect-timeout 15 --max-time 300 \
+# No deadline, so a slow link finishes; a stalled one fails and retries.
+curl --proto "$PROTOCOLS" --tlsv1.2 -fsSL --retry 3 --retry-all-errors --connect-timeout 15 --speed-limit 1024 --speed-time 60 \
   -o "$binary" "${URL_BASE}/${FILE}"
 
 actual_size=$(wc -c < "$binary" | tr -d ' ')

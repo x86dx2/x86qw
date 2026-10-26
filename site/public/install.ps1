@@ -19,9 +19,15 @@ try {
   Write-Host "- Downloading x86QW $Version ($File)"
   Add-Type -AssemblyName System.Net.Http
   $Client = [System.Net.Http.HttpClient]::new()
-  $Client.Timeout = [TimeSpan]::FromSeconds(300)
+  # A slow link has half an hour; a dropped one gets one more try.
+  $Client.Timeout = [TimeSpan]::FromMinutes(30)
   try {
-    $Bytes = $Client.GetByteArrayAsync($Url).GetAwaiter().GetResult()
+    try {
+      $Bytes = $Client.GetByteArrayAsync($Url).GetAwaiter().GetResult()
+    } catch {
+      Write-Host "- The download failed; trying once more"
+      $Bytes = $Client.GetByteArrayAsync($Url).GetAwaiter().GetResult()
+    }
   } finally { $Client.Dispose() }
   if ($Bytes.Length -ne $Size) { throw "x86QW: unexpected size ($($Bytes.Length), expected $Size); nothing was installed." }
   [IO.File]::WriteAllBytes($Binary, $Bytes)
