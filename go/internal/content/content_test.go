@@ -2,6 +2,7 @@ package content
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
@@ -37,6 +38,24 @@ func TestCheckoutInventoriesValidate(t *testing.T) {
 	}
 	if _, err := LoadManifest(project.Path(ManifestPath)); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A catalog entry served from dist must describe that file, or installs fail.
+func TestCatalogPackagesMatchTheirDistributionFiles(t *testing.T) {
+	manifest := object("files", object("clients/a.zip", object("size", pyjson.Number("3"), "sha256", strings.Repeat("a", 64))))
+	catalog := func() *Object {
+		return object("packages", []any{object("distribution_path", "clients/a.zip", "size", pyjson.Number("3"), "sha256", strings.Repeat("a", 64))})
+	}
+	if err := distributionPackagesMatch(catalog(), manifest); err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range map[string]any{"size": pyjson.Number("4"), "sha256": strings.Repeat("b", 64), "distribution_path": "clients/b.zip"} {
+		document := catalog()
+		firstObject(document, "packages").Set(key, value)
+		if distributionPackagesMatch(document, manifest) == nil {
+			t.Errorf("a catalog package with another %s was accepted", key)
+		}
 	}
 }
 

@@ -222,6 +222,18 @@ var mutations = []mutation{
 		raw, _ := os.ReadFile(path)
 		replaceFile(t, path, append(raw, 'x'))
 	}},
+	{"catalog-differs-from-dist", func(t *testing.T, root string) {
+		relative := firstManifestFile(t, root)
+		path := filepath.Join(root, DistDir, filepath.FromSlash(relative))
+		raw, _ := os.ReadFile(path)
+		raw = append(raw, 'x')
+		replaceFile(t, path, raw)
+		editJSON(t, filepath.Join(root, ManifestPath), true, func(d *Object) {
+			metadata := d.Value("files").(*Object).Value(relative).(*Object)
+			metadata.Set("size", intNumber(len(raw)))
+			metadata.Set("sha256", sha256Hex(raw))
+		})
+	}},
 	{"dist-missing-file", func(t *testing.T, root string) {
 		os.Remove(filepath.Join(root, DistDir, filepath.FromSlash(firstManifestFile(t, root))))
 	}},

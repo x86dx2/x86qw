@@ -1,5 +1,6 @@
 {
  "capabilities-duplicate-key": "[ERROR] cannot read capabilities catalog: <root>/maintenance/inventory/capabilities.json",
+ "catalog-differs-from-dist": "[ERROR] packages[1] does not match its distribution file: clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage",
  "catalog-diverges-from-tuf-target": "[ERROR] TUF does not authenticate the local catalog: the local catalog differs from the TUF target; sign it with x86qw-release sign",
  "catalog-package-size": "[ERROR] packages[0].size must be a positive integer",
  "compatibility-unknown-runtime": "[ERROR] compatibility references invalid kind or runtime",
