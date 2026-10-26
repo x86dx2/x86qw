@@ -269,8 +269,11 @@ sibling folder, applies only `0644` or `0755` and promotes the result by
 rename; the destination must not exist beforehand. A failure before promotion
 removes only the staging area.
 
-When materializing for the dedicated server, the PK3 first goes through that
-extraction and only then is copied atomically, recorded in the journal, into
-MVDSV's context. A different personal file is never overwritten. Personal
+When materializing for the dedicated server, the PK3 goes through that
+extraction into a staging folder beside MVDSV's context, and its members are
+published there as hard links, which never replace a file. The journal records
+the whole payload in one write before any member is published, so a session
+that dies halfway is cleaned up on the next run. A different personal file is
+never overwritten. Personal
 configurations, logs and demos are not treated as managed content. See the
 [file boundary ADR](adr/0002-single-archive-boundary.md).

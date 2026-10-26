@@ -15,29 +15,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/play"
 	"github.com/x86dx2/x86qw/go/internal/pyjson"
 )
 
 // These tests supervise /bin/sleep and /bin/sh stand-ins; no game server is
 // ever started.
-
-func testJournal(t *testing.T) *Journal {
-	t.Helper()
-	target := t.TempDir()
-	self, status := lock.Identity(os.Getpid())
-	if status != "alive" {
-		t.Skip("process identity unavailable")
-	}
-	owner := &lock.Owner{SessionID: "20261019T120000Z-0123456789ab", Command: "host",
-		ControllerPID: self.PID, ControllerStartToken: self.Token, ControllerExecutable: self.Executable}
-	journal, err := NewJournal(target, owner, false, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return journal
-}
 
 func quiet() *Console { return &Console{Out: io.Discard, Err: io.Discard} }
 
