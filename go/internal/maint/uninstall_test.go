@@ -154,7 +154,7 @@ func TestPurgeKeepsWhatX86QWDidNotMake(t *testing.T) {
 	write(t, filepath.Join(root, "taxes.pdf"), "unrelated")
 	// What a write cut short left beside x86QW's own files goes too; a logs
 	// folder, which neither x86QW nor its servers make, stays.
-	write(t, filepath.Join(root, ".x86qw.123456.tmp"), "half a CLI")
+	write(t, filepath.Join(root, "."+cli.BinaryName()+".123456.tmp"), "half a CLI")
 	write(t, filepath.Join(root, "..gitignore.123456.tmp"), "half a .gitignore")
 	write(t, filepath.Join(root, "logs", "mine.log"), "the user's")
 	report, err := Purge(root)
