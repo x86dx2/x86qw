@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/cli"
 )
 
@@ -76,6 +77,99 @@ func TestUninstallOfACLIOnlyFolderKeepsPersonalFiles(t *testing.T) {
 		t.Fatal("the demo was deleted")
 	}
 	if !strings.Contains(strings.Join(report.Lines, "\n"), "Permanent x86QW CLI removed") {
+		t.Fatalf("report: %v", report.Lines)
+	}
+}
+
+// Only a regular file at <target>/x86qw is the CLI: a folder there, such as
+// another installation, survives the uninstall of the outer one.
+func TestUninstallKeepsAFolderNamedLikeTheCLI(t *testing.T) {
+	isolate(t)
+	inner := managedInstall(t)
+	outer := filepath.Dir(inner)
+	write(t, filepath.Join(outer, filepath.FromSlash(stateRelative)), read(t, filepath.Join(inner, filepath.FromSlash(stateRelative))))
+	if _, err := Uninstall(outer); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(filepath.Join(inner, "qw", "demos", "match.mvd")) {
+		t.Fatal("the uninstall deleted the folder named like the CLI")
+	}
+}
+
+// A managed file the user replaced with a link is theirs: uninstall keeps
+// it, says so and still finishes.
+func TestUninstallKeepsAManagedFileTurnedIntoALink(t *testing.T) {
+	isolate(t)
+	root := managedInstall(t)
+	elsewhere := filepath.Join(t.TempDir(), "my-map.bsp")
+	write(t, elsewhere, "my own map")
+	managed := filepath.Join(root, "qw", "maps", "x86qw-a.bsp")
+	os.Remove(managed)
+	if err := os.Symlink(elsewhere, managed); err != nil {
+		t.Skip(err)
+	}
+	report, err := Uninstall(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !exists(managed) || exists(filepath.Join(root, ".x86qw")) {
+		t.Fatalf("link kept %v, metadata left %v", exists(managed), exists(filepath.Join(root, ".x86qw")))
+	}
+	if !strings.Contains(strings.Join(report.Warnings, "\n"), "x86qw-a.bsp") {
+		t.Fatalf("warnings: %v", report.Warnings)
+	}
+}
+
+// A managed folder the user turned into a link to elsewhere leads out of
+// the installation: what lies there is not uninstalled.
+func TestUninstallStaysInsideTheInstallation(t *testing.T) {
+	isolate(t)
+	root := managedInstall(t)
+	shared := filepath.Join(t.TempDir(), "shared-maps")
+	if err := os.Rename(filepath.Join(root, "qw", "maps"), shared); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(shared, filepath.Join(root, "qw", "maps")); err != nil {
+		t.Skip(err)
+	}
+	report, err := Uninstall(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !exists(filepath.Join(shared, "x86qw-a.bsp")) || !strings.Contains(strings.Join(report.Warnings, "\n"), "x86qw-a.bsp") {
+		t.Fatalf("outside the installation: a %v; warnings %v", exists(filepath.Join(shared, "x86qw-a.bsp")), report.Warnings)
+	}
+}
+
+// Purge removes what x86QW and its games made, inventoried or not, and keeps
+// what was in the folder before, as the installer promised.
+func TestPurgeKeepsWhatX86QWDidNotMake(t *testing.T) {
+	cache := isolate(t)
+	ownedCache(t, cache)
+	root := managedInstall(t)
+	record(t, root, "mvdsv", map[string]string{"docs/licenses/mvdsv.md": "license"})
+	write(t, filepath.Join(root, "arena", "maps", "downloaded.bsp"), "from a server")
+	write(t, filepath.Join(root, catalog.ClientSpecs[1].Runtime("nightly")+".x86qw-kept.1"), "the copy repair kept")
+	write(t, filepath.Join(root, "Doom", "save.dsg"), "another game's save")
+	write(t, filepath.Join(root, "taxes.pdf"), "unrelated")
+	// What a write cut short left beside x86QW's own files goes too; a logs
+	// folder, which neither x86QW nor its servers make, stays.
+	write(t, filepath.Join(root, "."+cli.BinaryName()+".123456.tmp"), "half a CLI")
+	write(t, filepath.Join(root, "..gitignore.123456.tmp"), "half a .gitignore")
+	write(t, filepath.Join(root, "logs", "mine.log"), "the user's")
+	report, err := Purge(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := os.ReadDir(root)
+	var left []string
+	for _, entry := range entries {
+		left = append(left, entry.Name())
+	}
+	if strings.Join(left, ",") != "Doom,logs,taxes.pdf" {
+		t.Fatalf("left behind: %v", left)
+	}
+	if !strings.Contains(strings.Join(report.Lines, "\n"), "Kept 3 items") {
 		t.Fatalf("report: %v", report.Lines)
 	}
 }

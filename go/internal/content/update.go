@@ -1,8 +1,6 @@
 package content
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
@@ -354,7 +353,7 @@ func (p *Project) downloadAsset(root string, asset Asset, known *Object, reuse s
 	}
 	if known != nil && isFile(target) {
 		info, _ := os.Stat(target)
-		digest, _ := fileSHA256(target)
+		digest, _ := archive.FileSHA256(target)
 		if pyjson.EqInt(known.Value("size"), info.Size()) && pyjson.Eq(known.Value("sha256"), digest) &&
 			pyjson.Eq(known.Value("url"), asset.URL) && pyjson.EqInt(known.Value("size"), asset.ExpectedSize) &&
 			pyjson.Eq(known.Value("sha256"), asset.ExpectedSHA256) {
@@ -373,7 +372,7 @@ func (p *Project) downloadAsset(root string, asset Asset, known *Object, reuse s
 			copyFile(reuse, staging)
 		}
 		size, _ := fileSize(staging)
-		digest, _ := fileSHA256(staging)
+		digest, _ := archive.FileSHA256(staging)
 		reused = size == asset.ExpectedSize && digest == asset.ExpectedSHA256
 	}
 	if !reused {
@@ -383,15 +382,11 @@ func (p *Project) downloadAsset(root string, asset Asset, known *Object, reuse s
 		}
 	}
 	if asset.ExpectedGitSHA1 != "" {
-		file, err := os.Open(staging)
+		digest, err := GitBlobSHA1(staging)
 		if err != nil {
 			return nil, false, err
 		}
-		digest := sha1.New()
-		fmt.Fprintf(digest, "blob %d\x00", asset.ExpectedSize)
-		io.Copy(digest, file)
-		file.Close()
-		if hex.EncodeToString(digest.Sum(nil)) != asset.ExpectedGitSHA1 {
+		if digest != asset.ExpectedGitSHA1 {
 			return nil, false, fmt.Errorf("download Git blob identity mismatch for %s", safeURLForLog(asset.URL))
 		}
 	}
@@ -965,7 +960,7 @@ func (p *Project) ezquakeSourceRevision(asset Asset) (string, error) {
 		if upstream.Value("id") != "ezquake-nightly" || !pyjson.Eq(upstream.Value("version"), version) {
 			continue
 		}
-		if revision, ok := upstream.Value("revision").(string); ok && hex40Strict.MatchString(revision) {
+		if revision, ok := upstream.Value("revision").(string); ok && hex40Pattern.MatchString(revision) {
 			return revision, nil
 		}
 	}
@@ -1043,16 +1038,15 @@ func (p *Project) updateEZQuakeCatalog(catalog *Object, assets []Asset, manifest
 		if channel == "stable" {
 			tag = "ezquake-" + version
 		}
-		repository := PrimaryRepository
+		urls := []any{"https://github.com/" + PrimaryRepository + "/releases/download/" + tag + "/" + filename}
 		if pyjson.Eq(template.Value("version"), version) && pyjson.Eq(template.Value("sha256"), metadata.Value("sha256")) {
-			for _, existing := range objectsOrStrings(template.Value("urls")) {
-				if found, _, err := GitHubReleaseCoordinates(existing, filename); err == nil {
-					repository = found
-					break
-				}
+			// The same release keeps its URLs: publish appends a mirror only
+			// once it checked it.
+			if published, ok := template.Value("urls").([]any); ok && len(published) > 0 {
+				urls = published
 			}
 		}
-		record.Set("urls", []any{"https://github.com/" + repository + "/releases/download/" + tag + "/" + filename, ArtifactURL(record)})
+		record.Set("urls", urls)
 		record.Set("mirror_title", "x86QW Content · ezQuake "+channel+" "+version)
 		record.Set("mirror_notes", "Cliente ezQuake "+channel+" "+version+" preservado pela distribuição x86QW.")
 		record.Set("mirror_latest", false)

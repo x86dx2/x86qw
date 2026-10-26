@@ -7,9 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/atomicfile"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/cli"
@@ -17,6 +19,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/plan"
 	"github.com/x86dx2/x86qw/go/internal/privfs"
+	"github.com/x86dx2/x86qw/go/internal/receipt"
 	"github.com/x86dx2/x86qw/go/internal/state"
 )
 
@@ -82,24 +85,41 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 		}
 	}
 	result := &Result{}
-	if len(outdated)+len(missing)+len(clients) == 0 && cliPackage == nil {
+	if len(outdated)+len(missing)+len(clients) == 0 && cliPackage == nil && !profileChanges(in) {
 		return result, nil
 	}
 	if err := refuseConfigMigrations(in.Root, append(append([]string{}, outdated...), missing...)); err != nil {
+		return nil, err
+	}
+	if err := hostRuns(in.Inventory, append(append([]string{}, outdated...), missing...)); err != nil {
 		return nil, err
 	}
 	current, err := state.Read(in.Root)
 	if err != nil {
 		return nil, fmt.Errorf("unreadable installation state: %w", err)
 	}
+	if in.Profile != "" {
+		current.Profile, current.RequestedComponents = in.Profile, in.Requested
+	}
 	held, err := lock.Acquire(in.Root, command)
 	if err != nil {
 		return nil, err
 	}
 	defer held.Release()
+	if err := stalePlan(in.Root, planned, labels); err != nil {
+		return nil, err
+	}
+	if len(outdated)+len(missing)+len(clients) == 0 && cliPackage == nil {
+		// Only the content choice changed: nothing installs, nothing to verify.
+		payload, err := stateDocument(in, current)
+		if err != nil {
+			return nil, err
+		}
+		return result, atomicfile.Write(filepath.Join(in.Root, ".x86qw", "state.json"), payload, 0o644)
+	}
 	paks := map[string]string{}
 	for _, name := range []string{"id1/pak0.pak", "id1/pak1.pak"} {
-		if paks[name], err = fileSHA256(filepath.Join(in.Root, name)); err != nil {
+		if paks[name], err = archive.FileSHA256(filepath.Join(in.Root, name)); err != nil {
 			return nil, err
 		}
 	}
@@ -124,7 +144,7 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 		case "Repair":
 			err = tx.RepairNightly(step.spec)
 		default: // Update or Restore reinstall the catalog release.
-			_, err = tx.InstallClient(ctx, in.Catalog, step.spec, step.channel)
+			_, err = tx.InstallClientRelease(ctx, in.Catalog, step.spec, step.channel, "")
 		}
 		if err != nil {
 			return fail(err)
@@ -142,8 +162,12 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 		result.Installed = append(result.Installed, batch...)
 		result.Files += count
 	}
+	// A PK3 of your own in qw/ changes the order, also with no component to update.
+	if err := tx.RefreshPackageOrder(); err != nil {
+		return fail(err)
+	}
 	for name, digest := range paks {
-		if actual, _ := fileSHA256(filepath.Join(in.Root, name)); actual != digest {
+		if actual, _ := archive.FileSHA256(filepath.Join(in.Root, name)); actual != digest {
 			return fail(fmt.Errorf("the recorded PAK %s changed during the update", name))
 		}
 	}
@@ -170,6 +194,42 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 	}
 	result.Warnings = tx.Warnings
 	return result, nil
+}
+
+// profileChanges reports whether in brings a content choice state.json does
+// not record yet.
+func profileChanges(in plan.Input) bool {
+	if in.Profile == "" {
+		return false
+	}
+	current, err := state.Read(in.Root)
+	return err != nil || current.Profile != in.Profile || !slices.Equal(current.RequestedComponents, in.Requested)
+}
+
+// stalePlan refuses a plan the installation moved past while it waited for
+// its answer, another command having updated it: it could take versions back.
+func stalePlan(root string, planned *plan.Plan, ids map[string]string) error {
+	changed := errors.New("the installation changed since this plan was made; run the command again")
+	for _, row := range planned.Operations {
+		switch {
+		case row.Kind == "CLI":
+			if planCLI(root) != row.Installed {
+				return changed
+			}
+		case row.Kind == "Client" && row.Action == "Update":
+			spec, channel, _ := clientRowTarget(row.Item)
+			payload, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(spec.Receipt(channel))))
+			if rec, err := receipt.ParseClient(payload, spec.Context(channel)); err != nil || rec.Get("selection") != row.Installed {
+				return changed
+			}
+		case row.Kind == "Component":
+			record, _, err := loadRecord(root, ids[row.Item])
+			if err != nil || (row.Action == "Add") != (record == nil) || (record != nil && row.Action == "Update" && record.Receipt.Get("selection") != row.Installed) {
+				return changed
+			}
+		}
+	}
+	return nil
 }
 
 func installBatch(ctx context.Context, tx *Transaction, in plan.Input, batch []string) (int, error) {
@@ -210,6 +270,7 @@ func installBatch(ctx context.Context, tx *Transaction, in plan.Input, batch []s
 				return 0, err
 			}
 		}
+		os.RemoveAll(filepath.Join(tx.Stage, "package-"+id)) // landed: the extraction goes
 	}
 	for _, id := range batch {
 		if id != "x86qw-client-bootstrap" {
@@ -268,6 +329,7 @@ func fetchPackage(ctx context.Context, tx *Transaction, id string, pkg catalog.P
 	if !download.Cached(cached, pin) {
 		return "", fmt.Errorf("package %s failed verification after the copy", pkg.Package)
 	}
+	os.Remove(temporary) // the cache holds it now
 	return cached, nil
 }
 
@@ -339,20 +401,31 @@ func refuseConfigMigrations(root string, batch []string) error {
 	return nil
 }
 
+// recordedComponents are the components with a receipt, what Verify holds
+// state.json to: also one this CLI's inventory no longer lists.
+func recordedComponents(root string) ([]string, error) {
+	records, err := receipt.LoadComponents(root)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	recorded := []string{}
+	for _, record := range records {
+		if !generatedRecords[record.ID] {
+			recorded = append(recorded, record.ID)
+		}
+	}
+	return recorded, nil
+}
+
 // stateDocument builds the new state.json after an update.
 func stateDocument(in plan.Input, current *state.State) ([]byte, error) {
-	var recorded []string
-	for _, id := range in.Inventory.IDs() {
-		if hasRecord(in.Root, id) {
-			recorded = append(recorded, id)
-		}
+	recorded, err := recordedComponents(in.Root)
+	if err != nil {
+		return nil, err
 	}
 	requested := current.RequestedComponents
 	if requested == nil {
 		requested = []string{}
-	}
-	if recorded == nil {
-		recorded = []string{}
 	}
 	document := map[string]any{
 		"capabilities":          []string{},

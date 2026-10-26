@@ -214,8 +214,8 @@ one's usage and options. Options can come before or after the folder.
 | `update` | Updates the installed ezQuake, components and CLI |
 | `upgrade` | Like `update`, and adds what your profile gained |
 | `verify` | Checks every managed file against the catalog and the receipts |
-| `repair` | Restores what `verify` reports, without touching what you edited |
-| `uninstall` | Removes the installation and keeps settings, PAKs and demos; `--purge` deletes everything |
+| `repair` | Restores what `verify` reports and keeps a copy of what you changed |
+| `uninstall` | Removes the installation and keeps settings, PAKs and demos; `--purge` also deletes personal data |
 | `library` | Favorites and recents; `--add` and `--remove` |
 | `profile` | Shows settings, cache and personal data; `--backup` and `--restore` |
 | `changes` | Shows files that are new, modified or removed compared with the installation |

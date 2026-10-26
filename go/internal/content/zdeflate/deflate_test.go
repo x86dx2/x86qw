@@ -9,11 +9,11 @@ import (
 	"io"
 	"math/rand"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
+
+	"github.com/x86dx2/x86qw/go/internal/download"
 )
 
 // cacheDir is where installations cache published packages.
@@ -21,11 +21,11 @@ func cacheDir() string {
 	if dir := os.Getenv("X86QW_COMPONENT_CACHE"); dir != "" {
 		return dir
 	}
-	output, err := exec.Command("getconf", "DARWIN_USER_CACHE_DIR").Output()
+	root, err := download.CacheDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(strings.TrimSpace(string(output)), "x86qw", "components")
+	return filepath.Join(root, "components")
 }
 
 func roundTrip(t *testing.T, raw []byte, label string) {

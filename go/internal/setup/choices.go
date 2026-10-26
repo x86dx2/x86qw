@@ -103,6 +103,7 @@ func LoadChoices(target string) (*Options, error) {
 		return nil, problem("", "err.choices", err.Error())
 	}
 	options.Target = target
+	options.Nick, options.Server.Name = PlainName(options.Nick), PlainName(options.Server.Name)
 	return &options, nil
 }
 
@@ -137,8 +138,12 @@ func ClientConfig(o Options, stamp int64) string {
 		{o.Keys.Forward, "+forward"}, {o.Keys.Back, "+back"}, {o.Keys.Left, "+moveleft"},
 		{o.Keys.Right, "+moveright"}, {o.Keys.Jump, "+jump"},
 	} {
-		if bind.key != "" && bind.key != "—" {
-			fmt.Fprintf(&b, "bind %-19s %s\n", bind.key, cfgQuote(bind.action))
+		key := bind.key
+		if key == ";" {
+			key = "semicolon" // a bare one would end the command
+		}
+		if KeyName(key) {
+			fmt.Fprintf(&b, "bind %-19s %s\n", key, cfgQuote(bind.action))
 		}
 	}
 	b.WriteString("\n")

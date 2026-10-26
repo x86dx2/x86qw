@@ -44,9 +44,12 @@ func requireHydrated(t *testing.T, root string) {
 func cloneCheckout(t *testing.T, root string) string {
 	t.Helper()
 	target := filepath.Join(t.TempDir(), "x86qw")
+	// cp -c clones on APFS; Windows has no cp at all.
 	if _, err := exec.Command("cp", "-cR", root, target).CombinedOutput(); err != nil {
-		if output, err := exec.Command("cp", "-R", root, target).CombinedOutput(); err != nil {
-			t.Fatalf("clone: %v: %s", err, output)
+		if _, err := exec.Command("cp", "-R", root, target).CombinedOutput(); err != nil {
+			if err := os.CopyFS(target, os.DirFS(root)); err != nil {
+				t.Fatalf("clone: %v", err)
+			}
 		}
 	}
 	// The worktree's .git file points at the real repository; never let a
@@ -219,6 +222,18 @@ var mutations = []mutation{
 		raw, _ := os.ReadFile(path)
 		replaceFile(t, path, append(raw, 'x'))
 	}},
+	{"catalog-differs-from-dist", func(t *testing.T, root string) {
+		relative := firstManifestFile(t, root)
+		path := filepath.Join(root, DistDir, filepath.FromSlash(relative))
+		raw, _ := os.ReadFile(path)
+		raw = append(raw, 'x')
+		replaceFile(t, path, raw)
+		editJSON(t, filepath.Join(root, ManifestPath), true, func(d *Object) {
+			metadata := d.Value("files").(*Object).Value(relative).(*Object)
+			metadata.Set("size", intNumber(len(raw)))
+			metadata.Set("sha256", sha256Hex(raw))
+		})
+	}},
 	{"dist-missing-file", func(t *testing.T, root string) {
 		os.Remove(filepath.Join(root, DistDir, filepath.FromSlash(firstManifestFile(t, root))))
 	}},
@@ -271,7 +286,8 @@ func TestVerifyRejectsCorruptions(t *testing.T) {
 			if err == nil {
 				t.Fatal("corruption accepted")
 			}
-			got := strings.ReplaceAll("[ERROR] "+err.Error(), clone+"/", "<root>/")
+			// Windows names the paths with backslashes.
+			got := strings.ReplaceAll(filepath.ToSlash("[ERROR] "+err.Error()), filepath.ToSlash(clone)+"/", "<root>/")
 			if got != want[item.name] {
 				t.Errorf("message differs:\nwant: %s\ngot:  %s", want[item.name], got)
 			}

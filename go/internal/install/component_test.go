@@ -2,22 +2,22 @@ package install
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
+	"github.com/x86dx2/x86qw/go/internal/download"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 )
 
 func componentCacheDir(t *testing.T) string {
 	t.Helper()
-	output, err := exec.Command("getconf", "DARWIN_USER_CACHE_DIR").Output()
+	root, err := download.CacheDir()
 	if err != nil {
 		t.Skip("no component cache")
 	}
-	dir := filepath.Join(strings.TrimSpace(string(output)), "x86qw", "components")
+	dir := filepath.Join(root, "components")
 	if _, err := os.Stat(dir); err != nil {
 		t.Skip("no component cache")
 	}
@@ -69,7 +69,7 @@ func TestPreparedPackagesMatchInstalledInventories(t *testing.T) {
 				if err := ValidateManagedPath(name); err != nil {
 					t.Fatal(err)
 				}
-				digest, _ := fileSHA256(filepath.Join(prepared.Managed, filepath.FromSlash(name)))
+				digest, _ := archive.FileSHA256(filepath.Join(prepared.Managed, filepath.FromSlash(name)))
 				entries = append(entries, receipt.Entry{Path: name, SHA256: digest})
 			}
 			if got := string(receipt.MarshalInventory(entries)); got != string(record.Inventory.Raw) {

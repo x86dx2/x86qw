@@ -3,12 +3,14 @@ package content
 import (
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"path/filepath"
-	"regexp"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
@@ -16,14 +18,10 @@ import (
 
 const githubAPIMaxBytes = 4 * 1024 * 1024
 
-var githubRepositoryPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
-
 // githubHeaders are the GitHub API headers, with the token from GH_TOKEN or
 // GITHUB_TOKEN.
 func (p *Project) githubHeaders() (map[string]string, error) {
-	headers := map[string]string{
-		"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": userAgent,
-	}
+	headers := maps.Clone(githubAPIHeaders)
 	token := p.env("GH_TOKEN")
 	if token == "" {
 		token = p.env("GITHUB_TOKEN")
@@ -46,7 +44,7 @@ func (p *Project) githubHeaders() (map[string]string, error) {
 func (p *Project) githubAPIObject(repository, endpoint, label string) (*Object, error) {
 	parts := strings.Split(repository, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || parts[0] == "." || parts[0] == ".." ||
-		parts[1] == "." || parts[1] == ".." || !githubRepositoryPattern.MatchString(repository) {
+		parts[1] == "." || parts[1] == ".." || !repositoryPattern.MatchString(repository) {
 		return nil, managerError("invalid GitHub repository: %s", pyRepr(repository))
 	}
 	headers, err := p.githubHeaders()
@@ -288,7 +286,7 @@ func (p *Project) LocalArtifact(pkg *Object) (string, error) {
 	if !isFile(path) || isSymlink(path) {
 		return "", fmt.Errorf("distribution artifact is missing: %s", path)
 	}
-	digest, err := fileSHA256(path)
+	digest, err := archive.FileSHA256(path)
 	if err != nil {
 		return "", err
 	}
@@ -427,10 +425,12 @@ func (p *Project) Commit(out io.Writer, message string, push bool) error {
 		fmt.Fprintln(out, "[OK] No changes to record in Git.")
 		return nil
 	}
-	if _, err := p.command(nil, "git", "add", "dist", "maintenance/inventory", "maintenance/recipes", CatalogPath); err != nil {
+	// The pathspec keeps whatever else the maintainer staged out of the commit.
+	paths := []string{"dist", "maintenance/inventory", "maintenance/recipes", CatalogPath}
+	if _, err := p.command(nil, "git", append([]string{"add"}, paths...)...); err != nil {
 		return err
 	}
-	staged, err := p.command(nil, "git", "diff", "--cached", "--name-only")
+	staged, err := p.command(nil, "git", append([]string{"diff", "--cached", "--name-only", "--"}, paths...)...)
 	if err != nil {
 		return err
 	}
@@ -440,7 +440,7 @@ func (p *Project) Commit(out io.Writer, message string, push bool) error {
 	if message == "" {
 		message = "chore(distribution): update preserved upstreams"
 	}
-	if _, err := p.command(nil, "git", "commit", "-m", message); err != nil {
+	if _, err := p.command(nil, "git", append([]string{"commit", "-m", message, "--"}, paths...)...); err != nil {
 		return err
 	}
 	if push {
@@ -451,7 +451,7 @@ func (p *Project) Commit(out io.Writer, message string, push bool) error {
 		if err != nil {
 			return err
 		}
-		if contains(strings.Fields(string(remotes)), "gitlab") {
+		if slices.Contains(strings.Fields(string(remotes)), "gitlab") {
 			if _, err := p.command(nil, "git", "push", "gitlab", "HEAD"); err != nil {
 				return err
 			}

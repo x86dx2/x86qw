@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/download"
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/output"
+	"github.com/x86dx2/x86qw/go/internal/setup"
 	"github.com/x86dx2/x86qw/go/internal/trust"
 )
 
@@ -26,6 +29,14 @@ func defaultCacheDir() string {
 		return ""
 	}
 	return filepath.Join(dir, download.TrustCacheName)
+}
+
+// interruptible is a context that Ctrl+C cancels, so an operation rolls back
+// instead of dying midway; a second Ctrl+C exits at once.
+func interruptible() (context.Context, context.CancelFunc) {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	context.AfterFunc(ctx, stop)
+	return ctx, stop
 }
 
 // targetFlag declares --target; the installation may also come as the
@@ -55,17 +66,7 @@ func targetOf(p *cliargs.Parser, flagTarget string) (string, error) {
 	if target == "" {
 		target = install.DefaultTarget()
 	}
-	return filepath.Abs(expandHome(target))
-}
-
-// expandHome turns a leading ~ into the home folder.
-func expandHome(path string) string {
-	if path == "~" || strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`) {
-		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, path[1:])
-		}
-	}
-	return path
+	return filepath.Abs(setup.ExpandHome(target))
 }
 
 // stdinIsTerminal is whether someone can answer (replaced by the tests).
@@ -93,13 +94,13 @@ func colorFor(w io.Writer, noColor bool) bool {
 // something: --yes goes ahead; on a terminal it asks; without one there
 // is nobody to ask, so it says to repeat with --yes and returns 2. A "no"
 // returns 0: nothing was asked to happen.
-func confirm(question, retry string, yes bool, stdout, stderr io.Writer) (proceed bool, code int) {
+func confirm(question string, retry []string, yes bool, stdout, stderr io.Writer) (proceed bool, code int) {
 	if yes {
 		return true, output.ExitSuccess
 	}
 	// While the app owns the terminal nobody can answer here either.
 	if !stdinIsTerminal() || appOpen {
-		fmt.Fprintf(stderr, "No terminal to confirm on. Run again with --yes: %s --yes\n", retry)
+		fmt.Fprintf(stderr, "No terminal to confirm on. Run again with --yes: %s --yes\n", setup.ShellJoin(retry))
 		return false, output.ExitUsage
 	}
 	fmt.Fprintf(stdout, "%s [y/N] ", question)

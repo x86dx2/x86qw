@@ -97,7 +97,7 @@ func (d *Demo) Catalog(context.Context) (*Catalog, error) {
 	}
 	return &Catalog{
 		Components: demoComponents, Profiles: profiles, CoreSize: demoCore,
-		ClientSize: demoClient, Modes: demoModes,
+		ClientSize: demoClient[HostPlatform()], Modes: demoModes,
 	}, nil
 }
 
@@ -198,7 +198,7 @@ func (d *Demo) checkFolder(o Options) found {
 	case errors.Is(err, os.ErrNotExist):
 	case err == nil && len(entries) > 0:
 		check.State, check.Value = CheckWarning, Say("folder.full")
-		check.Detail = Say("folder.full.d", shortPath(o.Target), len(entries))
+		check.Detail = Say("folder.full.d", ShortPath(o.Target), len(entries))
 		check.Fix = Say("folder.full.fix")
 	default:
 		check.Detail = Say("folder.empty")
@@ -554,7 +554,7 @@ var demoReports = map[string]string{
 	"changes": "\n· Local changes in the installation\n  M qw/maps/dm6.bsp  nquake-maps\n· 1 difference(s): A new, M modified, D removed.\n",
 	"library": "x86QW · library\nfavorites: 1\n  qw.example.com:27500\nrecents: 0\n",
 	"profile": "x86QW · profile\nsettings: ezquake/configs/config.cfg\npersonal data: 0\n",
-	"cleanup": "\nSafe cleanup\n✓ Regenerable data removed (12 files).\n· History, logs and demos were kept; use --personal-data to remove them.\n",
+	"cleanup": "\nSafe cleanup\n✓ Regenerable data removed (12 items).\n· History, logs and demos were kept; use --personal-data to remove them.\n",
 	"ui":      "/tmp/x86qw-ui-demo/x86qw.html\n",
 	"help":    "x86QW · modern QuakeWorld\n\nUsage: x86qw [COMMAND] [options]\n",
 }

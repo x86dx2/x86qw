@@ -173,7 +173,7 @@ func New(cfg Config) *Model {
 	}
 	m.opts = setup.Defaults(setup.Play, cfg.Target)
 	m.nick = NewField("", 15)
-	m.nick.Accept = func(r rune) bool { return r > ' ' && setup.NameRune(r) }
+	m.nick.Accept = func(r rune) bool { return r > ' ' && setup.PlainRune(r) }
 	return m
 }
 
@@ -688,6 +688,9 @@ func (m *Model) keyPress(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	}
+	if m.catalog == nil {
+		return nil // still loading: the screen offers ctrl+c only
+	}
 	if m.railOn {
 		return m.railKey(key)
 	}
@@ -815,7 +818,7 @@ func (m *Model) copyRecipe() tea.Cmd {
 		data, _ := m.opts.RecipeJSON()
 		return tea.SetClipboard(string(data))
 	}
-	return tea.SetClipboard(shellJoin(m.opts.Recipe()))
+	return tea.SetClipboard(setup.ShellJoin(m.opts.Recipe()))
 }
 
 // listNav moves the focus through n rows; it reports whether key did.
@@ -1039,7 +1042,8 @@ func (m *Model) View() tea.View {
 	room := m.h - first - 2
 	dock := m.dock(width)
 	if dock != nil {
-		room -= len(dock.lines) + 1
+		// A dock taller than the screen still leaves the body a row.
+		room = max(room-len(dock.lines)-1, 1)
 	}
 	// Body: in the upper third of the free space, from the body's first row.
 	// A body that changes height (a field showing up, a section opening)

@@ -45,3 +45,13 @@ func TestServicesDocuments(t *testing.T) {
 		t.Fatalf("numbers: %s", got)
 	}
 }
+
+// Floats come out as Python's json.dumps writes them, so files the Python
+// tools wrote and these match byte for byte.
+func TestFloatsAreWrittenLikePython(t *testing.T) {
+	for value, want := range map[float64]string{1234567.5: "1234567.5", 2: "2.0", 0.5: "0.5", 1e16: "1e+16", 1.5e-07: "1.5e-07", 123456789012.25: "123456789012.25"} {
+		if got, err := Dumps(value, -1); err != nil || got != want {
+			t.Errorf("%v: %q %v, want %q", value, got, err, want)
+		}
+	}
+}

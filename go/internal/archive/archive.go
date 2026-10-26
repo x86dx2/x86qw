@@ -106,7 +106,7 @@ func Open(source string, limits Limits) (*Plan, error) {
 	if info.Size() > limits.MaxSourceSize {
 		return nil, fail("ZIP file exceeds %d bytes", limits.MaxSourceSize)
 	}
-	digest, err := fileSHA256(source)
+	digest, err := FileSHA256(source)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +242,8 @@ func checkExtra(extra []byte, name string) error {
 	return nil
 }
 
-func utf16Units(value string) int { return len(utf16.Encode([]rune(value))) }
+// UTF16Units is the length of value in UTF-16 code units.
+func UTF16Units(value string) int { return len(utf16.Encode([]rune(value))) }
 
 func semanticKey(parts []string) string {
 	keys := make([]string, len(parts))
@@ -256,7 +257,7 @@ func validateName(name string, isDir bool, limits Limits) (string, []string, str
 	if name == "" {
 		return "", nil, "", fail("ZIP member without a name")
 	}
-	if utf16Units(name) > limits.MaxPathUTF16Units {
+	if UTF16Units(name) > limits.MaxPathUTF16Units {
 		return "", nil, "", fail("ZIP path exceeds %d UTF-16 units: %q", limits.MaxPathUTF16Units, name)
 	}
 	if strings.HasPrefix(name, "/") || strings.ContainsAny(name, `\:`) {
@@ -386,7 +387,8 @@ func extractMember(root string, member Member) error {
 	return os.Chmod(target, mode)
 }
 
-func fileSHA256(name string) (string, error) {
+// FileSHA256 is the hex SHA-256 of the file at name.
+func FileSHA256(name string) (string, error) {
 	file, err := os.Open(name)
 	if err != nil {
 		return "", err

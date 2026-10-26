@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"runtime"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/play"
+	"golang.org/x/text/unicode/norm"
 )
 
 // Intent is what the person wants to do with x86QW.
@@ -115,6 +117,35 @@ func PathTooLong(target string) bool { return len(target) > MVDSVPathRoom }
 // semicolon.
 func NameRune(r rune) bool { return r >= ' ' && r != '"' && r != '\\' && r != ';' && r != 0x7f }
 
+// PlainRune is what a nick or a server name may hold: a NameRune in ASCII.
+// The game sends names as bytes of the Quake charset, which has no accents,
+// so "Nélson" would reach the other players garbled.
+func PlainRune(r rune) bool { return r < 0x7f && NameRune(r) }
+
+// PlainName keeps the PlainRune runes of a name saved before names were
+// checked: "Zé" becomes "Ze", so older choices and recipes still work.
+func PlainName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if PlainRune(r) {
+			return r
+		}
+		return -1
+	}, norm.NFD.String(name))
+}
+
+// KeyName reports whether key can be bound in the client: one visible ASCII
+// character but the quote, or a key name such as space, uparrow or mouse2.
+// The console would run anything else after the bind as another command. A
+// comma separates the keys of --keys, so the recipe could not hold one.
+func KeyName(key string) bool {
+	if len(key) == 1 {
+		return key[0] > ' ' && key[0] < 0x7f && key[0] != '"' && key[0] != ','
+	}
+	return key != "" && strings.IndexFunc(key, func(r rune) bool {
+		return (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_'
+	}) < 0
+}
+
 // Ports lists the UDP game ports, one per instance.
 func (s Server) Ports() []int {
 	ports := make([]int, len(s.Instances))
@@ -205,10 +236,15 @@ func (o Options) Validate() error {
 		switch {
 		case nick == "":
 			return problem("nick", "v.nick")
-		case strings.IndexFunc(nick, func(r rune) bool { return !NameRune(r) }) >= 0:
+		case strings.IndexFunc(nick, func(r rune) bool { return !PlainRune(r) }) >= 0:
 			return problem("nick", "v.nick.chars")
 		case !slices.Contains(RulesetKeys, o.Experience):
 			return problem("experience", "v.ruleset", o.Experience)
+		}
+		for _, key := range []string{o.Keys.Forward, o.Keys.Back, o.Keys.Left, o.Keys.Right, o.Keys.Jump} {
+			if key != "" && key != "—" && !KeyName(key) {
+				return problem("keys", "v.key", key)
+			}
 		}
 	}
 	if o.Intent.WantsServer() {
@@ -222,11 +258,24 @@ func (s Server) Validate() error {
 	if strings.TrimSpace(s.Name) == "" {
 		return problem("server.name", "v.name")
 	}
-	if strings.IndexFunc(s.Name, func(r rune) bool { return !NameRune(r) }) >= 0 {
+	if strings.IndexFunc(s.Name, func(r rune) bool { return !PlainRune(r) }) >= 0 {
 		return problem("server.name", "v.name.chars")
 	}
 	if len(s.Instances) == 0 || len(s.Instances) > MaxInstances {
 		return problem("server.instances", "v.instances")
+	}
+	modes, err := play.LoadModes()
+	if err != nil {
+		return err
+	}
+	for _, instance := range s.Instances {
+		mode, err := play.FindMode(modes, instance.Mode)
+		if err != nil {
+			return problem("server.instances", "v.mode", instance.Mode)
+		}
+		if instance.Bots && !mode.Bots {
+			return problem("server.instances", "v.bots", mode.Label)
+		}
 	}
 	if s.Slots != 0 && (s.Slots < MinSlots || s.Slots > MaxSlots) {
 		return problem("server.slots", "v.slots", s.Slots)
@@ -266,6 +315,40 @@ func (s Server) Validate() error {
 	return nil
 }
 
+// ShellJoin quotes arguments, when they need it, for the shell they are
+// pasted into: a POSIX shell, or on Windows PowerShell, where the installer
+// runs and a comma would split a list.
+func ShellJoin(args []string) string {
+	// zsh looks up a word that starts with "=" as a command.
+	special, quote := " \t\"'$`\\!*?;&|<>()[]{}~#=", func(arg string) string { return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'" }
+	dashed := func(string) bool { return false }
+	if runtime.GOOS == "windows" {
+		// PowerShell takes the typographic quotes for ' too; doubled, any of them is literal.
+		special = " \t\"'$`;&|<>()[]{}@#,%‘’‚‛“”„"
+		quote = func(arg string) string {
+			return "'" + strings.NewReplacer("'", "''", "‘", "‘‘", "’", "’’", "‚", "‚‚", "‛", "‛‛").Replace(arg) + "'"
+		}
+		// It also splits a word that starts with a dash at a dot: -x.y- is -x .y-.
+		dashed = func(arg string) bool {
+			return strings.HasPrefix(arg, "-") && strings.TrimLeft(arg, "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") != ""
+		}
+	}
+	out := make([]string, len(args))
+	for index, arg := range args {
+		if arg == "" || strings.ContainsAny(arg, special) || dashed(arg) {
+			out[index] = quote(arg)
+		} else {
+			out[index] = arg
+		}
+	}
+	line := strings.Join(out, " ")
+	// PowerShell runs a quoted program only through its call operator.
+	if runtime.GOOS == "windows" && len(args) > 0 && out[0] != args[0] {
+		line = "& " + line
+	}
+	return line
+}
+
 // Recipe is the command that repeats this installation without questions.
 func (o Options) Recipe() []string {
 	args := []string{"x86qw", "setup", "--intent", string(o.Intent)}
@@ -280,7 +363,13 @@ func (o Options) Recipe() []string {
 		if keys == "custom" || keys == "" {
 			keys = strings.Join([]string{o.Keys.Forward, o.Keys.Back, o.Keys.Left, o.Keys.Right, o.Keys.Jump}, ",")
 		}
-		args = append(args, "--nick", strings.TrimSpace(o.Nick), "--content", content, "--keys", keys,
+		// Windows PowerShell 5.1 drops an empty argument: no component is --content=.
+		contentArgs := []string{"--content", content}
+		if content == "" {
+			contentArgs = []string{"--content="}
+		}
+		args = append(append(args, "--nick", strings.TrimSpace(o.Nick)), contentArgs...)
+		args = append(args, "--keys", keys,
 			"--sensitivity", strconv.FormatFloat(o.Mouse.Sensitivity, 'f', -1, 64))
 		if o.Mouse.Invert {
 			args = append(args, "--invert-mouse")

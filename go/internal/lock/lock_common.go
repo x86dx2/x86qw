@@ -194,10 +194,17 @@ type ProcessIdentity struct {
 }
 
 func realpath(path string) string {
+	if !filepath.IsAbs(path) {
+		return path // a bare argv[0] would resolve against the prober's folder
+	}
 	if resolved, err := filepath.EvalSymlinks(path); err == nil {
 		if absolute, err := filepath.Abs(resolved); err == nil {
 			return absolute
 		}
+	}
+	// A file removed while it runs: its folder still resolves.
+	if dir, err := filepath.EvalSymlinks(filepath.Dir(path)); err == nil {
+		return filepath.Join(dir, filepath.Base(path))
 	}
 	return path
 }

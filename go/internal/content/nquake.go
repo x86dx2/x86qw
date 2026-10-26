@@ -66,7 +66,7 @@ func LoadNQuakeInventory(path string) (*NQuakeInventory, error) {
 	inventory := &NQuakeInventory{Files: map[string]NQuakeFile{}}
 	inventory.Repository, _ = document.Value("repository").(string)
 	inventory.Revision, _ = document.Value("revision").(string)
-	if err := persistentURL(inventory.Repository, "nQuake repository"); err != nil || !hex40Strict.MatchString(inventory.Revision) {
+	if err := persistentURL(inventory.Repository, "nQuake repository"); err != nil || !hex40Pattern.MatchString(inventory.Revision) {
 		return invalid("repository or revision")
 	}
 	seen := map[string]bool{}
@@ -94,7 +94,7 @@ func LoadNQuakeInventory(path string) (*NQuakeInventory, error) {
 		digest, _ := entry.Value("sha256").(string)
 		blob, _ := entry.Value("git_sha1").(string)
 		if !pyjson.IsExactInt(entry.Value("size")) || int64Of(entry.Value("size")) < 0 ||
-			!sha256Pattern.MatchString(digest) || !hex40Strict.MatchString(blob) {
+			!sha256Pattern.MatchString(digest) || !hex40Pattern.MatchString(blob) {
 			return invalid("file " + path)
 		}
 		inventory.Files[path] = NQuakeFile{int64Of(entry.Value("size")), digest, blob}

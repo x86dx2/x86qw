@@ -12,6 +12,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/output"
 	"github.com/x86dx2/x86qw/go/internal/play"
 	"github.com/x86dx2/x86qw/go/internal/services"
+	"github.com/x86dx2/x86qw/go/internal/setup"
 )
 
 // serviceConsole builds the console for a service command.
@@ -63,19 +64,19 @@ func serviceMain(action string, args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			return serviceUsage("host", err, stdout, stderr)
 		}
-		op, common = &services.Operation{Action: "host", Host: options, Args: args}, &options.Common
+		op, common = &services.Operation{Action: "host", Host: options}, &options.Common
 	case "qtv":
 		options, err := services.ParseQtv(args)
 		if err != nil {
 			return serviceUsage("qtv", err, stdout, stderr)
 		}
-		op, common = &services.Operation{Action: "qtv", Qtv: options, Args: args}, &options.Common
+		op, common = &services.Operation{Action: "qtv", Qtv: options}, &options.Common
 	default:
 		options, err := services.ParseProxy(args)
 		if err != nil {
 			return serviceUsage("proxy", err, stdout, stderr)
 		}
-		op, common = &services.Operation{Action: "proxy", Proxy: options, Args: args}, &options.Common
+		op, common = &services.Operation{Action: "proxy", Proxy: options}, &options.Common
 	}
 	if common.Menu && !common.BackgroundChild {
 		// The server screen does what the host, QTV and proxy menus did.
@@ -85,7 +86,7 @@ func serviceMain(action string, args []string, stdout, stderr io.Writer) int {
 		if common.Target == "" {
 			common.Target = install.DefaultTarget()
 		}
-		root, _ := filepath.Abs(expandHome(common.Target))
+		root, _ := filepath.Abs(setup.ExpandHome(common.Target))
 		return runApp(realBackend("", install.HostPlatform()), root, "host", stdout, stderr)
 	}
 	return runService(op, common, stdout, stderr)

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
 // VerifyOptions tunes the repository hygiene checks that complement the
@@ -93,6 +95,9 @@ func (p *Project) Verify(out io.Writer, options VerifyOptions) error {
 	if err != nil {
 		return err
 	}
+	if err := distributionPackagesMatch(catalog, manifest); err != nil {
+		return err
+	}
 	sourceCount, err := p.VerifyPreservedSources(registry, distribution)
 	if err != nil {
 		return err
@@ -132,5 +137,25 @@ func (p *Project) Verify(out io.Writer, options VerifyOptions) error {
 		fmt.Fprintf(out, "[OK] Committed diff has no whitespace errors: %s\n", strings.Join(command, " "))
 	}
 	fmt.Fprintln(out, "[OK] Distribution and project structure validated.")
+	return nil
+}
+
+// distributionPackagesMatch requires each catalog package served from dist
+// to carry its file's size and SHA-256, which the manifest pins to the disk.
+func distributionPackagesMatch(catalog, manifest *Object) error {
+	files, _ := manifest.Value("files").(*Object)
+	if files == nil {
+		return fmt.Errorf("the distribution manifest lists no files")
+	}
+	for index, pkg := range objects(catalog.Value("packages")) {
+		path, ok := pkg.Value("distribution_path").(string)
+		if !ok {
+			continue
+		}
+		metadata, _ := files.Value(path).(*Object)
+		if metadata == nil || !pyjson.Eq(metadata.Value("size"), pkg.Value("size")) || !pyjson.Eq(metadata.Value("sha256"), pkg.Value("sha256")) {
+			return fmt.Errorf("packages[%d] does not match its distribution file: %s", index, path)
+		}
+	}
 	return nil
 }

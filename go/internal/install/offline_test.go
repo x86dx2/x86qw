@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -410,6 +411,135 @@ func TestOfflineRepairRestoresWhatWasDamaged(t *testing.T) {
 	if data, _ := os.ReadFile(filepath.Join(root, "qw", "maps", "x86qw-fixture.bsp")); string(data) != string(bsp("fixture map 1.0.0")) {
 		t.Fatalf("map not restored: %q", data)
 	}
+	if data, _ := os.ReadFile(appimage + ".x86qw-kept"); string(data) != "\x7fELF\x02 damaged" {
+		t.Fatalf("the changed ezQuake was not kept: %q", data)
+	}
+}
+
+// Repair puts back a managed file that changed and keeps the changed bytes
+// beside it, never over an earlier kept copy.
+func TestOfflineRepairKeepsACopyOfWhatChanged(t *testing.T) {
+	f := newFixture(t)
+	root := filepath.Join(t.TempDir(), "x86qw")
+	f.install(root, "essential")
+	pk3 := filepath.Join(root, "qw", "x86qw-fixture.pk3")
+	for _, damage := range []string{"first damage", "second damage"} {
+		if err := os.WriteFile(pk3, []byte(damage), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		result, err := Repair(f.ctx, f.input(root))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(strings.Join(result.Warnings, "\n"), "x86qw-fixture.pk3.x86qw-kept") {
+			t.Fatalf("warnings: %v", result.Warnings)
+		}
+	}
+	if data, _ := os.ReadFile(pk3); string(data) != "fixture pk3 1.0.0" {
+		t.Fatalf("not restored: %q", data)
+	}
+	for kept, want := range map[string]string{pk3 + ".x86qw-kept": "first damage", pk3 + ".x86qw-kept.1": "second damage"} {
+		if data, _ := os.ReadFile(kept); string(data) != want {
+			t.Errorf("%s: %q", filepath.Base(kept), data)
+		}
+	}
+	if _, err := Verify(root); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A cancelled installation stops at its next package, also when every
+// package is in the cache, and leaves nothing behind.
+func TestOfflineInstallStopsWhenCancelled(t *testing.T) {
+	f := newFixture(t)
+	f.install(filepath.Join(t.TempDir(), "cached"), "essential")
+	root := filepath.Join(t.TempDir(), "x86qw")
+	ctx, cancel := context.WithCancel(f.ctx)
+	cancel()
+	_, err := Install(ctx, root, f.catalog(), f.inventory, InstallOptions{Platform: "linux", Channel: "nightly", Profile: "essential"})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected the cancellation, got %v", err)
+	}
+	// The folder did not exist before: it does not after either.
+	if _, err := os.Lstat(root); err == nil {
+		entries, _ := os.ReadDir(root)
+		t.Errorf("the cancelled installation left its folder: %v", entries)
+	}
+}
+
+// A PK3 of your own in qw/ does not block an update of ezQuake alone.
+func TestOfflineClientUpdateWithAPersonalPK3(t *testing.T) {
+	f := newFixture(t)
+	root := filepath.Join(t.TempDir(), "x86qw")
+	f.install(root, "essential")
+	if err := os.WriteFile(filepath.Join(root, "qw", "zz-mine.pk3"), []byte("my skins"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f.nightly("20260201-000000_bcdef01")
+	in := f.input(root)
+	planned, err := plan.Update(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(f.ctx, "update", in, planned); err != nil {
+		t.Fatal(err)
+	}
+	if order, _ := os.ReadFile(filepath.Join(root, "qw", "pak.lst")); string(order) != "x86qw-fixture.pk3\nzz-mine.pk3\n" {
+		t.Fatalf("qw/pak.lst: %q", order)
+	}
+}
+
+// A component a newer CLI no longer lists stays installed and recorded: the
+// update goes on around it, and repair finds nothing to refuse.
+func TestOfflineUpdateKeepsAComponentTheInventoryDropped(t *testing.T) {
+	f := newFixture(t)
+	root := filepath.Join(t.TempDir(), "x86qw")
+	f.install(root, "essential")
+	f.nightly("20260201-000000_bcdef01")
+	inventory, err := catalog.ParseInventory([]byte(`{"content_namespaces":["x86qw"],"profiles":{"essential":["fixture-extra"]},"profile_history":{},` +
+		`"components":[{"id":"fixture-extra","label":"Test extra","kind":"maps","requires":[]}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.inventory = inventory
+	in := f.input(root)
+	planned, err := plan.Update(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(f.ctx, "update", in, planned); err != nil {
+		t.Fatal(err)
+	}
+	if current, err := state.Read(root); err != nil || strings.Join(current.Installed(), ",") != "fixture-maps" {
+		t.Fatalf("state.json: %+v %v", current, err)
+	}
+	if _, err := Repair(f.ctx, f.input(root)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A component the catalog stops publishing blocks no update: there is just
+// nothing to update it to.
+func TestOfflineUpdateSkipsAComponentTheCatalogDropped(t *testing.T) {
+	f := newFixture(t)
+	root := filepath.Join(t.TempDir(), "x86qw")
+	f.install(root, "essential")
+	f.nightly("20260201-000000_bcdef01")
+	published := f.packages[:0]
+	for _, pkg := range f.packages {
+		if pkg.Package != "fixture-maps" {
+			published = append(published, pkg)
+		}
+	}
+	f.packages = published
+	in := f.input(root)
+	planned, err := plan.Update(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(f.ctx, "update", in, planned); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestOfflineRepairRebuildsAMissingState(t *testing.T) {
@@ -461,5 +591,195 @@ func TestOfflineRepairRefusesAClientTheCatalogDropped(t *testing.T) {
 	after, _ := os.ReadDir(root)
 	if len(after) != len(before) {
 		t.Fatal("the refused repair changed the installation")
+	}
+}
+
+// A crash between the new ezQuake and its receipt leaves a runtime the
+// receipt does not describe, of a release the catalog has dropped: update
+// finishes the swap. A runtime of the user's own stays refused.
+func TestOfflineUpdateFinishesAnInterruptedClientSwap(t *testing.T) {
+	f := newFixture(t)
+	root := filepath.Join(t.TempDir(), "x86qw")
+	f.install(root, "essential")
+	body := f.nightly("20260201-000000_bcdef01") // replaces the installed release
+	appimage := filepath.Join(root, "ezquake-nightly-x86_64.AppImage")
+	for _, attempt := range []struct {
+		runtime []byte
+		lands   bool
+	}{{[]byte("\x7fELF\x02 mine"), false}, {body, true}} {
+		if err := os.WriteFile(appimage, attempt.runtime, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		in := f.input(root)
+		in.ClientAction = ClientAction(root)
+		planned, err := plan.Update(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = Apply(f.ctx, "update", in, planned)
+		if (err == nil) != attempt.lands {
+			t.Fatalf("runtime %q: %v", attempt.runtime[:8], err)
+		}
+		if data, _ := os.ReadFile(appimage); string(data) != string(attempt.runtime) {
+			t.Fatal("the runtime changed")
+		}
+	}
+	if _, err := Verify(root); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A qw/pak.lst the user edited stops an update with a way out: repair puts
+// the managed order back and keeps the edited one beside it.
+func TestOfflineAnEditedPackageOrderPointsToRepair(t *testing.T) {
+	f := newFixture(t)
+	root := filepath.Join(t.TempDir(), "x86qw")
+	f.install(root, "essential")
+	order := filepath.Join(root, "qw", "pak.lst")
+	if err := os.WriteFile(order, []byte("my-order.pk3\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f.nightly("20260201-000000_bcdef01")
+	in := f.input(root)
+	planned, err := plan.Update(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(f.ctx, "update", in, planned); err == nil || !strings.Contains(err.Error(), "repair") {
+		t.Fatalf("the update should point to repair: %v", err)
+	}
+	if _, err := Repair(f.ctx, f.input(root)); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(order + ".x86qw-kept"); string(data) != "my-order.pk3\n" {
+		t.Fatalf("the edited order was not kept: %q", data)
+	}
+	if _, err := Verify(root); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A plan waits for its answer; when another command updated the
+// installation meanwhile, applying it would take versions back: it is
+// refused instead.
+func TestOfflineAStalePlanIsRefused(t *testing.T) {
+	f := newFixture(t)
+	root := filepath.Join(t.TempDir(), "x86qw")
+	f.install(root, "essential")
+	version := func(v string) {
+		f.component("fixture-maps", "x86qw", v, map[string][]byte{"qw/x86qw-fixture.pk3": []byte("fixture pk3 " + v), "docs/licenses/fixture/LICENSE": []byte("fixture license\n")})
+	}
+	version("1.1.0")
+	old := f.input(root)
+	planned, err := plan.Update(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Meanwhile the app updates to 1.2.0.
+	version("1.2.0")
+	newer := f.input(root)
+	meanwhile, err := plan.Update(newer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(f.ctx, "update", newer, meanwhile); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(f.ctx, "update", old, planned); err == nil {
+		t.Fatal("the stale plan was applied")
+	}
+	if got := selection(t, root, "fixture-maps"); got != "1.2.0" {
+		t.Fatalf("fixture-maps went back to %s", got)
+	}
+}
+
+// The content choice the app applies reaches state.json, also when it
+// installs nothing new, so `x86qw upgrade` later plans from it.
+func TestOfflineApplyRecordsTheChosenProfile(t *testing.T) {
+	f := newFixture(t)
+	root := filepath.Join(t.TempDir(), "x86qw")
+	f.install(root, "essential")
+	f.setInventory(map[string][]string{"essential": {"fixture-maps"}, "complete": {"fixture-maps"}})
+	in := f.input(root)
+	in.Profile = "complete"
+	if _, err := Apply(f.ctx, "upgrade", in, &plan.Plan{}); err != nil {
+		t.Fatal(err)
+	}
+	if current, err := state.Read(root); err != nil || current.Profile != "complete" {
+		t.Fatalf("state.json: %+v %v", current, err)
+	}
+}
+
+// Recording only the content choice installs nothing, so a managed file
+// the user edited does not stop it: there is nothing to verify.
+func TestOfflineApplyRecordsTheProfileBesideAnEdit(t *testing.T) {
+	f := newFixture(t)
+	root := filepath.Join(t.TempDir(), "x86qw")
+	f.install(root, "essential")
+	if err := os.WriteFile(filepath.Join(root, "qw", "maps", "x86qw-fixture.bsp"), bsp("my map"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	in := f.input(root)
+	in.Profile, in.Requested = "custom", []string{"fixture-maps"}
+	if _, err := Apply(f.ctx, "upgrade", in, &plan.Plan{}); err != nil {
+		t.Fatal(err)
+	}
+	if current, err := state.Read(root); err != nil || current.Profile != "custom" {
+		t.Fatalf("state.json: %+v %v", current, err)
+	}
+}
+
+// A server component has builds for some machines only: on another one the
+// install stops before it downloads anything. A Linux ezQuake built for
+// x86-64 on an arm64 machine installs with a warning: only an emulator runs it.
+func TestOfflineInstallChecksTheMachineFirst(t *testing.T) {
+	f := newFixture(t)
+	saved := [2]string{hostOS, hostArch}
+	t.Cleanup(func() { hostOS, hostArch = saved[0], saved[1] })
+	f.component("fixture-server", "x86qw", "1.0.0", map[string][]byte{"bin/mvdsv-macos-arm64": []byte("server")})
+	inventory, err := catalog.ParseInventory([]byte(`{"content_namespaces":["x86qw"],"profiles":{"essential":["fixture-maps"],"complete":["fixture-maps","fixture-server"]},"profile_history":{},"components":[
+		{"id":"fixture-maps","label":"Test maps","kind":"maps","requires":[]},
+		{"id":"fixture-server","label":"Test server","kind":"server","requires":[],"project_sources":[{"destination":"bin/mvdsv-macos-arm64","install_destination":"mvdsv","platform":"macos-arm64"}]}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostOS, hostArch = "darwin", "amd64" // an Intel Mac
+	root := filepath.Join(t.TempDir(), "x86qw")
+	_, err = Install(f.ctx, root, f.catalog(), inventory, InstallOptions{Platform: "linux", Channel: "nightly", Profile: "complete"})
+	if err == nil || f.requests("x86qw-core-id1-1.zip") != 0 {
+		t.Fatalf("downloaded %d times before: %v", f.requests("x86qw-core-id1-1.zip"), err)
+	}
+	hostOS, hostArch = "linux", "arm64"
+	result, err := Install(f.ctx, root, f.catalog(), inventory, InstallOptions{Platform: "linux", Channel: "nightly", Profile: "essential"})
+	if err != nil || !strings.Contains(strings.Join(result.Warnings, "\n"), "x86-64") {
+		t.Fatalf("%+v %v", result, err)
+	}
+}
+
+// Each package frees its download and its extraction once it has landed, so
+// the install peaks near what the preflight counts, not at four times it.
+func TestOfflineInstallFreesEachPackageAsItLands(t *testing.T) {
+	f := newFixture(t)
+	f.component("fixture-extra", "x86qw", "1.0.0", map[string][]byte{"qw/x86qw-extra.pk3": []byte("extra")})
+	f.setInventory(map[string][]string{"essential": {"fixture-maps", "fixture-extra"}})
+	root := filepath.Join(t.TempDir(), "x86qw")
+	var left []string
+	ctx := WithObserver(f.ctx, &Observer{Package: func(id string, size int64) {
+		if id != "fixture-extra" {
+			return
+		}
+		filepath.WalkDir(filepath.Join(root, ".x86qw", "staging"), func(path string, entry fs.DirEntry, err error) error {
+			// The backup of what it replaced stays for a rollback.
+			if err == nil && (entry.Name() == "fixture-maps.download" || entry.Name() == "package-fixture-maps") {
+				left = append(left, entry.Name())
+			}
+			return nil
+		})
+	}})
+	if _, err := Install(ctx, root, f.catalog(), f.inventory, InstallOptions{Platform: "linux", Channel: "nightly", Profile: "essential"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(left) != 0 {
+		t.Fatalf("the first package still takes space: %v", left)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
@@ -363,7 +364,7 @@ func publishFixture(t *testing.T, payload []byte, withGitLab bool) (*Project, st
 	mirror := GitHubReleaseURL("nquake-test", filename)
 	urls := []any{mirror}
 	if withGitLab {
-		urls = append(urls, GitLabPackageURL("nquake-maps", "test", filename))
+		urls = append(urls, ArtifactURL(object("package", "nquake-maps", "version", "test", "filename", filename)))
 	}
 	pkg := object("component", "nquake", "package", "nquake-maps", "version", "test", "channel", "content",
 		"platform", "any", "architecture", "any", "filename", filename, "size", intNumber(len(payload)),
@@ -385,7 +386,7 @@ func TestPublishAgainstFakeMirrors(t *testing.T) {
 	payload := []byte("x86qw package bytes")
 	project, filename := publishFixture(t, payload, false)
 	digest := sha256.Sum256(payload)
-	gitlabURL := GitLabPackageURL("nquake-maps", "test", filename)
+	gitlabURL := ArtifactURL(object("package", "nquake-maps", "version", "test", "filename", filename))
 	var mu sync.Mutex
 	releaseExists, uploaded := false, false
 	var gitlab []byte
@@ -482,7 +483,7 @@ func TestPublishRejectsChangedMirror(t *testing.T) {
 	project, filename := publishFixture(t, []byte("published"), true)
 	web := &fakeWeb{handler: func(w http.ResponseWriter, r *http.Request) {
 		switch "https://" + r.URL.Host + r.URL.Path {
-		case GitLabPackageURL("nquake-maps", "test", filename):
+		case ArtifactURL(object("package", "nquake-maps", "version", "test", "filename", filename)):
 			w.Write([]byte("different"))
 		default:
 			http.NotFound(w, r)
@@ -497,7 +498,7 @@ func TestPublishRejectsChangedMirror(t *testing.T) {
 
 func TestGitLabUploadNeverFollowsRedirects(t *testing.T) {
 	project, filename := publishFixture(t, []byte("published"), false)
-	url := GitLabPackageURL("nquake-maps", "test", filename)
+	url := ArtifactURL(object("package", "nquake-maps", "version", "test", "filename", filename))
 	web := &fakeWeb{handler: func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
 			http.Redirect(w, r, "https://evil.example/collect", http.StatusTemporaryRedirect)
@@ -527,7 +528,7 @@ func TestCommitSequence(t *testing.T) {
 		switch strings.Join(args, " ") {
 		case "git status --porcelain":
 			return []byte(" M dist/manifest.json\n"), nil
-		case "git diff --cached --name-only":
+		case "git diff --cached --name-only -- dist maintenance/inventory maintenance/recipes site/public/api/v1/catalog.json":
 			return []byte("dist/manifest.json\n"), nil
 		case "git remote":
 			return []byte("origin\ngitlab\n"), nil
@@ -541,8 +542,8 @@ func TestCommitSequence(t *testing.T) {
 	expected := []string{
 		"git status --porcelain",
 		"git add dist maintenance/inventory maintenance/recipes site/public/api/v1/catalog.json",
-		"git diff --cached --name-only",
-		"git commit -m chore(distribution): update preserved upstreams",
+		"git diff --cached --name-only -- dist maintenance/inventory maintenance/recipes site/public/api/v1/catalog.json",
+		"git commit -m chore(distribution): update preserved upstreams -- dist maintenance/inventory maintenance/recipes site/public/api/v1/catalog.json",
 		"git push origin HEAD",
 		"git remote",
 		"git push gitlab HEAD",
@@ -654,6 +655,14 @@ func TestEachComponentIsCheckedOnItsOwn(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "[UNAVAILABLE] nquake-maps: ") || strings.Contains(out.String(), "[UNAVAILABLE] ezquake") {
 		t.Fatalf("nQuake down should affect only its components:\n%s", out.String())
+	}
+	// Components built from their own upstream plus nQuake files too.
+	project = NewProject(root)
+	project.HTTP = limited(currentUpstreams(t, root, ""), nquake).client()
+	out.Reset()
+	if code, err = project.Check(&out, &info, false, false, []string{"ktx", "pro-x"}); err != nil || code != 1 ||
+		!strings.Contains(out.String(), "[UNAVAILABLE] ktx: ") || !strings.Contains(out.String(), "[UNAVAILABLE] pro-x: ") {
+		t.Fatalf("ktx and pro-x own nQuake files and cannot be checked with nQuake down: %d %v\n%s", code, err, out.String())
 	}
 
 	if _, err := NewProject(root).Check(&out, &info, true, false, []string{"does-not-exist"}); err == nil || !strings.Contains(err.Error(), "unknown") {
@@ -818,5 +827,35 @@ func TestSymbolicLinksInTheNQuakeTreeAreIgnored(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "UNAVAILABLE") {
 		t.Fatalf("a symlink made nQuake unavailable:\n%s", out.String())
+	}
+}
+
+// Only publish, after it downloads and checks the public copy, records the
+// GitLab URL; registering the same package again keeps it, and a build never
+// writes one nobody checked.
+func TestRegisteringKeepsTheVerifiedMirrorAndAddsNone(t *testing.T) {
+	project, _ := publishFixture(t, []byte("x86qw package bytes"), true)
+	catalog, err := LoadJSONObject(project.Path(CatalogPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	published := firstObject(catalog, "packages")
+	rebuilt := published.Clone()
+	rebuilt.Set("urls", []any{published.Value("urls").([]any)[0]})
+	if err := project.RegisterPackages(project.Path(CatalogPath), object("packages", []any{rebuilt}), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := LoadJSONObject(project.Path(CatalogPath))
+	if urls := firstObject(after, "packages").Value("urls").([]any); len(urls) != 2 {
+		t.Fatalf("the verified GitLab URL was dropped: %v", urls)
+	}
+	root := repoRoot(t)
+	requireHydrated(t, root)
+	core, err := NewProject(root).BuildCorePackage(NewProject(root).Path(DistDir), t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if urls := core.Value("urls").([]any); len(urls) != 1 || !strings.HasPrefix(fmt.Sprint(urls[0]), "https://github.com/") {
+		t.Fatalf("a build records an unchecked mirror: %v", urls)
 	}
 }

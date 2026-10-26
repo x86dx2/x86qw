@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
 
@@ -108,10 +107,12 @@ func runPlan(command string, args []string, stdout, stderr io.Writer) int {
 		return output.ExitSuccess
 	}
 	question := fmt.Sprintf("Apply %d change(s) to %s?", len(result.Operations), target)
-	if proceed, code := confirm(question, "x86qw "+command+" "+target, a.yes, stdout, stderr); !proceed {
+	if proceed, code := confirm(question, []string{"x86qw", command, target}, a.yes, stdout, stderr); !proceed {
 		return code
 	}
-	applied, err := install.Apply(context.Background(), command, input, result)
+	ctx, stop := interruptible()
+	defer stop()
+	applied, err := install.Apply(ctx, command, input, result)
 	if err != nil {
 		fmt.Fprintf(stderr, "✗ %v\n", err)
 		return output.ExitFailure

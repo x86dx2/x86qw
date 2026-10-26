@@ -89,20 +89,18 @@ PK3
   → full scan
   → canonical extraction into private staging
   → preflight of every conflict in the MVDSV context
-  → journaled atomic copies
+  → one journal write, then hard links that never replace a file
   → staging cleanup
 ```
 
 This keeps the historical policy of never overwriting a different personal file
 without keeping a decompressor inside `services.py`.
 
-On Windows, the materialization holds handles to the ancestors without delete
-sharing, refuses reparse points and records identity by volume +
-`FILE_ID_128`. The file is written in exclusive staging, verified and promoted
-by `MoveFileExW` without replacement. Cleanup and rollback act on the same
-handle confirmed with `SetFileInformationByHandle`; they depend neither on a hardlink nor on
-`DeleteFileW` by path. The portable tests use a fake API with the same
-contract, and the native cases remain mandatory in the Windows job.
+On Windows as elsewhere, the members are published from the staging as hard
+links, which never replace a file; a payload folder on another volume gets a
+copy beside its members first, and the journal records the volume serial
+number and file index of the file that is published. A file system without
+hard links stops the session with that reason.
 
 On POSIX, files created by the session go through an exclusive, atomic rename
 into a quarantine in the same directory; there is no public sequence of

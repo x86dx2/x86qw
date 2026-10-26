@@ -36,7 +36,7 @@ func child(t *testing.T) []string {
 }
 
 func TestJobObjectStartAndStop(t *testing.T) {
-	command, err := startDetached(child(t), t.TempDir(), nil)
+	command, err := startDetached(child(t), t.TempDir(), nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestJobObjectStartAndStop(t *testing.T) {
 }
 
 func TestJobObjectKillsOnClose(t *testing.T) {
-	command, err := startDetached(child(t), t.TempDir(), nil)
+	command, err := startDetached(child(t), t.TempDir(), nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}

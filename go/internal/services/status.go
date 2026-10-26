@@ -257,7 +257,7 @@ func RequestStop(target string, timeout time.Duration) error {
 	pid, _ := intField(controller["pid"])
 	executable, _ := controller["executable"].(string)
 	if controller == nil || pid != owner.ControllerPID || controller["creation_token"] != owner.ControllerStartToken ||
-		realpath(executable) != realpath(owner.ControllerExecutable) {
+		executable != owner.ControllerExecutable {
 		return errorf("The lock and the journal do not name the same controller; nothing was stopped.")
 	}
 	request := filepath.Join(filepath.Dir(paths[0]), "stop.request")
@@ -291,16 +291,6 @@ func RequestStop(target string, timeout time.Duration) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 	return errorf("The stack got the request but did not finish stopping in time.")
-}
-
-func realpath(path string) string {
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		return resolved
-	}
-	if absolute, err := filepath.Abs(path); err == nil {
-		return absolute
-	}
-	return path
 }
 
 // publishStopRequest stages a private ".stop-*.request" and links it into

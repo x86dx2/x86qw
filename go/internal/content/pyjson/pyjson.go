@@ -314,6 +314,10 @@ func (d *decoder) string() (string, error) {
 						d.pos = saved
 					}
 				}
+				// Python keeps a lone surrogate, which Go cannot hold in a string.
+				if r >= 0xd800 && r < 0xe000 {
+					return "", d.errorf("Unpaired surrogate in \\uXXXX escape")
+				}
 				builder.WriteRune(r)
 			default:
 				return "", d.errorf("Invalid \\escape")

@@ -9,14 +9,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/x86dx2/x86qw/go/internal/maint"
+	"github.com/x86dx2/x86qw/go/internal/play"
 )
 
 const (
@@ -25,11 +24,6 @@ const (
 	API        = "https://api.quake.world/v1/servers"
 	maxBytes   = 8 << 20
 	maxServers = 20
-)
-
-var (
-	addressPattern = regexp.MustCompile(`^[A-Za-z0-9_.:\[\]-]+:[0-9]{1,5}$`)
-	qtvPattern     = regexp.MustCompile(`^[0-9]+@[A-Za-z0-9_.:\[\]-]+:[0-9]{1,5}$`)
 )
 
 // Players counts humans and bots.
@@ -76,12 +70,15 @@ func Fetch(ctx context.Context, client *http.Client) ([]any, error) {
 	return rows, nil
 }
 
+// validAddress is a server the library can keep and x86qw open can join.
 func validAddress(address string) bool {
-	if !addressPattern.MatchString(address) {
-		return false
-	}
-	port, err := strconv.Atoi(address[strings.LastIndex(address, ":")+1:])
-	return err == nil && port >= 1 && port <= 65535
+	_, err := maint.NormalizeAddress(address)
+	return err == nil && joinable("qw://"+address)
+}
+
+func joinable(link string) bool {
+	_, err := play.OpenArguments("", link)
+	return err == nil
 }
 
 // Library returns local favorites then recents as Hub-like rows.
@@ -188,7 +185,7 @@ func Project(rows []any) ([]Server, error) {
 				rawQTV = nested["stream"]
 			}
 		}
-		if value, ok := rawQTV.(string); ok && qtvPattern.MatchString(value) {
+		if value, ok := rawQTV.(string); ok && strings.Contains(value, "@") && joinable("qw://"+value+"/qtvplay") {
 			stream = &value
 		}
 		servers = append(servers, Server{
@@ -266,7 +263,8 @@ func Active(rows []any) []any {
 	return active
 }
 
-// Servers fetches the Hub and falls back to the local library.
+// Servers fetches the Hub and falls back to the local library when the
+// Hub cannot be reached; a Hub where nobody plays lists no server.
 func Servers(ctx context.Context, root string) ([]Server, error) {
 	rows, err := Fetch(ctx, &http.Client{})
 	rows = Active(rows)
@@ -278,7 +276,10 @@ func Servers(ctx context.Context, root string) ([]Server, error) {
 			}
 		}
 	}
-	if err != nil || valid == 0 {
+	if err == nil && valid == 0 {
+		return []Server{}, nil
+	}
+	if err != nil {
 		if rows, err = Library(root); err != nil {
 			return nil, err
 		}

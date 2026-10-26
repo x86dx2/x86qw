@@ -120,6 +120,10 @@ jobs:
             exec_line="$(sed -n 's/^Exec=//p' "$HOME/.local/share/applications/$handler" | head -1)"
             eval "${exec_line/\%u/--dry-run \"$LINK\"}" | grep -F -- "+qwurl $LINK"
             eval "${exec_line/\%u/--dry-run \"$demo\"}" | grep -F -- "+playdemo demos/x86qw-open-"
+            # The dry run writes nothing; the real one copies the demo, and
+            # its ezQuake exits at once, with no X server behind DISPLAY.
+            if ls "$target"/qw/demos/x86qw-open-*.mvd 2>/dev/null; then echo "the dry run copied the demo" >&2; exit 1; fi
+            DISPLAY=:0 timeout 60 bash -c "${exec_line/\%u/\"$demo\"}" || true
           fi
           # The handler copies the demo into qw/demos under its own name.
           for _ in $(seq 30); do

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
@@ -142,7 +143,7 @@ func stringList(value any, label string, allowEmpty bool) ([]string, error) {
 		return nil, fmt.Errorf("invalid %s", label)
 	}
 	values, ok := pyjson.StrList(raw)
-	if !ok || contains(values, "") || !uniqueStrings(values) {
+	if !ok || slices.Contains(values, "") || !uniqueStrings(values) {
 		return nil, fmt.Errorf("invalid %s", label)
 	}
 	return values, nil
@@ -305,7 +306,7 @@ func (p *Project) validateInventory(inventory *Inventory, componentCatalog, publ
 				return fmt.Errorf("runtime dependency is inconsistent: %s", identifier)
 			}
 		}
-		if contains(dependencies[identifier], identifier) {
+		if slices.Contains(dependencies[identifier], identifier) {
 			return fmt.Errorf("runtime dependency is inconsistent: %s", identifier)
 		}
 	}

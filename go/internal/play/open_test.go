@@ -23,6 +23,21 @@ func TestOpenAcceptsOnlyCleanAddresses(t *testing.T) {
 	}
 }
 
+// The server a link joins goes to the recents: the port defaults to 27500,
+// and a QTV stream or a demo joins none.
+func TestServerAddressIsWhatALinkJoins(t *testing.T) {
+	for link, want := range map[string]string{
+		"qw://qw.example.com:27501":            "qw.example.com:27501",
+		"QW://qw.example.com/observe":          "qw.example.com:27500",
+		"qw://2@qtv.example.org:28000/qtvplay": "",
+		"final.mvd":                            "",
+	} {
+		if got, _ := ServerAddress(link); got != want {
+			t.Errorf("%s: %q, want %q", link, got, want)
+		}
+	}
+}
+
 func TestOpenCopiesTheDemoUnderItsOwnName(t *testing.T) {
 	target, elsewhere := t.TempDir(), t.TempDir()
 	demo := filepath.Join(elsewhere, "final; quit $name.mvd")
@@ -42,5 +57,15 @@ func TestOpenCopiesTheDemoUnderItsOwnName(t *testing.T) {
 	}
 	if _, err := OpenArguments(target, filepath.Join(elsewhere, "notes.txt")); err == nil {
 		t.Fatal("a .txt is not a demo")
+	}
+}
+
+// ezQuake and MVDSV run whatever follows " +" on their command line as a
+// command, also inside the folder name: such a folder is refused before the
+// game starts.
+func TestAFolderWithAPlusIsRefused(t *testing.T) {
+	err := Start("/Users/me/My Games +quit/x86qw", "/nonexistent/ezquake", "", &Launch{})
+	if err == nil || !strings.Contains(err.Error(), `" +"`) {
+		t.Fatalf("%v", err)
 	}
 }

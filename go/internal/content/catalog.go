@@ -14,7 +14,7 @@ var (
 	sha256Pattern        = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	hex40Pattern         = regexp.MustCompile(`^[0-9a-f]{40}$`)
 	safeSegment          = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.+-]*$`)
-	ezquakeStableVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
+	ezquakeStableVersion = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`) // as internal/catalog reads it
 	ezquakeNightly       = regexp.MustCompile(`^[0-9]{8}-[0-9]{6}_[0-9a-f]{7}$`)
 	catalogPlatforms     = setOf("macos", "linux", "windows", "source", "any")
 	catalogChannels      = setOf("stable", "nightly", "content")

@@ -14,9 +14,21 @@ import (
 // launch (Recover).
 const startGrace = 3 * time.Second
 
+// CheckBasedir refuses an installation folder ezQuake and MVDSV would
+// misread: on their command line, " +" starts a command, folder name or not.
+func CheckBasedir(target string) error {
+	if strings.Contains(target, " +") {
+		return fmt.Errorf(`the folder name holds " +", which ezQuake and MVDSV run as a command; move the installation: %s`, target)
+	}
+	return nil
+}
+
 // Start opens ezQuake on the installation at target with launch,
 // publishing its KTX cfg first when it needs one.
 func Start(target, executable, binarySHA string, launch *Launch) error {
+	if err := CheckBasedir(target); err != nil {
+		return err
+	}
 	arguments := launch.Arguments
 	var config *RuntimeConfig
 	if len(launch.StartupCommands) > 0 {

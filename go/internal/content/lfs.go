@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,12 +27,6 @@ const (
 	lfsPointerVersion = "version https://git-lfs.github.com/spec/v1"
 	maxPointerBytes   = 4096
 	maxLFSObjectBytes = 512 << 20
-)
-
-var (
-	hex64        = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	commitID     = regexp.MustCompile(`^[0-9a-f]{40}$`)
-	repositoryID = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
 )
 
 // LFSPointer is one pointer file under dist.
@@ -66,7 +59,7 @@ func ParseLFSPointer(payload []byte) (string, int64, error) {
 		fields[name] = value
 	}
 	oid := fields["oid"]
-	if !strings.HasPrefix(oid, "sha256:") || !hex64.MatchString(oid[7:]) {
+	if !strings.HasPrefix(oid, "sha256:") || !sha256Pattern.MatchString(oid[7:]) {
 		return "", 0, errors.New("LFS pointer without a canonical SHA-256")
 	}
 	sizeText := fields["size"]
@@ -120,10 +113,10 @@ func LFSPointers(root string) ([]LFSPointer, error) {
 
 // LFSMediaURL is the immutable GitHub media URL of one path at commit.
 func LFSMediaURL(repository, commit, relative string) (string, error) {
-	if !repositoryID.MatchString(repository) {
+	if !repositoryPattern.MatchString(repository) {
 		return "", errors.New("invalid GitHub repository")
 	}
-	if !commitID.MatchString(commit) {
+	if !hex40Pattern.MatchString(commit) {
 		return "", errors.New("invalid candidate commit")
 	}
 	return "https://media.githubusercontent.com/media/" + repository + "/" + commit + "/" + quotePath(relative), nil

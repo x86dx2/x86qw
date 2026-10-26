@@ -290,7 +290,7 @@ func PlaySupportIssues(root string, games []Game) ([]string, map[string][]byte, 
 	}
 	for relative, payload := range expected {
 		digest := sha256.Sum256(payload)
-		actual, err := fileSHA256(filepath.Join(root, filepath.FromSlash(relative)))
+		actual, err := archive.FileSHA256(filepath.Join(root, filepath.FromSlash(relative)))
 		if err != nil || !regular(filepath.Join(root, filepath.FromSlash(relative))) || actual != hex.EncodeToString(digest[:]) {
 			issues = append(issues, "derived gamecode missing or different: "+relative)
 		}

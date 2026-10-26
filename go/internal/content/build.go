@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -26,16 +26,9 @@ const (
 	componentJSON    = "_x86qw/component.json"
 )
 
-var projectRefPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
-
 // GitHubReleaseURL is the primary mirror URL of a release asset.
 func GitHubReleaseURL(tag, filename string) string {
 	return "https://github.com/" + PrimaryRepository + "/releases/download/" + tag + "/" + filename
-}
-
-// GitLabPackageURL is the GitLab package registry URL of an artifact.
-func GitLabPackageURL(packageName, version, filename string) string {
-	return "https://gitlab.com/api/v4/projects/" + gitlabProjectID + "/packages/generic/" + packageName + "/" + version + "/" + filename
 }
 
 func projectLicenseURL(ref string) string {
@@ -153,7 +146,7 @@ func (p *Project) BuildPackages(distribution, output string, options BuildOption
 	if options.OwnershipOutput != "" && options.ProjectRef == "" {
 		return nil, fmt.Errorf("--project-ref is required when --ownership-output is used")
 	}
-	if options.ProjectRef != "" && !projectRefPattern.MatchString(options.ProjectRef) {
+	if options.ProjectRef != "" && !hex40Pattern.MatchString(options.ProjectRef) {
 		return nil, fmt.Errorf("project-ref must be a full lowercase hexadecimal SHA-1")
 	}
 	// One build carries every nQuake revision the components pin; each
@@ -261,7 +254,7 @@ func (p *Project) BuildPackages(distribution, output string, options BuildOption
 			"license", pyjson.Repr(getOr(release, "license", "upstream-distfiles-terms")),
 			"license_url", pyjson.Repr(getOr(release, "license_url", "https://github.com/nQuake/distfiles/tree/"+commit)),
 			"source_urls", orEmpty(sourceURLs), "redistribution_reviewed", true,
-			"urls", []any{mirror, GitLabPackageURL(identifier, version, filename)},
+			"urls", []any{mirror},
 			"mirror_title", title, "mirror_notes", "Pacotes de conteúdo versionados da distribuição x86QW.",
 			"mirror_latest", false,
 		)
@@ -392,7 +385,7 @@ func (p *Project) BuildCorePackage(distribution, output, ownershipOutput string)
 		"size", intNumber(len(packageBytes)), "sha256", sha256Hex(packageBytes), "origin_url", mirror,
 		"license", "id-software-registered-game-data", "license_url", license,
 		"source_urls", []any{"https://github.com/x86dx2/x86qw/tree/main/dist/game-data/id1"},
-		"redistribution_reviewed", true, "urls", []any{mirror, GitLabPackageURL(corePackage, coreVersion, filename)},
+		"redistribution_reviewed", true, "urls", []any{mirror},
 		"source_revision", revision, "mirror_title", "x86QW Content · Dados base "+coreVersion,
 		"mirror_notes", "Dados base obrigatórios usados pelo instalador x86QW.", "mirror_latest", false,
 	), nil
@@ -407,8 +400,8 @@ func packageKey(item *Object) any {
 	return item.Value("component")
 }
 
-// RegisterPackages writes the built packages into the catalog; now is the
-// generated_at clock.
+// RegisterPackages writes the built packages into the catalog; now becomes
+// generated_at when the packages change.
 func (p *Project) RegisterPackages(catalogPath string, manifest *Object, now time.Time) error {
 	value, err := ReadJSON(catalogPath)
 	if err != nil {
@@ -422,6 +415,8 @@ func (p *Project) RegisterPackages(catalogPath string, manifest *Object, now tim
 	if !ok {
 		return fmt.Errorf("catalog packages must be a list")
 	}
+	// Encoded now: registering edits the existing entries in place.
+	before, _ := pyjson.Encode(packages, false)
 	manifestPackages := objects(manifest.Value("packages"))
 	current := map[string]bool{}
 	for _, item := range manifestPackages {
@@ -452,7 +447,7 @@ func (p *Project) RegisterPackages(catalogPath string, manifest *Object, now tim
 			candidate := existing[0]
 			same := true
 			for _, key := range pkg.Keys() {
-				if !contains(publicationFields, key) && !pyjson.Eq(candidate.Value(key), pkg.Value(key)) {
+				if !slices.Contains(publicationFields, key) && !pyjson.Eq(candidate.Value(key), pkg.Value(key)) {
 					same = false
 				}
 			}
@@ -461,7 +456,8 @@ func (p *Project) RegisterPackages(catalogPath string, manifest *Object, now tim
 			}
 			candidate.Set("component", pkg.Value("component"))
 			for _, field := range publicationFields {
-				if pkg.Has(field) {
+				// The URLs stay: publish appends a mirror only once it checked it.
+				if pkg.Has(field) && field != "urls" {
 					candidate.Set(field, pkg.Value(field))
 				}
 			}
@@ -507,7 +503,9 @@ func (p *Project) RegisterPackages(catalogPath string, manifest *Object, now tim
 	})
 	packages = append(content, cli...)
 	catalog.Set("packages", orEmpty(packages))
-	catalog.Set("generated_at", now.UTC().Format("2006-01-02T15:04:05Z"))
+	if after, _ := pyjson.Encode(catalog.Value("packages"), false); !bytes.Equal(after, before) {
+		catalog.Set("generated_at", now.UTC().Format("2006-01-02T15:04:05Z"))
+	}
 	if _, err := p.ValidateCatalog(catalog); err != nil {
 		return err
 	}
@@ -527,8 +525,9 @@ func (p *Project) NormalizeCatalogReleaseMetadata(catalog *Object) error {
 		}
 	}
 	for _, raw := range packages {
+		// x86qw-release owns the CLI entries and writes no mirror metadata.
 		item, ok := raw.(*Object)
-		if !ok {
+		if !ok || IsCLIPackage(item) {
 			continue
 		}
 		component := pyjson.Repr(getOr(item, "component", ""))

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -18,6 +19,7 @@ func TestHostCommandParses(t *testing.T) {
 	}
 	target := t.TempDir()
 	options := Defaults(Host, target)
+	options.Server.Instances = append(options.Server.Instances, Instance{Mode: "ffa", Map: "dm4"})
 	if err := SaveServerPresets(target, options); err != nil {
 		t.Fatal(err)
 	}
@@ -26,9 +28,21 @@ func TestHostCommandParses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("x86qw %s: %v", strings.Join(args, " "), err)
 	}
-	want := []services.Instance{{Mode: "4on4", Map: "dm3", Port: 27501, Bots: true}}
+	want := []services.Instance{{Mode: "4on4", Map: "dm3", Port: 27501, Bots: true}, {Mode: "ffa", Map: "dm4", Port: 27502}}
 	if host.Port != 27500 || host.Mode != "duel" || !reflect.DeepEqual(host.Instances, want) {
 		t.Fatalf("x86qw %s: %+v", strings.Join(args, " "), host)
+	}
+}
+
+// The console ends a command at a semicolon, so that key binds by its name,
+// and what is not a key never reaches the script.
+func TestClientConfigBindsOnlyKeys(t *testing.T) {
+	options := Defaults(Play, t.TempDir())
+	options.Nick = "x86dx2"
+	options.Keys = Keys{Preset: "custom", Forward: "w;connect evil.example:27500", Back: "k", Left: "l", Right: ";", Jump: "space"}
+	cfg := ClientConfig(options, 1)
+	if !regexp.MustCompile(`(?m)^bind semicolon +"\+moveright"$`).MatchString(cfg) || strings.Contains(cfg, "connect") {
+		t.Fatalf("binds:\n%s", cfg)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -36,11 +37,7 @@ type Plan struct {
 }
 
 var (
-	legacyReplacements = []struct{ legacy, replacement string }{
-		{"nquake-bootstrap", "x86qw-client-bootstrap"}, {"nquake-ktx", "ktx"},
-	}
-	legacyRemovals = []string{"nquake-sounds"}
-	overlay        = regexp.MustCompile(`^(.+)\+x86qw\.(\d+)$`)
+	overlay = regexp.MustCompile(`^(.+)\+x86qw\.(\d+)$`)
 )
 
 // macOS runtime actions (see macos.RuntimeAction).
@@ -58,6 +55,10 @@ type Input struct {
 	// package for GOOS/GOARCH adds a "CLI" row.
 	CLIVersion   string
 	GOOS, GOARCH string
+	// Profile and Requested, when Profile is set, are the content choice an
+	// apply records in state.json (the app's); otherwise the state keeps its own.
+	Profile   string
+	Requested []string
 	// ClientAction verifies an installed client and returns its macOS
 	// action ("", ActionPrepareNightly or ActionRestoreUpstream). Nil skips both.
 	ClientAction func(spec catalog.ClientSpec, channel string, rec *receipt.Receipt) (string, error)
@@ -90,12 +91,12 @@ func load(in Input) (*installation, error) {
 			result.stale = true
 		}
 		for _, id := range current.RecordedComponents {
-			for _, legacy := range legacyReplacements {
-				if id == legacy.legacy {
+			for _, legacy := range state.LegacyReplacements {
+				if id == legacy.Legacy {
 					result.stale = true
 				}
 			}
-			for _, removed := range legacyRemovals {
+			for _, removed := range state.LegacyRemovals {
 				if id == removed {
 					result.stale = true
 				}
@@ -168,7 +169,13 @@ func Update(in Input) (*Plan, error) {
 			action := ""
 			if in.ClientAction != nil {
 				if action, err = in.ClientAction(spec, channel, rec); err != nil {
-					return nil, err
+					// Repair restores a recorded release the catalog still
+					// publishes; past that, the update to the published one may
+					// finish a swap a crash cut short.
+					if slices.ContainsFunc(releases, func(release catalog.Package) bool { return release.Version == rec.Get("selection") }) {
+						return nil, err
+					}
+					action = ""
 				}
 			}
 			item := fmt.Sprintf("ezQuake %s %s", spec.Label, channel)
@@ -194,26 +201,26 @@ func Update(in Input) (*Plan, error) {
 	if clients == 0 {
 		return nil, fmt.Errorf("no managed ezQuake was found in %s; use install.sh to install x86QW", in.Root)
 	}
-	for _, id := range legacyRemovals {
+	for _, id := range state.LegacyRemovals {
 		if record, ok := current.records[id]; ok {
 			rows = append(rows, Row{Kind: "Component", Item: "Redundant nQuake sounds", Installed: record.Receipt.Get("selection"), Available: "merged into KTX", Action: "Remove"})
 		}
 	}
-	for _, legacy := range legacyReplacements {
-		record, ok := current.records[legacy.legacy]
+	for _, legacy := range state.LegacyReplacements {
+		record, ok := current.records[legacy.Legacy]
 		if !ok {
 			continue
 		}
-		pkg, err := in.Catalog.ComponentPackage(legacy.replacement, in.Inventory.ContentNamespaces)
+		pkg, err := in.Catalog.ComponentPackage(legacy.Replacement, in.Inventory.ContentNamespaces)
 		if err != nil {
 			return nil, err
 		}
-		rows = append(rows, Row{Kind: "Component", Item: label(in, legacy.replacement), Installed: record.Receipt.Get("selection"), Available: pkg.Version, Action: "Migrate", Size: size(pkg)})
+		rows = append(rows, Row{Kind: "Component", Item: label(in, legacy.Replacement), Installed: record.Receipt.Get("selection"), Available: pkg.Version, Action: "Migrate", Size: size(pkg)})
 	}
 	for _, id := range current.installed(in) {
 		pkg, err := in.Catalog.ComponentPackage(id, in.Inventory.ContentNamespaces)
 		if err != nil {
-			return nil, err
+			continue // not published for this catalog: nothing to update it to
 		}
 		installed := current.records[id].Receipt.Get("selection")
 		if installed == pkg.Version || newerOverlay(installed, pkg.Version) {
@@ -246,9 +253,9 @@ func Upgrade(in Input) (*Plan, error) {
 	for _, id := range current.installed(in) {
 		present[id] = true
 	}
-	for _, legacy := range legacyReplacements {
-		if _, ok := current.records[legacy.legacy]; ok {
-			present[legacy.replacement] = true
+	for _, legacy := range state.LegacyReplacements {
+		if _, ok := current.records[legacy.Legacy]; ok {
+			present[legacy.Replacement] = true
 		}
 	}
 	rows := result.Operations
@@ -258,7 +265,7 @@ func Upgrade(in Input) (*Plan, error) {
 		}
 		pkg, err := in.Catalog.ComponentPackage(id, in.Inventory.ContentNamespaces)
 		if err != nil {
-			return nil, err
+			continue // not published for this catalog: nothing to add
 		}
 		rows = append(rows, Row{Kind: "Component", Item: label(in, id), Installed: "not installed", Available: pkg.Version, Action: "Add", Size: size(pkg)})
 	}

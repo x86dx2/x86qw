@@ -32,11 +32,14 @@ func (s *started) exited() (bool, int) {
 	return s.done, s.code
 }
 
+// notifySignals is signal.Notify; tests deliver the signals an OS would.
+var notifySignals = signal.Notify
+
 // RunProcesses starts specs in order, waits for readiness, marks the journal
 // running and supervises until a stop request, a child exit or a signal.
 func RunProcesses(specs []*Spec, journal *Journal, console *Console, output *os.File) (code int, err error) {
 	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, serviceSignals...)
+	notifySignals(signals, serviceSignals...)
 	defer signal.Stop(signals)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -105,7 +108,7 @@ func RunProcesses(specs []*Spec, journal *Journal, console *Console, output *os.
 		if holdErr != nil {
 			return 0, errorf("The %s command does not match the validated target.", spec.Label)
 		}
-		command, startErr := startDetached(spec.Arguments, spec.Cwd, output)
+		command, startErr := startDetached(spec.Arguments, spec.Cwd, output, spec.Hidden)
 		release()
 		if startErr != nil {
 			var installerErr *Error
@@ -142,7 +145,7 @@ func RunProcesses(specs []*Spec, journal *Journal, console *Console, output *os.
 				}
 				console.Detail("QTV ready and answering over HTTP.")
 			case "udp":
-				if err := waitUDPReadiness(ctx, exited, spec.Readiness); err != nil {
+				if err := waitUDPReadiness(ctx, exited, spec.Readiness, command.Process.Pid); err != nil {
 					return failed(err)
 				}
 				console.Detail("QWFWD ready and holding the UDP port.")

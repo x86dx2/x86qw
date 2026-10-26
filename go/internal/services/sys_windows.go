@@ -197,7 +197,7 @@ func resumeMainThread(pid int) error {
 
 // startDetached starts a service suspended in its own process group, adds
 // it to the Job Object and resumes it (WindowsJobObject.start_process).
-func startDetached(arguments []string, dir string, output *os.File) (*exec.Cmd, error) {
+func startDetached(arguments []string, dir string, output *os.File, hidden bool) (*exec.Cmd, error) {
 	jobHandle, err := serviceJob()
 	if err != nil {
 		return nil, err
@@ -233,7 +233,44 @@ func startDetached(arguments []string, dir string, output *os.File) (*exec.Cmd, 
 	if err := resumeMainThread(pid); err != nil {
 		return rollback(err, true)
 	}
+	if hidden {
+		// Opened while the command still holds pid, so it names no other process later.
+		if process, err := windows.OpenProcess(windows.SYNCHRONIZE, false, uint32(pid)); err == nil {
+			go hideWindows(uint32(pid), process)
+		}
+	}
 	return command, nil
+}
+
+var (
+	enumWindows     = windows.NewLazySystemDLL("user32.dll").NewProc("EnumWindows")
+	showWindowAsync = windows.NewLazySystemDLL("user32.dll").NewProc("ShowWindowAsync")
+	// hideWindow hides the visible windows of the process its parameter
+	// names; one callback serves every server, as callbacks are never freed.
+	hideWindow = sync.OnceValue(func() uintptr {
+		return windows.NewCallback(func(window windows.HWND, pid uintptr) uintptr {
+			var owner uint32
+			windows.GetWindowThreadProcessId(window, &owner)
+			if uintptr(owner) == pid && windows.IsWindowVisible(window) {
+				showWindowAsync.Call(uintptr(window), windows.SW_HIDE)
+			}
+			return 1
+		})
+	})
+)
+
+// hideWindows hides what pid, open as process, shows during its first
+// seconds, then closes process. MVDSV opens a window of its own, visible
+// from creation whatever the STARTUPINFO says, and closing it ends the
+// whole stack; MVDSV itself hides it the same way when it starts minimized.
+func hideWindows(pid uint32, process windows.Handle) {
+	defer windows.CloseHandle(process)
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
+		enumWindows.Call(hideWindow(), uintptr(pid))
+		if event, _ := windows.WaitForSingleObject(process, 50); event != uint32(windows.WAIT_TIMEOUT) {
+			return
+		}
+	}
 }
 
 // stopGroups terminates the services in reverse order, waits up to four
@@ -263,15 +300,24 @@ func stopGroups(commands []*exec.Cmd, exited map[int]bool) error {
 
 func exitCode(state *os.ProcessState) int { return state.ExitCode() }
 
-var serviceSignals = []os.Signal{os.Interrupt}
+// serviceSignals end a stack: Ctrl+C, and the console closing, a logoff or
+// a shutdown, which Go delivers as SIGTERM.
+var serviceSignals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 
-func signalNumber(sig os.Signal) int { return 2 }
+func signalNumber(sig os.Signal) int {
+	if sig == syscall.SIGTERM {
+		return 15
+	}
+	return 2
+}
 
 // spawnBackgroundController detaches one controller in a new process group
 // and hands it the secrets exclusively through stdin.
 func spawnBackgroundController(executable string, arguments []string, request []byte) (*exec.Cmd, error) {
 	command := exec.Command(executable, arguments...)
-	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP | windows.DETACHED_PROCESS}
+	// A hidden console rather than none: the servers it starts inherit it
+	// instead of each opening a window that ends the session when closed.
+	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP | windows.CREATE_NO_WINDOW}
 	stdin, err := command.StdinPipe()
 	if err != nil {
 		return nil, errorf("Could not create the background controller: %v", err)

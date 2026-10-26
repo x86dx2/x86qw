@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/doctor"
+	"github.com/x86dx2/x86qw/go/internal/fspath"
 )
 
 // The local UI is a read-only HTML snapshot of the installation.
@@ -58,13 +59,13 @@ func RenderLocalUI(target string) (string, error) {
 
 // WriteLocalUI writes the snapshot outside the installation.
 func WriteLocalUI(target, destination string) (string, error) {
-	target = resolve(target)
+	target = fspath.Resolve(target)
 	output, err := filepath.Abs(destination)
 	if err != nil {
 		return "", err
 	}
-	output = resolve(output)
-	if output == target || inside(output, target) {
+	output = fspath.Resolve(output)
+	if output == target || fspath.Inside(output, target) {
 		return "", errors.New("the panel cannot be written inside the installation")
 	}
 	if _, err := os.Lstat(output); err == nil {

@@ -217,7 +217,7 @@ func (m *Model) pressTool(action toolAction) tea.Cmd {
 // toolLines are the report's lines wrapped to the panel, with their tone.
 func (m *Model) toolLines() []string {
 	t := m.theme
-	inner := max(minWidth, min(m.w-8, modalWidth)) - 4
+	inner := m.dialogWidth() - 4
 	var out []string
 	for _, line := range m.toolPanel.lines {
 		style := t.Style(t.Text2)
@@ -243,7 +243,7 @@ func (m *Model) toolLines() []string {
 func (m *Model) toolRowsView() []formRow {
 	r := m.toolPanel
 	t := m.theme
-	inner := max(minWidth, min(m.w-8, modalWidth)) - 4
+	inner := m.dialogWidth() - 4
 	var window []string
 	if r.busy == "report" {
 		window = []string{t.Style(t.Gray).Render(m.spinner() + " " + m.t("tool.running"))}

@@ -32,7 +32,7 @@ func HostPlatform() string { return catalog.Platform(runtime.GOOS) }
 // Install creates a new installation like `x86qw install --non-interactive`:
 // base PAKs from the core package, the ezQuake client, the profile's
 // components and state.json, then verifies the result.
-func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory *catalog.Inventory, options InstallOptions) (*Result, error) {
+func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory *catalog.Inventory, options InstallOptions) (result *Result, err error) {
 	var spec *catalog.ClientSpec
 	for index := range catalog.ClientSpecs {
 		if catalog.ClientSpecs[index].Platform == options.Platform {
@@ -57,6 +57,9 @@ func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory
 	if err != nil {
 		return nil, err
 	}
+	if err := hostRuns(inventory, selected); err != nil {
+		return nil, err
+	}
 	// Like macos_game_directory_reset_required: only a target without any
 	// managed ezQuake gets its macOS directory preferences cleared. Adding a
 	// channel to (or reinstalling) an existing installation is allowed.
@@ -70,6 +73,20 @@ func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory
 			}
 		}
 	}
+	// A failed install takes back the folders it made: the target, .x86qw
+	// and id1, when they are empty again (deferred before the lock goes,
+	// so it runs after).
+	var made []string
+	for _, dir := range []string{target, filepath.Join(target, ".x86qw"), filepath.Join(target, ".x86qw", "sessions"), filepath.Join(target, ".x86qw", "staging"), filepath.Join(target, "id1")} {
+		if _, statErr := os.Lstat(dir); statErr != nil {
+			made = append(made, dir)
+		}
+	}
+	defer func() {
+		for index := len(made) - 1; err != nil && index >= 0; index-- {
+			os.Remove(made[index])
+		}
+	}()
 	held, err := lock.Acquire(target, "install")
 	if err != nil {
 		return nil, err
@@ -85,6 +102,9 @@ func Install(ctx context.Context, target string, cat *catalog.Catalog, inventory
 	}
 	defer tx.Close()
 	tx.observe = observing(ctx)
+	if spec.Platform == "linux" && hostOS == "linux" && hostArch != "amd64" {
+		tx.warn("This ezQuake is built for x86-64 and this machine is %s: only an emulator runs it.", hostArch)
+	}
 	fail := func(err error) (*Result, error) {
 		if undoErr := tx.Rollback(); undoErr != nil {
 			return nil, fmt.Errorf("%w; incomplete rollback: %v", err, undoErr)

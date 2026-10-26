@@ -3,11 +3,15 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -93,6 +97,21 @@ func TestUserPathKeepsOtherEntriesUnexpanded(t *testing.T) {
 	}
 }
 
+// Windows puts the link in place of %1 and splits the line itself: what a
+// raw quote in the link adds lands after "--", never as an option.
+func TestHandlerCommandKeepsTheLinkAfterTheOptions(t *testing.T) {
+	root := `C:\Games\x86qw`
+	line := strings.ReplaceAll(handlerCommand(root), "%1", `qw://x" --target "\\evil\share`)
+	args, err := windows.DecomposeCommandLine(line)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{Command(root), "open", "--target", root, "--", "qw://x", "--target", `\\evil\share`}
+	if !slices.Equal(args, want) {
+		t.Fatalf("%q", args)
+	}
+}
+
 func TestWindowsHandlersComeAndGo(t *testing.T) {
 	const classes = `Software\Classes\`
 	for _, key := range []string{"qw", demoProgID, ".mvd", ".qwd"} {
@@ -106,13 +125,40 @@ func TestWindowsHandlersComeAndGo(t *testing.T) {
 			deleteTree(classes + key)
 		}
 	})
+	extensionKeys := func() bool {
+		for _, extension := range []string{".mvd", ".qwd"} {
+			if k, err := registry.OpenKey(registry.CURRENT_USER, classes+extension, registry.QUERY_VALUE); err == nil {
+				k.Close()
+				return true
+			}
+		}
+		return false
+	}
 	root := t.TempDir()
+	// Turning off what was never on leaves the registry as it was.
+	if err := SetHandlers(root, false, false); err != nil || extensionKeys() {
+		t.Fatalf("turning demos off created .mvd or .qwd: %v", err)
+	}
 	if err := SetHandlers(root, true, true); err != nil {
 		t.Fatal(err)
 	}
 	if owned, _ := ownedCommand(classes+"qw", root); !owned {
 		t.Fatal("qw:// should open with this installation")
 	}
+	// The command written before "--" is this installation's too.
+	command, _ := registry.OpenKey(registry.CURRENT_USER, classes+`qw\shell\open\command`, registry.SET_VALUE)
+	command.SetStringValue("", fmt.Sprintf(`"%s" open --target "%s" "%%1"`, Command(root), root))
+	command.Close()
+	if owned, _ := ownedCommand(classes+"qw", root); !owned {
+		t.Fatal("the command without -- is not recognized")
+	}
+	// An update rewrites it, so an installation from before gets the "--" too.
+	RefreshEntries(root, t.TempDir())
+	command, _ = registry.OpenKey(registry.CURRENT_USER, classes+`qw\shell\open\command`, registry.QUERY_VALUE)
+	if value, _, _ := command.GetStringValue(""); value != handlerCommand(root) {
+		t.Fatalf("after the update: %q", value)
+	}
+	command.Close()
 	k, _ := registry.OpenKey(registry.CURRENT_USER, classes+".mvd", registry.QUERY_VALUE)
 	if value, _, _ := k.GetStringValue(""); value != demoProgID {
 		t.Fatalf(".mvd: %q", value)
@@ -126,6 +172,9 @@ func TestWindowsHandlersComeAndGo(t *testing.T) {
 	}
 	if _, exists := ownedCommand(classes+"qw", root); exists {
 		t.Fatal("qw:// should be gone")
+	}
+	if extensionKeys() {
+		t.Fatal(".mvd and .qwd should be gone with the demo type")
 	}
 }
 

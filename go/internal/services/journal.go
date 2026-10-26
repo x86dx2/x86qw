@@ -41,6 +41,8 @@ type Journal struct {
 	Directory string
 	Path      string
 	Data      map[string]any
+	// writes counts the journal's rewrites; each one is a full, synced write.
+	writes int
 }
 
 func isoNow() string {
@@ -101,6 +103,7 @@ func NewJournal(target string, owner *lock.Owner, background bool, backgroundLog
 }
 
 func (j *Journal) write() error {
+	j.writes++
 	text, err := pyjson.Dumps(j.Data, 2)
 	if err == nil {
 		err = atomicfile.Write(j.Path, []byte(text+"\n"), 0o600)
@@ -113,14 +116,27 @@ func (j *Journal) write() error {
 
 // Relative renders a path relative to the installation (POSIX).
 func (j *Journal) Relative(absolute string) (string, error) {
-	// The name itself stays as given; only the folders it is in resolve.
-	name := filepath.Join(fspath.Resolve(filepath.Dir(absolute)), filepath.Base(absolute))
+	return j.relatives()(absolute)
+}
+
+// relatives is Relative for many paths, resolving each folder once.
+func (j *Journal) relatives() func(absolute string) (string, error) {
 	root := fspath.Resolve(j.Target)
-	relative, err := filepath.Rel(root, name)
-	if err != nil || !fspath.Inside(name, root) {
-		return "", errorf("The journal refused a path outside the installation.")
+	folders := map[string]string{}
+	return func(absolute string) (string, error) {
+		// The name itself stays as given; only the folders it is in resolve.
+		folder, ok := folders[filepath.Dir(absolute)]
+		if !ok {
+			folder = fspath.Resolve(filepath.Dir(absolute))
+			folders[filepath.Dir(absolute)] = folder
+		}
+		name := filepath.Join(folder, filepath.Base(absolute))
+		relative, err := filepath.Rel(root, name)
+		if err != nil || !fspath.Inside(name, root) {
+			return "", errorf("The journal refused a path outside the installation.")
+		}
+		return filepath.ToSlash(relative), nil
 	}
-	return filepath.ToSlash(relative), nil
 }
 
 // SetStatus updates the session status.
@@ -206,56 +222,63 @@ func (j *Journal) RecordTemporary(absolute, origin string, sensitive bool, ident
 	return j.write()
 }
 
-func (j *Journal) materializedRecord(file *MaterializedFile, state string) (map[string]any, error) {
-	relative, err := j.Relative(file.Path)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]any{
-		"path": relative, "expected_hash": file.ExpectedHash, "expected_size": file.Size,
-		"origin": file.Origin, "created_by_session": file.CreatedBySession, "existed": file.Existed,
-		"modified_during_session": false, "type": "materialized-content", "sensitive": false,
-		"device": file.Identity[0], "inode": file.Identity[1], "state": state,
-	}, nil
-}
-
-// RecordMaterializedIntent records a PK3 member before publishing it.
-func (j *Journal) RecordMaterializedIntent(file *MaterializedFile) error {
-	entry, err := j.materializedRecord(file, "pending")
-	if err != nil {
-		return err
-	}
-	j.Data["materialized_files"] = append(j.list("materialized_files"), entry)
-	return j.write()
-}
-
-// RecordMaterialized marks a PK3 member ready.
-func (j *Journal) RecordMaterialized(file *MaterializedFile) error {
-	entry, err := j.materializedRecord(file, "ready")
-	if err != nil {
-		return err
-	}
-	j.replaceOrAppend("materialized_files", entry["path"].(string), entry)
-	return j.write()
-}
-
-// RecordDirectory records a directory created for the session.
-func (j *Journal) RecordDirectory(dir *MaterializedDirectory) error {
-	relative, err := j.Relative(dir.Path)
-	if err != nil {
-		return err
-	}
+// RecordPayload records a PK3 payload in one write: the folders it created,
+// the files that were already there (ready) and the members about to be
+// published (pending). Called again with only ready files once they are
+// published, it marks them so.
+func (j *Journal) RecordPayload(directories []*MaterializedDirectory, ready, pending []*MaterializedFile) error {
+	relative := j.relatives()
+	known := map[string]bool{}
 	for _, item := range j.list("created_directories") {
-		if existing, ok := item.(map[string]any); ok && existing["path"] == relative {
-			return nil
-		}
-		if item == relative {
-			return nil
+		if existing, ok := item.(map[string]any); ok {
+			known[fmt.Sprint(existing["path"])] = true
+		} else {
+			known[fmt.Sprint(item)] = true
 		}
 	}
-	j.Data["created_directories"] = append(j.list("created_directories"), map[string]any{
-		"path": relative, "device": dir.Identity[0], "inode": dir.Identity[1],
-	})
+	for _, dir := range directories {
+		path, err := relative(dir.Path)
+		if err != nil {
+			return err
+		}
+		if !known[path] {
+			known[path] = true
+			j.Data["created_directories"] = append(j.list("created_directories"), map[string]any{
+				"path": path, "device": dir.Identity[0], "inode": dir.Identity[1],
+			})
+		}
+	}
+	items := j.list("materialized_files")
+	waiting := map[string]int{}
+	for index, item := range items {
+		if existing, ok := item.(map[string]any); ok && existing["state"] == "pending" {
+			waiting[fmt.Sprint(existing["path"])] = index
+		}
+	}
+	for _, group := range []struct {
+		files []*MaterializedFile
+		state string
+	}{{ready, "ready"}, {pending, "pending"}} {
+		for _, file := range group.files {
+			path, err := relative(file.Path)
+			if err != nil {
+				return err
+			}
+			entry := map[string]any{
+				"path": path, "expected_hash": file.ExpectedHash, "expected_size": file.Size,
+				"origin": file.Origin, "created_by_session": file.CreatedBySession, "existed": file.Existed,
+				"modified_during_session": false, "type": "materialized-content", "sensitive": false,
+				"device": file.Identity[0], "inode": file.Identity[1], "state": group.state,
+			}
+			if index, ok := waiting[path]; ok {
+				items[index] = entry
+				delete(waiting, path)
+			} else {
+				items = append(items, entry)
+			}
+		}
+	}
+	j.Data["materialized_files"] = items
 	return j.write()
 }
 
@@ -294,7 +317,8 @@ func (j *Journal) ConsumeStopRequest() (bool, error) {
 // JournalPath resolves a recorded relative path inside the installation.
 func JournalPath(target string, relative any) (string, bool) {
 	text, ok := relative.(string)
-	if !ok || text == "" || path.IsAbs(text) {
+	// On Windows a backslash or a drive would lead out of target.
+	if !ok || text == "" || path.IsAbs(text) || strings.ContainsAny(text, `\:`) {
 		return "", false
 	}
 	for _, part := range strings.Split(text, "/") {

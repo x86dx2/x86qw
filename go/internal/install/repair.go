@@ -9,20 +9,16 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/lock"
+	"github.com/x86dx2/x86qw/go/internal/macos"
 	"github.com/x86dx2/x86qw/go/internal/plan"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 	"github.com/x86dx2/x86qw/go/internal/state"
 )
 
 // Repair plans and restores managed content.
-
-// legacyStableIdentities maps old macOS stable ezQuake binaries to the
-// upstream binary a repair restores.
-var legacyStableIdentities = map[string]string{
-	"2ccea8f214c91e5fc92b5cb195c81ac584f75a551d11a58de56e5e7951eec7ed": "e24524761d8ff10c57a8ecbb2fdc7ce29d1bd78641cfaecf49644d8881e2422a",
-}
 
 // permissionRuntimes are executable server runtimes per component, in
 // runtimes.json order.
@@ -37,6 +33,7 @@ type clientIssue struct {
 	reason    string
 	mode      string // payload or permission
 	available bool
+	changed   bool // the runtime differs from its receipt: repair keeps a copy
 }
 
 // RepairAssessment is what a repair found wrong.
@@ -60,10 +57,8 @@ func diagnosticCategory(diagnostic string) string {
 
 func assessRepair(in plan.Input) (*RepairAssessment, error) {
 	root := in.Root
-	for _, pak := range []struct{ path, sha string }{{"id1/pak0.pak", pak0SHA256}, {"id1/pak1.pak", pak1SHA256}} {
-		if err := checkPak(filepath.Join(root, pak.path), pak.sha); err != nil {
-			return nil, err
-		}
+	if err := CheckPaks(root); err != nil {
+		return nil, err
 	}
 	assessment := &RepairAssessment{}
 	valid := map[string]*receipt.Record{}
@@ -77,8 +72,8 @@ func assessRepair(in plan.Input) (*RepairAssessment, error) {
 		valid[entry.Name()] = record
 	}
 	installed := map[string]bool{}
-	for _, id := range in.Inventory.IDs() {
-		if valid[id] != nil {
+	for id := range valid {
+		if !generatedRecords[id] {
 			installed[id] = true
 		}
 	}
@@ -171,19 +166,19 @@ func assessRepair(in plan.Input) (*RepairAssessment, error) {
 				continue
 			}
 			if spec.Platform == "linux" && regular(runtime) && executableMissing(runtime) {
-				if digest, _ := fileSHA256(runtime); digest == rec.Get("binary_sha256") {
+				if digest, _ := archive.FileSHA256(runtime); digest == rec.Get("binary_sha256") {
 					issue.reason, issue.mode = "AppImage without execute permission", "permission"
 					assessment.clients = append(assessment.clients, issue)
 					continue
 				}
 			}
 			if _, err := verifyClient(root, spec, channel); err != nil {
-				issue.reason = "runtime missing, incomplete or different"
+				issue.reason, issue.changed = "runtime missing, incomplete or different", true
 				assessment.clients = append(assessment.clients, issue)
 				continue
 			}
 			if spec.Platform == "macos" && channel == "stable" {
-				if legacy, ok := legacyStableIdentities[rec.Get("artifact_sha256")]; ok && legacy == rec.Get("binary_sha256") {
+				if identities, ok := macos.StableBinaryIdentities[rec.Get("artifact_sha256")]; ok && identities.Legacy == rec.Get("binary_sha256") {
 					issue.reason = "x86QW re-signed bundle; restore the intact upstream bundle"
 					assessment.clients = append(assessment.clients, issue)
 				}
@@ -299,7 +294,7 @@ func Repair(ctx context.Context, in plan.Input) (*Result, error) {
 	defer held.Release()
 	tx, err := NewTransaction(in.Root, ".x86qw-repair.")
 	if tx != nil {
-		tx.observe = observing(ctx)
+		tx.observe, tx.repair = observing(ctx), true
 	}
 	if err != nil {
 		return nil, err
@@ -341,6 +336,10 @@ func Repair(ctx context.Context, in plan.Input) (*Result, error) {
 		}
 		runtime := filepath.Join(in.Root, issue.spec.Runtime(issue.channel))
 		aside := filepath.Join(tx.Stage, "previous-runtime-"+issue.channel)
+		if issue.changed {
+			aside = keptCopy(runtime)
+			tx.warn("Changed ezQuake restored; your copy is %s", aside)
+		}
 		if _, err := os.Lstat(runtime); err == nil {
 			if err := os.Rename(runtime, aside); err != nil {
 				return fail(err)
@@ -399,17 +398,13 @@ func Repair(ctx context.Context, in plan.Input) (*Result, error) {
 // repairStateDocument writes state.json again with the state's own known
 // components and capabilities.
 func repairStateDocument(in plan.Input, base map[string]any) ([]byte, error) {
-	recorded := []any{}
-	var recordedIDs []string
-	for _, id := range in.Inventory.IDs() {
-		if hasRecord(in.Root, id) {
-			recorded = append(recorded, id)
-			recordedIDs = append(recordedIDs, id)
-		}
+	recorded, err := recordedComponents(in.Root)
+	if err != nil {
+		return nil, err
 	}
 	document := map[string]any{
 		"capabilities":          base["capabilities"],
-		"component_fingerprint": state.Fingerprint(recordedIDs),
+		"component_fingerprint": state.Fingerprint(recorded),
 		"format":                2,
 		"known_components":      base["known_components"],
 		"min_cli_version":       "0.7.0",

@@ -148,6 +148,31 @@ func TestChangesShowsWhatTheUserEdited(t *testing.T) {
 	}
 }
 
+// A file a server named may hold terminal control codes: changes prints its
+// name escaped, never raw.
+func TestChangesEscapesControlCharacters(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows file names take no control characters")
+	}
+	root := fixtureInstall(t)
+	writeFile(t, filepath.Join(root, "qw", "maps", "x\x1b]0;owned\x07.bsp"), "map")
+	if out := runOK(t, 0, "changes", root); strings.ContainsAny(out, "\x1b\x07") || !strings.Contains(out, `\x1b`) {
+		t.Fatalf("changes: %q", out)
+	}
+}
+
+// A folder of three demos goes as one removal: cleanup counts items, never
+// claiming one file for three.
+func TestCleanupCountsItemsNotFiles(t *testing.T) {
+	root := fixtureInstall(t)
+	for _, name := range []string{"a.mvd", "b.mvd", "c.mvd"} {
+		writeFile(t, filepath.Join(root, "td2", "demos", name), "demo "+name)
+	}
+	if out := runOK(t, 0, "cleanup", "--personal-data", root); strings.Contains(out, "1 file") || !strings.Contains(out, "(1 item)") {
+		t.Fatalf("cleanup: %s", out)
+	}
+}
+
 func TestCleanupMigrateAndStatusLeaveTheInstallation(t *testing.T) {
 	root := fixtureInstall(t)
 	runOK(t, 0, "cleanup", root)

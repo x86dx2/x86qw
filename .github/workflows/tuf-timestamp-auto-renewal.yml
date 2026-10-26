@@ -31,6 +31,7 @@ jobs:
       checks: read
       statuses: read
       issues: write
+      actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -97,7 +98,9 @@ jobs:
       # required checks; the job's own token opens and merges the PR (it
       # needs no extra permission on the release token, and starts no
       # workflow of its own). A squash merge through the API is signed by
-      # GitHub, which the signed-commit rule asks for.
+      # GitHub, which the signed-commit rule asks for. A site commit whose
+      # deploy queued behind this run refuses the older timestamp, so the
+      # step deploys main again once the record merges.
       - name: Record the published timestamp on main
         env:
           PUSH_TOKEN: ${{ secrets.RELEASE_GH_TOKEN }}
@@ -133,6 +136,7 @@ jobs:
             git rebase FETCH_HEAD
             git push --no-verify --force "$remote" "$branch"
           done
+          gh workflow run site-deploy.yml --ref main
           # The repository deletes merged branches; this only covers a delay.
           gh api -X DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${branch}" 2>/dev/null || true
       - name: Open an issue when the renewal fails

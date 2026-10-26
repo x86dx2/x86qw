@@ -42,7 +42,8 @@ type gameState struct {
 	actingOn  screen
 	actionErr error
 	errOn     screen
-	subject   string // what the action is about, for the toast after it
+	subject   string      // what the action is about, for the toast after it
+	played    setup.Match // the match Play launched, the last one once open
 }
 
 type matchCatalogMsg struct {
@@ -192,9 +193,9 @@ func (m *Model) gameUpdate(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		switch msg.what {
 		case "play":
-			m.say(fmt.Sprintf(m.t("played"), m.matchTitle()))
+			m.say(fmt.Sprintf(m.t("played"), g.subject))
 			if g.catalog != nil {
-				last := g.match
+				last := g.played
 				g.catalog.Last = &last
 			}
 		case "join":
@@ -205,6 +206,12 @@ func (m *Model) gameUpdate(msg tea.Msg) (tea.Cmd, bool) {
 			for index := range g.servers {
 				if g.servers[index].Address == g.subject {
 					g.servers[index].Favorite = msg.what == "favorite"
+				}
+			}
+			// Favorites sort first: the focus follows the server it was on.
+			for index, server := range m.visibleServers() {
+				if server.Address == g.subject {
+					m.focus = index
 				}
 			}
 			m.say(fmt.Sprintf(m.t(msg.what+"d"), g.subject))
@@ -549,7 +556,8 @@ func (m *Model) activateMatch(id string) tea.Cmd {
 		return nil
 	}
 	backend, target, match := m.cfg.Backend, m.target(), m.game.match
-	m.game.mapNote = ""
+	// The match can change while ezQuake opens; the toast names this one.
+	m.game.mapNote, m.game.subject, m.game.played = "", m.matchTitle(), match
 	return m.act("play", func(ctx context.Context) error { return backend.Play(ctx, target, match) })
 }
 
@@ -786,7 +794,16 @@ func (m *Model) serversPage(p *page) {
 		p.add(p.st(t.Error).Render("  " + m.glyphs.Fail + "  " + m.explain(g.serversErr)))
 		return
 	}
-	p.lead(fmt.Sprintf(m.t("servers.lead"), len(g.servers)))
+	// The Hub lists only servers with someone on them: a list with nobody
+	// on any is the favorites and recents, there because the Hub is not.
+	switch {
+	case len(g.servers) == 0:
+		p.lead(m.t("servers.none"))
+	case !slices.ContainsFunc(g.servers, func(s setup.PublicServer) bool { return s.Humans+s.Bots > 0 }):
+		p.lead(m.t("servers.offline"))
+	default:
+		p.lead(fmt.Sprintf(m.t("servers.lead"), len(g.servers)))
+	}
 	p.gap(1)
 	filter := g.filter.String()
 	label := p.st(t.Gray).Render("  " + m.t("pick.search") + "  ")
@@ -818,7 +835,9 @@ func (m *Model) serversPage(p *page) {
 		if server.Bots > 0 {
 			players += fmt.Sprintf("+%d", server.Bots)
 		}
-		right := base.Foreground(t.Gray).Render(fmt.Sprintf("%-9s %-6s %5s", server.Map, server.Mode, players))
+		// A map or mode wider than its column would leave no room for the title.
+		mapText, mode := padRight(ansi.Truncate(server.Map, 9, "…"), 9), padRight(ansi.Truncate(server.Mode, 6, "…"), 6)
+		right := base.Foreground(t.Gray).Render(fmt.Sprintf("%s %s %5s", mapText, mode, players))
 		if server.QTV != "" {
 			right += base.Foreground(t.Success).Render("  " + m.t("qtv.badge"))
 		} else {
@@ -1039,6 +1058,10 @@ func (m *Model) activateHost(id string) tea.Cmd {
 		// puts the choices back and returns here.
 		m.openSetup(scHost, "h.add")
 		m.opts.Intent = setup.Both
+		if len(m.opts.Server.Instances) == 0 {
+			// Choices recorded without a server start from the default one.
+			m.opts.Server = setup.Defaults(setup.Both, m.opts.Target).Server
+		}
 	case "h.start":
 		if m.game.acting == "" {
 			if err := m.canHost(); err != nil {
@@ -1162,7 +1185,7 @@ func (m *Model) gameKey(msg tea.KeyPressMsg) tea.Cmd {
 			}
 		case "c":
 			if m.screen == scMatch {
-				return m.copyText(shellJoin(append([]string{"x86qw"}, m.game.match.Args(m.target())...)))
+				return m.copyText(setup.ShellJoin(append([]string{"x86qw"}, m.game.match.Args(m.target())...)))
 			}
 		case "esc", "left", "backspace":
 			return m.toRail()

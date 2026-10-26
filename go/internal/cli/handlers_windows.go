@@ -16,8 +16,10 @@ import (
 
 const demoProgID = "x86qw.demo"
 
+// handlerCommand ends the options before the link: a quote in it would
+// otherwise let it add its own --target.
 func handlerCommand(root string) string {
-	return fmt.Sprintf(`"%s" open --target "%s" "%%1"`, Command(root), root)
+	return fmt.Sprintf(`"%s" open --target "%s" -- "%%1"`, Command(root), root)
 }
 
 // ownedCommand reports whether the open command under key launches root:
@@ -31,6 +33,20 @@ func ownedCommand(key, root string) (owned, exists bool) {
 	value, _, err := k.GetStringValue("")
 	legacy := strings.Contains(strings.ToLower(value), strings.ToLower(filepath.Join(root, ".x86qw", "cli")+`\`))
 	return err == nil && (strings.Contains(strings.ToLower(value), strings.ToLower(`"`+Command(root)+`"`)) || legacy), true
+}
+
+// refreshHandlers rewrites the open command of the handlers root owns.
+func refreshHandlers(root string) {
+	for _, key := range []string{`Software\Classes\qw`, `Software\Classes\` + demoProgID} {
+		if owned, _ := ownedCommand(key, root); owned {
+			if command, err := registry.OpenKey(registry.CURRENT_USER, key+`\shell\open\command`, registry.QUERY_VALUE|registry.SET_VALUE); err == nil {
+				if value, _, _ := command.GetStringValue(""); value != handlerCommand(root) {
+					command.SetStringValue("", handlerCommand(root))
+				}
+				command.Close()
+			}
+		}
+	}
 }
 
 func writeCommand(key, root, label string, protocol bool) error {
@@ -93,7 +109,13 @@ func setHandlers(root string, links, demos bool) error {
 		return errors.Join(errs...)
 	}
 	for _, extension := range []string{".mvd", ".qwd"} {
-		key, _, err := registry.CreateKey(registry.CURRENT_USER, classes+extension, registry.QUERY_VALUE|registry.SET_VALUE)
+		key, err := registry.OpenKey(registry.CURRENT_USER, classes+extension, registry.QUERY_VALUE|registry.SET_VALUE)
+		if demos && errors.Is(err, registry.ErrNotExist) {
+			key, _, err = registry.CreateKey(registry.CURRENT_USER, classes+extension, registry.QUERY_VALUE|registry.SET_VALUE)
+		}
+		if errors.Is(err, registry.ErrNotExist) {
+			continue
+		}
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -104,6 +126,12 @@ func setHandlers(root string, links, demos bool) error {
 			errs = append(errs, key.SetStringValue("", demoProgID))
 		case !demos && current == demoProgID:
 			errs = append(errs, key.DeleteValue(""))
+			// A key left with nothing in it was ours alone.
+			if info, err := key.Stat(); err == nil && info.SubKeyCount == 0 && info.ValueCount == 0 {
+				key.Close()
+				errs = append(errs, registry.DeleteKey(registry.CURRENT_USER, classes+extension))
+				continue
+			}
 		}
 		key.Close()
 	}

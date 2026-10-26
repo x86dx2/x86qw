@@ -1,8 +1,12 @@
 package content
 
 import (
+	"bytes"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
@@ -40,6 +44,44 @@ func TestCheckoutInventoriesValidate(t *testing.T) {
 	}
 }
 
+// The client refuses a stable ezQuake version with a leading zero.
+func TestCatalogRefusesStableVersionsTheClientRejects(t *testing.T) {
+	project := NewProject(repoRoot(t))
+	catalog, err := LoadJSONObject(project.Path(CatalogPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pkg := range objects(catalog.Value("packages")) {
+		if pyjson.Eq(pkg.Value("component"), "ezquake") && pyjson.Eq(pkg.Value("channel"), "stable") {
+			version := pkg.Value("version").(string)
+			pkg.Set("version", "0"+version)
+			pkg.Set("distribution_path", strings.Replace(pkg.Value("distribution_path").(string), "/"+version+"/", "/0"+version+"/", 1))
+			break
+		}
+	}
+	if _, err := project.ValidateCatalog(catalog); err == nil || !strings.Contains(err.Error(), ".version is invalid for ezquake stable") {
+		t.Fatalf("a stable version with a leading zero was not refused: %v", err)
+	}
+}
+
+// A catalog entry served from dist must describe that file, or installs fail.
+func TestCatalogPackagesMatchTheirDistributionFiles(t *testing.T) {
+	manifest := object("files", object("clients/a.zip", object("size", pyjson.Number("3"), "sha256", strings.Repeat("a", 64))))
+	catalog := func() *Object {
+		return object("packages", []any{object("distribution_path", "clients/a.zip", "size", pyjson.Number("3"), "sha256", strings.Repeat("a", 64))})
+	}
+	if err := distributionPackagesMatch(catalog(), manifest); err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range map[string]any{"size": pyjson.Number("4"), "sha256": strings.Repeat("b", 64), "distribution_path": "clients/b.zip"} {
+		document := catalog()
+		firstObject(document, "packages").Set(key, value)
+		if distributionPackagesMatch(document, manifest) == nil {
+			t.Errorf("a catalog package with another %s was accepted", key)
+		}
+	}
+}
+
 func TestProductIsByteIdentical(t *testing.T) {
 	root := repoRoot(t)
 	requireHydrated(t, root)
@@ -51,6 +93,46 @@ func TestProductIsByteIdentical(t *testing.T) {
 	actual, _ := os.ReadFile(project.Path(ProductPath))
 	if string(expected) != string(actual) {
 		t.Fatal("regenerated product.json differs from the published one")
+	}
+}
+
+// build --register over packages the catalog already lists writes the same
+// bytes, so the TUF-signed catalog stays valid.
+func TestRegisteringUnchangedPackagesKeepsTheCatalog(t *testing.T) {
+	project := NewProject(repoRoot(t))
+	committed, err := os.ReadFile(project.Path(CatalogPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := LoadJSONObject(project.Path(CatalogPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var built []any
+	for _, pkg := range objects(catalog.Value("packages")) {
+		if pyjson.Eq(pkg.Value("channel"), "content") {
+			built = append(built, pkg)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "catalog.json")
+	if err := os.WriteFile(path, committed, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := project.RegisterPackages(path, object("packages", built), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	registered, err := LoadJSONObject(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := project.NormalizeCatalogReleaseMetadata(registered); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteJSON(path, registered); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := os.ReadFile(path); !bytes.Equal(after, committed) {
+		t.Fatal("registering unchanged packages rewrote the catalog")
 	}
 }
 

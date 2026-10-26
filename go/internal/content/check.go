@@ -16,8 +16,6 @@ import (
 
 // Upstream freshness: `x86qw-content check`.
 
-var hex40Strict = regexp.MustCompile(`^[0-9a-f]{40}$`)
-
 // UpdateResult is one component freshness line. Error is set when the
 // component's upstream could not be consulted; the others are unaffected.
 type UpdateResult struct {
@@ -192,7 +190,7 @@ func ReferenceRevision(assets []Asset) (string, error) {
 		return "", fmt.Errorf("nQuake discovery did not produce exactly one revision")
 	}
 	revision := sortedKeys(revisions)[0]
-	if !hex40Strict.MatchString(revision) {
+	if !hex40Pattern.MatchString(revision) {
 		return "", fmt.Errorf("invalid nQuake revision: %s", revision)
 	}
 	return revision, nil
@@ -355,7 +353,7 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool, selected []st
 		nquakeOwners := NQuakeOwners(manifest, ids)
 		if reason := unavailable["nquake"]; reason != "" {
 			for index := range results {
-				if nquakeOwners[results[index].Component] && results[index].Error == "" && IsReferenceStrategy(results[index].Strategy) {
+				if nquakeOwners[results[index].Component] && results[index].Error == "" {
 					results[index].Status, results[index].LatestSource, results[index].Error = "unavailable", results[index].Installed, reason
 				}
 			}

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/buildinfo"
 	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
@@ -64,10 +65,10 @@ func TestVerifyDetectsTamperedFile(t *testing.T) {
 		}
 	}
 	write("qw/readme.txt", "original")
-	digest, _ := fileSHA256(filepath.Join(root, "qw/readme.txt"))
+	digest, _ := archive.FileSHA256(filepath.Join(root, "qw/readme.txt"))
 	inventory := "qw/readme.txt\t" + digest + "\n"
 	write(".x86qw/components/docs/inventory", inventory)
-	invDigest, _ := fileSHA256(filepath.Join(root, ".x86qw/components/docs/inventory"))
+	invDigest, _ := archive.FileSHA256(filepath.Join(root, ".x86qw/components/docs/inventory"))
 	write(".x86qw/components/docs/receipt", "format\t1\ncomponent\tdocs\nselection\t1\nsource\tx\ninventory_sha256\t"+invDigest+"\n")
 	write("qw/readme.txt", "tampered")
 	records, err := loadForTest(root)

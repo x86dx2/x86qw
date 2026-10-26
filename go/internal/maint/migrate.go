@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/x86dx2/x86qw/go/internal/atomicfile"
 	"github.com/x86dx2/x86qw/go/internal/lock"
-	"github.com/x86dx2/x86qw/go/internal/privfs"
 	"github.com/x86dx2/x86qw/go/internal/state"
 )
 
@@ -61,23 +61,7 @@ func Migrate(target string) ([]MigrationOp, error) {
 	if err != nil || len(ops) == 0 {
 		return ops, err
 	}
-	journal := filepath.Join(target, metadataDirectory, "migrations", "1.0")
-	for _, dir := range []string{filepath.Dir(journal), journal} {
-		if err := privfs.Mkdir(dir); err != nil && !errors.Is(err, os.ErrExist) {
-			return nil, err
-		}
-	}
-	path := filepath.Join(target, filepath.FromSlash(stateRelative))
-	temporary := path + ".migrate-tmp"
-	if err := os.WriteFile(temporary, payload, 0o644); err != nil {
-		return nil, err
-	}
-	if err := os.Chmod(temporary, 0o644); err != nil {
-		os.Remove(temporary)
-		return nil, err
-	}
-	if err := os.Rename(temporary, path); err != nil {
-		os.Remove(temporary)
+	if err := atomicfile.Write(filepath.Join(target, filepath.FromSlash(stateRelative)), payload, 0o644); err != nil {
 		return nil, err
 	}
 	if _, err := state.Read(target); err != nil {

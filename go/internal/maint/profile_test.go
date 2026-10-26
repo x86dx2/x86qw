@@ -3,9 +3,9 @@ package maint
 import (
 	"archive/zip"
 	"github.com/x86dx2/x86qw/go/internal/doctor"
+	"github.com/x86dx2/x86qw/go/internal/fspath"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -115,9 +115,6 @@ func TestProfileRestoreRejectsTamperedBackups(t *testing.T) {
 // A destination that is a symlink stops the restore and rolls back what
 // it already wrote.
 func TestProfileRestoreRollsBackOnASymlinkedDestination(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symbolic links need a privilege on Windows")
-	}
 	root := profiled(t)
 	archive := filepath.Join(t.TempDir(), "profile.zip")
 	if _, err := BackupProfile(root, archive); err != nil {
@@ -128,7 +125,7 @@ func TestProfileRestoreRollsBackOnASymlinkedDestination(t *testing.T) {
 	write(t, outside, "fora\n")
 	os.Remove(filepath.Join(root, "qw", "x86qw-ktx-user.cfg"))
 	if err := os.Symlink(outside, filepath.Join(root, "qw", "x86qw-ktx-user.cfg")); err != nil {
-		t.Fatal(err)
+		t.Skip(err)
 	}
 	if _, err := RestoreProfile(archive, root); err == nil || !strings.Contains(err.Error(), "symlink") {
 		t.Fatalf("a link should stop the restore: %v", err)
@@ -150,8 +147,8 @@ func TestInsideUsesTheOSSeparator(t *testing.T) {
 		filepath.Join(root+"-sibling", "a.zip"):    false,
 		filepath.Join(filepath.Dir(root), "a.zip"): false,
 	} {
-		if inside(name, root) != want {
-			t.Errorf("inside(%s) should be %v", name, want)
+		if fspath.Inside(name, root) != want {
+			t.Errorf("fspath.Inside(%s) should be %v", name, want)
 		}
 	}
 }
@@ -174,7 +171,7 @@ func TestBundleDestinationNeverLandsInsideTheInstallation(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	root := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "bundle.zip")
-	if got, err := doctor.BundleDestination(outside, root); err != nil || got != filepath.Join(resolve(filepath.Dir(outside)), "bundle.zip") {
+	if got, err := doctor.BundleDestination(outside, root); err != nil || got != filepath.Join(fspath.Resolve(filepath.Dir(outside)), "bundle.zip") {
 		t.Fatalf("outside the installation: %s %v", got, err)
 	}
 	if _, err := doctor.BundleDestination(filepath.Join(root, "sub", "bundle.zip"), root); err == nil {
@@ -183,7 +180,7 @@ func TestBundleDestinationNeverLandsInsideTheInstallation(t *testing.T) {
 	previous, _ := os.Getwd()
 	defer os.Chdir(previous)
 	os.Chdir(root)
-	if got, err := doctor.BundleDestination("bundle.zip", root); err != nil || got != filepath.Join(resolve(home), "bundle.zip") {
+	if got, err := doctor.BundleDestination("bundle.zip", root); err != nil || got != filepath.Join(fspath.Resolve(home), "bundle.zip") {
 		t.Fatalf("a bare name inside the installation should go to home: %s %v", got, err)
 	}
 }

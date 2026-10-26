@@ -19,12 +19,10 @@ import (
 
 // Operation drives one `host`, `proxy` or `qtv` invocation like services.main.
 type Operation struct {
-	Action string
-	Host   *HostOptions
-	Proxy  *ProxyOptions
-	Qtv    *QtvOptions
-	// Args are the raw command-line arguments (re-used by --background).
-	Args    []string
+	Action  string
+	Host    *HostOptions
+	Proxy   *ProxyOptions
+	Qtv     *QtvOptions
 	Stdin   io.Reader
 	Console *Console
 	// Output receives the runtimes' stdout/stderr.
@@ -363,6 +361,9 @@ func (op *Operation) Run() (code int) {
 		if o.WithQTV {
 			c.Info(fmt.Sprintf("QTV HTTP: http://%s/", Endpoint(o.QtvBind, o.QtvPort)))
 		}
+	}
+	for _, spec := range specs {
+		spec.Hidden = common.BackgroundChild
 	}
 	result, err := RunProcesses(specs, journal, c, op.Output)
 	if err != nil {

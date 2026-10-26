@@ -9,6 +9,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/maint"
 	"github.com/x86dx2/x86qw/go/internal/output"
+	"github.com/x86dx2/x86qw/go/internal/setup"
 )
 
 type uiArgs struct{ target, output string }
@@ -30,7 +31,7 @@ func runUI(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return usageFailure("ui", err, stderr)
 	}
-	destination := expandHome(a.output)
+	destination := setup.ExpandHome(a.output)
 	if destination == "" {
 		// A fresh folder of our own, so the page goes where no one else
 		// can have put anything first.

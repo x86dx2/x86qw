@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -74,6 +73,16 @@ func (a *setupArgs) recipeGiven() bool {
 	return given
 }
 
+// strayRecipeFlag is a recipe flag given without --intent or --recipe,
+// which nothing would read.
+func (a *setupArgs) strayRecipeFlag() string {
+	stray := ""
+	if a.recipe != nil && !a.recipeGiven() {
+		a.recipe.Visit(func(f *flag.Flag) { stray = f.Name })
+	}
+	return stray
+}
+
 // installProfile installs a profile into a new installation, the work of
 // setup --profile and install --profile.
 func installProfile(root string, a *setupArgs, stdout, stderr io.Writer) error {
@@ -85,7 +94,9 @@ func installProfile(root string, a *setupArgs, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	result, err := install.Install(context.Background(), root, parsed, inventory, install.InstallOptions{
+	ctx, stop := interruptible()
+	defer stop()
+	result, err := install.Install(ctx, root, parsed, inventory, install.InstallOptions{
 		Platform: a.platform, Channel: a.channel, Release: a.release, Profile: a.profile,
 	})
 	if err != nil {
@@ -112,6 +123,9 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 	a, root, code, ok := parseSetup("setup", args, stdout, stderr)
 	if !ok {
 		return code
+	}
+	if stray := a.strayRecipeFlag(); stray != "" {
+		return usageFailure("setup", cliargs.Usagef("--%s is part of a recipe: give --intent or --recipe too", stray), stderr)
 	}
 	switch {
 	case a.recipeGiven():
@@ -159,7 +173,7 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 	if err := publishCLI(root, true, stdout); err != nil {
 		return failure(root, err, stderr)
 	}
-	fmt.Fprintf(stdout, "  Play now: %s play\n", here(root))
+	fmt.Fprintf(stdout, "  Play now: %s\n", setup.ShellJoin([]string{here(root), "play"}))
 	return output.ExitSuccess
 }
 
@@ -176,12 +190,12 @@ func here(root string) string {
 // preflight, each component as it lands and how to start.
 func runRecipe(backend *setup.Real, options setup.Options, yes bool, stdout, stderr io.Writer) int {
 	con := newConsole(stdout, stderr, false, false)
-	recipe := strings.Join(options.Recipe(), " ")
-	if proceed, code := confirm("Install in "+options.Target+" with this recipe?", recipe, yes, stdout, stderr); !proceed {
+	recipe := options.Recipe() // it ends with --yes, which confirm adds back
+	if proceed, code := confirm("Install in "+options.Target+" with this recipe?", recipe[:len(recipe)-1], yes, stdout, stderr); !proceed {
 		return code
 	}
 	// Ctrl+C cancels and waits for the rollback instead of exiting midway.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := interruptible()
 	defer stop()
 	last, err := setup.RunRecipe(ctx, backend, options, setup.RecipeReport{
 		Check: func(check setup.Check) {
@@ -212,11 +226,11 @@ func runRecipe(backend *setup.Real, options setup.Options, yes bool, stdout, std
 	}
 	fmt.Fprintf(stdout, "✓ x86QW installed in %s\n", options.Target)
 	if options.Intent.WantsServer() {
-		fmt.Fprintf(stdout, "  Start the server: %s %s\n", here(options.Target), strings.Join(setup.HostCommand(options.Target, options), " "))
+		fmt.Fprintf(stdout, "  Start the server: %s\n", setup.ShellJoin(append([]string{here(options.Target)}, setup.HostCommand(options.Target, options)...)))
 		fmt.Fprintf(stdout, "  rcon: %s (kept in %s)\n", options.Server.Rcon, filepath.Join(options.Target, filepath.FromSlash(setup.RconFile)))
 	}
 	if options.Intent.WantsClient() {
-		fmt.Fprintf(stdout, "  Play now: %s play\n", here(options.Target))
+		fmt.Fprintf(stdout, "  Play now: %s\n", setup.ShellJoin([]string{here(options.Target), "play"}))
 	}
 	return output.ExitSuccess
 }

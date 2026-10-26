@@ -42,15 +42,19 @@ func deferLauncher(path string) bool {
 }
 
 // removeWhenGone starts a hidden PowerShell that waits (at most a minute)
-// for pids to exit and then removes path.
+// for pids to exit and then removes path, and its folder if that is left
+// empty (the installation folder after a purge).
 func removeWhenGone(pids []int, path string) bool {
 	ids := make([]string, len(pids))
 	for index, pid := range pids {
 		ids[index] = fmt.Sprint(pid)
 	}
-	script := fmt.Sprintf("Wait-Process -Id %s -Timeout 60 -ErrorAction SilentlyContinue; Remove-Item -LiteralPath '%s' -Recurse -Force",
-		strings.Join(ids, ","), strings.ReplaceAll(path, "'", "''"))
+	quote := func(path string) string { return "'" + strings.ReplaceAll(path, "'", "''") + "'" }
+	script := fmt.Sprintf("Wait-Process -Id %s -Timeout 60 -ErrorAction SilentlyContinue; Remove-Item -LiteralPath %s -Recurse -Force; "+
+		"try { [IO.Directory]::Delete(%s) } catch {}", strings.Join(ids, ","), quote(path), quote(filepath.Dir(path)))
 	command := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script)
+	// Its working folder must not be the one it removes.
+	command.Dir = filepath.Dir(filepath.Dir(path))
 	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NO_WINDOW | windows.CREATE_NEW_PROCESS_GROUP}
 	if err := command.Start(); err != nil {
 		return false
@@ -58,3 +62,7 @@ func removeWhenGone(pids []int, path string) bool {
 	command.Process.Release()
 	return true
 }
+
+// removesItself is never true on Windows, where a running executable cannot
+// be removed: it is set aside and goes once it exits.
+func removesItself(path string) bool { return false }

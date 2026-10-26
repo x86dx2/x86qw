@@ -191,7 +191,7 @@ func (m *Model) sectionRows() []reviewRow {
 		}
 	}
 	rows = append(rows, reviewRow{"integ", m.t("sec.integ"), fmt.Sprintf(m.t("d.integN"), on, offered)})
-	return append(rows, reviewRow{"folder", m.t("sec.folder"), shortPath(o.Target)})
+	return append(rows, reviewRow{"folder", m.t("sec.folder"), setup.ShortPath(o.Target)})
 }
 
 // sectionSummary is the one-line summary of a section of the setup.
@@ -266,7 +266,7 @@ func (m *Model) totalBytes() int64 {
 		}
 	} else {
 		// ezQuake comes with every installation, a server's too.
-		total = m.catalog.CoreSize + m.catalog.ClientSize[platform()]
+		total = m.catalog.CoreSize + m.catalog.ClientSize
 	}
 	for _, id := range setup.Selected(m.catalog, m.opts) {
 		if !have[id] {
@@ -328,7 +328,7 @@ func (m *Model) details(id string) [][2]string {
 	case "integ":
 		return m.integrationDetails()
 	case "folder":
-		return [][2]string{{"", shortPath(m.opts.Target)}}
+		return [][2]string{{"", setup.ShortPath(m.opts.Target)}}
 	}
 	return nil
 }
@@ -534,7 +534,7 @@ func (m *Model) openSection(p *page, row reviewRow, first bool) {
 	p.band(spread(left, base.Foreground(t.Gray).Render(hint)+base.Render("  "), p.width, t.Band), t.Band, "row:"+row.id)
 	indent := p.st(t.Base).Render("    ")
 	if row.id == "recipe" {
-		lines := strings.Split(lipgloss.Wrap(shellJoin(m.opts.Recipe()), p.width-6, " "), "\n")
+		lines := strings.Split(lipgloss.Wrap(setup.ShellJoin(m.opts.Recipe()), p.width-6, " "), "\n")
 		if len(lines) > 4 {
 			lines = append(lines[:3], m.glyphs.Ellipsis)
 		}
@@ -604,7 +604,7 @@ func (m *Model) dock(width int) *page {
 			glyph, style, value := m.spinner(), p.st(t.Brand), p.st(t.Dim).Render(m.t("net.detecting"))
 			switch check.State {
 			case setup.CheckOK:
-				glyph, style, value = m.glyphs.Ok, p.st(t.Success), p.st(t.Gray).Render(shortPath(m.in(check.Says.Value)))
+				glyph, style, value = m.glyphs.Ok, p.st(t.Success), p.st(t.Gray).Render(setup.ShortPath(m.in(check.Says.Value)))
 			case setup.CheckWarning:
 				glyph, style, value = m.glyphs.Warn, p.st(t.Warning), p.st(t.Warning).Render(m.in(check.Says.Value))
 			case setup.CheckFailed:
@@ -943,7 +943,7 @@ func (m *Model) donePage(p *page) {
 	if m.progress.Total == 0 {
 		downloaded = m.t("done.nothing")
 	}
-	p.add(p.st(t.Gray).Render("   " + fmt.Sprintf("%s · %s · %s", downloaded, duration(time.Since(m.instAt).Round(time.Second)), shortPath(m.opts.Target))))
+	p.add(p.st(t.Gray).Render("   " + fmt.Sprintf("%s · %s · %s", downloaded, duration(time.Since(m.instAt).Round(time.Second)), setup.ShortPath(m.opts.Target))))
 	// Windows hands the new PATH to new terminals only.
 	if runtime.GOOS == "windows" && m.opts.Integration.Path {
 		p.add(p.st(t.Gray).Render("   " + fmt.Sprintf(m.t("done.path"), filepath.Join(m.opts.Target, "x86qw.exe"))))
@@ -1065,7 +1065,7 @@ func (m *Model) panelPage(p *page) {
 	m.logo(p)
 	e := m.existing
 	p.title(m.t("home.title"))
-	facts := fmt.Sprintf(m.t("home.facts"), shortPath(e.Target), e.Components)
+	facts := fmt.Sprintf(m.t("home.facts"), setup.ShortPath(e.Target), e.Components)
 	if e.CLIVersion != "" {
 		facts += " · CLI " + e.CLIVersion
 	}
@@ -1201,7 +1201,7 @@ func (m *Model) panelResult(p *page) {
 	case m.panelErr != nil:
 		p.add(p.st(t.Error).Bold(true).Render("  " + m.glyphs.Fail + "  " + m.explain(m.panelErr)))
 	case m.removed:
-		p.add(p.st(t.Success).Bold(true).Render("  " + m.glyphs.Ok + "  " + fmt.Sprintf(m.t("removed"), shortPath(m.existing.Target))))
+		p.add(p.st(t.Success).Bold(true).Render("  " + m.glyphs.Ok + "  " + fmt.Sprintf(m.t("removed"), setup.ShortPath(m.existing.Target))))
 		p.gap(1)
 		p.lead(m.t("removed.d"))
 	case m.report != nil && m.report.Repaired:
@@ -1260,36 +1260,6 @@ func duration(d time.Duration) string {
 		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
 	}
 	return fmt.Sprintf("%ds", int(d.Seconds()+0.5))
-}
-
-func platform() string {
-	switch runtime.GOOS {
-	case "darwin":
-		return "macos"
-	case "windows":
-		return "windows"
-	}
-	return "linux"
-}
-
-func shortPath(path string) string {
-	if home := homeDir(); home != "" && strings.HasPrefix(path, home) {
-		return "~" + strings.TrimPrefix(path, home)
-	}
-	return path
-}
-
-// shellJoin quotes arguments for a POSIX shell when they need it.
-func shellJoin(args []string) string {
-	out := make([]string, len(args))
-	for index, arg := range args {
-		if arg == "" || strings.ContainsAny(arg, " \t\"'$`\\!*?;&|<>()[]{}~#") {
-			out[index] = "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
-		} else {
-			out[index] = arg
-		}
-	}
-	return strings.Join(out, " ")
 }
 
 // wrapSegments breaks a " · " separated value between segments, falling

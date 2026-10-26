@@ -3,9 +3,7 @@ package install
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -16,6 +14,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/macos"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
@@ -55,10 +54,8 @@ type Report struct {
 // verifies.
 func Verify(root string) (*Report, error) {
 	report := &Report{}
-	for _, pak := range []struct{ path, sha string }{{"id1/pak0.pak", pak0SHA256}, {"id1/pak1.pak", pak1SHA256}} {
-		if err := checkPak(filepath.Join(root, pak.path), pak.sha); err != nil {
-			return nil, err
-		}
+	if err := CheckPaks(root); err != nil {
+		return nil, err
 	}
 	for _, spec := range catalog.ClientSpecs {
 		for _, channel := range catalog.Channels {
@@ -91,7 +88,7 @@ func Verify(root string) (*Report, error) {
 		recorded := append([]string(nil), current.Installed()...)
 		sort.Strings(recorded)
 		if strings.Join(recorded, "\n") != strings.Join(report.Components, "\n") {
-			return nil, errors.New("the installation state differs from the recorded components; run update to reconcile")
+			return nil, errors.New("the installation state differs from the recorded components; run repair to reconcile")
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, err
@@ -134,7 +131,7 @@ func checkPak(name, expected string) error {
 	if string(header) != "PACK" {
 		return fmt.Errorf("the file has no valid PAK header: %s", name)
 	}
-	digest, err := fileSHA256(name)
+	digest, err := archive.FileSHA256(name)
 	if err != nil {
 		return err
 	}
@@ -180,7 +177,7 @@ func loadVerifiedClient(root string, spec catalog.ClientSpec, channel string) (*
 	if err != nil || !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("ezQuake runtime missing: %s", runtime)
 	}
-	digest, err := fileSHA256(binaryPath)
+	digest, err := archive.FileSHA256(binaryPath)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +235,7 @@ func verifyRecord(root string, record *receipt.Record) (int, error) {
 		if err != nil || !info.Mode().IsRegular() {
 			return 0, fmt.Errorf("managed file missing from component %s: %s", record.ID, managed)
 		}
-		digest, err := fileSHA256(managed)
+		digest, err := archive.FileSHA256(managed)
 		if err != nil {
 			return 0, err
 		}
@@ -310,14 +307,14 @@ func verifyPackageOrder(root string, record *receipt.Record) error {
 		return nil
 	}
 	if record == nil {
-		return errors.New("PK3 order not recorded; run the x86QW bootstrap again on the same target")
+		return errors.New("PK3 order not recorded; run repair")
 	}
 	payload, err := os.ReadFile(filepath.Join(root, "qw/pak.lst"))
 	if err != nil {
 		return err
 	}
 	if string(payload) != strings.Join(packages, "\n")+"\n" {
-		return errors.New("qw/pak.lst does not match the installed PK3s; run the x86QW bootstrap again on the same target")
+		return errors.New("qw/pak.lst does not match the installed PK3s; run repair")
 	}
 	return nil
 }
@@ -335,19 +332,6 @@ func readHeader(name string, size int) ([]byte, error) {
 	return header, nil
 }
 
-func fileSHA256(name string) (string, error) {
-	file, err := os.Open(name)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
 // CheckPaks checks the original id1 PAKs.
 func CheckPaks(root string) error {
 	for _, pak := range []struct{ path, sha string }{{"id1/pak0.pak", pak0SHA256}, {"id1/pak1.pak", pak1SHA256}} {
@@ -356,17 +340,6 @@ func CheckPaks(root string) error {
 		}
 	}
 	return nil
-}
-
-// VerifyComponent checks the managed files of one component, returning
-// their count and the receipt's selection.
-func VerifyComponent(root, component string) (int, string, error) {
-	record, err := receipt.Load(filepath.Join(root, receipt.ComponentsDir, component))
-	if err != nil {
-		return 0, "", err
-	}
-	count, err := verifyRecord(root, record)
-	return count, record.Receipt.Get("selection"), err
 }
 
 // VerifyPlaySupport checks the play-support files of the installed games.

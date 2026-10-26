@@ -15,13 +15,11 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/tufsign"
 )
 
-// noStoreHeaders keeps mutable API documents out of the CDN cache.
-const noStoreHeaders = "\n/api/v1/product.json\n  Cache-Control: no-store, no-cache, must-revalidate\n  CDN-Cache-Control: no-store\n  Access-Control-Allow-Origin: *\n"
-
 // runSite assembles the deployable site from site/public: every file, the
 // current TUF generation alone (timestamp, its snapshot and targets, the
 // root and the catalog target), the provenance documents version and
-// api/v1/health, which exist only in the deploy, and the no-store headers.
+// api/v1/health, which exist only in the deploy; site/public/_headers
+// already keeps product.json out of the CDN cache.
 //
 //	x86qw-release site --source site/public --out DIR --commit SHA [--validate-run N --deploy-run N]
 func runSite(args []string) int {
@@ -134,10 +132,5 @@ func assembleSite(source, out, commit string, validateRun, deployRun int64) erro
 	if err := os.WriteFile(filepath.Join(out, "api", "v1", "health"), encodeIndented(health), 0o644); err != nil {
 		return err
 	}
-	headers := filepath.Join(out, "_headers")
-	current, err := os.ReadFile(headers)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(headers, append(current, []byte(noStoreHeaders)...), 0o644)
+	return nil
 }

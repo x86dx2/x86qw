@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -21,6 +22,9 @@ import (
 )
 
 const releaseBase = "https://github.com/x86dx2/x86qw/releases/download/"
+
+// maxAsset bounds each download; the binaries are about 14 MiB.
+const maxAsset = 64 << 20
 
 // Where the checkout names the current CLI release, besides the catalog,
 // product.json and the bootstraps: README.md by tag and the page by span.
@@ -75,6 +79,12 @@ func prepare(repo, version, assets, keys string) error {
 	if err != nil {
 		return err
 	}
+	// SHA256SUMS comes with the binaries; the attestation says go-release built them.
+	for _, target := range Targets {
+		if err := attested(filepath.Join(assets, assetName(version, target))); err != nil {
+			return err
+		}
+	}
 	path := filepath.Join(repo, filepath.FromSlash(catalogFile))
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -110,6 +120,16 @@ func prepare(repo, version, assets, keys string) error {
 	return nil
 }
 
+// attested checks with gh that the release workflow built the binary at path.
+var attested = func(path string) error {
+	output, err := exec.Command("gh", "attestation", "verify", path, "--repo", "x86dx2/x86qw",
+		"--signer-workflow", "x86dx2/x86qw/.github/workflows/go-release.yml").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s has no build attestation from go-release.yml (%v):\n%s", filepath.Base(path), err, output)
+	}
+	return nil
+}
+
 // download fetches the release's binaries and SHA256SUMS into dir.
 func download(version, dir string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
@@ -133,7 +153,11 @@ func download(version, dir string) error {
 		}
 		file, err := os.Create(filepath.Join(dir, name))
 		if err == nil {
-			_, err = io.Copy(file, response.Body)
+			var n int64
+			n, err = io.Copy(file, io.LimitReader(response.Body, maxAsset+1))
+			if err == nil && n > maxAsset {
+				err = fmt.Errorf("%s is larger than %d MiB", name, maxAsset>>20)
+			}
 			err = errors.Join(err, file.Close())
 		}
 		response.Body.Close()

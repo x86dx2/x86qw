@@ -188,9 +188,14 @@ func Resolve(root string, r Request) (*Choice, error) {
 	if choice.Component = install.InstalledComponent(root, *game); choice.Component == "" {
 		return nil, fmt.Errorf("The %s component is no longer installed.", game.Label)
 	}
-	if choice.Files, choice.Selection, err = install.VerifyComponent(root, choice.Component); err != nil {
+	record, err := install.VerifyComponentRecord(root, choice.Component)
+	if err == nil && record == nil {
+		err = fmt.Errorf("The %s component is no longer installed.", game.Label)
+	}
+	if err != nil {
 		return nil, err
 	}
+	choice.Files, choice.Selection = len(record.Inventory.Entries), record.Receipt.Get("selection")
 	switch {
 	case game.UsesModeCatalog() && r.Mode == "":
 		return nil, errors.New("Pick a KTX mode (--mode).")

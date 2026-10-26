@@ -85,4 +85,12 @@ func TestAdoptKeepsPackageFlagWorking(t *testing.T) {
 	if err := p.Parse([]string{"--volume", "loud"}); !IsUsage(err) {
 		t.Fatalf("invalid volume: %v", err)
 	}
+	// Package flag would let the last of two win without a word.
+	twice := New()
+	servers := flag.NewFlagSet("z", flag.ContinueOnError)
+	servers.String("servers", "", "instances")
+	twice.Adopt(servers)
+	if err := twice.Parse([]string{"--servers", "duel:dm6", "--servers", "ctf:e2m2"}); !IsUsage(err) {
+		t.Fatalf("an adopted flag given twice: %v", err)
+	}
 }

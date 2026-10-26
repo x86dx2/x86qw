@@ -8,17 +8,17 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
+	"github.com/x86dx2/x86qw/go/internal/fspath"
 	"golang.org/x/text/unicode/norm"
 )
 
 // x86qw-content add: reviewed distribution-change definitions.
 
 var (
-	safeIdentifier = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.+-]*$`)
-	safeConsumer   = regexp.MustCompile(`^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9_.+-]*$`)
+	safeConsumer = regexp.MustCompile(`^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9_.+-]*$`)
 )
 
 // safeRelative checks a definition's relative path, optionally under
@@ -99,7 +99,7 @@ func validateLocalSourcePath(base string, value any) (string, error) {
 	if !isFile(candidate) {
 		return "", managerError("local source must be a regular file without symlinks")
 	}
-	if relative, err := filepath.Rel(root, resolve(candidate)); err != nil || strings.HasPrefix(relative, "..") {
+	if relative, err := filepath.Rel(root, fspath.Resolve(candidate)); err != nil || strings.HasPrefix(relative, "..") {
 		return "", managerError("local source escapes the definition's directory")
 	}
 	return candidate, nil
@@ -155,7 +155,7 @@ func validateDefinitionFile(raw any, base string) (*filePlan, error) {
 		if expectedSize != nil && !pyjson.EqInt(expectedSize, info.Size()) {
 			return nil, managerError("local size does not match the definition file")
 		}
-		digest, err := fileSHA256(origin)
+		digest, err := archive.FileSHA256(origin)
 		if err != nil {
 			return nil, err
 		}
@@ -199,7 +199,7 @@ func validateDefinitionFile(raw any, base string) (*filePlan, error) {
 			return nil, managerError("a managed upstream file requires a safe distribution_component and consumer")
 		}
 		if pkg := entry.Value("package"); pkg != nil {
-			if text, ok := pkg.(string); !ok || !safeIdentifier.MatchString(text) {
+			if text, ok := pkg.(string); !ok || !safeSegment.MatchString(text) {
 				return nil, managerError("the managed file's package must be a safe identifier")
 			}
 		}
@@ -231,7 +231,7 @@ func applyReferenceTransition(releases *Object, proposed any) (referenceTransiti
 	repository, repositoryOK := transition.Value("repository").(string)
 	revision, revisionOK := transition.Value("revision").(string)
 	moving, movingOK := transition.Value("components").(*Object)
-	if !repositoryOK || !revisionOK || !hex40Strict.MatchString(revision) || !movingOK || len(moving.Keys()) == 0 {
+	if !repositoryOK || !revisionOK || !hex40Pattern.MatchString(revision) || !movingOK || len(moving.Keys()) == 0 {
 		return referenceTransition{}, false, managerError("the nQuake reference transition has invalid fields")
 	}
 	parsed, err := validateHTTPSURL(repository, "nQuake reference repository")
@@ -247,7 +247,7 @@ func applyReferenceTransition(releases *Object, proposed any) (referenceTransiti
 	result := referenceTransition{revision, map[string]string{}}
 	for _, identifier := range moving.Keys() {
 		previous, ok := moving.Value(identifier).(string)
-		if !ok || !hex40Strict.MatchString(previous) {
+		if !ok || !hex40Pattern.MatchString(previous) {
 			return referenceTransition{}, false, managerError("invalid previous revision for %s", identifier)
 		}
 		pinned := ReferenceRevisionOf(releases, identifier)
@@ -828,7 +828,7 @@ func (p *Project) fetchDefinitionFile(plan *filePlan, destination string) (int64
 	if err != nil {
 		return 0, "", err
 	}
-	digest, err := fileSHA256(destination)
+	digest, err := archive.FileSHA256(destination)
 	if err != nil {
 		return 0, "", err
 	}
@@ -993,7 +993,7 @@ func (p *Project) Add(out io.Writer, definitionPath string, options AddOptions) 
 		pkg := pkgValue.(*Object)
 		artifact := joinPosix(filepath.Join(work, "dist"), pyjson.Repr(getOr(pkg, "distribution_path", "")))
 		size, _ := fileSize(artifact)
-		digest, _ := fileSHA256(artifact)
+		digest, _ := archive.FileSHA256(artifact)
 		if !isFile(artifact) || !pyjson.EqInt(pkg.Value("size"), size) || !pyjson.Eq(pkg.Value("sha256"), digest) {
 			return managerError("the declared package does not match the incorporated file")
 		}
@@ -1016,11 +1016,7 @@ func (p *Project) Add(out io.Writer, definitionPath string, options AddOptions) 
 	if err != nil {
 		return err
 	}
-	manifestBuild, err := staged.BuildPackages(filepath.Join(work, "dist"), filepath.Join(work, "packages"), BuildOptions{})
-	if err != nil {
-		return err
-	}
-	if err := p.RegisterPackages(filepath.Join(work, "catalog.json"), manifestBuild, time.Now()); err != nil {
+	if err := staged.buildIntoWorkspace(work); err != nil {
 		return err
 	}
 	if err := p.applyWorkspace(work, true); err != nil {

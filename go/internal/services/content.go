@@ -2,10 +2,7 @@ package services
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,6 +11,13 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/privfs"
 )
+
+// StagingPrefix names the folder a payload is extracted to before it is
+// published, and the copies beside its members on another volume.
+const StagingPrefix = ".x86qw_ktx_"
+
+// link publishes a member; tests replace it to play another volume.
+var link = os.Link
 
 const temporaryHeader = "// x86QW: temporary configuration, removed when the session stops.\n"
 
@@ -102,26 +106,22 @@ func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, e
 		return nil, errorf("Could not prepare the %s payload for MVDSV: %v", label, err)
 	}
 	defer plan.Close()
-	scratch, err := os.MkdirTemp("", "x86qw-pk3-")
+	// Extracted beside the destination, each member publishes as a hard
+	// link: the same volume, and the permissions the folder gives its own
+	// files. Nothing is synced per file; the journal is what must be
+	// durable before anything is published.
+	staging, err := os.MkdirTemp(root, StagingPrefix)
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(scratch)
-	extracted := filepath.Join(scratch, "payload")
+	defer os.RemoveAll(staging)
+	extracted := filepath.Join(staging, "payload")
 	if err := plan.Extract(extracted); err != nil {
 		return nil, errorf("Could not prepare the %s payload for MVDSV: %v", label, err)
 	}
-	result := &Materialized{}
-	fail := func(err error) (*Materialized, error) {
-		result.Cleanup(nil)
-		return nil, err
-	}
-	type prepared struct {
-		name, source, destination, digest string
-		size                              int64
-		existed                           bool
-	}
-	var members []prepared
+	origin := filepath.ToSlash(pk3)
+	var ready, pending []*MaterializedFile
+	sources := map[*MaterializedFile]string{}
 	for _, member := range plan.Members {
 		source := filepath.Join(extracted, filepath.FromSlash(member.Name))
 		digest, size, err := fileSHA256(source)
@@ -129,109 +129,146 @@ func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, e
 			return nil, err
 		}
 		destination := filepath.Join(root, filepath.FromSlash(member.Name))
-		existed := false
 		if info, err := os.Lstat(destination); err == nil {
 			current, _, hashErr := fileSHA256(destination)
 			if !info.Mode().IsRegular() || hashErr != nil || current != digest {
 				return nil, errorf("A local file conflicts with the dedicated %s payload: %s", label, destination)
 			}
-			existed = true
+			ready = append(ready, &MaterializedFile{Path: destination, ExpectedHash: digest, Origin: origin,
+				Existed: true, Identity: identityAt(destination, info), Size: size})
+			continue
 		}
-		members = append(members, prepared{member.Name, source, destination, digest, size, existed})
+		info, err := os.Lstat(source)
+		if err != nil {
+			return nil, err
+		}
+		entry := &MaterializedFile{Path: destination, ExpectedHash: digest, Origin: origin,
+			CreatedBySession: true, Identity: identityAt(source, info), Size: size}
+		pending = append(pending, entry)
+		sources[entry] = source
 	}
-	origin := filepath.ToSlash(pk3)
-	for _, member := range members {
-		parent := filepath.Dir(member.destination)
+	// Every member lands inside the installation, checked before a folder
+	// is made: a payload folder may be a link out of it.
+	if journal != nil {
+		relative := journal.relatives()
+		for _, file := range append(ready, pending...) {
+			if _, err := relative(file.Path); err != nil {
+				return nil, err
+			}
+		}
+	}
+	// Left by a session that died while preparing: one session runs at a
+	// time, under the installation's lock.
+	folders := map[string]bool{root: true}
+	for _, file := range append(ready, pending...) {
+		folders[filepath.Dir(file.Path)] = true
+	}
+	for folder := range folders {
+		entries, _ := os.ReadDir(folder)
+		for _, entry := range entries {
+			if path := filepath.Join(folder, entry.Name()); strings.HasPrefix(entry.Name(), StagingPrefix) && path != staging {
+				os.RemoveAll(path)
+			}
+		}
+	}
+	result := &Materialized{}
+	// Copies beside members go first: a folder made for the payload goes
+	// only when it is empty.
+	var copies []string
+	removeCopies := func() {
+		for _, path := range copies {
+			os.Remove(path)
+		}
+	}
+	defer removeCopies()
+	fail := func(err error) (*Materialized, error) {
+		removeCopies()
+		result.Cleanup(nil)
+		return nil, err
+	}
+	// shortcut: a kill between these folders and the journal write leaves
+	// them empty and unrecorded; MVDSV reads nothing there, so they stay.
+	for _, file := range pending {
 		var missing []string
-		for cursor := parent; cursor != root; cursor = filepath.Dir(cursor) {
+		for cursor := filepath.Dir(file.Path); cursor != root; cursor = filepath.Dir(cursor) {
 			if _, err := os.Lstat(cursor); err == nil {
 				break
 			}
 			missing = append(missing, cursor)
 		}
 		for index := len(missing) - 1; index >= 0; index-- {
-			if err := os.Mkdir(missing[index], 0o755); err != nil && !errors.Is(err, os.ErrExist) {
+			if err := os.Mkdir(missing[index], 0o755); err != nil {
 				return fail(err)
 			}
 			info, err := os.Lstat(missing[index])
 			if err != nil {
 				return fail(err)
 			}
-			directory := &MaterializedDirectory{Path: missing[index], Identity: identityAt(missing[index], info)}
-			result.Directories = append(result.Directories, directory)
-			if journal != nil {
-				if err := journal.RecordDirectory(directory); err != nil {
-					return fail(err)
-				}
-			}
+			result.Directories = append(result.Directories, &MaterializedDirectory{Path: missing[index], Identity: identityAt(missing[index], info)})
 		}
-		if member.existed {
-			info, err := os.Lstat(member.destination)
-			if err != nil {
-				return fail(err)
-			}
-			entry := &MaterializedFile{Path: member.destination, ExpectedHash: member.digest, Origin: origin,
-				Existed: true, Identity: identityAt(member.destination, info), Size: member.size}
-			if journal != nil {
-				if err := journal.RecordMaterialized(entry); err != nil {
-					return fail(err)
-				}
-			}
-			result.Files = append(result.Files, entry)
+	}
+	// A folder on another volume, a mount inside the game folder, takes no
+	// link from the staging: its members are copied there first.
+	linkable := map[string]bool{}
+	for _, file := range pending {
+		folder := filepath.Dir(file.Path)
+		ok, tried := linkable[folder]
+		if !tried {
+			probe := filepath.Join(folder, StagingPrefix+tokenHex(8))
+			ok = link(sources[file], probe) == nil
+			os.Remove(probe)
+			linkable[folder] = ok
+		}
+		if ok {
 			continue
 		}
-		temporary := filepath.Join(parent, ".x86qw_ktx_"+tokenHex(12))
-		identity, err := copyPrivate(member.source, temporary, member.digest, member.size)
+		copied := filepath.Join(folder, StagingPrefix+tokenHex(8))
+		copies = append(copies, copied)
+		if err := copyNew(sources[file], copied); err != nil {
+			return fail(err)
+		}
+		info, err := os.Lstat(copied)
 		if err != nil {
-			os.Remove(temporary)
-			return fail(errorf("Mismatched content in the %s package: %s", label, member.name))
+			return fail(err)
 		}
-		entry := &MaterializedFile{Path: member.destination, ExpectedHash: member.digest, Origin: origin,
-			CreatedBySession: true, Identity: identity, Size: member.size}
-		if journal != nil {
-			if err := journal.RecordMaterializedIntent(entry); err != nil {
-				os.Remove(temporary)
-				return fail(err)
-			}
+		file.Identity, sources[file] = identityAt(copied, info), copied
+	}
+	result.Files = append(result.Files, ready...)
+	if journal != nil {
+		if err := journal.RecordPayload(result.Directories, ready, pending); err != nil {
+			return fail(err)
 		}
-		if err := os.Link(temporary, member.destination); err != nil {
-			os.Remove(temporary)
-			return fail(errorf("A file appeared during preparation and was kept: %s", member.destination))
+	}
+	for _, file := range pending {
+		// A link never replaces: a file that appeared meanwhile is kept.
+		if err := link(sources[file], file.Path); errors.Is(err, os.ErrExist) {
+			return fail(errorf("A file appeared during preparation and was kept: %s", file.Path))
+		} else if err != nil {
+			return fail(errorf("Could not publish %s for MVDSV (%v): the installation's file system must support hard links.", file.Path, err))
 		}
-		result.Files = append(result.Files, entry)
-		os.Remove(temporary)
-		if journal != nil {
-			if err := journal.RecordMaterialized(entry); err != nil {
-				return fail(err)
-			}
+		result.Files = append(result.Files, file)
+	}
+	if journal != nil {
+		if err := journal.RecordPayload(nil, pending, nil); err != nil {
+			return fail(err)
 		}
 	}
 	return result, nil
 }
 
-func copyPrivate(source, destination, digest string, size int64) ([2]int64, error) {
+// copyNew copies source to a file created at destination.
+func copyNew(source, destination string) error {
 	in, err := os.Open(source)
 	if err != nil {
-		return [2]int64{}, err
+		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	out, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
-		return [2]int64{}, err
+		return err
 	}
-	hash := sha256.New()
-	copied, copyErr := io.Copy(io.MultiWriter(out, hash), io.LimitReader(in, size+1))
-	syncErr := out.Sync()
-	chmodErr := out.Chmod(0o644)
-	identity, identityErr := identityOfFile(out)
-	closeErr := out.Close()
-	if err := errors.Join(copyErr, syncErr, chmodErr, identityErr, closeErr); err != nil {
-		return [2]int64{}, err
-	}
-	if copied != size || hex.EncodeToString(hash.Sum(nil)) != digest {
-		return [2]int64{}, errors.New("mismatched content")
-	}
-	return identity, nil
+	_, err = io.Copy(out, in)
+	return errors.Join(err, out.Close())
 }
 
 // SuppressAutoexec drops gamedir/server.cfg created by the session so MVDSV
@@ -306,5 +343,3 @@ func ReadPasswordFile(path, label string) (string, error) {
 	}
 	return value, nil
 }
-
-var _ = fmt.Sprint

@@ -12,6 +12,7 @@ import (
 
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/download"
+	"github.com/x86dx2/x86qw/go/internal/fspath"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 	"github.com/x86dx2/x86qw/go/internal/state"
 )
@@ -48,7 +49,7 @@ func ValidateTarget(target string, mustExist bool) (string, error) {
 	if !exists && mustExist {
 		return "", fmt.Errorf("The target folder does not exist: %s", target)
 	}
-	resolved := resolve(target)
+	resolved := fspath.Resolve(target)
 	if resolved == filepath.Dir(resolved) {
 		return "", errors.New("The file system root cannot be used as the target.")
 	}
@@ -207,8 +208,15 @@ func minimalRemovalPaths(paths []string) []string {
 func quarantineRemove(paths []string) error {
 	type moved struct{ original, aside string }
 	var done []moved
+	var running []string
 	for _, path := range paths {
 		if deferLauncher(path) {
+			continue
+		}
+		// The CLI removing itself goes in place, last: set aside, it would
+		// not match its own lock, which would then look abandoned.
+		if removesItself(path) {
+			running = append(running, path)
 			continue
 		}
 		aside := filepath.Join(filepath.Dir(path), fmt.Sprintf(".x86qw-%s-quarantine.%d", filepath.Base(path), os.Getpid()))
@@ -226,29 +234,37 @@ func quarantineRemove(paths []string) error {
 			errs = append(errs, err)
 		}
 	}
+	for _, path := range running {
+		errs = append(errs, os.Remove(path))
+	}
 	return errors.Join(errs...)
 }
 
-// managedRuntimePaths lists every file owned by a component inventory.
-func managedRuntimePaths(target string) map[string]bool {
+// managedRuntimePaths lists every file owned by a component inventory that
+// loads; the error names the receipts that did not.
+func managedRuntimePaths(target string) (map[string]bool, error) {
 	managed := map[string]bool{}
+	var errs []error
 	for _, id := range componentRecordIDs(target) {
 		record, err := receipt.Load(filepath.Join(target, filepath.FromSlash(componentsRelative), id))
 		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				errs = append(errs, fmt.Errorf("the receipt of %s could not be read: %w", id, err))
+			}
 			continue
 		}
 		for _, entry := range record.Inventory.Entries {
 			managed[entry.Path] = true
 		}
 	}
-	return managed
+	return managed, errors.Join(errs...)
 }
 
 // CleanupSelection lists the cache paths and, when asked, the personal
 // paths a cleanup removes.
-func CleanupSelection(target string, downloads, personalData bool) ([]string, []string) {
+func CleanupSelection(target string, downloads, personalData bool) ([]string, []string, error) {
 	if info, err := os.Lstat(target); err != nil || !info.IsDir() {
-		return nil, nil
+		return nil, nil, nil
 	}
 	var cachePaths, personalPaths []string
 	for _, relative := range []string{"ezquake/sb/cache", "ezquake/temp"} {
@@ -278,7 +294,10 @@ func CleanupSelection(target string, downloads, personalData bool) ([]string, []
 		}
 	}
 	if downloads && fortressDir {
-		managed := managedRuntimePaths(target)
+		managed, err := managedRuntimePaths(target)
+		if err != nil {
+			return nil, nil, err
+		}
 		for _, rootName := range []string{"fortress/progs", "fortress/sound"} {
 			root := filepath.Join(target, filepath.FromSlash(rootName))
 			if info, err := os.Lstat(root); err != nil || !info.IsDir() {
@@ -315,7 +334,7 @@ func CleanupSelection(target string, downloads, personalData bool) ([]string, []
 			selectedCache = append(selectedCache, path)
 		}
 	}
-	return selectedCache, selectedPersonal
+	return selectedCache, selectedPersonal, nil
 }
 
 // CleanupResult reports what cleanup removed.
@@ -330,7 +349,10 @@ func Cleanup(target string, downloads, personalData bool) (*CleanupResult, error
 	if err := RequireManagedIdentity(target, "cleanup"); err != nil {
 		return nil, err
 	}
-	cachePaths, personalPaths := CleanupSelection(target, downloads, personalData)
+	cachePaths, personalPaths, err := CleanupSelection(target, downloads, personalData)
+	if err != nil {
+		return nil, err
+	}
 	caches, err := ownedCaches()
 	if err != nil {
 		return nil, err

@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -121,4 +123,72 @@ func TestMatchDrawsBeforeItsCatalog(t *testing.T) {
 	m.View()
 	m.click("row:play")
 	drive(m, key("enter"), key("p"))
+}
+
+// The match can change while ezQuake opens: the toast and the last match
+// are still the one launched.
+func TestPlayRemembersTheMatchLaunched(t *testing.T) {
+	m := onMatch(t)
+	launched, title := m.game.match, m.matchTitle()
+	_, cmd := m.Update(key("p"))
+	if m.game.acting != "play" {
+		t.Fatalf("acting %q", m.game.acting)
+	}
+	m.openModal("m.mode")
+	for _, row := range m.gameModalRows() {
+		if row.id == "mode.4on4" {
+			row.activate()
+		}
+	}
+	m.closeModal(true)
+	if m.game.match.Mode == launched.Mode {
+		t.Fatal("the match did not change")
+	}
+	drive(m, run(cmd)...)
+	if !strings.Contains(m.toast, title) || m.game.catalog.Last == nil || m.game.catalog.Last.Mode != launched.Mode {
+		t.Fatalf("launched %s, toast %q, last %+v", title, m.toast, m.game.catalog.Last)
+	}
+}
+
+// listed is the demo with servers of its own on the list.
+type listed struct {
+	*setup.Demo
+	servers []setup.PublicServer
+}
+
+func (l listed) Servers(context.Context, string) ([]setup.PublicServer, error) { return l.servers, nil }
+
+// A long map or mode is cut to its column, so the server's own name still
+// shows on its row.
+func TestALongMapOrModeKeepsTheServerName(t *testing.T) {
+	servers := []setup.PublicServer{
+		{Address: "a.example:27500", Title: "Long map", Map: strings.Repeat("m", 300), Mode: strings.Repeat("y", 300), Humans: 1},
+		{Address: "b.example:27500", Title: "Wide map", Map: strings.Repeat("地", 20), Mode: strings.Repeat("ｍ", 30), Humans: 1},
+	}
+	m := New(Config{Backend: listed{&setup.Demo{ExistingInstall: true, Speed: 200}, servers}, Target: shortTarget(t), Lang: EN, Start: "servers"})
+	drive(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+	drive(m, run(m.Init())...)
+	view := stripANSI(m.View().Content)
+	for title, cut := range map[string]string{"Long map": "mmmmmmmm… yyyyy…", "Wide map": "地地地地… ｍｍ…"} {
+		if !slices.ContainsFunc(strings.Split(view, "\n"), func(line string) bool { return strings.Contains(line, title) && strings.Contains(line, cut) }) {
+			t.Errorf("no row with %q and %q:\n%s", title, cut, view)
+		}
+	}
+}
+
+// A Hub where nobody plays says so. Favorites with nobody on them are what
+// stands in for a Hub that cannot be reached, and the lead says that.
+func TestServersLeadTellsAQuietHubFromAnUnreachableOne(t *testing.T) {
+	for want, servers := range map[string][]setup.PublicServer{
+		"Nobody is playing":      nil,
+		"The Hub is unreachable": {{Address: "fav.example:27500", Title: "fav.example:27500", Map: "-", Mode: "-", Favorite: true}},
+		"1 servers with players": {{Address: "a.example:27500", Title: "A", Map: "dm6", Mode: "duel", Humans: 2}},
+	} {
+		m := New(Config{Backend: listed{&setup.Demo{ExistingInstall: true, Speed: 200}, servers}, Target: shortTarget(t), Lang: EN, Start: "servers"})
+		drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
+		drive(m, run(m.Init())...)
+		if view := stripANSI(m.View().Content); !strings.Contains(view, want) {
+			t.Errorf("%q missing:\n%s", want, view)
+		}
+	}
 }

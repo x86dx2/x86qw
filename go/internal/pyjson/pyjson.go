@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	contentjson "github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
 // Dumps renders value. indent < 0 means the single-line form, with ", " and
@@ -46,11 +48,7 @@ func write(b *strings.Builder, value any, indent, depth int) error {
 		if math.IsNaN(v) || math.IsInf(v, 0) {
 			return fmt.Errorf("non-finite JSON value")
 		}
-		if v == math.Trunc(v) && math.Abs(v) < 1e16 {
-			b.WriteString(strconv.FormatFloat(v, 'f', 1, 64))
-		} else {
-			b.WriteString(strconv.FormatFloat(v, 'g', -1, 64))
-		}
+		b.WriteString(contentjson.FloatRepr(v)) // float.__repr__, as json.dumps writes it
 	case []string:
 		items := make([]any, len(v))
 		for index, item := range v {
@@ -183,30 +181,6 @@ func lessCodepoints(a, b string) bool {
 }
 
 func writeString(b *strings.Builder, value string) {
-	b.WriteByte('"')
-	for _, r := range value {
-		switch r {
-		case '"':
-			b.WriteString(`\"`)
-		case '\\':
-			b.WriteString(`\\`)
-		case '\n':
-			b.WriteString(`\n`)
-		case '\r':
-			b.WriteString(`\r`)
-		case '\t':
-			b.WriteString(`\t`)
-		case '\b':
-			b.WriteString(`\b`)
-		case '\f':
-			b.WriteString(`\f`)
-		default:
-			if r < 0x20 {
-				fmt.Fprintf(b, `\u%04x`, r)
-			} else {
-				b.WriteRune(r)
-			}
-		}
-	}
-	b.WriteByte('"')
+	quoted, _ := contentjson.Encode(value, false) // a string always encodes
+	b.Write(quoted)
 }

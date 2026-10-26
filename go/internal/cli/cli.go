@@ -27,6 +27,14 @@ const (
 	cliDir = ".x86qw/cli"
 )
 
+// moveRunningAside is whether a running CLI has to move aside before its
+// replacement goes in (Windows), and renameFile is os.Rename: tests stand
+// in for both, so the swap is checked everywhere.
+var (
+	moveRunningAside = runtime.GOOS == "windows"
+	renameFile       = os.Rename
+)
+
 // BinaryName is the CLI file name for this OS.
 func BinaryName() string {
 	if runtime.GOOS == "windows" {
@@ -136,18 +144,26 @@ func (l *Layer) put(path, aside string, data []byte, mode os.FileMode) error {
 	if err := errors.Join(temporary.Sync(), temporary.Close(), os.Chmod(temporary.Name(), mode)); err != nil {
 		return err
 	}
-	if runtime.GOOS == "windows" && existed {
+	movedAside := false
+	if moveRunningAside && existed {
 		// A running exe cannot be replaced, only renamed: move it aside.
 		// TidyAside removes it once that process has ended.
 		if err := os.MkdirAll(filepath.Dir(aside), 0o755); err != nil {
 			return err
 		}
 		aside = freeAside(aside)
-		if err := os.Rename(path, aside); err != nil {
+		if err := renameFile(path, aside); err != nil {
 			return fmt.Errorf("the CLI in use could not be replaced: %w", err)
 		}
+		movedAside = true
 	}
-	if err := os.Rename(temporary.Name(), path); err != nil {
+	if err := renameFile(temporary.Name(), path); err != nil {
+		if movedAside {
+			// Without this the installation is left with no CLI at all.
+			if undo := renameFile(aside, path); undo != nil {
+				return fmt.Errorf("%w; the CLI is left at %s: move it back to %s (%v)", err, aside, path, undo)
+			}
+		}
 		return err
 	}
 	l.changes = append(l.changes, change{path: path, previous: previous, mode: oldMode, existed: existed})

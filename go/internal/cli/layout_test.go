@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -109,5 +111,55 @@ func TestFreeAsideSkipsOneInUse(t *testing.T) {
 	os.MkdirAll(filepath.Join(aside, "busy"), 0o755)
 	if got := freeAside(aside); got != aside+".1" {
 		t.Fatalf("busy slot: %s", got)
+	}
+}
+
+// On Windows the running CLI moves aside before the new one goes in. When
+// that second step fails (an antivirus holding the new file), the CLI in use
+// comes back: otherwise the installation would have none at all.
+func TestAFailedSwapPutsTheRunningCLIBack(t *testing.T) {
+	saved, savedRename := moveRunningAside, renameFile
+	t.Cleanup(func() { moveRunningAside, renameFile = saved, savedRename })
+	moveRunningAside = true
+	renameFile = func(from, to string) error {
+		if strings.HasSuffix(from, ".tmp") {
+			return errors.New("the new file is held")
+		}
+		return os.Rename(from, to)
+	}
+	root := t.TempDir()
+	command := filepath.Join(root, "x86qw")
+	if err := os.WriteFile(command, []byte("running CLI"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var layer Layer
+	if err := layer.put(command, filepath.Join(root, ".x86qw", "cli", "x86qw.old"), []byte("new CLI"), 0o755); err == nil {
+		t.Fatal("the failed swap reported success")
+	}
+	if data, _ := os.ReadFile(command); string(data) != "running CLI" {
+		t.Fatalf("the installation has no CLI: %q", data)
+	}
+}
+
+// When the CLI in use cannot come back either, the error says where it is,
+// so the user can put it back.
+func TestAFailedRestoreNamesWhereTheCLIIs(t *testing.T) {
+	saved, savedRename := moveRunningAside, renameFile
+	t.Cleanup(func() { moveRunningAside, renameFile = saved, savedRename })
+	moveRunningAside = true
+	root := t.TempDir()
+	command, aside := filepath.Join(root, "x86qw"), filepath.Join(root, ".x86qw", "cli", "x86qw.old")
+	renameFile = func(from, to string) error {
+		if strings.HasSuffix(from, ".tmp") || from == aside {
+			return errors.New("held")
+		}
+		return os.Rename(from, to)
+	}
+	if err := os.WriteFile(command, []byte("running CLI"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var layer Layer
+	if err := layer.put(command, aside, []byte("new CLI"), 0o755); err == nil || !strings.Contains(err.Error(), aside) {
+		t.Fatalf("the error does not say where the CLI is: %v", err)
 	}
 }

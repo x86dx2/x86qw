@@ -38,6 +38,8 @@ type Spec struct {
 	Readiness      *Readiness
 	Parameters     [][2]string
 	ExpectedSHA256 string
+	// Hidden hides the windows the server opens: a background session's.
+	Hidden bool
 }
 
 // Session collects what one service run created.
@@ -306,6 +308,9 @@ func isBinaryName(name string) bool {
 
 // HostSpec is how to start MVDSV for a hosted game.
 func HostSpec(target string, o *HostOptions, hosted *Hosted, session *Session, journal *Journal) (*Spec, error) {
+	if err := play.CheckBasedir(target); err != nil {
+		return nil, err
+	}
 	binary, digest, err := runtimeBinary(target, "mvdsv")
 	if err != nil {
 		return nil, err
@@ -339,7 +344,7 @@ func HostSpec(target string, o *HostOptions, hosted *Hosted, session *Session, j
 		}
 	}
 	bootstrap := tokenHex(12)
-	safeHostname, err := SafeText(hostname, "hostname", 96)
+	safeHostname, err := SafeName(hostname, "hostname", 96)
 	if err != nil {
 		return nil, err
 	}
@@ -395,10 +400,9 @@ func HostSpec(target string, o *HostOptions, hosted *Hosted, session *Session, j
 			postLines = append(postLines, []byte("set "+setting[0]+" "+setting[1]))
 		}
 	}
-	postLines = append(postLines, []byte("rcon_password "+q(o.RconPassword)))
-	if IsExternalBind(o.Bind) {
-		postLines = append(postLines, []byte("sv_crypt_rcon 1"))
-	}
+	// ezQuake sends rcon hashed by default, also to a server on this machine;
+	// only the startup sends above go in plain text, before this cfg runs.
+	postLines = append(postLines, []byte("rcon_password "+q(o.RconPassword)), []byte("sv_crypt_rcon 1"))
 	postConfig, err := WriteTemporaryConfig(gameDirectory, "xp_", postLines, journal)
 	if err != nil {
 		return nil, err
@@ -406,7 +410,13 @@ func HostSpec(target string, o *HostOptions, hosted *Hosted, session *Session, j
 	session.Temporary = append(session.Temporary, postConfig)
 	arguments := []string{binary, "-basedir", target}
 	arguments = append(arguments, game.DedicatedArguments...)
-	arguments = append(arguments, "-ip", o.Bind, "-port", fmt.Sprint(o.Port), "-mem", "64", "+exec", filepath.Base(sessionConfig.Path))
+	arguments = append(arguments, "-ip", o.Bind, "-port", fmt.Sprint(o.Port), "-mem", "64")
+	if runtime.GOOS == "windows" {
+		// MVDSV's Windows build stops on a fatal error behind a message box
+		// nobody sees in a background session; this makes it exit instead.
+		arguments = append(arguments, "-noerrormsgbox")
+	}
+	arguments = append(arguments, "+exec", filepath.Base(sessionConfig.Path))
 	mvdLabel := "automatic"
 	if o.NoMVD {
 		mvdLabel = "off"
@@ -486,7 +496,7 @@ func ProxySpec(target, bind string, port int) (*Spec, error) {
 	}
 	return &Spec{
 		Label: "QWFWD", Arguments: []string{binary, fmt.Sprint(port), bind}, Cwd: directory, ExpectedSHA256: digest,
-		Readiness:  &Readiness{Kind: "udp", Address: LocalServiceAddress(bind), Port: port},
+		Readiness:  &Readiness{Kind: "udp", Address: bind, Port: port},
 		Parameters: [][2]string{{"bind", bind}, {"port", fmt.Sprint(port)}, {"protocol", "UDP QuakeWorld"}},
 	}, nil
 }
@@ -505,7 +515,7 @@ func QtvSpec(target, bind string, port int, hostname, upstream, password string,
 	if err := ensurePrivateDirectory(filepath.Join(directory, "demos")); err != nil {
 		return nil, err
 	}
-	safeHostname, err := SafeText(hostname, "QTV hostname", 96)
+	safeHostname, err := SafeName(hostname, "QTV hostname", 96)
 	if err != nil {
 		return nil, err
 	}
