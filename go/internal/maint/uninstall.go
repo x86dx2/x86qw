@@ -296,8 +296,9 @@ func Purge(target string) (*Report, error) {
 		for _, child := range children {
 			switch path := filepath.Join(target, child.Name()); {
 			case path == metadata:
-			// The copy repair keeps of a changed file (name.x86qw-kept[.N]) goes with it.
-			case own[strings.SplitN(child.Name(), ".x86qw-kept", 2)[0]] || strings.HasPrefix(child.Name(), ".x86qw-"):
+			// The copy repair keeps of a changed file (name.x86qw-kept[.N]) goes with it,
+			// as does what a write cut short left beside it (.name.N.tmp).
+			case own[strings.SplitN(child.Name(), ".x86qw-kept", 2)[0]] || strings.HasPrefix(child.Name(), ".x86qw-") || own[cutShort(child.Name())]:
 				candidates = append(candidates, path)
 			default:
 				kept++
@@ -373,6 +374,16 @@ func onlyRemovedAfterExit(target string) bool {
 	return true
 }
 
+// cutShort is the name whose write left name behind: atomicfile and the
+// CLI write .name.N.tmp beside name. Anything else gives "".
+func cutShort(name string) string {
+	base, ok := strings.CutSuffix(strings.TrimPrefix(name, "."), ".tmp")
+	if dot := strings.LastIndex(base, "."); ok && strings.HasPrefix(name, ".") && dot > 0 {
+		return base[:dot]
+	}
+	return ""
+}
+
 // ownNames are the top-level names in target that x86QW and the games it
 // installs make: purge removes those and keeps whatever was there before.
 func ownNames(target string) map[string]bool {
@@ -399,7 +410,10 @@ func ownNames(target string) map[string]bool {
 		}
 	}
 	for _, path := range append(append(append([]string{}, profileRoots...), profileFiles...), personalRoot...) {
-		add(path)
+		// A server writes logs there only when its config says so: one may be the user's.
+		if path != "logs" {
+			add(path)
+		}
 	}
 	return names
 }

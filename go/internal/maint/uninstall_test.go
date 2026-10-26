@@ -152,6 +152,11 @@ func TestPurgeKeepsWhatX86QWDidNotMake(t *testing.T) {
 	write(t, filepath.Join(root, catalog.ClientSpecs[1].Runtime("nightly")+".x86qw-kept.1"), "the copy repair kept")
 	write(t, filepath.Join(root, "Doom", "save.dsg"), "another game's save")
 	write(t, filepath.Join(root, "taxes.pdf"), "unrelated")
+	// What a write cut short left beside x86QW's own files goes too; a logs
+	// folder, which neither x86QW nor its servers make, stays.
+	write(t, filepath.Join(root, ".x86qw.123456.tmp"), "half a CLI")
+	write(t, filepath.Join(root, "..gitignore.123456.tmp"), "half a .gitignore")
+	write(t, filepath.Join(root, "logs", "mine.log"), "the user's")
 	report, err := Purge(root)
 	if err != nil {
 		t.Fatal(err)
@@ -161,10 +166,10 @@ func TestPurgeKeepsWhatX86QWDidNotMake(t *testing.T) {
 	for _, entry := range entries {
 		left = append(left, entry.Name())
 	}
-	if strings.Join(left, ",") != "Doom,taxes.pdf" {
+	if strings.Join(left, ",") != "Doom,logs,taxes.pdf" {
 		t.Fatalf("left behind: %v", left)
 	}
-	if !strings.Contains(strings.Join(report.Lines, "\n"), "Kept 2 items") {
+	if !strings.Contains(strings.Join(report.Lines, "\n"), "Kept 3 items") {
 		t.Fatalf("report: %v", report.Lines)
 	}
 }
