@@ -44,9 +44,12 @@ func requireHydrated(t *testing.T, root string) {
 func cloneCheckout(t *testing.T, root string) string {
 	t.Helper()
 	target := filepath.Join(t.TempDir(), "x86qw")
+	// cp -c clones on APFS; Windows has no cp at all.
 	if _, err := exec.Command("cp", "-cR", root, target).CombinedOutput(); err != nil {
-		if output, err := exec.Command("cp", "-R", root, target).CombinedOutput(); err != nil {
-			t.Fatalf("clone: %v: %s", err, output)
+		if _, err := exec.Command("cp", "-R", root, target).CombinedOutput(); err != nil {
+			if err := os.CopyFS(target, os.DirFS(root)); err != nil {
+				t.Fatalf("clone: %v", err)
+			}
 		}
 	}
 	// The worktree's .git file points at the real repository; never let a
@@ -271,7 +274,8 @@ func TestVerifyRejectsCorruptions(t *testing.T) {
 			if err == nil {
 				t.Fatal("corruption accepted")
 			}
-			got := strings.ReplaceAll("[ERROR] "+err.Error(), clone+"/", "<root>/")
+			// Windows names the paths with backslashes.
+			got := strings.ReplaceAll(filepath.ToSlash("[ERROR] "+err.Error()), filepath.ToSlash(clone)+"/", "<root>/")
 			if got != want[item.name] {
 				t.Errorf("message differs:\nwant: %s\ngot:  %s", want[item.name], got)
 			}
