@@ -355,7 +355,7 @@ func (p *Project) Check(out, info io.Writer, offline, asJSON bool, selected []st
 		nquakeOwners := NQuakeOwners(manifest, ids)
 		if reason := unavailable["nquake"]; reason != "" {
 			for index := range results {
-				if nquakeOwners[results[index].Component] && results[index].Error == "" && IsReferenceStrategy(results[index].Strategy) {
+				if nquakeOwners[results[index].Component] && results[index].Error == "" {
 					results[index].Status, results[index].LatestSource, results[index].Error = "unavailable", results[index].Installed, reason
 				}
 			}

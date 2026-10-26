@@ -656,6 +656,14 @@ func TestEachComponentIsCheckedOnItsOwn(t *testing.T) {
 	if !strings.Contains(out.String(), "[UNAVAILABLE] nquake-maps: ") || strings.Contains(out.String(), "[UNAVAILABLE] ezquake") {
 		t.Fatalf("nQuake down should affect only its components:\n%s", out.String())
 	}
+	// Components built from their own upstream plus nQuake files too.
+	project = NewProject(root)
+	project.HTTP = limited(currentUpstreams(t, root, ""), nquake).client()
+	out.Reset()
+	if code, err = project.Check(&out, &info, false, false, []string{"ktx", "pro-x"}); err != nil || code != 1 ||
+		!strings.Contains(out.String(), "[UNAVAILABLE] ktx: ") || !strings.Contains(out.String(), "[UNAVAILABLE] pro-x: ") {
+		t.Fatalf("ktx and pro-x own nQuake files and cannot be checked with nQuake down: %d %v\n%s", code, err, out.String())
+	}
 
 	if _, err := NewProject(root).Check(&out, &info, true, false, []string{"does-not-exist"}); err == nil || !strings.Contains(err.Error(), "unknown") {
 		t.Fatalf("an unknown component should be refused: %v", err)
