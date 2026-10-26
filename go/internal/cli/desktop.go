@@ -37,16 +37,19 @@ MimeType=x-scheme-handler/qw;%s;
 `, execArgument(Command(root)), execArgument(root), demoMIME)
 }
 
-// RefreshEntries rewrites the Linux entries that launch root in the
-// current format, so an update repairs what an earlier version wrote. It
-// creates none and leaves the others alone.
+// RefreshEntries rewrites the Linux entries and the Windows link and demo
+// handlers that launch root in the current format, so an update repairs
+// what an earlier version wrote. It creates none and leaves the others alone.
 func RefreshEntries(root, home string) {
+	refreshHandlers(root)
 	if runtime.GOOS != "linux" {
 		return
 	}
 	for path, entry := range map[string]string{DesktopEntryPath(home): desktopEntry(root), handlerEntryPath(home): handlerEntry(root)} {
 		if owned, _ := ownsEntry(path, root); owned {
-			os.WriteFile(path, []byte(entry), 0o644)
+			if current, _ := os.ReadFile(path); string(current) != entry {
+				os.WriteFile(path, []byte(entry), 0o644)
+			}
 		}
 	}
 }

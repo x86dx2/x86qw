@@ -35,6 +35,20 @@ func ownedCommand(key, root string) (owned, exists bool) {
 	return err == nil && (strings.Contains(strings.ToLower(value), strings.ToLower(`"`+Command(root)+`"`)) || legacy), true
 }
 
+// refreshHandlers rewrites the open command of the handlers root owns.
+func refreshHandlers(root string) {
+	for _, key := range []string{`Software\Classes\qw`, `Software\Classes\` + demoProgID} {
+		if owned, _ := ownedCommand(key, root); owned {
+			if command, err := registry.OpenKey(registry.CURRENT_USER, key+`\shell\open\command`, registry.QUERY_VALUE|registry.SET_VALUE); err == nil {
+				if value, _, _ := command.GetStringValue(""); value != handlerCommand(root) {
+					command.SetStringValue("", handlerCommand(root))
+				}
+				command.Close()
+			}
+		}
+	}
+}
+
 func writeCommand(key, root, label string, protocol bool) error {
 	k, _, err := registry.CreateKey(registry.CURRENT_USER, key, registry.SET_VALUE)
 	if err != nil {

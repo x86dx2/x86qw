@@ -152,6 +152,13 @@ func TestWindowsHandlersComeAndGo(t *testing.T) {
 	if owned, _ := ownedCommand(classes+"qw", root); !owned {
 		t.Fatal("the command without -- is not recognized")
 	}
+	// An update rewrites it, so an installation from before gets the "--" too.
+	RefreshEntries(root, t.TempDir())
+	command, _ = registry.OpenKey(registry.CURRENT_USER, classes+`qw\shell\open\command`, registry.QUERY_VALUE)
+	if value, _, _ := command.GetStringValue(""); value != handlerCommand(root) {
+		t.Fatalf("after the update: %q", value)
+	}
+	command.Close()
 	k, _ := registry.OpenKey(registry.CURRENT_USER, classes+".mvd", registry.QUERY_VALUE)
 	if value, _, _ := k.GetStringValue(""); value != demoProgID {
 		t.Fatalf(".mvd: %q", value)

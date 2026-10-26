@@ -111,6 +111,12 @@ func runApp(backend *setup.Real, root, start string, stdout, stderr io.Writer) i
 			}
 		}
 	}
+	// An upgrade replaces the CLI without this: the entries and handlers an
+	// earlier version wrote take this version's form.
+	if install.Installed(root) {
+		home, _ := os.UserHomeDir()
+		cli.RefreshEntries(root, home)
+	}
 	// Everything, the tools included, runs inside the app.
 	appOpen = true
 	err := tui.Run(tui.Config{Backend: backend, Target: root, Lang: interfaceLanguage(), Start: start})
