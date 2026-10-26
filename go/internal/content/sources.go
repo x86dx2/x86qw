@@ -865,7 +865,7 @@ func (c *SourceContext) loadArchiveLayerPolicy(identifier string, release, layer
 		}
 		reference, referenceOK := conflict.Value("reference_sha256").(string)
 		upstreamSHA, upstreamOK := conflict.Value("upstream_sha256").(string)
-		if !referenceOK || !upstreamOK || !hex64Pattern.MatchString(reference) || !hex64Pattern.MatchString(upstreamSHA) {
+		if !referenceOK || !upstreamOK || !sha256Pattern.MatchString(reference) || !sha256Pattern.MatchString(upstreamSHA) {
 			return nil, "", fmt.Errorf("archive layer policy has an invalid conflict hash: %s", member)
 		}
 		resolution := conflict.Value("resolution")

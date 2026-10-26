@@ -90,7 +90,7 @@ func validateOwnershipEntry(value any, depth int, seen map[string]bool) (*Object
 	if order, _ := pyjson.IntCmp(size, int64(ownershipMaxBytes)); order > 0 {
 		return nil, ownershipError("size of %s exceeds the allowed limit", path)
 	}
-	if digest, ok := raw.Value("sha256").(string); !ok || !hex64Pattern.MatchString(digest) {
+	if digest, ok := raw.Value("sha256").(string); !ok || !sha256Pattern.MatchString(digest) {
 		return nil, ownershipError("sha256 of %s must be a lowercase hexadecimal SHA-256", path)
 	}
 	if !inSet(raw.Value("kind"), ownershipKinds) {

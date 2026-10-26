@@ -105,7 +105,7 @@ func ValidateUpstreams(value any) error {
 			}
 			paths[distributionPath] = true
 			if (source.Has("size") || source.Has("sha256")) &&
-				(!validSize(source.Value("size")) || !hex64Pattern.MatchString(pyjson.Repr(getOr(source, "sha256", "")))) {
+				(!validSize(source.Value("size")) || !sha256Pattern.MatchString(pyjson.Repr(getOr(source, "sha256", "")))) {
 				return fmt.Errorf("invalid preserved source identity: %s", identifier)
 			}
 		}

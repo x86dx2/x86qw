@@ -460,8 +460,6 @@ func validateProfiles(catalog *Object, identifiers map[string]bool, messages pro
 	return result, nil
 }
 
-var hex64Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
-
 func fingerprintList(value any) ([]string, bool) {
 	raw, ok := value.([]any)
 	if !ok || len(raw) == 0 {
@@ -475,7 +473,7 @@ func fingerprintList(value any) ([]string, bool) {
 		return nil, false
 	}
 	for _, value := range values {
-		if !hex64Pattern.MatchString(value) {
+		if !sha256Pattern.MatchString(value) {
 			return nil, false
 		}
 	}

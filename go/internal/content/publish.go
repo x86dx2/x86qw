@@ -3,9 +3,9 @@ package content
 import (
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -18,14 +18,10 @@ import (
 
 const githubAPIMaxBytes = 4 * 1024 * 1024
 
-var githubRepositoryPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
-
 // githubHeaders are the GitHub API headers, with the token from GH_TOKEN or
 // GITHUB_TOKEN.
 func (p *Project) githubHeaders() (map[string]string, error) {
-	headers := map[string]string{
-		"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": userAgent,
-	}
+	headers := maps.Clone(githubAPIHeaders)
 	token := p.env("GH_TOKEN")
 	if token == "" {
 		token = p.env("GITHUB_TOKEN")
@@ -48,7 +44,7 @@ func (p *Project) githubHeaders() (map[string]string, error) {
 func (p *Project) githubAPIObject(repository, endpoint, label string) (*Object, error) {
 	parts := strings.Split(repository, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || parts[0] == "." || parts[0] == ".." ||
-		parts[1] == "." || parts[1] == ".." || !githubRepositoryPattern.MatchString(repository) {
+		parts[1] == "." || parts[1] == ".." || !repositoryPattern.MatchString(repository) {
 		return nil, managerError("invalid GitHub repository: %s", pyRepr(repository))
 	}
 	headers, err := p.githubHeaders()

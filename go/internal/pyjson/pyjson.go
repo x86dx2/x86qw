@@ -181,30 +181,6 @@ func lessCodepoints(a, b string) bool {
 }
 
 func writeString(b *strings.Builder, value string) {
-	b.WriteByte('"')
-	for _, r := range value {
-		switch r {
-		case '"':
-			b.WriteString(`\"`)
-		case '\\':
-			b.WriteString(`\\`)
-		case '\n':
-			b.WriteString(`\n`)
-		case '\r':
-			b.WriteString(`\r`)
-		case '\t':
-			b.WriteString(`\t`)
-		case '\b':
-			b.WriteString(`\b`)
-		case '\f':
-			b.WriteString(`\f`)
-		default:
-			if r < 0x20 {
-				fmt.Fprintf(b, `\u%04x`, r)
-			} else {
-				b.WriteRune(r)
-			}
-		}
-	}
-	b.WriteByte('"')
+	quoted, _ := contentjson.Encode(value, false) // a string always encodes
+	b.Write(quoted)
 }

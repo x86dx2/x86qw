@@ -12,12 +12,11 @@ import (
 // Component release inventory: maintenance/inventory/releases.json.
 
 var (
-	releaseVersion        = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$`)
-	releaseStrategies     = setOf("reference-snapshot", "reference-overlay", "upstream-overlay", "upstream-package", "upstream-composed")
-	releaseFreshness      = setOf("reference-payload-current", "upstream-current")
-	repositoryPattern     = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
-	distributionComponent = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
-	externalStrategies    = setOf("reference-overlay", "upstream-overlay", "upstream-package", "upstream-composed")
+	releaseVersion     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$`)
+	releaseStrategies  = setOf("reference-snapshot", "reference-overlay", "upstream-overlay", "upstream-package", "upstream-composed")
+	releaseFreshness   = setOf("reference-payload-current", "upstream-current")
+	repositoryPattern  = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+	externalStrategies = setOf("reference-overlay", "upstream-overlay", "upstream-package", "upstream-composed")
 )
 
 func persistentURL(value any, label string) error {
@@ -101,7 +100,7 @@ func ValidateReleases(value any, componentIDs, namespaces map[string]bool) error
 		}
 		strategy := release.Value("strategy").(string)
 		referenceRevision, pinned := release.Value("reference_revision").(string)
-		if release.Has("reference_revision") && !(pinned && hex40Strict.MatchString(referenceRevision)) {
+		if release.Has("reference_revision") && !(pinned && hex40Pattern.MatchString(referenceRevision)) {
 			return fmt.Errorf("invalid nQuake reference revision: %s", identifier)
 		}
 		if (IsReferenceStrategy(strategy) || strategy == "upstream-overlay") && !pinned {
@@ -158,7 +157,7 @@ func ValidateReleases(value any, componentIDs, namespaces map[string]bool) error
 			if !releaseVersion.MatchString(pyjson.Repr(getOr(release, "distribution_tag", ""))) {
 				return fmt.Errorf("invalid distribution tag: %s", identifier)
 			}
-			if !distributionComponent.MatchString(pyjson.Repr(getOr(release, "distribution_component", ""))) {
+			if !componentID.MatchString(pyjson.Repr(getOr(release, "distribution_component", ""))) {
 				return fmt.Errorf("invalid distribution_component: %s", identifier)
 			}
 			compatibility, ok := release.Value("compatibility").(*Object)
@@ -224,7 +223,7 @@ func validateArtifact(raw any, release *Object, strategy, identifier string, dis
 	if !validSize(artifact.Value("size")) {
 		return fmt.Errorf("invalid artifact size: %s", identifier)
 	}
-	if !hex64Pattern.MatchString(pyjson.Repr(getOr(artifact, "sha256", ""))) {
+	if !sha256Pattern.MatchString(pyjson.Repr(getOr(artifact, "sha256", ""))) {
 		return fmt.Errorf("invalid artifact hash: %s", identifier)
 	}
 	members, ok := getOr(artifact, "members", []any{}).([]any)
@@ -250,7 +249,7 @@ func validateArtifact(raw any, release *Object, strategy, identifier string, dis
 		if !validSize(member.Value("size")) {
 			return fmt.Errorf("invalid artifact member size: %s", identifier)
 		}
-		if !hex64Pattern.MatchString(pyjson.Repr(getOr(member, "sha256", ""))) {
+		if !sha256Pattern.MatchString(pyjson.Repr(getOr(member, "sha256", ""))) {
 			return fmt.Errorf("invalid artifact member hash: %s", identifier)
 		}
 	}
@@ -337,7 +336,7 @@ func validateArchiveEdits(release *Object, strategy, identifier string) error {
 		if !beforeOK || before == "" || !afterOK || before == after {
 			return fmt.Errorf("ineffective archive text replacement: %s", identifier)
 		}
-		if !hex64Pattern.MatchString(pyjson.Repr(getOr(replacement, "source_sha256", ""))) {
+		if !sha256Pattern.MatchString(pyjson.Repr(getOr(replacement, "source_sha256", ""))) {
 			return fmt.Errorf("invalid archive member source hash: %s", identifier)
 		}
 		identity := [3]string{target, member, before}
@@ -415,7 +414,7 @@ func validateArchiveEdits(release *Object, strategy, identifier string) error {
 		if !validSize(copy.Value("size")) {
 			return fmt.Errorf("invalid package copy size: %s", identifier)
 		}
-		if !hex64Pattern.MatchString(pyjson.Repr(getOr(copy, "sha256", ""))) {
+		if !sha256Pattern.MatchString(pyjson.Repr(getOr(copy, "sha256", ""))) {
 			return fmt.Errorf("invalid package copy hash: %s", identifier)
 		}
 		copyDestinations[destination] = true
@@ -442,7 +441,7 @@ func validateArchiveEdits(release *Object, strategy, identifier string) error {
 		if !beforeOK || before == "" || !afterOK || before == after {
 			return fmt.Errorf("ineffective text replacement: %s", identifier)
 		}
-		if !hex64Pattern.MatchString(pyjson.Repr(getOr(replacement, "source_sha256", ""))) {
+		if !sha256Pattern.MatchString(pyjson.Repr(getOr(replacement, "source_sha256", ""))) {
 			return fmt.Errorf("invalid text replacement source hash: %s", identifier)
 		}
 		identity := [2]string{target, before}

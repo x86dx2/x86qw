@@ -1,8 +1,6 @@
 package content
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -384,15 +382,11 @@ func (p *Project) downloadAsset(root string, asset Asset, known *Object, reuse s
 		}
 	}
 	if asset.ExpectedGitSHA1 != "" {
-		file, err := os.Open(staging)
+		digest, err := GitBlobSHA1(staging)
 		if err != nil {
 			return nil, false, err
 		}
-		digest := sha1.New()
-		fmt.Fprintf(digest, "blob %d\x00", asset.ExpectedSize)
-		io.Copy(digest, file)
-		file.Close()
-		if hex.EncodeToString(digest.Sum(nil)) != asset.ExpectedGitSHA1 {
+		if digest != asset.ExpectedGitSHA1 {
 			return nil, false, fmt.Errorf("download Git blob identity mismatch for %s", safeURLForLog(asset.URL))
 		}
 	}
@@ -966,7 +960,7 @@ func (p *Project) ezquakeSourceRevision(asset Asset) (string, error) {
 		if upstream.Value("id") != "ezquake-nightly" || !pyjson.Eq(upstream.Value("version"), version) {
 			continue
 		}
-		if revision, ok := upstream.Value("revision").(string); ok && hex40Strict.MatchString(revision) {
+		if revision, ok := upstream.Value("revision").(string); ok && hex40Pattern.MatchString(revision) {
 			return revision, nil
 		}
 	}

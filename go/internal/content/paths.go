@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"golang.org/x/text/unicode/norm"
@@ -117,18 +118,6 @@ var windowsReserved = func() map[string]bool {
 	return names
 }()
 
-func utf16Units(value string) int {
-	units := 0
-	for _, r := range value {
-		if r > 0xffff {
-			units += 2
-		} else {
-			units++
-		}
-	}
-	return units
-}
-
 // otherCategory reports unicodedata.category(r).startswith("C").
 func otherCategory(r rune) bool {
 	if unicode.Is(unicode.Cc, r) || unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Co, r) || unicode.Is(unicode.Cs, r) {
@@ -162,11 +151,11 @@ func ValidatePortableRelativePath(value any, label string) (string, error) {
 	for _, part := range rawParts {
 		base, _, _ := strings.Cut(part, ".")
 		if norm.NFC.String(part) != part || strings.HasSuffix(part, ".") || strings.HasSuffix(part, " ") ||
-			windowsReserved[upper.String(base)] || utf16Units(part) > 255 {
+			windowsReserved[upper.String(base)] || archive.UTF16Units(part) > 255 {
 			return "", fmt.Errorf("non-portable %s component: %s", label, pyRepr(part))
 		}
 	}
-	if utf16Units(text) > 240 {
+	if archive.UTF16Units(text) > 240 {
 		return "", fmt.Errorf("%s exceeds 240 UTF-16 code units", label)
 	}
 	return text, nil

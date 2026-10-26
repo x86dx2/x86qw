@@ -18,8 +18,7 @@ import (
 // x86qw-content add: reviewed distribution-change definitions.
 
 var (
-	safeIdentifier = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.+-]*$`)
-	safeConsumer   = regexp.MustCompile(`^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9_.+-]*$`)
+	safeConsumer = regexp.MustCompile(`^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9_.+-]*$`)
 )
 
 // safeRelative checks a definition's relative path, optionally under
@@ -200,7 +199,7 @@ func validateDefinitionFile(raw any, base string) (*filePlan, error) {
 			return nil, managerError("a managed upstream file requires a safe distribution_component and consumer")
 		}
 		if pkg := entry.Value("package"); pkg != nil {
-			if text, ok := pkg.(string); !ok || !safeIdentifier.MatchString(text) {
+			if text, ok := pkg.(string); !ok || !safeSegment.MatchString(text) {
 				return nil, managerError("the managed file's package must be a safe identifier")
 			}
 		}
@@ -232,7 +231,7 @@ func applyReferenceTransition(releases *Object, proposed any) (referenceTransiti
 	repository, repositoryOK := transition.Value("repository").(string)
 	revision, revisionOK := transition.Value("revision").(string)
 	moving, movingOK := transition.Value("components").(*Object)
-	if !repositoryOK || !revisionOK || !hex40Strict.MatchString(revision) || !movingOK || len(moving.Keys()) == 0 {
+	if !repositoryOK || !revisionOK || !hex40Pattern.MatchString(revision) || !movingOK || len(moving.Keys()) == 0 {
 		return referenceTransition{}, false, managerError("the nQuake reference transition has invalid fields")
 	}
 	parsed, err := validateHTTPSURL(repository, "nQuake reference repository")
@@ -248,7 +247,7 @@ func applyReferenceTransition(releases *Object, proposed any) (referenceTransiti
 	result := referenceTransition{revision, map[string]string{}}
 	for _, identifier := range moving.Keys() {
 		previous, ok := moving.Value(identifier).(string)
-		if !ok || !hex40Strict.MatchString(previous) {
+		if !ok || !hex40Pattern.MatchString(previous) {
 			return referenceTransition{}, false, managerError("invalid previous revision for %s", identifier)
 		}
 		pinned := ReferenceRevisionOf(releases, identifier)

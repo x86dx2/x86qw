@@ -242,7 +242,8 @@ func checkExtra(extra []byte, name string) error {
 	return nil
 }
 
-func utf16Units(value string) int { return len(utf16.Encode([]rune(value))) }
+// UTF16Units is the length of value in UTF-16 code units.
+func UTF16Units(value string) int { return len(utf16.Encode([]rune(value))) }
 
 func semanticKey(parts []string) string {
 	keys := make([]string, len(parts))
@@ -256,7 +257,7 @@ func validateName(name string, isDir bool, limits Limits) (string, []string, str
 	if name == "" {
 		return "", nil, "", fail("ZIP member without a name")
 	}
-	if utf16Units(name) > limits.MaxPathUTF16Units {
+	if UTF16Units(name) > limits.MaxPathUTF16Units {
 		return "", nil, "", fail("ZIP path exceeds %d UTF-16 units: %q", limits.MaxPathUTF16Units, name)
 	}
 	if strings.HasPrefix(name, "/") || strings.ContainsAny(name, `\:`) {

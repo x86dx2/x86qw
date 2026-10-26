@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -26,8 +25,6 @@ const (
 	projectCopyright = "Copyright (c) 2026 x86dx2"
 	componentJSON    = "_x86qw/component.json"
 )
-
-var projectRefPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 // GitHubReleaseURL is the primary mirror URL of a release asset.
 func GitHubReleaseURL(tag, filename string) string {
@@ -149,7 +146,7 @@ func (p *Project) BuildPackages(distribution, output string, options BuildOption
 	if options.OwnershipOutput != "" && options.ProjectRef == "" {
 		return nil, fmt.Errorf("--project-ref is required when --ownership-output is used")
 	}
-	if options.ProjectRef != "" && !projectRefPattern.MatchString(options.ProjectRef) {
+	if options.ProjectRef != "" && !hex40Pattern.MatchString(options.ProjectRef) {
 		return nil, fmt.Errorf("project-ref must be a full lowercase hexadecimal SHA-1")
 	}
 	// One build carries every nQuake revision the components pin; each
