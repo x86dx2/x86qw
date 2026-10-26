@@ -160,7 +160,9 @@ func (l *Layer) put(path, aside string, data []byte, mode os.FileMode) error {
 	if err := renameFile(temporary.Name(), path); err != nil {
 		if movedAside {
 			// Without this the installation is left with no CLI at all.
-			return errors.Join(err, renameFile(aside, path))
+			if undo := renameFile(aside, path); undo != nil {
+				return fmt.Errorf("%w; the CLI is left at %s: move it back to %s (%v)", err, aside, path, undo)
+			}
 		}
 		return err
 	}

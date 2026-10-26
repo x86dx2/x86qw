@@ -140,3 +140,26 @@ func TestAFailedSwapPutsTheRunningCLIBack(t *testing.T) {
 		t.Fatalf("the installation has no CLI: %q", data)
 	}
 }
+
+// When the CLI in use cannot come back either, the error says where it is,
+// so the user can put it back.
+func TestAFailedRestoreNamesWhereTheCLIIs(t *testing.T) {
+	saved, savedRename := moveRunningAside, renameFile
+	t.Cleanup(func() { moveRunningAside, renameFile = saved, savedRename })
+	moveRunningAside = true
+	root := t.TempDir()
+	command, aside := filepath.Join(root, "x86qw"), filepath.Join(root, ".x86qw", "cli", "x86qw.old")
+	renameFile = func(from, to string) error {
+		if strings.HasSuffix(from, ".tmp") || from == aside {
+			return errors.New("held")
+		}
+		return os.Rename(from, to)
+	}
+	if err := os.WriteFile(command, []byte("running CLI"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var layer Layer
+	if err := layer.put(command, aside, []byte("new CLI"), 0o755); err == nil || !strings.Contains(err.Error(), aside) {
+		t.Fatalf("the error does not say where the CLI is: %v", err)
+	}
+}
