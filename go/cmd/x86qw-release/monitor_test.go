@@ -33,3 +33,30 @@ func TestCheckoutMatchesOnlyTheSameCatalog(t *testing.T) {
 		t.Fatalf("another snapshot under the same timestamp is %s", state)
 	}
 }
+
+// Production ahead of main is "recording" only in the hour after a renewal
+// signed it with the usual lease; a longer lease must not stretch that hour.
+func TestProductionAheadWithALongLeaseFails(t *testing.T) {
+	repo, err := repoRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	local, err := tufsign.ReadGeneration(filepath.Join(repo, filepath.FromSlash(trustDir)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	ahead := func(lease time.Duration) (string, error) {
+		live := trust.RoleState{Version: local.Timestamp + 1, Expires: now.Add(lease)}
+		return compareCheckout(live, local.Snapshot, local.Catalog, "", now)
+	}
+	if state, err := ahead(timestampLease - 10*time.Minute); state != "recording" || err != nil {
+		t.Fatalf("a renewal signed ten minutes ago: %s %v", state, err)
+	}
+	if state, err := ahead(timestampLease - 2*time.Hour); state != "behind" || err == nil {
+		t.Fatalf("a renewal signed two hours ago: %s %v", state, err)
+	}
+	if state, err := ahead(365 * 24 * time.Hour); err == nil {
+		t.Fatalf("a renewal with a one-year lease is %s", state)
+	}
+}

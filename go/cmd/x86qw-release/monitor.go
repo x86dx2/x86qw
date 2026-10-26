@@ -108,6 +108,10 @@ func compareCheckout(live trust.RoleState, liveSnapshot int64, liveCatalog, sinc
 		}
 		return "ahead", fmt.Errorf("main has TUF generation %d and production still serves %d: run the Deploy site workflow", local.Timestamp, live.Version)
 	default:
+		// A longer lease than renewals sign would read as recording for months.
+		if live.Expires.After(now.Add(timestampLease + syncGrace)) {
+			return "behind", fmt.Errorf("production serves timestamp %d, main records %d, and it expires %s, past the %d-day lease renewals sign", live.Version, local.Timestamp, live.Expires.UTC().Format(time.RFC3339), int(timestampLease.Hours()/24))
+		}
 		if now.Sub(live.Expires.Add(-timestampLease)) < syncGrace {
 			return "recording", nil
 		}
