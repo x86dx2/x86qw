@@ -129,8 +129,9 @@ func terminateRecordedProcess(entry map[string]any) (string, error) {
 	return "", errorf("Orphaned process PID %d did not stop; its state was kept.", pid)
 }
 
-// startDetached starts a service in its own session/process group.
-func startDetached(arguments []string, dir string, output *os.File) (*exec.Cmd, error) {
+// startDetached starts a service in its own session/process group. Hidden
+// only matters on Windows, where servers open windows of their own.
+func startDetached(arguments []string, dir string, output *os.File, hidden bool) (*exec.Cmd, error) {
 	command := exec.Command(arguments[0], arguments[1:]...)
 	command.Dir = dir
 	if output != nil {

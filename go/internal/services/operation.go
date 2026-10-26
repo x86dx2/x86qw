@@ -362,6 +362,9 @@ func (op *Operation) Run() (code int) {
 			c.Info(fmt.Sprintf("QTV HTTP: http://%s/", Endpoint(o.QtvBind, o.QtvPort)))
 		}
 	}
+	for _, spec := range specs {
+		spec.Hidden = common.BackgroundChild
+	}
 	result, err := RunProcesses(specs, journal, c, op.Output)
 	if err != nil {
 		return fail(err)

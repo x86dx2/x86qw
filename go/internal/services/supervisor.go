@@ -108,7 +108,7 @@ func RunProcesses(specs []*Spec, journal *Journal, console *Console, output *os.
 		if holdErr != nil {
 			return 0, errorf("The %s command does not match the validated target.", spec.Label)
 		}
-		command, startErr := startDetached(spec.Arguments, spec.Cwd, output)
+		command, startErr := startDetached(spec.Arguments, spec.Cwd, output, spec.Hidden)
 		release()
 		if startErr != nil {
 			var installerErr *Error

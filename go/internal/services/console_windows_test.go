@@ -53,7 +53,7 @@ func TestWindowHelper(t *testing.T) {
 
 // windowReport starts that server as the supervisor does, output being the
 // session's log, and returns what it reported.
-func windowReport(t *testing.T, output *os.File) string {
+func windowReport(t *testing.T, output *os.File, hidden bool) string {
 	t.Helper()
 	report := filepath.Join(t.TempDir(), "report")
 	t.Setenv("X86QW_TEST_WINDOW_REPORT", report)
@@ -61,7 +61,7 @@ func windowReport(t *testing.T, output *os.File) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	command, err := startDetached([]string{self, "-test.run=^TestWindowHelper$"}, filepath.Dir(report), output)
+	command, err := startDetached([]string{self, "-test.run=^TestWindowHelper$"}, filepath.Dir(report), output, hidden)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,9 +71,10 @@ func windowReport(t *testing.T, output *os.File) string {
 }
 
 // A server of a background session opens no window of its own either:
-// MVDSV's, closed, ends the whole stack. A foreground one keeps it.
+// MVDSV's, closed, ends the whole stack. A foreground one keeps it, though
+// its output goes to a file as well: the terminal's.
 func TestBackgroundServersShowNoWindow(t *testing.T) {
-	if got := windowReport(t, nil); got != "visible=true" {
+	if got := windowReport(t, nil, false); got != "visible=true" {
 		t.Skipf("this session shows no windows to tell apart (%s)", got)
 	}
 	log, err := os.Create(filepath.Join(t.TempDir(), "log"))
@@ -81,7 +82,10 @@ func TestBackgroundServersShowNoWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer log.Close()
-	if got := windowReport(t, log); got != "visible=false" {
+	if got := windowReport(t, log, false); got != "visible=true" {
+		t.Fatalf("a server of a foreground session: %s", got)
+	}
+	if got := windowReport(t, log, true); got != "visible=false" {
 		t.Fatalf("a server of a background session: %s", got)
 	}
 }
@@ -96,7 +100,7 @@ func TestConsoleWindowHelper(t *testing.T) {
 	case "controller":
 		self, _ := os.Executable()
 		os.Setenv("X86QW_TEST_CONSOLE", "server")
-		command, err := startDetached([]string{self, "-test.run=^TestConsoleWindowHelper$"}, filepath.Dir(report), nil)
+		command, err := startDetached([]string{self, "-test.run=^TestConsoleWindowHelper$"}, filepath.Dir(report), nil, true)
 		if err != nil {
 			os.WriteFile(report, []byte("error: "+err.Error()), 0o644)
 			return

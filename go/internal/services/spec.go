@@ -38,6 +38,8 @@ type Spec struct {
 	Readiness      *Readiness
 	Parameters     [][2]string
 	ExpectedSHA256 string
+	// Hidden hides the windows the server opens: a background session's.
+	Hidden bool
 }
 
 // Session collects what one service run created.

@@ -197,7 +197,7 @@ func resumeMainThread(pid int) error {
 
 // startDetached starts a service suspended in its own process group, adds
 // it to the Job Object and resumes it (WindowsJobObject.start_process).
-func startDetached(arguments []string, dir string, output *os.File) (*exec.Cmd, error) {
+func startDetached(arguments []string, dir string, output *os.File, hidden bool) (*exec.Cmd, error) {
 	jobHandle, err := serviceJob()
 	if err != nil {
 		return nil, err
@@ -233,8 +233,7 @@ func startDetached(arguments []string, dir string, output *os.File) (*exec.Cmd, 
 	if err := resumeMainThread(pid); err != nil {
 		return rollback(err, true)
 	}
-	// A background session (output is its log) shows no server window.
-	if output != nil {
+	if hidden {
 		go hideWindows(uint32(pid))
 	}
 	return command, nil
