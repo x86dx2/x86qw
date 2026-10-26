@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -156,6 +157,24 @@ type listed struct {
 }
 
 func (l listed) Servers(context.Context, string) ([]setup.PublicServer, error) { return l.servers, nil }
+
+// A long map or mode is cut to its column, so the server's own name still
+// shows on its row.
+func TestALongMapOrModeKeepsTheServerName(t *testing.T) {
+	servers := []setup.PublicServer{
+		{Address: "a.example:27500", Title: "Long map", Map: strings.Repeat("m", 300), Mode: strings.Repeat("y", 300), Humans: 1},
+		{Address: "b.example:27500", Title: "Wide map", Map: strings.Repeat("地", 20), Mode: strings.Repeat("ｍ", 30), Humans: 1},
+	}
+	m := New(Config{Backend: listed{&setup.Demo{ExistingInstall: true, Speed: 200}, servers}, Target: shortTarget(t), Lang: EN, Start: "servers"})
+	drive(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+	drive(m, run(m.Init())...)
+	view := stripANSI(m.View().Content)
+	for title, cut := range map[string]string{"Long map": "mmmmmmmm… yyyyy…", "Wide map": "地地地地… ｍｍ…"} {
+		if !slices.ContainsFunc(strings.Split(view, "\n"), func(line string) bool { return strings.Contains(line, title) && strings.Contains(line, cut) }) {
+			t.Errorf("no row with %q and %q:\n%s", title, cut, view)
+		}
+	}
+}
 
 // A Hub where nobody plays says so. Favorites with nobody on them are what
 // stands in for a Hub that cannot be reached, and the lead says that.

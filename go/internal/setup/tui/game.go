@@ -835,7 +835,9 @@ func (m *Model) serversPage(p *page) {
 		if server.Bots > 0 {
 			players += fmt.Sprintf("+%d", server.Bots)
 		}
-		right := base.Foreground(t.Gray).Render(fmt.Sprintf("%-9s %-6s %5s", server.Map, server.Mode, players))
+		// A map or mode wider than its column would leave no room for the title.
+		mapText, mode := padRight(ansi.Truncate(server.Map, 9, "…"), 9), padRight(ansi.Truncate(server.Mode, 6, "…"), 6)
+		right := base.Foreground(t.Gray).Render(fmt.Sprintf("%s %s %5s", mapText, mode, players))
 		if server.QTV != "" {
 			right += base.Foreground(t.Success).Render("  " + m.t("qtv.badge"))
 		} else {
