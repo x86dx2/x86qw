@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -78,6 +79,12 @@ func prepare(repo, version, assets, keys string) error {
 	if err != nil {
 		return err
 	}
+	// SHA256SUMS comes with the binaries; the attestation says go-release built them.
+	for _, target := range Targets {
+		if err := attested(filepath.Join(assets, assetName(version, target))); err != nil {
+			return err
+		}
+	}
 	path := filepath.Join(repo, filepath.FromSlash(catalogFile))
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -110,6 +117,16 @@ func prepare(repo, version, assets, keys string) error {
 		return err
 	}
 	fmt.Printf("CLI %s ready in the checkout with TUF generation %d: review the diff and open the PR.\n", version, generation)
+	return nil
+}
+
+// attested checks with gh that the release workflow built the binary at path.
+var attested = func(path string) error {
+	output, err := exec.Command("gh", "attestation", "verify", path, "--repo", "x86dx2/x86qw",
+		"--signer-workflow", "x86dx2/x86qw/.github/workflows/go-release.yml").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s has no build attestation from go-release.yml (%v):\n%s", filepath.Base(path), err, output)
+	}
 	return nil
 }
 

@@ -42,8 +42,9 @@ root of the checkout.
    go -C go run ./cmd/x86qw-release prepare --version X.Y.Z
    ```
 
-   `prepare` downloads the binaries and checks each one against
-   `SHA256SUMS`, rewrites the catalog (with a new `generated_at`),
+   `prepare` downloads the binaries, checks each one against
+   `SHA256SUMS` and, with `gh attestation verify`, that `go-release.yml`
+   built it, then rewrites the catalog (with a new `generated_at`),
    `product.json`, the `install.sh` and `install.ps1` bootstraps and the
    version named in `README.md` and in `index.html`. Then it signs the next
    TUF generation (the higher of checkout and production, plus one), removes
