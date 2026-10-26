@@ -104,8 +104,18 @@ func portTaken(kind, address string, port int) bool {
 		closer.Close()
 		return false
 	}
+	return heldWhere(owners, want, port)
+}
+
+// heldWhere reports whether an owner holds port where want would bind it:
+// the same address, or either one on every interface of its family. A
+// socket on every IPv6 interface may take IPv4 too (dual stack).
+func heldWhere(owners []portOwner, want netip.Addr, port int) bool {
+	want = want.Unmap().WithZone("")
 	for _, owner := range owners {
-		if owner.port == port && (owner.address.IsUnspecified() || want.IsUnspecified() || owner.address == want) {
+		same := owner.address.Is4() == want.Is4()
+		if owner.port == port && (same && (owner.address.IsUnspecified() || want.IsUnspecified() || owner.address == want) ||
+			owner.address == netip.IPv6Unspecified()) {
 			return true
 		}
 	}
