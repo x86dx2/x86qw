@@ -403,8 +403,8 @@ func packageKey(item *Object) any {
 	return item.Value("component")
 }
 
-// RegisterPackages writes the built packages into the catalog; now is the
-// generated_at clock.
+// RegisterPackages writes the built packages into the catalog; now becomes
+// generated_at when the packages change.
 func (p *Project) RegisterPackages(catalogPath string, manifest *Object, now time.Time) error {
 	value, err := ReadJSON(catalogPath)
 	if err != nil {
@@ -418,6 +418,8 @@ func (p *Project) RegisterPackages(catalogPath string, manifest *Object, now tim
 	if !ok {
 		return fmt.Errorf("catalog packages must be a list")
 	}
+	// Encoded now: registering edits the existing entries in place.
+	before, _ := pyjson.Encode(packages, false)
 	manifestPackages := objects(manifest.Value("packages"))
 	current := map[string]bool{}
 	for _, item := range manifestPackages {
@@ -504,7 +506,9 @@ func (p *Project) RegisterPackages(catalogPath string, manifest *Object, now tim
 	})
 	packages = append(content, cli...)
 	catalog.Set("packages", orEmpty(packages))
-	catalog.Set("generated_at", now.UTC().Format("2006-01-02T15:04:05Z"))
+	if after, _ := pyjson.Encode(catalog.Value("packages"), false); !bytes.Equal(after, before) {
+		catalog.Set("generated_at", now.UTC().Format("2006-01-02T15:04:05Z"))
+	}
 	if _, err := p.ValidateCatalog(catalog); err != nil {
 		return err
 	}
@@ -524,8 +528,9 @@ func (p *Project) NormalizeCatalogReleaseMetadata(catalog *Object) error {
 		}
 	}
 	for _, raw := range packages {
+		// x86qw-release owns the CLI entries and writes no mirror metadata.
 		item, ok := raw.(*Object)
-		if !ok {
+		if !ok || IsCLIPackage(item) {
 			continue
 		}
 		component := pyjson.Repr(getOr(item, "component", ""))

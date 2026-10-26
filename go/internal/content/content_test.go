@@ -1,9 +1,12 @@
 package content
 
 import (
+	"bytes"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
@@ -70,6 +73,46 @@ func TestProductIsByteIdentical(t *testing.T) {
 	actual, _ := os.ReadFile(project.Path(ProductPath))
 	if string(expected) != string(actual) {
 		t.Fatal("regenerated product.json differs from the published one")
+	}
+}
+
+// build --register over packages the catalog already lists writes the same
+// bytes, so the TUF-signed catalog stays valid.
+func TestRegisteringUnchangedPackagesKeepsTheCatalog(t *testing.T) {
+	project := NewProject(repoRoot(t))
+	committed, err := os.ReadFile(project.Path(CatalogPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := LoadJSONObject(project.Path(CatalogPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var built []any
+	for _, pkg := range objects(catalog.Value("packages")) {
+		if pyjson.Eq(pkg.Value("channel"), "content") {
+			built = append(built, pkg)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "catalog.json")
+	if err := os.WriteFile(path, committed, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := project.RegisterPackages(path, object("packages", built), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	registered, err := LoadJSONObject(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := project.NormalizeCatalogReleaseMetadata(registered); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteJSON(path, registered); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := os.ReadFile(path); !bytes.Equal(after, committed) {
+		t.Fatal("registering unchanged packages rewrote the catalog")
 	}
 }
 
