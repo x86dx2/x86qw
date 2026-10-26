@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,9 +12,12 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/privfs"
 )
 
-// stagingPrefix names the folder a payload is extracted to before it is
-// published.
-const stagingPrefix = ".x86qw_ktx_"
+// StagingPrefix names the folder a payload is extracted to before it is
+// published, and the copies beside its members on another volume.
+const StagingPrefix = ".x86qw_ktx_"
+
+// link publishes a member; tests replace it to play another volume.
+var link = os.Link
 
 const temporaryHeader = "// x86QW: temporary configuration, removed when the session stops.\n"
 
@@ -102,17 +106,11 @@ func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, e
 		return nil, errorf("Could not prepare the %s payload for MVDSV: %v", label, err)
 	}
 	defer plan.Close()
-	// Left by a session that died while preparing: one session runs at a
-	// time, under the installation's lock.
-	stale, _ := filepath.Glob(filepath.Join(root, stagingPrefix+"*"))
-	for _, path := range stale {
-		os.RemoveAll(path)
-	}
 	// Extracted beside the destination, each member publishes as a hard
 	// link: the same volume, and the permissions the folder gives its own
-	// files. Nothing is copied or synced per file; the journal is what
-	// must be durable before anything is published.
-	staging, err := os.MkdirTemp(root, stagingPrefix)
+	// files. Nothing is synced per file; the journal is what must be
+	// durable before anything is published.
+	staging, err := os.MkdirTemp(root, StagingPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -159,11 +157,37 @@ func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, e
 			}
 		}
 	}
+	// Left by a session that died while preparing: one session runs at a
+	// time, under the installation's lock.
+	folders := map[string]bool{root: true}
+	for _, file := range append(ready, pending...) {
+		folders[filepath.Dir(file.Path)] = true
+	}
+	for folder := range folders {
+		entries, _ := os.ReadDir(folder)
+		for _, entry := range entries {
+			if path := filepath.Join(folder, entry.Name()); strings.HasPrefix(entry.Name(), StagingPrefix) && path != staging {
+				os.RemoveAll(path)
+			}
+		}
+	}
 	result := &Materialized{}
+	// Copies beside members go first: a folder made for the payload goes
+	// only when it is empty.
+	var copies []string
+	removeCopies := func() {
+		for _, path := range copies {
+			os.Remove(path)
+		}
+	}
+	defer removeCopies()
 	fail := func(err error) (*Materialized, error) {
+		removeCopies()
 		result.Cleanup(nil)
 		return nil, err
 	}
+	// shortcut: a kill between these folders and the journal write leaves
+	// them empty and unrecorded; MVDSV reads nothing there, so they stay.
 	for _, file := range pending {
 		var missing []string
 		for cursor := filepath.Dir(file.Path); cursor != root; cursor = filepath.Dir(cursor) {
@@ -183,6 +207,32 @@ func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, e
 			result.Directories = append(result.Directories, &MaterializedDirectory{Path: missing[index], Identity: identityAt(missing[index], info)})
 		}
 	}
+	// A folder on another volume, a mount inside the game folder, takes no
+	// link from the staging: its members are copied there first.
+	linkable := map[string]bool{}
+	for _, file := range pending {
+		folder := filepath.Dir(file.Path)
+		ok, tried := linkable[folder]
+		if !tried {
+			probe := filepath.Join(folder, StagingPrefix+tokenHex(8))
+			ok = link(sources[file], probe) == nil
+			os.Remove(probe)
+			linkable[folder] = ok
+		}
+		if ok {
+			continue
+		}
+		copied := filepath.Join(folder, StagingPrefix+tokenHex(8))
+		copies = append(copies, copied)
+		if err := copyNew(sources[file], copied); err != nil {
+			return fail(err)
+		}
+		info, err := os.Lstat(copied)
+		if err != nil {
+			return fail(err)
+		}
+		file.Identity, sources[file] = identityAt(copied, info), copied
+	}
 	result.Files = append(result.Files, ready...)
 	if journal != nil {
 		if err := journal.RecordPayload(result.Directories, ready, pending); err != nil {
@@ -191,8 +241,10 @@ func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, e
 	}
 	for _, file := range pending {
 		// A link never replaces: a file that appeared meanwhile is kept.
-		if err := os.Link(sources[file], file.Path); err != nil {
+		if err := link(sources[file], file.Path); errors.Is(err, os.ErrExist) {
 			return fail(errorf("A file appeared during preparation and was kept: %s", file.Path))
+		} else if err != nil {
+			return fail(errorf("Could not publish %s for MVDSV (%v): the installation's file system must support hard links.", file.Path, err))
 		}
 		result.Files = append(result.Files, file)
 	}
@@ -202,6 +254,21 @@ func MaterializePK3(pk3, root, label string, journal *Journal) (*Materialized, e
 		}
 	}
 	return result, nil
+}
+
+// copyNew copies source to a file created at destination.
+func copyNew(source, destination string) error {
+	in, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(out, in)
+	return errors.Join(err, out.Close())
 }
 
 // SuppressAutoexec drops gamedir/server.cfg created by the session so MVDSV

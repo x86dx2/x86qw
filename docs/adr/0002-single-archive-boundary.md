@@ -144,13 +144,13 @@ staging and only then are its valid files materialized in a conflict-safe,
 journaled way in the MVDSV context. A different personal file stays
 preserved.
 
-On Windows, this materialization does not rely on hardlinks or on a `stat` +
-remove-by-path sequence. Each ancestor stays open without
-`FILE_SHARE_DELETE`, reparse points are refused and the persisted identity uses
-`VolumeSerialNumber` + `FILE_ID_128`. The file goes through exclusive staging,
-`MoveFileExW` without replacement and a check through the handle. Cleanup
-marks for deletion the same handle whose identity and hash were confirmed; a
-diverging identity is preserved.
+On every system, including Windows, the members are published from that
+staging as hard links, which never replace a file. A payload folder on
+another volume, such as a mount inside the game folder, takes no link from
+the staging: its members are copied beside them first, and the journal
+records the identity of the file that is published (the volume serial number
+and file index on Windows). A file system without hard links, such as exFAT,
+stops the session with that reason.
 
 On POSIX, cleanup no longer runs `hash` followed by `unlink` directly on the
 public name. It moves the name into a quarantine through an exclusive, atomic

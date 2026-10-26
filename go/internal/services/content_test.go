@@ -2,6 +2,7 @@ package services
 
 import (
 	"archive/zip"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -146,5 +147,95 @@ func TestMaterializeWritesNothingOutsideTheInstallation(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
 		t.Fatalf("written outside the installation: %v", entries)
+	}
+}
+
+// A payload folder on another volume, such as a mount inside the game
+// folder, takes no link from the staging: its members are copied there
+// first, and the journal holds the files that were published.
+func TestMaterializeIntoAFolderOnAnotherVolume(t *testing.T) {
+	journal := testJournal(t)
+	gamedir := filepath.Join(journal.Target, "qw")
+	os.MkdirAll(gamedir, 0o755)
+	members := payload(40)
+	pk3 := filepath.Join(gamedir, "ktx.pk3")
+	writePK3(t, pk3, members)
+	mounted := filepath.Join(gamedir, "sound", "ktx") + string(filepath.Separator)
+	saved := link
+	t.Cleanup(func() { link = saved })
+	link = func(source, destination string) error {
+		if strings.HasPrefix(destination, mounted) != strings.HasPrefix(source, mounted) {
+			return &os.LinkError{Op: "link", Old: source, New: destination, Err: errors.New("cross-device link")}
+		}
+		return saved(source, destination)
+	}
+	writesBefore := journal.writes
+	materialized, err := MaterializePK3(pk3, gamedir, "KTX", journal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if writes := journal.writes - writesBefore; writes > 3 {
+		t.Fatalf("%d journal writes", writes)
+	}
+	for name, body := range members {
+		if data, err := os.ReadFile(filepath.Join(gamedir, filepath.FromSlash(name))); err != nil || string(data) != body {
+			t.Fatalf("%s: %q %v", name, data, err)
+		}
+	}
+	for _, file := range materialized.Files {
+		if info, err := os.Lstat(file.Path); err != nil || file.Identity != identityAt(file.Path, info) {
+			t.Fatalf("the journal does not hold the published %s", file.Path)
+		}
+	}
+	if entries, _ := os.ReadDir(mounted); len(entries) != 10 {
+		t.Fatalf("left beside the members: %v", entries)
+	}
+	materialized.Cleanup(func(warning string) { t.Error(warning) })
+}
+
+// A file system without hard links, such as exFAT, stops the session with
+// that reason, not with a file that never appeared.
+func TestMaterializeOnAFileSystemWithoutLinks(t *testing.T) {
+	journal := testJournal(t)
+	gamedir := filepath.Join(journal.Target, "qw")
+	os.MkdirAll(gamedir, 0o755)
+	pk3 := filepath.Join(gamedir, "ktx.pk3")
+	writePK3(t, pk3, payload(8))
+	saved := link
+	t.Cleanup(func() { link = saved })
+	link = func(source, destination string) error {
+		return &os.LinkError{Op: "link", Old: source, New: destination, Err: errors.New("operation not supported")}
+	}
+	if _, err := MaterializePK3(pk3, gamedir, "KTX", journal); err == nil || !strings.Contains(err.Error(), "hard links") {
+		t.Fatalf("got %v", err)
+	}
+	if entries, _ := os.ReadDir(gamedir); len(entries) != 1 {
+		t.Fatalf("left in the game folder: %v", entries)
+	}
+}
+
+// What a session that died while preparing left, at the game folder or
+// beside a member, goes with the next one, also in a folder whose name a
+// glob would read as a pattern.
+func TestMaterializeSweepsWhatADeadSessionLeft(t *testing.T) {
+	journal := testJournal(t)
+	gamedir := filepath.Join(journal.Target, "qw [old]")
+	os.MkdirAll(filepath.Join(gamedir, StagingPrefix+"dead", "payload"), 0o755)
+	os.MkdirAll(filepath.Join(gamedir, "locs"), 0o755)
+	os.WriteFile(filepath.Join(gamedir, "locs", StagingPrefix+"copy"), []byte("x"), 0o644)
+	pk3 := filepath.Join(gamedir, "ktx.pk3")
+	writePK3(t, pk3, payload(8))
+	materialized, err := MaterializePK3(pk3, gamedir, "KTX", journal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer materialized.Cleanup(nil)
+	for _, folder := range []string{gamedir, filepath.Join(gamedir, "locs")} {
+		entries, _ := os.ReadDir(folder)
+		for _, entry := range entries {
+			if strings.HasPrefix(entry.Name(), StagingPrefix) {
+				t.Fatalf("left: %s", filepath.Join(folder, entry.Name()))
+			}
+		}
 	}
 }

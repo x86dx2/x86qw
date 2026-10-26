@@ -271,7 +271,9 @@ removes only the staging area.
 
 When materializing for the dedicated server, the PK3 goes through that
 extraction into a staging folder beside MVDSV's context, and its members are
-published there as hard links, which never replace a file. The journal records
+published there as hard links, which never replace a file; a payload folder on
+another volume gets a copy beside its members first, and a file system without
+hard links, such as exFAT, stops the session with that reason. The journal records
 the whole payload in one write before any member is published, so a session
 that dies halfway is cleaned up on the next run. A different personal file is
 never overwritten. Personal

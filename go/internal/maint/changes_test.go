@@ -15,6 +15,9 @@ func TestChangesReportAddedModifiedAndDeletedFiles(t *testing.T) {
 	// Operational paths never show up.
 	write(t, filepath.Join(root, "qw", "demos", "other.mvd"), "demo")
 	write(t, filepath.Join(root, "ezquake", "temp", "x"), "temp")
+	// Nor what a hosting session prepares, or left when it died.
+	write(t, filepath.Join(root, "qw", ".x86qw_ktx_1234", "payload", "qwprogs.qvm"), "progs")
+	write(t, filepath.Join(root, "qw", "sound", ".x86qw_ktx_abcd"), "copy")
 	changes, err := InspectChanges(root)
 	if err != nil {
 		t.Fatal(err)
@@ -53,7 +56,7 @@ func TestGitignoreListsOperationalAndManagedPaths(t *testing.T) {
 		}
 		return false
 	}
-	for _, line := range []string{"/.x86qw", "/qw/demos", "/ezquake-nightly-x86_64.AppImage", "/qw/maps/x86qw-a.bsp", `/qw/progs/a\ b\[1\].mdl`} {
+	for _, line := range []string{"/.x86qw", "/qw/demos", "/ezquake-nightly-x86_64.AppImage", "/qw/maps/x86qw-a.bsp", `/qw/progs/a\ b\[1\].mdl`, ".x86qw_ktx_*"} {
 		if !has(line) {
 			t.Errorf("%q missing from .gitignore", line)
 		}
