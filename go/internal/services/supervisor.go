@@ -32,11 +32,14 @@ func (s *started) exited() (bool, int) {
 	return s.done, s.code
 }
 
+// notifySignals is signal.Notify; tests deliver the signals an OS would.
+var notifySignals = signal.Notify
+
 // RunProcesses starts specs in order, waits for readiness, marks the journal
 // running and supervises until a stop request, a child exit or a signal.
 func RunProcesses(specs []*Spec, journal *Journal, console *Console, output *os.File) (code int, err error) {
 	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, serviceSignals...)
+	notifySignals(signals, serviceSignals...)
 	defer signal.Stop(signals)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
