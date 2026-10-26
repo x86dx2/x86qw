@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -191,7 +192,12 @@ func knownComponents(o Options) error {
 func ReadRecipe(r io.Reader) (Options, error) {
 	// What the file leaves out keeps its default, not a zero.
 	file := recipeFile{Options: Defaults("", "")}
-	decoder := json.NewDecoder(io.LimitReader(r, 1<<20))
+	payload, err := io.ReadAll(io.LimitReader(r, 1<<20))
+	if err != nil {
+		return Options{}, fmt.Errorf("invalid recipe JSON: %w", err)
+	}
+	// PowerShell 5.1 and Windows editors start UTF-8 with a byte order mark.
+	decoder := json.NewDecoder(bytes.NewReader(bytes.TrimPrefix(payload, []byte("\xef\xbb\xbf"))))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&file); err != nil {
 		return Options{}, fmt.Errorf("invalid recipe JSON: %w", err)

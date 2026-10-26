@@ -29,6 +29,15 @@ func TestRecipeFillsWhatItLeavesOutWithTheDefaults(t *testing.T) {
 	}
 }
 
+// A recipe saved on Windows by PowerShell 5.1 (Set-Content -Encoding UTF8)
+// starts with a byte order mark; it is the same recipe.
+func TestARecipeWithAByteOrderMarkReads(t *testing.T) {
+	o, err := ReadRecipe(strings.NewReader("\xef\xbb\xbf" + `{"format": 1, "Intent": "play", "Nick": "p"}`))
+	if err != nil || o.Nick != "p" {
+		t.Fatalf("%v %+v", err, o)
+	}
+}
+
 // What the install could not carry out is refused up front: a mode or a
 // component that does not exist.
 func TestRecipeRefusesWhatItCannotInstall(t *testing.T) {
