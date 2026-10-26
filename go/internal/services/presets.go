@@ -140,6 +140,14 @@ func closedPreset(value any) (Preset, error) {
 		}
 		preset[field] = value
 	}
+	// The addresses go where a flag's would, so they hold what a flag takes.
+	for _, field := range []string{"bind", "qtv_bind", "proxy_bind"} {
+		address, err := BindAddress(preset[field].(string))
+		if err != nil {
+			return nil, fmt.Errorf("a preset's %s field is invalid", field)
+		}
+		preset[field] = address
+	}
 	if preset["game"] == "" || preset["map"] == "" {
 		return nil, errors.New("host preset requires game and map")
 	}
