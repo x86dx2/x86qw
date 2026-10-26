@@ -145,7 +145,7 @@ func RunProcesses(specs []*Spec, journal *Journal, console *Console, output *os.
 				}
 				console.Detail("QTV ready and answering over HTTP.")
 			case "udp":
-				if err := waitUDPReadiness(ctx, exited, spec.Readiness); err != nil {
+				if err := waitUDPReadiness(ctx, exited, spec.Readiness, command.Process.Pid); err != nil {
 					return failed(err)
 				}
 				console.Detail("QWFWD ready and holding the UDP port.")

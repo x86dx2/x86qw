@@ -50,18 +50,9 @@ func PreflightPorts(requests []PortRequest) error {
 			return errorf("Duplicate local port: %d was requested by %s and %s.", request.Port, previous, request.Label)
 		}
 		seen[request.Port] = request.Label
-		address := Endpoint(request.Address, request.Port)
-		var closer io.Closer
-		var err error
-		if request.Kind == "tcp" {
-			closer, err = net.Listen(network("tcp", request.Address), address)
-		} else {
-			closer, err = net.ListenPacket(network("udp", request.Address), address)
+		if portTaken(request.Kind, request.Address, request.Port) {
+			return errorf("Port %s for %s is not available.", Endpoint(request.Address, request.Port), request.Label)
 		}
-		if err != nil {
-			return errorf("Port %s for %s is not available.", address, request.Label)
-		}
-		closer.Close()
 	}
 	return nil
 }
@@ -133,7 +124,7 @@ func waitHTTPReadiness(ctx context.Context, exited func() bool, readiness *Readi
 
 // waitUDPReadiness waits until the runtime has been alive for 1 s and holds
 // the port.
-func waitUDPReadiness(ctx context.Context, exited func() bool, readiness *Readiness) error {
+func waitUDPReadiness(ctx context.Context, exited func() bool, readiness *Readiness, pid int) error {
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
 		if exited() {
@@ -143,11 +134,9 @@ func waitUDPReadiness(ctx context.Context, exited func() bool, readiness *Readin
 			return err
 		}
 	}
-	probe, err := net.ListenPacket(network("udp", readiness.Address), Endpoint(readiness.Address, readiness.Port))
-	if err != nil {
+	if udpHeldBy(readiness.Address, readiness.Port, pid) {
 		return nil
 	}
-	probe.Close()
 	return errorf("QWFWD stayed alive but did not take the requested UDP port.")
 }
 
@@ -160,7 +149,9 @@ func applyStartupRcon(ctx context.Context, startup *StartupRcon) error {
 	if err != nil {
 		return err
 	}
-	connection, err := net.ListenUDP(network("udp", startup.Address), nil)
+	// On the server's own address: a socket on every interface would make
+	// the firewall ask about x86QW itself.
+	connection, err := net.ListenUDP(network("udp", startup.Address), &net.UDPAddr{IP: destination.IP})
 	if err != nil {
 		return err
 	}

@@ -37,7 +37,8 @@ func fakeRuntime(t *testing.T, target, component string) {
 }
 
 // A QWFWD bound to every interface holds its port: on Windows a loopback
-// bind still succeeds beside it, so that is not the probe.
+// bind still succeeds beside it, so that is not the probe. A port nobody
+// took is not ready.
 func TestQWFWDOnEveryInterfaceIsReady(t *testing.T) {
 	target := t.TempDir()
 	fakeRuntime(t, target, "qwfwd")
@@ -46,12 +47,48 @@ func TestQWFWDOnEveryInterfaceIsReady(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer held.Close()
-	spec, err := ProxySpec(target, "0.0.0.0", held.LocalAddr().(*net.UDPAddr).Port)
+	port := held.LocalAddr().(*net.UDPAddr).Port
+	spec, err := ProxySpec(target, "0.0.0.0", port)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := waitUDPReadiness(context.Background(), func() bool { return false }, spec.Readiness); err != nil {
+	alive := func() bool { return false }
+	if err := waitUDPReadiness(context.Background(), alive, spec.Readiness, os.Getpid()); err != nil {
 		t.Fatal(err)
+	}
+	held.Close()
+	if err := waitUDPReadiness(context.Background(), alive, spec.Readiness, os.Getpid()); err == nil {
+		t.Fatal("a port nobody holds was taken for ready")
+	}
+}
+
+// The preflight sees a port another program holds on every interface, also
+// when the server asks for one address only: on Windows a bind to that
+// address would still succeed.
+func TestPreflightSeesAPortTakenOnEveryInterface(t *testing.T) {
+	udp, err := net.ListenPacket("udp4", "0.0.0.0:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer udp.Close()
+	tcp, err := net.Listen("tcp4", "0.0.0.0:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tcp.Close()
+	udpPort, tcpPort := udp.LocalAddr().(*net.UDPAddr).Port, tcp.Addr().(*net.TCPAddr).Port
+	for _, request := range []PortRequest{
+		{"MVDSV", "127.0.0.1", udpPort, "udp"}, {"MVDSV", "0.0.0.0", udpPort, "udp"},
+		{"QTV", "127.0.0.1", tcpPort, "tcp"}, {"QTV", "0.0.0.0", tcpPort, "tcp"},
+	} {
+		if err := PreflightPorts([]PortRequest{request}); err == nil {
+			t.Errorf("%s %s:%d was taken for free", request.Kind, request.Address, request.Port)
+		}
+	}
+	free, _ := net.ListenPacket("udp4", "127.0.0.1:0")
+	freePort := free.LocalAddr().(*net.UDPAddr).Port
+	free.Close()
+	if err := PreflightPorts([]PortRequest{{"MVDSV", "0.0.0.0", freePort, "udp"}}); err != nil {
+		t.Fatalf("a free port: %v", err)
 	}
 }

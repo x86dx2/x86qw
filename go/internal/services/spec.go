@@ -494,8 +494,6 @@ func ProxySpec(target, bind string, port int) (*Spec, error) {
 	}
 	return &Spec{
 		Label: "QWFWD", Arguments: []string{binary, fmt.Sprint(port), bind}, Cwd: directory, ExpectedSHA256: digest,
-		// The probe binds the very address QWFWD holds: on Windows a
-		// loopback bind succeeds beside a wildcard one.
 		Readiness:  &Readiness{Kind: "udp", Address: bind, Port: port},
 		Parameters: [][2]string{{"bind", bind}, {"port", fmt.Sprint(port)}, {"protocol", "UDP QuakeWorld"}},
 	}, nil
