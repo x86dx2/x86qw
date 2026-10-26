@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"runtime"
 	"slices"
 	"sort"
 	"strconv"
@@ -301,17 +302,32 @@ func (s Server) Validate() error {
 	return nil
 }
 
-// ShellJoin quotes arguments for a POSIX shell when they need it.
+// ShellJoin quotes arguments, when they need it, for the shell they are
+// pasted into: a POSIX shell, or on Windows PowerShell, where the installer
+// runs and a comma would split a list.
 func ShellJoin(args []string) string {
+	special, quote := " \t\"'$`\\!*?;&|<>()[]{}~#", func(arg string) string { return "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'" }
+	if runtime.GOOS == "windows" {
+		// PowerShell takes the typographic quotes for ' too; doubled, any of them is literal.
+		special = " \t\"'$`;&|<>()[]{}@#,%‘’‚‛“”„"
+		quote = func(arg string) string {
+			return "'" + strings.NewReplacer("'", "''", "‘", "‘‘", "’", "’’", "‚", "‚‚", "‛", "‛‛").Replace(arg) + "'"
+		}
+	}
 	out := make([]string, len(args))
 	for index, arg := range args {
-		if arg == "" || strings.ContainsAny(arg, " \t\"'$`\\!*?;&|<>()[]{}~#") {
-			out[index] = "'" + strings.ReplaceAll(arg, "'", `'\''`) + "'"
+		if arg == "" || strings.ContainsAny(arg, special) {
+			out[index] = quote(arg)
 		} else {
 			out[index] = arg
 		}
 	}
-	return strings.Join(out, " ")
+	line := strings.Join(out, " ")
+	// PowerShell runs a quoted program only through its call operator.
+	if runtime.GOOS == "windows" && len(args) > 0 && out[0] != args[0] {
+		line = "& " + line
+	}
+	return line
 }
 
 // Recipe is the command that repeats this installation without questions.

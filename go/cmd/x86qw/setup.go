@@ -173,7 +173,7 @@ func runSetup(args []string, stdout, stderr io.Writer) int {
 	if err := publishCLI(root, true, stdout); err != nil {
 		return failure(root, err, stderr)
 	}
-	fmt.Fprintf(stdout, "  Play now: %s play\n", here(root))
+	fmt.Fprintf(stdout, "  Play now: %s\n", setup.ShellJoin([]string{here(root), "play"}))
 	return output.ExitSuccess
 }
 
@@ -226,11 +226,11 @@ func runRecipe(backend *setup.Real, options setup.Options, yes bool, stdout, std
 	}
 	fmt.Fprintf(stdout, "✓ x86QW installed in %s\n", options.Target)
 	if options.Intent.WantsServer() {
-		fmt.Fprintf(stdout, "  Start the server: %s %s\n", here(options.Target), setup.ShellJoin(setup.HostCommand(options.Target, options)))
+		fmt.Fprintf(stdout, "  Start the server: %s\n", setup.ShellJoin(append([]string{here(options.Target)}, setup.HostCommand(options.Target, options)...)))
 		fmt.Fprintf(stdout, "  rcon: %s (kept in %s)\n", options.Server.Rcon, filepath.Join(options.Target, filepath.FromSlash(setup.RconFile)))
 	}
 	if options.Intent.WantsClient() {
-		fmt.Fprintf(stdout, "  Play now: %s play\n", here(options.Target))
+		fmt.Fprintf(stdout, "  Play now: %s\n", setup.ShellJoin([]string{here(options.Target), "play"}))
 	}
 	return output.ExitSuccess
 }

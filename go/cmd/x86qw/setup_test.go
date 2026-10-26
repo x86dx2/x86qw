@@ -76,9 +76,6 @@ func TestMatchArgsParseAsPlayFlags(t *testing.T) {
 // The command printed to run again with --yes, pasted into a shell, is the
 // same command: a value with spaces arrives whole and --yes comes once.
 func TestTheRetryCommandRunsAsPrinted(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX shell quoting")
-	}
 	withoutTerminal(t)
 	target := filepath.Join(t.TempDir(), "My Games", "x86qw")
 	var stdout, stderr bytes.Buffer
@@ -87,13 +84,19 @@ func TestTheRetryCommandRunsAsPrinted(t *testing.T) {
 	if !found {
 		t.Fatal(stderr.String())
 	}
-	words, err := exec.Command("sh", "-c", `printf '%s\n' `+retry).Output()
+	// sh prints the command word too; PowerShell, where the Windows
+	// installer runs, hands the function only its arguments.
+	paste, skip := exec.Command("sh", "-c", `printf '%s\n' `+retry), 1
+	if runtime.GOOS == "windows" {
+		paste, skip = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "function x86qw { $args }; "+retry), 0
+	}
+	words, err := paste.Output()
 	if err != nil {
 		t.Fatal(err)
 	}
 	var again []string
 	yes := 0
-	for _, word := range strings.Split(strings.TrimSuffix(string(words), "\n"), "\n")[1:] {
+	for _, word := range strings.Split(strings.TrimSuffix(strings.ReplaceAll(string(words), "\r\n", "\n"), "\n"), "\n")[skip:] {
 		if word == "--yes" {
 			yes++ // left out, so nothing installs
 			continue
