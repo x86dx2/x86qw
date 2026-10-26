@@ -42,7 +42,8 @@ type gameState struct {
 	actingOn  screen
 	actionErr error
 	errOn     screen
-	subject   string // what the action is about, for the toast after it
+	subject   string      // what the action is about, for the toast after it
+	played    setup.Match // the match Play launched, the last one once open
 }
 
 type matchCatalogMsg struct {
@@ -192,9 +193,9 @@ func (m *Model) gameUpdate(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		switch msg.what {
 		case "play":
-			m.say(fmt.Sprintf(m.t("played"), m.matchTitle()))
+			m.say(fmt.Sprintf(m.t("played"), g.subject))
 			if g.catalog != nil {
-				last := g.match
+				last := g.played
 				g.catalog.Last = &last
 			}
 		case "join":
@@ -555,7 +556,8 @@ func (m *Model) activateMatch(id string) tea.Cmd {
 		return nil
 	}
 	backend, target, match := m.cfg.Backend, m.target(), m.game.match
-	m.game.mapNote = ""
+	// The match can change while ezQuake opens; the toast names this one.
+	m.game.mapNote, m.game.subject, m.game.played = "", m.matchTitle(), match
 	return m.act("play", func(ctx context.Context) error { return backend.Play(ctx, target, match) })
 }
 

@@ -124,6 +124,31 @@ func TestMatchDrawsBeforeItsCatalog(t *testing.T) {
 	drive(m, key("enter"), key("p"))
 }
 
+// The match can change while ezQuake opens: the toast and the last match
+// are still the one launched.
+func TestPlayRemembersTheMatchLaunched(t *testing.T) {
+	m := onMatch(t)
+	launched, title := m.game.match, m.matchTitle()
+	_, cmd := m.Update(key("p"))
+	if m.game.acting != "play" {
+		t.Fatalf("acting %q", m.game.acting)
+	}
+	m.openModal("m.mode")
+	for _, row := range m.gameModalRows() {
+		if row.id == "mode.4on4" {
+			row.activate()
+		}
+	}
+	m.closeModal(true)
+	if m.game.match.Mode == launched.Mode {
+		t.Fatal("the match did not change")
+	}
+	drive(m, run(cmd)...)
+	if !strings.Contains(m.toast, title) || m.game.catalog.Last == nil || m.game.catalog.Last.Mode != launched.Mode {
+		t.Fatalf("launched %s, toast %q, last %+v", title, m.toast, m.game.catalog.Last)
+	}
+}
+
 // listed is the demo with servers of its own on the list.
 type listed struct {
 	*setup.Demo
