@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/play"
+	"golang.org/x/text/unicode/norm"
 )
 
 // Intent is what the person wants to do with x86QW.
@@ -120,6 +121,17 @@ func NameRune(r rune) bool { return r >= ' ' && r != '"' && r != '\\' && r != ';
 // The game sends names as bytes of the Quake charset, which has no accents,
 // so "Nélson" would reach the other players garbled.
 func PlainRune(r rune) bool { return r < 0x7f && NameRune(r) }
+
+// PlainName keeps the PlainRune runes of a name saved before names were
+// checked: "Zé" becomes "Ze", so older choices and recipes still work.
+func PlainName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if PlainRune(r) {
+			return r
+		}
+		return -1
+	}, norm.NFD.String(name))
+}
 
 // KeyName reports whether key can be bound in the client: one visible ASCII
 // character but the quote, or a key name such as space, uparrow or mouse2.

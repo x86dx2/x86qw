@@ -103,6 +103,7 @@ func LoadChoices(target string) (*Options, error) {
 		return nil, problem("", "err.choices", err.Error())
 	}
 	options.Target = target
+	options.Nick, options.Server.Name = PlainName(options.Nick), PlainName(options.Server.Name)
 	return &options, nil
 }
 

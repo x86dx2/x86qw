@@ -207,6 +207,7 @@ func ReadRecipe(r io.Reader) (Options, error) {
 	}
 	o := file.Options
 	o.Target, o.Upgrade = "", false
+	o.Nick, o.Server.Name = PlainName(o.Nick), PlainName(o.Server.Name)
 	if o.Server.Rcon == "" {
 		o.Server.Rcon = Password(14)
 	}

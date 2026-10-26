@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -110,5 +111,27 @@ func TestRecipeServersFollowTheModeCatalog(t *testing.T) {
 	o, err := parseRecipe([]string{"--intent", "host", "--servers", "1on1:dm6"})
 	if err != nil || o.Server.Instances[0].Mode != "duel" {
 		t.Fatalf("%+v %v", o.Server.Instances, err)
+	}
+}
+
+// Names saved before they were kept to ASCII lose their accents, not the
+// installation: older choices and recipes still validate.
+func TestOldAccentedNamesLoadPlain(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "x86qw")
+	o := Defaults(Both, target)
+	o.Nick, o.Server.Name = "Nélson", "Servidor do Zé"
+	if err := SaveChoices(target, o); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadChoices(target)
+	if err != nil || loaded.Nick != "Nelson" || loaded.Server.Name != "Servidor do Ze" {
+		t.Fatalf("choices: %+v %v", loaded, err)
+	}
+	if err := loaded.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	recipe, err := ReadRecipe(strings.NewReader(`{"format":1,"intent":"play","nick":"Zé"}`))
+	if err != nil || recipe.Nick != "Ze" {
+		t.Fatalf("recipe: %+v %v", recipe, err)
 	}
 }
