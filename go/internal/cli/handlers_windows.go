@@ -93,7 +93,13 @@ func setHandlers(root string, links, demos bool) error {
 		return errors.Join(errs...)
 	}
 	for _, extension := range []string{".mvd", ".qwd"} {
-		key, _, err := registry.CreateKey(registry.CURRENT_USER, classes+extension, registry.QUERY_VALUE|registry.SET_VALUE)
+		key, err := registry.OpenKey(registry.CURRENT_USER, classes+extension, registry.QUERY_VALUE|registry.SET_VALUE)
+		if demos && errors.Is(err, registry.ErrNotExist) {
+			key, _, err = registry.CreateKey(registry.CURRENT_USER, classes+extension, registry.QUERY_VALUE|registry.SET_VALUE)
+		}
+		if errors.Is(err, registry.ErrNotExist) {
+			continue
+		}
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -104,6 +110,12 @@ func setHandlers(root string, links, demos bool) error {
 			errs = append(errs, key.SetStringValue("", demoProgID))
 		case !demos && current == demoProgID:
 			errs = append(errs, key.DeleteValue(""))
+			// A key left with nothing in it was ours alone.
+			if info, err := key.Stat(); err == nil && info.SubKeyCount == 0 && info.ValueCount == 0 {
+				key.Close()
+				errs = append(errs, registry.DeleteKey(registry.CURRENT_USER, classes+extension))
+				continue
+			}
 		}
 		key.Close()
 	}

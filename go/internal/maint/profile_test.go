@@ -6,7 +6,6 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/fspath"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -116,9 +115,6 @@ func TestProfileRestoreRejectsTamperedBackups(t *testing.T) {
 // A destination that is a symlink stops the restore and rolls back what
 // it already wrote.
 func TestProfileRestoreRollsBackOnASymlinkedDestination(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symbolic links need a privilege on Windows")
-	}
 	root := profiled(t)
 	archive := filepath.Join(t.TempDir(), "profile.zip")
 	if _, err := BackupProfile(root, archive); err != nil {
@@ -129,7 +125,7 @@ func TestProfileRestoreRollsBackOnASymlinkedDestination(t *testing.T) {
 	write(t, outside, "fora\n")
 	os.Remove(filepath.Join(root, "qw", "x86qw-ktx-user.cfg"))
 	if err := os.Symlink(outside, filepath.Join(root, "qw", "x86qw-ktx-user.cfg")); err != nil {
-		t.Fatal(err)
+		t.Skip(err)
 	}
 	if _, err := RestoreProfile(archive, root); err == nil || !strings.Contains(err.Error(), "symlink") {
 		t.Fatalf("a link should stop the restore: %v", err)

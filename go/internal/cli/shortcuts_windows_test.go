@@ -106,7 +106,20 @@ func TestWindowsHandlersComeAndGo(t *testing.T) {
 			deleteTree(classes + key)
 		}
 	})
+	extensionKeys := func() bool {
+		for _, extension := range []string{".mvd", ".qwd"} {
+			if k, err := registry.OpenKey(registry.CURRENT_USER, classes+extension, registry.QUERY_VALUE); err == nil {
+				k.Close()
+				return true
+			}
+		}
+		return false
+	}
 	root := t.TempDir()
+	// Turning off what was never on leaves the registry as it was.
+	if err := SetHandlers(root, false, false); err != nil || extensionKeys() {
+		t.Fatalf("turning demos off created .mvd or .qwd: %v", err)
+	}
 	if err := SetHandlers(root, true, true); err != nil {
 		t.Fatal(err)
 	}
@@ -126,6 +139,9 @@ func TestWindowsHandlersComeAndGo(t *testing.T) {
 	}
 	if _, exists := ownedCommand(classes+"qw", root); exists {
 		t.Fatal("qw:// should be gone")
+	}
+	if extensionKeys() {
+		t.Fatal(".mvd and .qwd should be gone with the demo type")
 	}
 }
 

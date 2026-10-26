@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -112,16 +111,13 @@ func TestLibraryRejectsBadAddressesAndDocuments(t *testing.T) {
 }
 
 func TestLibraryRefusesASymlink(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symbolic links need a privilege on Windows")
-	}
 	root := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "fora.json")
 	write(t, outside, `{"format": 1, "kind": "library", "favorites": [], "recents": []}`)
 	path := filepath.Join(root, filepath.FromSlash(LibraryPath))
 	os.MkdirAll(filepath.Dir(path), 0o755)
 	if err := os.Symlink(outside, path); err != nil {
-		t.Fatal(err)
+		t.Skip(err)
 	}
 	if err := AddFavorite(root, "a.example:27500", time.Now()); err == nil {
 		t.Fatal("a write through a link was accepted")
