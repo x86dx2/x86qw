@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -18,7 +19,72 @@ import (
 var (
 	getConsoleWindow = windows.NewLazySystemDLL("kernel32.dll").NewProc("GetConsoleWindow")
 	isWindowVisible  = windows.NewLazySystemDLL("user32.dll").NewProc("IsWindowVisible")
+	createWindowEx   = windows.NewLazySystemDLL("user32.dll").NewProc("CreateWindowExW")
+	showWindow       = windows.NewLazySystemDLL("user32.dll").NewProc("ShowWindow")
+	peekMessage      = windows.NewLazySystemDLL("user32.dll").NewProc("PeekMessageW")
+	dispatchMessage  = windows.NewLazySystemDLL("user32.dll").NewProc("DispatchMessageW")
 )
+
+// TestWindowHelper is the server TestBackgroundServersShowNoWindow starts.
+// Like MVDSV, it opens a window visible from creation, shows it again and
+// runs its message loop; it reports whether the window still shows after
+// a few seconds.
+func TestWindowHelper(t *testing.T) {
+	report := os.Getenv("X86QW_TEST_WINDOW_REPORT")
+	if report == "" {
+		t.Skip("run by TestBackgroundServersShowNoWindow")
+	}
+	class, _ := windows.UTF16PtrFromString("STATIC")
+	const visibleOverlappedWindow, showNormal, remove = 0x10CF0000, 1, 1
+	window, _, _ := createWindowEx.Call(0, uintptr(unsafe.Pointer(class)), 0, visibleOverlappedWindow, 0, 0, 200, 100, 0, 0, 0, 0)
+	showWindow.Call(window, showNormal)
+	var message [64]byte
+	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		for {
+			if got, _, _ := peekMessage.Call(uintptr(unsafe.Pointer(&message)), 0, 0, 0, remove); got == 0 {
+				break
+			}
+			dispatchMessage.Call(uintptr(unsafe.Pointer(&message)))
+		}
+	}
+	visible, _, _ := isWindowVisible.Call(window)
+	os.WriteFile(report, []byte(fmt.Sprintf("visible=%v", window != 0 && visible != 0)), 0o644)
+}
+
+// windowReport starts that server as the supervisor does, output being the
+// session's log, and returns what it reported.
+func windowReport(t *testing.T, output *os.File) string {
+	t.Helper()
+	report := filepath.Join(t.TempDir(), "report")
+	t.Setenv("X86QW_TEST_WINDOW_REPORT", report)
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	command, err := startDetached([]string{self, "-test.run=^TestWindowHelper$"}, filepath.Dir(report), output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command.Wait()
+	data, _ := os.ReadFile(report)
+	return string(data)
+}
+
+// A server of a background session opens no window of its own either:
+// MVDSV's, closed, ends the whole stack. A foreground one keeps it.
+func TestBackgroundServersShowNoWindow(t *testing.T) {
+	if got := windowReport(t, nil); got != "visible=true" {
+		t.Skipf("this session shows no windows to tell apart (%s)", got)
+	}
+	log, err := os.Create(filepath.Join(t.TempDir(), "log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+	if got := windowReport(t, log); got != "visible=false" {
+		t.Fatalf("a server of a background session: %s", got)
+	}
+}
 
 // TestConsoleWindowHelper plays the two parts TestServersOpenNoConsoleWindow
 // starts: a background controller, which starts a server stand-in the way

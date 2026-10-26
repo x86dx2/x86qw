@@ -408,7 +408,13 @@ func HostSpec(target string, o *HostOptions, hosted *Hosted, session *Session, j
 	session.Temporary = append(session.Temporary, postConfig)
 	arguments := []string{binary, "-basedir", target}
 	arguments = append(arguments, game.DedicatedArguments...)
-	arguments = append(arguments, "-ip", o.Bind, "-port", fmt.Sprint(o.Port), "-mem", "64", "+exec", filepath.Base(sessionConfig.Path))
+	arguments = append(arguments, "-ip", o.Bind, "-port", fmt.Sprint(o.Port), "-mem", "64")
+	if runtime.GOOS == "windows" {
+		// MVDSV's Windows build stops on a fatal error behind a message box
+		// nobody sees in a background session; this makes it exit instead.
+		arguments = append(arguments, "-noerrormsgbox")
+	}
+	arguments = append(arguments, "+exec", filepath.Base(sessionConfig.Path))
 	mvdLabel := "automatic"
 	if o.NoMVD {
 		mvdLabel = "off"

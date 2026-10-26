@@ -233,7 +233,47 @@ func startDetached(arguments []string, dir string, output *os.File) (*exec.Cmd, 
 	if err := resumeMainThread(pid); err != nil {
 		return rollback(err, true)
 	}
+	// A background session (output is its log) shows no server window.
+	if output != nil {
+		go hideWindows(uint32(pid))
+	}
 	return command, nil
+}
+
+var (
+	enumWindows     = windows.NewLazySystemDLL("user32.dll").NewProc("EnumWindows")
+	showWindowAsync = windows.NewLazySystemDLL("user32.dll").NewProc("ShowWindowAsync")
+	// hideWindow hides the visible windows of the process its parameter
+	// names; one callback serves every server, as callbacks are never freed.
+	hideWindow = sync.OnceValue(func() uintptr {
+		return windows.NewCallback(func(window windows.HWND, pid uintptr) uintptr {
+			var owner uint32
+			windows.GetWindowThreadProcessId(window, &owner)
+			if uintptr(owner) == pid && windows.IsWindowVisible(window) {
+				showWindowAsync.Call(uintptr(window), windows.SW_HIDE)
+			}
+			return 1
+		})
+	})
+)
+
+// hideWindows hides what pid shows during its first seconds. MVDSV opens a
+// window of its own, visible from creation whatever the STARTUPINFO says,
+// and closing it ends the whole stack; MVDSV itself hides it the same way
+// when it starts minimized.
+func hideWindows(pid uint32) {
+	// The open handle keeps pid from naming another process meanwhile.
+	process, err := windows.OpenProcess(windows.SYNCHRONIZE, false, pid)
+	if err != nil {
+		return
+	}
+	defer windows.CloseHandle(process)
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
+		enumWindows.Call(hideWindow(), uintptr(pid))
+		if event, _ := windows.WaitForSingleObject(process, 50); event != uint32(windows.WAIT_TIMEOUT) {
+			return
+		}
+	}
 }
 
 // stopGroups terminates the services in reverse order, waits up to four
