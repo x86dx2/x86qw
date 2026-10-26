@@ -30,6 +30,16 @@ const openDemoAge = 7 * 24 * time.Hour
 // under a name made from its content, so nothing the file was called
 // reaches the console. An item that is neither is a cliargs.UsageError.
 func OpenArguments(target, item string) ([]string, error) {
+	return openArguments(target, item, true)
+}
+
+// DryOpenArguments are the OpenArguments of a dry run: nothing is copied
+// into qw/demos or pruned from it.
+func DryOpenArguments(target, item string) ([]string, error) {
+	return openArguments(target, item, false)
+}
+
+func openArguments(target, item string, write bool) ([]string, error) {
 	if strings.HasPrefix(strings.ToLower(item), "qw://") {
 		address := "qw://" + item[len("qw://"):]
 		if !qwURL.MatchString(address) || strings.Contains(address, "@") && !strings.HasSuffix(address, "/qtvplay") {
@@ -77,6 +87,9 @@ func OpenArguments(target, item string) ([]string, error) {
 	}
 	digest := sha256.Sum256(payload)
 	name := "x86qw-open-" + hex.EncodeToString(digest[:6]) + extension
+	if !write {
+		return []string{"+playdemo", "demos/" + name}, nil
+	}
 	demos := filepath.Join(target, "qw", "demos")
 	if err := os.MkdirAll(demos, 0o755); err != nil {
 		return nil, err

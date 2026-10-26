@@ -40,7 +40,11 @@ func runOpen(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return usageFailure("open", err, stderr)
 	}
-	extra, err := play.OpenArguments(root, item)
+	openArguments := play.OpenArguments
+	if a.dryRun {
+		openArguments = play.DryOpenArguments
+	}
+	extra, err := openArguments(root, item)
 	if cliargs.IsUsage(err) {
 		return usageFailure("open", err, stderr)
 	}
