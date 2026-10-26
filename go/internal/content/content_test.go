@@ -44,6 +44,26 @@ func TestCheckoutInventoriesValidate(t *testing.T) {
 	}
 }
 
+// The client refuses a stable ezQuake version with a leading zero.
+func TestCatalogRefusesStableVersionsTheClientRejects(t *testing.T) {
+	project := NewProject(repoRoot(t))
+	catalog, err := LoadJSONObject(project.Path(CatalogPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pkg := range objects(catalog.Value("packages")) {
+		if pyjson.Eq(pkg.Value("component"), "ezquake") && pyjson.Eq(pkg.Value("channel"), "stable") {
+			version := pkg.Value("version").(string)
+			pkg.Set("version", "0"+version)
+			pkg.Set("distribution_path", strings.Replace(pkg.Value("distribution_path").(string), "/"+version+"/", "/0"+version+"/", 1))
+			break
+		}
+	}
+	if _, err := project.ValidateCatalog(catalog); err == nil || !strings.Contains(err.Error(), ".version is invalid for ezquake stable") {
+		t.Fatalf("a stable version with a leading zero was not refused: %v", err)
+	}
+}
+
 // A catalog entry served from dist must describe that file, or installs fail.
 func TestCatalogPackagesMatchTheirDistributionFiles(t *testing.T) {
 	manifest := object("files", object("clients/a.zip", object("size", pyjson.Number("3"), "sha256", strings.Repeat("a", 64))))
