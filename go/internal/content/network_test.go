@@ -528,7 +528,7 @@ func TestCommitSequence(t *testing.T) {
 		switch strings.Join(args, " ") {
 		case "git status --porcelain":
 			return []byte(" M dist/manifest.json\n"), nil
-		case "git diff --cached --name-only":
+		case "git diff --cached --name-only -- dist maintenance/inventory maintenance/recipes site/public/api/v1/catalog.json":
 			return []byte("dist/manifest.json\n"), nil
 		case "git remote":
 			return []byte("origin\ngitlab\n"), nil
@@ -542,8 +542,8 @@ func TestCommitSequence(t *testing.T) {
 	expected := []string{
 		"git status --porcelain",
 		"git add dist maintenance/inventory maintenance/recipes site/public/api/v1/catalog.json",
-		"git diff --cached --name-only",
-		"git commit -m chore(distribution): update preserved upstreams",
+		"git diff --cached --name-only -- dist maintenance/inventory maintenance/recipes site/public/api/v1/catalog.json",
+		"git commit -m chore(distribution): update preserved upstreams -- dist maintenance/inventory maintenance/recipes site/public/api/v1/catalog.json",
 		"git push origin HEAD",
 		"git remote",
 		"git push gitlab HEAD",

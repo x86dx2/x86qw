@@ -429,10 +429,12 @@ func (p *Project) Commit(out io.Writer, message string, push bool) error {
 		fmt.Fprintln(out, "[OK] No changes to record in Git.")
 		return nil
 	}
-	if _, err := p.command(nil, "git", "add", "dist", "maintenance/inventory", "maintenance/recipes", CatalogPath); err != nil {
+	// The pathspec keeps whatever else the maintainer staged out of the commit.
+	paths := []string{"dist", "maintenance/inventory", "maintenance/recipes", CatalogPath}
+	if _, err := p.command(nil, "git", append([]string{"add"}, paths...)...); err != nil {
 		return err
 	}
-	staged, err := p.command(nil, "git", "diff", "--cached", "--name-only")
+	staged, err := p.command(nil, "git", append([]string{"diff", "--cached", "--name-only", "--"}, paths...)...)
 	if err != nil {
 		return err
 	}
@@ -442,7 +444,7 @@ func (p *Project) Commit(out io.Writer, message string, push bool) error {
 	if message == "" {
 		message = "chore(distribution): update preserved upstreams"
 	}
-	if _, err := p.command(nil, "git", "commit", "-m", message); err != nil {
+	if _, err := p.command(nil, "git", append([]string{"commit", "-m", message, "--"}, paths...)...); err != nil {
 		return err
 	}
 	if push {

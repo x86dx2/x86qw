@@ -79,6 +79,40 @@ func TestCheckLFS(t *testing.T) {
 	}
 }
 
+// commit records the distribution only; what the maintainer staged before
+// stays staged.
+func TestCommitTakesOnlyTheDistribution(t *testing.T) {
+	isolateGit(t)
+	dir := t.TempDir()
+	gitRun(t, dir, "init", "-q")
+	gitRun(t, dir, "config", "user.name", "t")
+	gitRun(t, dir, "config", "user.email", "t@example.invalid")
+	write := func(name, text string) {
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		os.MkdirAll(filepath.Dir(path), 0o755)
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"dist/a.txt", "go/unrelated.go", "maintenance/inventory/x.json", "maintenance/recipes/x.json", CatalogPath} {
+		write(name, "v1\n")
+	}
+	gitRun(t, dir, "add", ".")
+	gitRun(t, dir, "commit", "-q", "-m", "base")
+	write("dist/a.txt", "v2\n")
+	write("go/unrelated.go", "v2\n")
+	gitRun(t, dir, "add", "go/unrelated.go")
+	if err := NewProject(dir).Commit(&bytes.Buffer{}, "", false); err != nil {
+		t.Fatal(err)
+	}
+	if files := gitRun(t, dir, "show", "--name-only", "--format=", "HEAD"); files != "dist/a.txt" {
+		t.Fatalf("the distribution commit holds:\n%s", files)
+	}
+	if staged := gitRun(t, dir, "diff", "--cached", "--name-only"); staged != "go/unrelated.go" {
+		t.Fatalf("the staged file was taken: %q", staged)
+	}
+}
+
 func TestCommittedDiffCheck(t *testing.T) {
 	isolateGit(t)
 	dir := t.TempDir()
