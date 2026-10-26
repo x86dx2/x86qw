@@ -16,8 +16,10 @@ import (
 
 const demoProgID = "x86qw.demo"
 
+// handlerCommand ends the options before the link: a quote in it would
+// otherwise let it add its own --target.
 func handlerCommand(root string) string {
-	return fmt.Sprintf(`"%s" open --target "%s" "%%1"`, Command(root), root)
+	return fmt.Sprintf(`"%s" open --target "%s" -- "%%1"`, Command(root), root)
 }
 
 // ownedCommand reports whether the open command under key launches root:
