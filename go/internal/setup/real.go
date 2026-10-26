@@ -2,7 +2,6 @@ package setup
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/catalog"
+	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/doctor"
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/lock"
@@ -161,7 +161,7 @@ func kind(component catalog.Component) string {
 // back, without sizes, with the reason in Unavailable: an installation
 // still opens to play and host.
 func (r *Real) Catalog(ctx context.Context) (*Catalog, error) {
-	out := &Catalog{Profiles: map[string][]string{}, ClientSize: map[string]int64{}}
+	out := &Catalog{Profiles: map[string][]string{}}
 	var inv *catalog.Inventory
 	if err := r.load(); err != nil {
 		out.Unavailable = unavailable(err)
@@ -193,9 +193,9 @@ func (r *Real) Catalog(ctx context.Context) (*Catalog, error) {
 		if core, err := cat.ComponentPackage(corePackage, []string{"core"}); err == nil {
 			out.CoreSize = core.Size
 		}
-		for _, spec := range catalog.ClientSpecs {
+		if spec, err := r.spec(); err == nil {
 			if releases, err := cat.ClientReleases(spec, "stable"); err == nil && len(releases) > 0 {
-				out.ClientSize[spec.Platform] = releases[0].Size
+				out.ClientSize = releases[0].Size
 			}
 		}
 	}
@@ -208,6 +208,9 @@ func (r *Real) Catalog(ctx context.Context) (*Catalog, error) {
 	}
 	return out, nil
 }
+
+// HostPlatform is this machine's catalog platform: macos, linux or windows.
+func HostPlatform() string { return install.HostPlatform() }
 
 // Installed reports whether target holds an x86QW installation: its state
 // or a client receipt. What a rolled-back install leaves in .x86qw is not.
@@ -224,7 +227,7 @@ func (r *Real) Existing(ctx context.Context, target string) (*Existing, error) {
 	if !Installed(target) {
 		return nil, nil
 	}
-	existing := &Existing{Target: target, CLIVersion: cliVersion(target)}
+	existing := &Existing{Target: target, CLIVersion: cli.InstalledVersion(target)}
 	components, _ := receipt.LoadComponents(target)
 	existing.Components = len(components)
 	for _, record := range components {
@@ -284,21 +287,6 @@ func (r *Real) idsByLabel() map[string]string {
 	return ids
 }
 
-// cliVersion reads the version the installed CLI's receipt records.
-func cliVersion(target string) string {
-	payload, err := os.ReadFile(filepath.Join(target, ".x86qw", "cli", "receipt"))
-	if err != nil {
-		return ""
-	}
-	var cli struct {
-		Version string `json:"version"`
-	}
-	if json.Unmarshal(payload, &cli) != nil {
-		return ""
-	}
-	return cli.Version
-}
-
 // Network detects the addresses.
 func (r *Real) Network(ctx context.Context) Network { return DetectNetwork(ctx) }
 
@@ -327,7 +315,7 @@ func (r *Real) required(options Options) int64 {
 	if err != nil {
 		return 0
 	}
-	total := cat.CoreSize + cat.ClientSize[r.platform()]
+	total := cat.CoreSize + cat.ClientSize
 	for _, id := range Selected(cat, options) {
 		for _, component := range cat.Components {
 			if component.ID == id {
@@ -390,6 +378,10 @@ func (r *Real) checkFolder(o Options) found {
 		check.State, check.Detail = CheckFailed, Say("folder.relative")
 		return check
 	}
+	if play.CheckBasedir(o.Target) != nil {
+		check.State, check.Detail = CheckFailed, Say("folder.plus")
+		return check
+	}
 	if Installed(o.Target) {
 		check.Detail = Say("folder.existing")
 		if held, err := lock.Acquire(o.Target, "setup"); err != nil {
@@ -408,7 +400,7 @@ func (r *Real) checkFolder(o Options) found {
 		check.State, check.Detail = CheckFailed, Raw(err.Error())
 	case len(entries) > 0:
 		check.State, check.Value = CheckWarning, Say("folder.full")
-		check.Detail = Say("folder.full.d", shortPath(o.Target), len(entries))
+		check.Detail = Say("folder.full.d", ShortPath(o.Target), len(entries))
 		check.Fix = Say("folder.full.fix")
 	default:
 		check.Detail = Say("folder.empty")
@@ -420,7 +412,7 @@ func (r *Real) checkFolder(o Options) found {
 		probe, err := os.CreateTemp(parent, ".x86qw-setup-*")
 		if err != nil {
 			check.State, check.Value = CheckFailed, Say("folder.denied")
-			check.Detail = Say("folder.denied.d", shortPath(parent))
+			check.Detail = Say("folder.denied.d", ShortPath(parent))
 			check.Fix = Say("folder.other")
 			return check
 		}
@@ -536,7 +528,8 @@ func checkPorts(o Options) found {
 	return check
 }
 
-func shortPath(path string) string {
+// ShortPath writes the home folder at the start of path as ~.
+func ShortPath(path string) string {
 	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(path, home) {
 		return "~" + strings.TrimPrefix(path, home)
 	}
@@ -607,7 +600,7 @@ func (r *Real) Install(ctx context.Context, options Options, control <-chan bool
 	for _, component := range cat.Components {
 		sizes[component.ID] = component.Size
 	}
-	lanes := []Lane{{ID: corePackage, Label: labels[corePackage], Size: cat.CoreSize}, {ID: "client", Label: labels["client"], Size: cat.ClientSize[r.platform()]}}
+	lanes := []Lane{{ID: corePackage, Label: labels[corePackage], Size: cat.CoreSize}, {ID: "client", Label: labels["client"], Size: cat.ClientSize}}
 	resolved, err := r.inv.Resolve(selected)
 	if err != nil {
 		return failed(err)
@@ -694,16 +687,17 @@ func (r *Real) apply(ctx context.Context, options Options, control <-chan bool) 
 		lanes = append(lanes, Lane{ID: id, Label: label, Size: *row.Size})
 	}
 	in := r.planInput(target)
+	// state.json records the content chosen here, so `x86qw upgrade` plans
+	// from it; the apply writes it even when nothing new installs.
+	if cat, err := r.Catalog(ctx); err == nil {
+		in.Profile, in.Requested = r.profileFor(Selected(cat, options), options)
+	}
 	return track(ctx, newTracker(lanes, labels), control, func(ctx context.Context) ([]Text, error) {
-		var warnings []Text
-		if len(planned.Operations) > 0 {
-			result, err := install.Apply(ctx, "upgrade", in, planned)
-			if err != nil {
-				return nil, err
-			}
-			warnings = rawTexts(result.Warnings)
+		result, err := install.Apply(ctx, "upgrade", in, planned)
+		if err != nil {
+			return nil, err
 		}
-		return append(warnings, r.finish(target, options)...), nil
+		return append(rawTexts(result.Warnings), r.finish(target, options)...), nil
 	})
 }
 
@@ -739,7 +733,12 @@ func (r *Real) finish(target string, options Options) []Text {
 		note("warn.presets", SaveServerPresets(target, options))
 	}
 	if r.Publish != nil {
-		note("warn.cli", r.Publish(target))
+		// A running server holds the lock: then the CLI stays as it is, or
+		// its lock would look stale.
+		if held, err := lock.Acquire(target, "install"); err == nil {
+			note("warn.cli", r.Publish(target))
+			held.Release()
+		}
 	}
 	if r.Integrate != nil {
 		note("warn.integ", r.Integrate(target, options.Integration))

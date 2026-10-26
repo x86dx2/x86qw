@@ -10,9 +10,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/download"
+	"github.com/x86dx2/x86qw/go/internal/fspath"
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 )
@@ -38,14 +40,16 @@ func (r *Report) warn(format string, args ...any) {
 	r.Warnings = append(r.Warnings, fmt.Sprintf(format, args...))
 }
 
+// cliPaths are the CLI and its metadata in target. At the root only regular
+// files count: a folder named x86qw, another installation say, is not the CLI.
 func cliPaths(target string) []string {
-	return []string{
-		cli.Command(target),
-		filepath.Join(target, ".x86qw", "cli"),
-		filepath.Join(target, filepath.FromSlash(legacyCLIReceipt)),
-		filepath.Join(target, "x86qw.sh"),
-		filepath.Join(target, "x86qw.cmd"),
+	paths := []string{filepath.Join(target, ".x86qw", "cli"), filepath.Join(target, filepath.FromSlash(legacyCLIReceipt))}
+	for _, path := range []string{cli.Command(target), filepath.Join(target, "x86qw.sh"), filepath.Join(target, "x86qw.cmd")} {
+		if regular(path) {
+			paths = append(paths, path)
+		}
 	}
+	return paths
 }
 
 func lexists(path string) bool {
@@ -86,16 +90,20 @@ func removeComponent(target, id string, report *Report) (int, error) {
 		return 0, err
 	}
 	removed := 0
+	root := fspath.Resolve(target)
 	for _, entry := range record.Inventory.Entries {
 		path := filepath.Join(target, filepath.FromSlash(entry.Path))
 		info, err := os.Lstat(path)
 		if err != nil {
 			continue
 		}
-		if !info.Mode().IsRegular() {
-			return removed, fmt.Errorf("Invalid managed path: %s", path)
+		if !info.Mode().IsRegular() || !fspath.Inside(fspath.Resolve(path), root) {
+			// A link or folder the user put there is theirs, like an edit,
+			// and so is wherever a linked folder leads.
+			report.warn("Modified file kept: %s", path)
+			continue
 		}
-		if digest, _ := fileSHA256(path); digest == entry.SHA256 {
+		if digest, _ := archive.FileSHA256(path); digest == entry.SHA256 {
 			if err := os.Remove(path); err != nil {
 				return removed, err
 			}
@@ -137,7 +145,7 @@ func Uninstall(target string) (*Report, error) {
 	preserved := map[string]string{}
 	for _, relative := range []string{"id1/pak0.pak", "id1/pak1.pak", "ezquake/configs/config.cfg"} {
 		if path := filepath.Join(target, filepath.FromSlash(relative)); regular(path) {
-			preserved[relative], _ = fileSHA256(path)
+			preserved[relative], _ = archive.FileSHA256(path)
 		}
 	}
 	var removal []string
@@ -191,7 +199,7 @@ func Uninstall(target string) (*Report, error) {
 		}
 	}
 	for relative, expected := range preserved {
-		if digest, _ := fileSHA256(filepath.Join(target, filepath.FromSlash(relative))); digest != expected {
+		if digest, _ := archive.FileSHA256(filepath.Join(target, filepath.FromSlash(relative))); digest != expected {
 			return nil, fmt.Errorf("%s changed during uninstall", relative)
 		}
 	}
@@ -268,6 +276,7 @@ func Purge(target string) (*Report, error) {
 	exists := lexists(target)
 	var held *lock.Lock
 	var candidates []string
+	kept := 0
 	if exists {
 		if err := RequireManagedIdentity(target, "uninstall --purge"); err != nil {
 			return nil, err
@@ -276,16 +285,22 @@ func Purge(target string) (*Report, error) {
 			return nil, err
 		}
 		if cwd, err := os.Getwd(); err == nil {
-			if resolved := resolve(cwd); resolved == target || inside(resolved, target) {
+			if resolved := fspath.Resolve(cwd); resolved == target || fspath.Inside(resolved, target) {
 				os.Chdir(filepath.Dir(target))
 			}
 		}
 		metadata := filepath.Join(target, metadataDirectory)
 		sessions := filepath.Join(metadata, "sessions")
+		own := ownNames(target)
 		children, _ := os.ReadDir(target)
 		for _, child := range children {
-			if path := filepath.Join(target, child.Name()); path != metadata {
+			switch path := filepath.Join(target, child.Name()); {
+			case path == metadata:
+			// The copy repair keeps of a changed file (name.x86qw-kept[.N]) goes with it.
+			case own[strings.SplitN(child.Name(), ".x86qw-kept", 2)[0]] || strings.HasPrefix(child.Name(), ".x86qw-"):
 				candidates = append(candidates, path)
+			default:
+				kept++
 			}
 		}
 		metadataChildren, _ := os.ReadDir(metadata)
@@ -330,10 +345,45 @@ func Purge(target string) (*Report, error) {
 			return nil, err
 		}
 		removeEmptyMetadata(target, true)
-		if lexists(target) {
+		if lexists(filepath.Join(target, metadataDirectory)) || (kept == 0 && lexists(target)) {
 			return nil, errors.New("What is left of the installation is not empty and was kept.")
 		}
-		report.success("Installation folder removed: %s", target)
+		if kept > 0 {
+			report.info("Kept %d items that x86QW did not make in %s.", kept, target)
+		} else {
+			report.success("Installation folder removed: %s", target)
+		}
 	}
 	return report, nil
+}
+
+// ownNames are the top-level names in target that x86QW and the games it
+// installs make: purge removes those and keeps whatever was there before.
+func ownNames(target string) map[string]bool {
+	names := map[string]bool{".DS_Store": true, ".gitignore": true, "id1": true}
+	add := func(relative string) { names[strings.SplitN(relative, "/", 2)[0]] = true }
+	for _, spec := range catalog.ClientSpecs {
+		for _, channel := range catalog.Channels {
+			add(spec.Runtime(channel))
+		}
+	}
+	for _, path := range cliPaths(target) {
+		if filepath.Dir(path) == target {
+			add(filepath.Base(path))
+		}
+	}
+	// A receipt that does not load only makes purge keep more.
+	managed, _ := managedRuntimePaths(target)
+	for path := range managed {
+		add(path)
+	}
+	if personal, err := receipt.Load(filepath.Join(target, filepath.FromSlash(receipt.PersonalDir))); err == nil {
+		for _, entry := range personal.Inventory.Entries {
+			add(entry.Path)
+		}
+	}
+	for _, path := range append(append(append([]string{}, profileRoots...), profileFiles...), personalRoot...) {
+		add(path)
+	}
+	return names
 }

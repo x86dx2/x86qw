@@ -70,6 +70,21 @@ func TestCleanupWithPersonalDataTakesLogsAndDemos(t *testing.T) {
 	}
 }
 
+// --downloads keeps what a component installed; a receipt that does not load
+// stops it, or that component's files would go as downloads.
+func TestCleanupDownloadsStopsOnABrokenReceipt(t *testing.T) {
+	isolate(t)
+	root := managedInstall(t)
+	cluttered(t, root)
+	write(t, filepath.Join(root, filepath.FromSlash(componentsRelative), "team-fortress", "receipt"), "broken")
+	if _, err := Cleanup(root, true, false); err == nil {
+		t.Fatal("a broken receipt should stop the cleanup")
+	}
+	if !exists(filepath.Join(root, "fortress", "progs", "managed.mdl")) {
+		t.Fatal("the file of the component whose receipt is broken was deleted")
+	}
+}
+
 func TestCleanupRefusesAFolderWithoutX86QW(t *testing.T) {
 	isolate(t)
 	plain := t.TempDir()

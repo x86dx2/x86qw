@@ -11,7 +11,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/atomicfile"
+	"github.com/x86dx2/x86qw/go/internal/fspath"
 	"github.com/x86dx2/x86qw/go/internal/privfs"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 )
@@ -24,6 +26,11 @@ type Transaction struct {
 	Warnings []string
 	undo     []func() error
 	observe  *Observer
+	// repair restores managed files that changed, keeping a copy of each.
+	repair bool
+	// kept is set when a rollback failed: the stage holds the only copy of
+	// the previous files, so Close leaves it.
+	kept bool
 }
 
 // NewTransaction creates a private staging directory under .x86qw/staging.
@@ -50,11 +57,24 @@ func (t *Transaction) Rollback() error {
 		errs = append(errs, t.undo[index]())
 	}
 	t.undo = nil
-	return errors.Join(errs...)
+	if err := errors.Join(errs...); err != nil {
+		return t.keepStage(err)
+	}
+	return nil
 }
 
-// Close discards the stage (after commit or rollback).
+// keepStage keeps the stage for Close and says where the previous files are.
+func (t *Transaction) keepStage(err error) error {
+	t.kept = true
+	return fmt.Errorf("%w; the previous files are kept in %s", err, t.Stage)
+}
+
+// Close discards the stage (after commit or rollback), unless a rollback
+// failed.
 func (t *Transaction) Close() error {
+	if t.kept {
+		return nil
+	}
 	err := os.RemoveAll(t.Stage)
 	os.Remove(filepath.Dir(t.Stage))
 	return err
@@ -62,6 +82,12 @@ func (t *Transaction) Close() error {
 
 func (t *Transaction) path(relative string) string {
 	return filepath.Join(t.Root, filepath.FromSlash(relative))
+}
+
+// outside reports whether path leads out of the installation, through a
+// folder the user turned into a link: nothing there is x86QW's to delete.
+func (t *Transaction) outside(path string) bool {
+	return !fspath.Inside(fspath.Resolve(path), fspath.Resolve(t.Root))
 }
 
 func loadRecord(root, id string) (*receipt.Record, map[string]string, error) {
@@ -95,8 +121,13 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 	}
 	t.observer().files(id, len(files))
 	var entries []receipt.Entry
+	var changed []string
 	for _, relative := range files {
 		if err := validate(relative); err != nil {
+			return 0, err
+		}
+		digest, err := archive.FileSHA256(filepath.Join(managed, filepath.FromSlash(relative)))
+		if err != nil {
 			return 0, err
 		}
 		destination := t.path(relative)
@@ -104,28 +135,30 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 			if !info.Mode().IsRegular() {
 				return 0, fmt.Errorf("existing path is not a regular file: %s", destination)
 			}
-			current, err := fileSHA256(destination)
+			current, err := archive.FileSHA256(destination)
 			if err != nil {
 				return 0, err
 			}
-			if expected, owned := old[relative]; !owned || current != expected {
-				t.warn("Personal or modified file kept: %s", destination)
-				t.observer().file(id, relative, info.Size(), true)
-				continue
+			// Bytes already new are what an interrupted run copied.
+			if expected, owned := old[relative]; current != digest && (!owned || current != expected) {
+				if !owned || !t.repair {
+					t.warn("Personal or modified file kept: %s", destination)
+					t.observer().file(id, relative, info.Size(), true)
+					continue
+				}
+				changed = append(changed, relative)
 			}
-		}
-		digest, err := fileSHA256(filepath.Join(managed, filepath.FromSlash(relative)))
-		if err != nil {
-			return 0, err
 		}
 		entries = append(entries, receipt.Entry{Path: relative, SHA256: digest})
 	}
 	if len(entries) == 0 {
-		return 0, fmt.Errorf("no new file of component %s could be installed", id)
+		return 0, fmt.Errorf("no new file of component %s could be installed: each is one you changed or put there; repair restores those x86QW installed and keeps a copy of yours", id)
 	}
 	newNames := map[string]bool{}
+	folded := map[string]string{}
 	for _, entry := range entries {
 		newNames[entry.Path] = true
+		folded[strings.ToLower(entry.Path)] = entry.Path
 	}
 	var stale []string
 	for name, digest := range old {
@@ -140,7 +173,14 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 		if err != nil || !info.Mode().IsRegular() {
 			return 0, fmt.Errorf("invalid managed path: %s", path)
 		}
-		if current, _ := fileSHA256(path); current == digest {
+		// Renamed only in case, on a volume that ignores case: the new
+		// entry is this same file.
+		if renamed, ok := folded[strings.ToLower(name)]; ok {
+			if other, err := os.Lstat(t.path(renamed)); err == nil && os.SameFile(info, other) {
+				continue
+			}
+		}
+		if current, _ := archive.FileSHA256(path); current == digest && !t.outside(path) {
 			stale = append(stale, name)
 		} else {
 			t.warn("Modified file kept: %s", path)
@@ -152,11 +192,14 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 	if err != nil {
 		return 0, err
 	}
-	var backedUp, created, createdDirs []string
+	var backedUp, created, createdDirs, copies []string
 	restore := func() error {
 		var errs []error
 		for _, name := range created {
 			errs = append(errs, ignoreMissing(os.Remove(t.path(name))))
+		}
+		for _, path := range copies {
+			errs = append(errs, ignoreMissing(os.Remove(path)))
 		}
 		for _, name := range backedUp {
 			errs = append(errs, copyFile(filepath.Join(backup, filepath.FromSlash(name)), t.path(name), keepMode))
@@ -168,7 +211,7 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 	}
 	fail := func(err error) (int, error) {
 		if undoErr := restore(); undoErr != nil {
-			return 0, fmt.Errorf("installing %s failed; incomplete rollback: %v (%w)", id, undoErr, err)
+			return 0, t.keepStage(fmt.Errorf("installing %s failed; incomplete rollback: %v (%w)", id, undoErr, err))
 		}
 		return 0, err
 	}
@@ -181,6 +224,14 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 			return fail(err)
 		}
 		backedUp = append(backedUp, name)
+	}
+	for _, name := range changed {
+		aside := keptCopy(t.path(name))
+		if err := copyFile(t.path(name), aside, keepMode); err != nil {
+			return fail(err)
+		}
+		copies = append(copies, aside)
+		t.warn("Changed file restored; your copy is %s", aside)
 	}
 	for _, entry := range entries {
 		source := filepath.Join(managed, filepath.FromSlash(entry.Path))
@@ -203,7 +254,7 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 			return fail(err)
 		}
 		t.observer().file(id, entry.Path, info.Size(), false)
-		if digest, _ := fileSHA256(destination); digest != entry.SHA256 {
+		if digest, _ := archive.FileSHA256(destination); digest != entry.SHA256 {
 			return fail(fmt.Errorf("copied file differs from the plan: %s", destination))
 		}
 		if !existed {
@@ -221,6 +272,20 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 	}
 	t.undo = append(t.undo, restore, undoMetadata)
 	return len(entries), nil
+}
+
+// keptCopy is where a changed copy of path goes: path.x86qw-kept, or with
+// .1, .2 and so on when an earlier repair kept one already.
+func keptCopy(path string) string {
+	for index := 0; ; index++ {
+		candidate := path + ".x86qw-kept"
+		if index > 0 {
+			candidate = fmt.Sprintf("%s.%d", candidate, index)
+		}
+		if _, err := os.Lstat(candidate); errors.Is(err, os.ErrNotExist) {
+			return candidate
+		}
+	}
 }
 
 func namesOf(entries []receipt.Entry) []string {
@@ -303,7 +368,7 @@ func (t *Transaction) RemoveComponent(id string) error {
 	var removed []string
 	for name, digest := range entries {
 		path := t.path(name)
-		if current, err := fileSHA256(path); err == nil && current == digest {
+		if current, err := archive.FileSHA256(path); err == nil && current == digest && !t.outside(path) {
 			if err := copyFile(path, filepath.Join(backup, filepath.FromSlash(name)), keepMode); err != nil {
 				return err
 			}
@@ -332,7 +397,7 @@ func (t *Transaction) RemoveComponent(id string) error {
 // InstallDefault creates a personal default if missing and records it in the
 // personal baseline (install_component_default_transaction).
 func (t *Transaction) InstallDefault(source, relative string) error {
-	digest, err := fileSHA256(source)
+	digest, err := archive.FileSHA256(source)
 	if err != nil {
 		return err
 	}
@@ -340,7 +405,7 @@ func (t *Transaction) InstallDefault(source, relative string) error {
 	exists := false
 	if info, err := os.Lstat(destination); err == nil {
 		exists = true
-		current, _ := fileSHA256(destination)
+		current, _ := archive.FileSHA256(destination)
 		if !info.Mode().IsRegular() || current != digest {
 			return nil
 		}
@@ -432,7 +497,7 @@ func (t *Transaction) RefreshPackageOrder() error {
 	payload := []byte(strings.Join(packages, "\n") + "\n")
 	if record != nil {
 		if current, err := os.ReadFile(t.path("qw/pak.lst")); err == nil && string(current) == string(payload) {
-			if verifyRecordQuiet(t.Root, record) == nil {
+			if _, err := verifyRecord(t.Root, record); err == nil {
 				return nil
 			}
 		}
@@ -446,11 +511,6 @@ func (t *Transaction) RefreshPackageOrder() error {
 		return err
 	}
 	_, err = t.InstallOverlay("package-order", managed, "1", "x86QW deterministic PK3 order", ValidateManagedPath)
-	return err
-}
-
-func verifyRecordQuiet(root string, record *receipt.Record) error {
-	_, err := verifyRecord(root, record)
 	return err
 }
 
@@ -491,7 +551,7 @@ func (t *Transaction) ReconcilePlaySupport() error {
 			if !info.Mode().IsRegular() {
 				return fmt.Errorf("invalid local support: %s", destination)
 			}
-			current, _ := fileSHA256(destination)
+			current, _ := archive.FileSHA256(destination)
 			sum := sha256.Sum256(payload)
 			if current != hex.EncodeToString(sum[:]) && old[relative] != current {
 				t.warn("Personal file kept: %s", destination)

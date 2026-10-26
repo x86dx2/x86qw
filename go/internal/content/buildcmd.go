@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
@@ -34,7 +35,7 @@ func VerifyArtifact(path string, pkg *Object) error {
 			return fmt.Errorf("artifact is not a safe ZIP archive: %v", err)
 		}
 	}
-	digest, err := fileSHA256(path)
+	digest, err := archive.FileSHA256(path)
 	if err != nil {
 		return err
 	}

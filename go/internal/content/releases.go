@@ -3,6 +3,7 @@ package content
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
@@ -165,7 +166,7 @@ func ValidateReleases(value any, componentIDs, namespaces map[string]bool) error
 			if valid {
 				scope, isList := pyjson.StrList(compatibility.Value("client_scope"))
 				verified, verifiedList := compatibility.Value("verified").([]any)
-				valid = isList && len(scope) > 0 && !contains(scope, "") && verifiedList && len(verified) > 0 &&
+				valid = isList && len(scope) > 0 && !slices.Contains(scope, "") && verifiedList && len(verified) > 0 &&
 					pyjson.IsStr(compatibility.Value("gamecode_runtime"))
 			}
 			if !valid {

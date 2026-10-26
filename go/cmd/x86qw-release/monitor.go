@@ -66,7 +66,7 @@ func runMonitor(args []string) int {
 		"warning_hours": *warning, "checked_at": now.Format(time.RFC3339),
 	}
 	if *checkout {
-		state, err := compareCheckout(catalog.Roles["timestamp"], *since, now)
+		state, err := compareCheckout(catalog.Roles["timestamp"], catalog.Roles["snapshot"].Version, catalog.SHA256, *since, now)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
 			failed = true
@@ -86,7 +86,7 @@ func runMonitor(args []string) int {
 // compareCheckout says whether the checkout serves what production does.
 // The side that is ahead has syncGrace to bring the other along: the
 // checkout from its commit time, production from its timestamp's signing.
-func compareCheckout(live trust.RoleState, since string, now time.Time) (string, error) {
+func compareCheckout(live trust.RoleState, liveSnapshot int64, liveCatalog, since string, now time.Time) (string, error) {
 	repo, err := repoRoot()
 	if err != nil {
 		return "", err
@@ -96,8 +96,11 @@ func compareCheckout(live trust.RoleState, since string, now time.Time) (string,
 		return "", err
 	}
 	switch {
-	case local.Timestamp == live.Version:
+	case local.Timestamp == live.Version && local.Snapshot == liveSnapshot && local.Catalog == liveCatalog:
 		return "matches", nil
+	case local.Timestamp == live.Version:
+		// Two signings of one generation: a renewal and a release raced.
+		return "diverged", fmt.Errorf("main and production both carry TUF timestamp %d but different chains: sign main again and deploy", live.Version)
 	case local.Timestamp > live.Version:
 		committed, err := time.Parse(time.RFC3339, since)
 		if err == nil && now.Sub(committed) < syncGrace {

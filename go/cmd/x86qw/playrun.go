@@ -11,6 +11,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/output"
 	"github.com/x86dx2/x86qw/go/internal/play"
+	"github.com/x86dx2/x86qw/go/internal/setup"
 )
 
 func runPlay(args []string, stdout, stderr io.Writer) int {
@@ -30,7 +31,7 @@ func runPlay(args []string, stdout, stderr io.Writer) int {
 	if request.target == "" {
 		request.target = install.DefaultTarget()
 	}
-	target, _ := filepath.Abs(expandHome(request.target))
+	target, _ := filepath.Abs(setup.ExpandHome(request.target))
 	ktxOrUnset := request.game == "" || request.game == "ktx"
 	if request.menu || request.configureRuleset || (request.mode == "" && ktxOrUnset) {
 		// Something is left to choose: the match screen chooses it.

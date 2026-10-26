@@ -16,8 +16,8 @@ type Component struct {
 type Catalog struct {
 	Components []Component
 	Profiles   map[string][]string
-	CoreSize   int64            // the id1 game data, always installed
-	ClientSize map[string]int64 // ezQuake per platform
+	CoreSize   int64 // the id1 game data, always installed
+	ClientSize int64 // ezQuake, for the system the backend installs
 	Modes      []Mode
 	// Unavailable is why the published catalog could not be read: the
 	// components come from the inventory, without sizes, and nothing can

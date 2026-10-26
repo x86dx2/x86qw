@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 )
@@ -69,7 +70,7 @@ func TestPreparedPackagesMatchInstalledInventories(t *testing.T) {
 				if err := ValidateManagedPath(name); err != nil {
 					t.Fatal(err)
 				}
-				digest, _ := fileSHA256(filepath.Join(prepared.Managed, filepath.FromSlash(name)))
+				digest, _ := archive.FileSHA256(filepath.Join(prepared.Managed, filepath.FromSlash(name)))
 				entries = append(entries, receipt.Entry{Path: name, SHA256: digest})
 			}
 			if got := string(receipt.MarshalInventory(entries)); got != string(record.Inventory.Raw) {

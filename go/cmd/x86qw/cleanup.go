@@ -18,7 +18,7 @@ type cleanupArgs struct {
 func (a *cleanupArgs) parser() *cliargs.Parser {
 	p := cliargs.New()
 	targetFlag(p, &a.target)
-	p.Bool(&a.downloads, "also the maps downloaded from servers", "--downloads")
+	p.Bool(&a.downloads, "also what no component installed in fortress/progs and fortress/sound, yours included", "--downloads")
 	p.Bool(&a.personal, "also history, logs and demos", "--personal-data")
 	return p
 }
@@ -57,17 +57,17 @@ func runCleanup(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "✓ Cache removed: %s\n", root)
 	}
 	if result.Cache > 0 {
-		fmt.Fprintf(stdout, "✓ Regenerable data removed (%s).\n", fileCount(result.Cache))
+		fmt.Fprintf(stdout, "✓ Regenerable data removed (%s).\n", itemCount(result.Cache))
 	} else {
 		fmt.Fprintln(stdout, "· No regenerable data in the installation needed removing.")
 	}
 	if result.Personal > 0 {
-		fmt.Fprintf(stdout, "✓ Local personal data removed (%s).\n", fileCount(result.Personal))
+		fmt.Fprintf(stdout, "✓ Local personal data removed (%s).\n", itemCount(result.Personal))
 	} else if !a.personal {
 		fmt.Fprintln(stdout, "· History, logs and demos were kept; use --personal-data to remove them.")
 	}
 	if !a.downloads {
-		fmt.Fprintln(stdout, "· Server downloads were kept; use --downloads to remove them.")
+		fmt.Fprintln(stdout, "· fortress/progs and fortress/sound were kept; --downloads removes what no component installed there.")
 	}
 	return output.ExitSuccess
 }
@@ -79,9 +79,17 @@ func fileCount(count int) string {
 	return fmt.Sprintf("%d files", count)
 }
 
+// itemCount names what cleanup counts: a folder removed whole is one item.
+func itemCount(count int) string {
+	if count == 1 {
+		return "1 item"
+	}
+	return fmt.Sprintf("%d items", count)
+}
+
 func init() {
 	register(command{name: "cleanup", group: "Your data", order: 50, synopsis: "[TARGET]",
 		summary: "deletes caches and, when asked, personal data",
-		about:   "Deletes what x86QW can regenerate: caches and temporary files. Maps downloaded from servers and your personal data go only when you ask.",
+		about:   "Deletes what x86QW can regenerate: caches and temporary files. What no component installed in fortress/progs and fortress/sound (server downloads, your own files too) and your personal data go only when you ask.",
 		flags:   (&cleanupArgs{}).parser, run: noName(runCleanup)})
 }

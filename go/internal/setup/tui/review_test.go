@@ -319,3 +319,20 @@ func TestPortugueseShowsTheInventoryInPortuguese(t *testing.T) {
 		}
 	}
 }
+
+// Marking a favorite moves it up the list, and the focus goes with it.
+func TestTheFocusFollowsANewFavorite(t *testing.T) {
+	m := New(Config{Backend: &setup.Demo{ExistingInstall: true, Speed: 50}, Target: shortTarget(t), Lang: EN, Start: "servers"})
+	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
+	drive(m, run(m.Init())...)
+	servers := m.visibleServers()
+	m.focus = len(servers) - 1
+	if servers[m.focus].Favorite {
+		t.Fatal("the last server should not be a favorite yet")
+	}
+	address := servers[m.focus].Address
+	drive(m, key("ctrl+f"))
+	if focused := m.focusedServer(); focused == nil || focused.Address != address || !focused.Favorite {
+		t.Fatalf("the focus left %s for %+v", address, focused)
+	}
+}

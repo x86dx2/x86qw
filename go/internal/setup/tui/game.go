@@ -207,6 +207,12 @@ func (m *Model) gameUpdate(msg tea.Msg) (tea.Cmd, bool) {
 					g.servers[index].Favorite = msg.what == "favorite"
 				}
 			}
+			// Favorites sort first: the focus follows the server it was on.
+			for index, server := range m.visibleServers() {
+				if server.Address == g.subject {
+					m.focus = index
+				}
+			}
 			m.say(fmt.Sprintf(m.t(msg.what+"d"), g.subject))
 		case "start", "stop":
 			m.focus = 0
@@ -1039,6 +1045,10 @@ func (m *Model) activateHost(id string) tea.Cmd {
 		// puts the choices back and returns here.
 		m.openSetup(scHost, "h.add")
 		m.opts.Intent = setup.Both
+		if len(m.opts.Server.Instances) == 0 {
+			// Choices recorded without a server start from the default one.
+			m.opts.Server = setup.Defaults(setup.Both, m.opts.Target).Server
+		}
 	case "h.start":
 		if m.game.acting == "" {
 			if err := m.canHost(); err != nil {
@@ -1162,7 +1172,7 @@ func (m *Model) gameKey(msg tea.KeyPressMsg) tea.Cmd {
 			}
 		case "c":
 			if m.screen == scMatch {
-				return m.copyText(shellJoin(append([]string{"x86qw"}, m.game.match.Args(m.target())...)))
+				return m.copyText(setup.ShellJoin(append([]string{"x86qw"}, m.game.match.Args(m.target())...)))
 			}
 		case "esc", "left", "backspace":
 			return m.toRail()

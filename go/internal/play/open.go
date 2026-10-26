@@ -17,7 +17,7 @@ import (
 // A qw:// address reaches the ezQuake console, so only a host, a port and
 // one of the paths ezQuake's qwurl knows get through; a QTV stream number
 // (N@) only with /qtvplay.
-var qwURL = regexp.MustCompile(`^qw://([0-9]{1,6}@)?[A-Za-z0-9.-]{1,253}(:[0-9]{1,5})?(/(join|observe|spectate|qtvplay)?)?$`)
+var qwURL = regexp.MustCompile(`^qw://([0-9]{1,10}@)?[A-Za-z0-9_.-]{1,253}(:[0-9]{1,5})?(/(join|observe|spectate|qtvplay)?)?$`)
 
 // DemoExtensions are the demos x86qw open plays.
 var DemoExtensions = []string{".mvd", ".qwd"}
@@ -86,6 +86,22 @@ func OpenArguments(target, item string) ([]string, error) {
 		return nil, err
 	}
 	return []string{"+playdemo", "demos/" + name}, nil
+}
+
+// ServerAddress is the game server a qw:// link joins, as host:port, on
+// 27500 when the link names no port; a QTV stream (N@host) joins none.
+func ServerAddress(link string) (string, bool) {
+	if !strings.HasPrefix(strings.ToLower(link), "qw://") {
+		return "", false
+	}
+	server, _, _ := strings.Cut(link[len("qw://"):], "/")
+	if server == "" || strings.Contains(server, "@") {
+		return "", false
+	}
+	if !strings.Contains(server, ":") {
+		server += ":27500"
+	}
+	return server, true
 }
 
 // pruneOpenedDemos removes the copies made for viewing that are old.

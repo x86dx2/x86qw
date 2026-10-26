@@ -263,15 +263,24 @@ func stopGroups(commands []*exec.Cmd, exited map[int]bool) error {
 
 func exitCode(state *os.ProcessState) int { return state.ExitCode() }
 
-var serviceSignals = []os.Signal{os.Interrupt}
+// serviceSignals end a stack: Ctrl+C, and the console closing, a logoff or
+// a shutdown, which Go delivers as SIGTERM.
+var serviceSignals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 
-func signalNumber(sig os.Signal) int { return 2 }
+func signalNumber(sig os.Signal) int {
+	if sig == syscall.SIGTERM {
+		return 15
+	}
+	return 2
+}
 
 // spawnBackgroundController detaches one controller in a new process group
 // and hands it the secrets exclusively through stdin.
 func spawnBackgroundController(executable string, arguments []string, request []byte) (*exec.Cmd, error) {
 	command := exec.Command(executable, arguments...)
-	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP | windows.DETACHED_PROCESS}
+	// A hidden console rather than none: the servers it starts inherit it
+	// instead of each opening a window that ends the session when closed.
+	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP | windows.CREATE_NO_WINDOW}
 	stdin, err := command.StdinPipe()
 	if err != nil {
 		return nil, errorf("Could not create the background controller: %v", err)

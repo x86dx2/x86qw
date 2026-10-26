@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/content"
@@ -127,7 +126,6 @@ func init() {
 	register("add", "incorporates a package/configuration from a reviewed definition", runAdd)
 	register("publish", "publishes the artifacts to the GitHub and GitLab mirrors", runPublish)
 	register("commit", "records only distribution changes in Git", runCommit)
-	_ = os.Stdin
 }
 
 // splitPositional separates component names from flags, which may come in

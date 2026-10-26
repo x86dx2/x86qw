@@ -294,7 +294,8 @@ func (j *Journal) ConsumeStopRequest() (bool, error) {
 // JournalPath resolves a recorded relative path inside the installation.
 func JournalPath(target string, relative any) (string, bool) {
 	text, ok := relative.(string)
-	if !ok || text == "" || path.IsAbs(text) {
+	// On Windows a backslash or a drive would lead out of target.
+	if !ok || text == "" || path.IsAbs(text) || strings.ContainsAny(text, `\:`) {
 		return "", false
 	}
 	for _, part := range strings.Split(text, "/") {

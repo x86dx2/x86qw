@@ -126,3 +126,34 @@ func TestPreflightPortsRejectsDuplicates(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+// MVDSV reads " +" in its folder as the start of a command, as ezQuake does.
+func TestHostRefusesAFolderWithAPlus(t *testing.T) {
+	if _, err := HostSpec("/srv/My Games +quit/x86qw", &HostOptions{}, nil, nil, nil); err == nil || !strings.Contains(err.Error(), `" +"`) {
+		t.Fatalf("%v", err)
+	}
+}
+
+// A server name goes out in the Quake charset, which has no accents: like
+// the installer, the host command refuses one instead of showing it garbled.
+func TestServerNamesTakePlainLettersOnly(t *testing.T) {
+	if _, err := SafeName("Servidor São Paulo", "hostname", 96); err == nil {
+		t.Fatal("an accented name was accepted")
+	}
+	if _, err := SafeName("Servidor Sao Paulo", "hostname", 96); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A journal names files with forward slashes only: on Windows a backslash or
+// a drive would lead out of the installation, so neither is accepted.
+func TestJournalPathsStayInside(t *testing.T) {
+	for _, relative := range []string{`..\..\x`, `qw\..\..\x`, "C:x", "../x", "/x"} {
+		if _, ok := JournalPath("/srv/x86qw", relative); ok {
+			t.Errorf("%q was accepted", relative)
+		}
+	}
+	if _, ok := JournalPath("/srv/x86qw", "qw/xh_session.cfg"); !ok {
+		t.Fatal("a plain path was refused")
+	}
+}

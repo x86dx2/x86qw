@@ -273,6 +273,10 @@ func TestAddMovesOneComponentToAnotherNQuakeRevision(t *testing.T) {
 			t.Fatalf("the CLI reads %s at revision %s", id, current.Revision())
 		}
 	}
+	// Every new installation starts from the core package.
+	if _, err := parsed.ComponentPackage("x86qw-core-id1", []string{"core"}); err != nil {
+		t.Fatalf("add left the base PAKs out of the catalog: %v", err)
+	}
 	if _, err := os.Stat(filepath.Join(clone, DistDir, "distributions/nquake/non-gpl/qw/maps")); err != nil {
 		t.Errorf("other components' files left the previous revision: %v", err)
 	}

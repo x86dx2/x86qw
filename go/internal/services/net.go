@@ -53,6 +53,15 @@ func SafeText(value, label string, maximum int) (string, error) {
 	return value, nil
 }
 
+// SafeName is SafeText for a name players see, in ASCII: it goes out in the
+// Quake charset, which has no accents.
+func SafeName(value, label string, maximum int) (string, error) {
+	if strings.IndexFunc(value, func(r rune) bool { return r > '~' }) >= 0 {
+		return "", errorf("%s takes letters without accents.", label)
+	}
+	return SafeText(value, label, maximum)
+}
+
 // ParseNetworkEndpoint validates host:port or [IPv6]:port.
 func ParseNetworkEndpoint(value string) (string, error) {
 	bad := value == "" || len(value) > 253 || strings.ContainsAny(value, "\\\";")

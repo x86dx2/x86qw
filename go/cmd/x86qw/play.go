@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -99,8 +100,8 @@ func intFlag(value string, low, high int, target *int) error {
 	return nil
 }
 
-// parsePlay reads play's arguments; the one positional is a game or, when
-// it names none, the installation.
+// parsePlay reads play's arguments; the one positional is a game, a KTX
+// mode or, when it names neither, the installation.
 func parsePlay(args []string, games []play.Game) (*playRequest, error) {
 	r := &playRequest{}
 	f := &playFlags{}
@@ -119,10 +120,16 @@ func parsePlay(args []string, games []play.Game) (*playRequest, error) {
 				r.game = game.ID
 			}
 		}
-		if r.game == "" {
-			if r.target != "" {
-				return nil, cliargs.Usagef("unknown game: %s", selection)
-			}
+		modes, _ := play.LoadModes()
+		_, notFolder := os.Stat(selection)
+		_, modeErr := play.FindMode(modes, selection)
+		switch {
+		case r.game != "":
+		case r.mode == "" && notFolder != nil && modeErr == nil:
+			r.mode = selection // `x86qw play duel`
+		case r.target != "":
+			return nil, cliargs.Usagef("unknown game: %s", selection)
+		default:
 			r.target = selection
 		}
 	}

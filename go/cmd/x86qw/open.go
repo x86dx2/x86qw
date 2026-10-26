@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/install"
+	"github.com/x86dx2/x86qw/go/internal/maint"
 	"github.com/x86dx2/x86qw/go/internal/output"
 	"github.com/x86dx2/x86qw/go/internal/play"
 )
@@ -66,6 +68,12 @@ func runOpen(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintf(stderr, "✗ %v\n", err)
 		return output.ExitFailure
+	}
+	// Every join, from the app or a link, passes here.
+	if server, ok := play.ServerAddress(item); ok {
+		if err := maint.AddRecent(root, server, time.Now()); err != nil {
+			fmt.Fprintf(stderr, "! The server was not added to the recents: %v\n", err)
+		}
 	}
 	return output.ExitSuccess
 }

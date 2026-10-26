@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
@@ -288,7 +290,7 @@ func (p *Project) LocalArtifact(pkg *Object) (string, error) {
 	if !isFile(path) || isSymlink(path) {
 		return "", fmt.Errorf("distribution artifact is missing: %s", path)
 	}
-	digest, err := fileSHA256(path)
+	digest, err := archive.FileSHA256(path)
 	if err != nil {
 		return "", err
 	}
@@ -451,7 +453,7 @@ func (p *Project) Commit(out io.Writer, message string, push bool) error {
 		if err != nil {
 			return err
 		}
-		if contains(strings.Fields(string(remotes)), "gitlab") {
+		if slices.Contains(strings.Fields(string(remotes)), "gitlab") {
 			if _, err := p.command(nil, "git", "push", "gitlab", "HEAD"); err != nil {
 				return err
 			}

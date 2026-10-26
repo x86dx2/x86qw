@@ -11,7 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/install"
+	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/play"
 	"github.com/x86dx2/x86qw/go/internal/services"
 	"github.com/x86dx2/x86qw/go/internal/trust"
@@ -32,7 +34,7 @@ func TestRealCatalogHasSizesAndModes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cat.CoreSize == 0 || cat.ClientSize[install.HostPlatform()] == 0 || len(cat.Modes) == 0 || len(cat.Profiles["recommended"]) == 0 {
+	if cat.CoreSize == 0 || cat.ClientSize == 0 || len(cat.Modes) == 0 || len(cat.Profiles["recommended"]) == 0 {
 		t.Fatalf("incomplete catalog: core %d, client %v, %d modes", cat.CoreSize, cat.ClientSize, len(cat.Modes))
 	}
 	for _, component := range cat.Components {
@@ -133,6 +135,15 @@ func TestRealInstall(t *testing.T) {
 	report, err := r.Repair(context.Background(), target)
 	if err != nil || report.Problem != "" || report.Files == 0 {
 		t.Fatalf("verify: %+v %v", report, err)
+	}
+}
+
+// The game and the server read " +" in their folder as a command: the
+// installer refuses such a folder up front.
+func TestFolderWithAPlusIsRefused(t *testing.T) {
+	options := Defaults(Play, filepath.Join(t.TempDir(), "My Games +quit", "x86qw"))
+	if check := (&Real{}).checkFolder(options); check.State != CheckFailed {
+		t.Fatalf("folder: %+v", check)
 	}
 }
 
@@ -357,5 +368,47 @@ func TestContentUpdatedIsTheCLIOnlyFailure(t *testing.T) {
 	}
 	if ContentUpdated(os.ErrPermission) {
 		t.Fatal("any failure counts as content-only")
+	}
+}
+
+// While another command holds the installation (a running server, say), the
+// app does not swap the CLI under it: that would make its lock look stale.
+func TestFinishLeavesTheCLIWhileTheInstallationIsBusy(t *testing.T) {
+	target := t.TempDir()
+	held, err := lock.Acquire(target, "host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Release()
+	published := false
+	r := &Real{Publish: func(string) error { published = true; return nil }}
+	r.finish(target, Defaults(Host, target))
+	if published {
+		t.Fatal("the CLI was published under a held lock")
+	}
+}
+
+// The catalog the app shows sizes ezQuake for the system the backend
+// installs, --platform included, not for the machine the app runs on.
+func TestCatalogSizesTheClientOfTheInstalledPlatform(t *testing.T) {
+	published, err := os.ReadFile(filepath.Join("..", "..", "..", "site", "public", "api", "v1", "catalog.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(t.TempDir(), "catalog.json")
+	os.WriteFile(file, published, 0o644)
+	parsed, err := catalog.Parse(published)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, spec := range catalog.ClientSpecs {
+		releases, err := parsed.ClientReleases(spec, "stable")
+		if err != nil {
+			t.Fatal(err)
+		}
+		shown, err := (&Real{CatalogFile: file, Platform: spec.Platform}).Catalog(context.Background())
+		if err != nil || shown.ClientSize != releases[0].Size {
+			t.Fatalf("%s: shows %d, installs %d (%v)", spec.Platform, shown.ClientSize, releases[0].Size, err)
+		}
 	}
 }

@@ -3,6 +3,7 @@ package play
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -67,6 +68,49 @@ func TestPlanForDuelWithBots(t *testing.T) {
 	o.Bots = 1
 	if _, err := LaunchCommands(duel, "dm6", map[string]bool{}, o); err == nil {
 		t.Fatal("bots without a Frogbot route accepted")
+	}
+}
+
+// ezQuake runs each +command of its command line through a 1024-byte line:
+// whatever the ruleset and the mode, no command is longer, or its end is lost.
+func TestLaunchCommandsFitTheConsoleLine(t *testing.T) {
+	games, err := LoadGames()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ktx Game
+	for _, game := range games {
+		if game.ID == "ktx" {
+			ktx = game
+		}
+	}
+	modes, _ := LoadModes()
+	for _, ruleset := range RulesetKeys {
+		for _, mode := range modes {
+			assets := map[string]bool{}
+			for _, requirement := range mode.Requirements {
+				assets[strings.ToLower(strings.ReplaceAll(requirement.Asset, "{map}", "dm6"))] = true
+			}
+			launch, err := Build(ktx, &mode, "dm6", assets, DefaultOptions(), ruleset)
+			if err != nil {
+				t.Fatalf("%s %s: %v", ruleset, mode.Key, err)
+			}
+			// Each command runs from its + argument to the next.
+			var lines []string
+			for _, arg := range launch.Arguments {
+				if strings.HasPrefix(arg, "+") {
+					lines = append(lines, arg[1:])
+				} else if len(lines) > 0 {
+					lines[len(lines)-1] += " " + arg
+				}
+			}
+			// The runtime cfg goes through the same line.
+			for _, line := range append(lines, launch.StartupCommands...) {
+				if len(line) > 1023 {
+					t.Errorf("%s %s: a %d-byte command", ruleset, mode.Key, len(line))
+				}
+			}
+		}
 	}
 }
 

@@ -24,9 +24,6 @@ import (
 // archiveBinary is the runtime inside each platform's stable archive.
 var archiveBinary = map[string]string{"macos": "ezQuake.app", "linux": "ezQuake-x86_64.AppImage", "windows": "ezquake.exe"}
 
-var clientReceiptKeys = []string{"format", "platform", "architecture", "channel", "selection", "install_name",
-	"bundle_version", "artifact_name", "artifact_url", "artifact_sha256", "binary_sha256"}
-
 // legacyClientReceipt is the flat pre-1.0 receipt path.
 func legacyClientReceipt(spec catalog.ClientSpec, channel string) string {
 	return ".x86qw/ezquake-" + spec.Platform + "-" + channel + ".receipt"
@@ -78,6 +75,7 @@ func (t *Transaction) prepareRelease(ctx context.Context, spec catalog.ClientSpe
 		if !download.Cached(cached, pin) {
 			return nil, errors.New("the ezQuake download failed verification after the copy")
 		}
+		os.Remove(temporary) // the cache holds it now
 	}
 	prepared := filepath.Join(t.Stage, "prepared-runtime")
 	os.RemoveAll(prepared)
@@ -156,7 +154,7 @@ func (t *Transaction) prepareRelease(ctx context.Context, spec catalog.ClientSpe
 		}
 		bundleVersion = release.Version
 	}
-	rec := &receipt.Receipt{Keys: clientReceiptKeys, Values: map[string]string{
+	rec := &receipt.Receipt{Keys: receipt.ClientFields, Values: map[string]string{
 		"format": "1", "platform": spec.Platform, "architecture": spec.Architecture, "channel": channel,
 		"selection": release.Version, "install_name": spec.Runtime(channel), "bundle_version": bundleVersion,
 		"artifact_name": release.Filename, "artifact_url": release.URLs[0],
@@ -195,6 +193,16 @@ func (t *Transaction) checkRuntimeOwnership(spec catalog.ClientSpec, channel str
 	return nil
 }
 
+// runtimeIs reports whether the installed runtime's executable has digest.
+func (t *Transaction) runtimeIs(spec catalog.ClientSpec, channel, digest string) bool {
+	binary := t.path(spec.Runtime(channel))
+	if spec.Platform == "macos" {
+		binary = filepath.Join(binary, "Contents", "MacOS", "ezQuake")
+	}
+	current, err := archive.FileSHA256(binary)
+	return err == nil && regular(binary) && current == digest
+}
+
 // commitRuntime swaps the prepared runtime and its receipt into place, with
 // the previous runtime and receipts kept in the stage for rollback.
 func (t *Transaction) commitRuntime(spec catalog.ClientSpec, channel string, prepared *preparedClient) error {
@@ -213,7 +221,9 @@ func (t *Transaction) commitRuntime(spec catalog.ClientSpec, channel string, pre
 	}
 	if err := os.Rename(prepared.path, destination); err != nil {
 		if hadPrevious {
-			os.Rename(previous, destination)
+			if undoErr := os.Rename(previous, destination); undoErr != nil {
+				return t.keepStage(fmt.Errorf("%w; incomplete rollback: %v", err, undoErr))
+			}
 		}
 		return err
 	}
@@ -226,27 +236,31 @@ func (t *Transaction) commitRuntime(spec catalog.ClientSpec, channel string, pre
 		}
 		return nil
 	}
+	// fail puts the previous runtime back; when that fails, the stage keeps it.
+	fail := func(err error) error {
+		if undoErr := undoRuntime(); undoErr != nil {
+			return t.keepStage(fmt.Errorf("%w; incomplete rollback: %v", err, undoErr))
+		}
+		return err
+	}
 	// The legacy flat receipt is retired once the canonical one is written.
 	var movedLegacy []string
 	legacy := t.path(legacyClientReceipt(spec, channel))
 	if regular(legacy) {
 		backup := filepath.Join(backupRoot, "legacy.receipt")
 		if err := os.Rename(legacy, backup); err != nil {
-			undoRuntime()
-			return err
+			return fail(err)
 		}
 		movedLegacy = append(movedLegacy, legacy, backup)
 	}
 	receiptPath := t.path(spec.Receipt(channel))
 	created, err := mkdirParents(filepath.Join(t.Root, ".x86qw"), filepath.Dir(receiptPath), 0o700)
 	if err != nil {
-		undoRuntime()
-		return err
+		return fail(err)
 	}
 	undoReceipt, err := t.replaceFiles(filepath.Dir(receiptPath), map[string][]byte{filepath.Base(receiptPath): prepared.receipt.Marshal()})
 	if err != nil {
-		undoRuntime()
-		return err
+		return fail(err)
 	}
 	t.undo = append(t.undo, func() error {
 		errs := []error{undoReceipt()}
@@ -262,11 +276,6 @@ func (t *Transaction) commitRuntime(spec catalog.ClientSpec, channel string, pre
 	return nil
 }
 
-// InstallClient installs (or reinstalls) the newest release of a channel.
-func (t *Transaction) InstallClient(ctx context.Context, cat *catalog.Catalog, spec catalog.ClientSpec, channel string) (string, error) {
-	return t.InstallClientRelease(ctx, cat, spec, channel, "")
-}
-
 // InstallClientRelease installs one release of a channel; "" or "latest"
 // is the newest (choose_release).
 func (t *Transaction) InstallClientRelease(ctx context.Context, cat *catalog.Catalog, spec catalog.ClientSpec, channel, version string) (string, error) {
@@ -275,7 +284,7 @@ func (t *Transaction) InstallClientRelease(ctx context.Context, cat *catalog.Cat
 
 // InstallClientVersion reinstalls the receipt's exact release for repair.
 func (t *Transaction) InstallClientVersion(ctx context.Context, cat *catalog.Catalog, spec catalog.ClientSpec, channel, selection string) (string, error) {
-	return t.installClient(ctx, cat, spec, channel, selection, fmt.Sprintf("The recorded ezQuake version %s is not available for repair.", channel))
+	return t.installClient(ctx, cat, spec, channel, selection, fmt.Sprintf("The recorded ezQuake version %s is not available for repair.", selection))
 }
 
 func (t *Transaction) installClient(ctx context.Context, cat *catalog.Catalog, spec catalog.ClientSpec, channel, version, missing string) (string, error) {
@@ -286,9 +295,6 @@ func (t *Transaction) installClient(ctx context.Context, cat *catalog.Catalog, s
 		if err := macos.EnsureProcessAbsent("ezQuake"); err != nil {
 			return "", err
 		}
-	}
-	if err := t.checkRuntimeOwnership(spec, channel); err != nil {
-		return "", err
 	}
 	releases, err := cat.ClientReleases(spec, channel)
 	if err != nil {
@@ -308,6 +314,10 @@ func (t *Transaction) installClient(ctx context.Context, cat *catalog.Catalog, s
 	}
 	prepared, err := t.prepareRelease(ctx, spec, channel, release)
 	if err != nil {
+		return "", err
+	}
+	// A runtime already equal to the release is what a swap cut short left.
+	if err := t.checkRuntimeOwnership(spec, channel); err != nil && !t.runtimeIs(spec, channel, prepared.receipt.Get("binary_sha256")) {
 		return "", err
 	}
 	if err := t.commitRuntime(spec, channel, prepared); err != nil {
@@ -350,8 +360,8 @@ func (t *Transaction) RepairNightly(spec catalog.ClientSpec) error {
 	if err != nil {
 		return err
 	}
-	updated := &receipt.Receipt{Keys: clientReceiptKeys, Values: map[string]string{}}
-	for _, key := range clientReceiptKeys {
+	updated := &receipt.Receipt{Keys: receipt.ClientFields, Values: map[string]string{}}
+	for _, key := range receipt.ClientFields {
 		updated.Values[key] = rec.Get(key)
 	}
 	updated.Values["binary_sha256"] = binaryHash
@@ -436,7 +446,7 @@ func inspectMacApp(app string) (string, string, error) {
 			return "", "", fmt.Errorf("invalid ezQuake signature: %s", strings.TrimSpace(stderr.String()))
 		}
 	}
-	digest, err := fileSHA256(binaryPath)
+	digest, err := archive.FileSHA256(binaryPath)
 	return version, digest, err
 }
 
@@ -457,5 +467,5 @@ func inspectPortableBinary(path, platform string) (string, error) {
 			return "", fmt.Errorf("unexpected Windows binary format: %s", path)
 		}
 	}
-	return fileSHA256(path)
+	return archive.FileSHA256(path)
 }

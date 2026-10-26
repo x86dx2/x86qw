@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -306,5 +305,3 @@ func ReadPasswordFile(path, label string) (string, error) {
 	}
 	return value, nil
 }
-
-var _ = fmt.Sprint

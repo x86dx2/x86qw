@@ -8,7 +8,6 @@ import (
 const (
 	// RuntimeConfigPlaceholder is replaced by the ephemeral cfg file name.
 	RuntimeConfigPlaceholder = "__X86QW_KTX_RUNTIME_CONFIG__"
-	inlineSetupLimit         = 1400
 	defaultRuleset           = "x86qw"
 )
 
@@ -54,7 +53,6 @@ func RulesetArguments(ruleset string) []string {
 // needs them, the commands of its KTX cfg.
 func Build(game Game, mode *Mode, mapName string, assets map[string]bool, o Options, ruleset string) (*Launch, error) {
 	args := RulesetArguments(ruleset)
-	_, hasProfile := rulesetConfigs[ruleset]
 	flag := "0"
 	if ruleset == defaultRuleset {
 		flag = "1"
@@ -105,7 +103,6 @@ func Build(game Game, mode *Mode, mapName string, assets map[string]bool, o Opti
 		for _, setting := range mode.LaunchSettings {
 			args = append(args, "+"+setting[0], setting[1])
 		}
-		setupBody := strings.Join(append([]string{"unalias x86qw_ktx_launch_setup"}, setup...), ";")
 		event := map[string]string{"ffa": "on_enter_ffa", "tot": "on_enter_ffa", "ctf": "on_enter_ctf"}[mode.Usermode]
 		if event == "" {
 			event = "on_enter"
@@ -114,52 +111,40 @@ func Build(game Game, mode *Mode, mapName string, assets map[string]bool, o Opti
 		if mode.EntryConfig != "" {
 			eventBody = "exec " + mode.EntryConfig
 		}
-		if hasProfile || bots || length(setupBody) > inlineSetupLimit {
-			if bots {
-				chunked, err := ChunkedSetupCommands(postMap)
-				if err != nil {
-					return nil, err
-				}
-				quoted, err := QuoteConsoleCommand(eventBody)
-				if err != nil {
-					return nil, err
-				}
-				launch.StartupCommands = append(append(append([]string{}, keyAliases...), chunked...), "tempalias "+event+" "+quoted)
-			} else {
-				definitions, invocation, err := ChunkedSetupPlan(setup, 700)
-				if err != nil {
-					return nil, err
-				}
-				var compatibility []string
-				if mode.EntryConfig == "" {
-					eventBody = "exec x86qw-ktx.cfg;" + invocation
-				} else {
-					quoted, err := QuoteConsoleCommand(invocation)
-					if err != nil {
-						return nil, err
-					}
-					compatibility = []string{"tempalias x86qw_ktx_launch_setup " + quoted}
-				}
-				quoted, err := QuoteConsoleCommand(eventBody)
-				if err != nil {
-					return nil, err
-				}
-				launch.StartupCommands = append(append(definitions, compatibility...), "tempalias "+event+" "+quoted)
-			}
-			args = append(args, "+exec", RuntimeConfigPlaceholder)
-		} else {
-			quotedSetup, err := QuoteConsoleCommand(setupBody)
+		// The setup goes through the runtime cfg: on the command line it
+		// would outgrow the console's 1024-byte line.
+		if bots {
+			chunked, err := ChunkedSetupCommands(postMap)
 			if err != nil {
 				return nil, err
 			}
-			eventArgument := eventBody
+			quoted, err := QuoteConsoleCommand(eventBody)
+			if err != nil {
+				return nil, err
+			}
+			launch.StartupCommands = append(append(append([]string{}, keyAliases...), chunked...), "tempalias "+event+" "+quoted)
+		} else {
+			definitions, invocation, err := ChunkedSetupPlan(setup, 700)
+			if err != nil {
+				return nil, err
+			}
+			var compatibility []string
 			if mode.EntryConfig == "" {
-				if eventArgument, err = QuoteConsoleCommand(eventBody); err != nil {
+				eventBody = "exec x86qw-ktx.cfg;" + invocation
+			} else {
+				quoted, err := QuoteConsoleCommand(invocation)
+				if err != nil {
 					return nil, err
 				}
+				compatibility = []string{"tempalias x86qw_ktx_launch_setup " + quoted}
 			}
-			args = append(args, "+tempalias", "x86qw_ktx_launch_setup", quotedSetup, "+tempalias", event, eventArgument)
+			quoted, err := QuoteConsoleCommand(eventBody)
+			if err != nil {
+				return nil, err
+			}
+			launch.StartupCommands = append(append(definitions, compatibility...), "tempalias "+event+" "+quoted)
 		}
+		args = append(args, "+exec", RuntimeConfigPlaceholder)
 		args = append(args, "+set", "k_defmap", mapName, "+set", "k_defmode", mode.Usermode)
 	}
 	args = append(args, "+map", mapName)

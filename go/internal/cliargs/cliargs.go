@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -182,11 +183,11 @@ func (p *Parser) Parse(args []string) error {
 			value = args[index]
 		}
 		for _, group := range p.groups {
-			if !contains(group, name) {
+			if !slices.Contains(group, name) {
 				continue
 			}
 			for _, other := range group {
-				if other != name && p.Given(other) && !contains(spec.names, other) {
+				if other != name && p.Given(other) && !slices.Contains(spec.names, other) {
 					return Usagef("%s cannot be used with %s", name, other)
 				}
 			}
@@ -200,15 +201,6 @@ func (p *Parser) Parse(args []string) error {
 		}
 	}
 	return nil
-}
-
-func contains(values []string, wanted string) bool {
-	for _, value := range values {
-		if value == wanted {
-			return true
-		}
-	}
-	return false
 }
 
 // Flags renders the declared flags as an aligned table, one per line.
@@ -242,7 +234,13 @@ func (p *Parser) Flags() string {
 func (p *Parser) Adopt(fs *flag.FlagSet) {
 	fs.VisitAll(func(f *flag.Flag) {
 		name := "--" + f.Name
+		given := false
 		set := func(value string) error {
+			// Package flag would let the last of two win without a word.
+			if given {
+				return Usagef("given twice")
+			}
+			given = true
 			if err := fs.Set(f.Name, value); err != nil {
 				return Usagef("invalid value: %q", value)
 			}

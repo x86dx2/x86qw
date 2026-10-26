@@ -306,6 +306,9 @@ func isBinaryName(name string) bool {
 
 // HostSpec is how to start MVDSV for a hosted game.
 func HostSpec(target string, o *HostOptions, hosted *Hosted, session *Session, journal *Journal) (*Spec, error) {
+	if err := play.CheckBasedir(target); err != nil {
+		return nil, err
+	}
 	binary, digest, err := runtimeBinary(target, "mvdsv")
 	if err != nil {
 		return nil, err
@@ -339,7 +342,7 @@ func HostSpec(target string, o *HostOptions, hosted *Hosted, session *Session, j
 		}
 	}
 	bootstrap := tokenHex(12)
-	safeHostname, err := SafeText(hostname, "hostname", 96)
+	safeHostname, err := SafeName(hostname, "hostname", 96)
 	if err != nil {
 		return nil, err
 	}
@@ -395,10 +398,9 @@ func HostSpec(target string, o *HostOptions, hosted *Hosted, session *Session, j
 			postLines = append(postLines, []byte("set "+setting[0]+" "+setting[1]))
 		}
 	}
-	postLines = append(postLines, []byte("rcon_password "+q(o.RconPassword)))
-	if IsExternalBind(o.Bind) {
-		postLines = append(postLines, []byte("sv_crypt_rcon 1"))
-	}
+	// ezQuake sends rcon hashed by default, also to a server on this machine;
+	// only the startup sends above go in plain text, before this cfg runs.
+	postLines = append(postLines, []byte("rcon_password "+q(o.RconPassword)), []byte("sv_crypt_rcon 1"))
 	postConfig, err := WriteTemporaryConfig(gameDirectory, "xp_", postLines, journal)
 	if err != nil {
 		return nil, err
@@ -505,7 +507,7 @@ func QtvSpec(target, bind string, port int, hostname, upstream, password string,
 	if err := ensurePrivateDirectory(filepath.Join(directory, "demos")); err != nil {
 		return nil, err
 	}
-	safeHostname, err := SafeText(hostname, "QTV hostname", 96)
+	safeHostname, err := SafeName(hostname, "QTV hostname", 96)
 	if err != nil {
 		return nil, err
 	}

@@ -11,7 +11,8 @@ import (
 var (
 	stableVersion  = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 	nightlyVersion = regexp.MustCompile(`^[0-9]{8}-[0-9]{6}_[0-9a-f]{7}$`)
-	clientFields   = []string{
+	// ClientFields are the keys of an ezQuake receipt, in order.
+	ClientFields = []string{
 		"format", "platform", "architecture", "channel", "selection", "install_name",
 		"bundle_version", "artifact_name", "artifact_url", "artifact_sha256", "binary_sha256",
 	}
@@ -28,10 +29,10 @@ func ParseClient(payload []byte, context ClientContext) (*Receipt, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(rec.Keys) != len(clientFields) {
+	if len(rec.Keys) != len(ClientFields) {
 		return nil, fmt.Errorf("incomplete ezQuake receipt table")
 	}
-	for _, field := range clientFields {
+	for _, field := range ClientFields {
 		if _, ok := rec.Values[field]; !ok {
 			return nil, fmt.Errorf("incomplete ezQuake receipt table: %s", field)
 		}

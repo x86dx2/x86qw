@@ -15,6 +15,7 @@ import (
 	"unicode"
 
 	"github.com/x86dx2/x86qw/go/internal/atomicfile"
+	"github.com/x86dx2/x86qw/go/internal/play"
 	"github.com/x86dx2/x86qw/go/internal/pyjson"
 )
 
@@ -188,10 +189,14 @@ func writeLibrary(target string, library *Library) error {
 	return atomicfile.Write(destination, []byte(encoded+"\n"), 0o644)
 }
 
-// AddFavorite pins a server (newest first, at most 20).
+// AddFavorite pins a server (newest first, at most 20), one x86qw open can
+// join.
 func AddFavorite(target, address string, now time.Time) error {
 	entry, err := newEntry(address, "", "user", now)
 	if err != nil {
+		return err
+	}
+	if _, err := play.OpenArguments("", "qw://"+entry.Address); err != nil {
 		return err
 	}
 	library, err := LoadLibrary(target)
@@ -208,6 +213,26 @@ func AddFavorite(target, address string, now time.Time) error {
 		return errors.New("the favorites list is full")
 	}
 	library.Favorites = favorites
+	return writeLibrary(target, library)
+}
+
+// AddRecent records a server just joined (newest first, at most 20).
+func AddRecent(target, address string, now time.Time) error {
+	entry, err := newEntry(address, "", "user", now)
+	if err != nil {
+		return err
+	}
+	library, err := LoadLibrary(target)
+	if err != nil {
+		return err
+	}
+	recents := []LibraryEntry{entry}
+	for _, item := range library.Recents {
+		if item.Address != entry.Address && len(recents) < maxRecents {
+			recents = append(recents, item)
+		}
+	}
+	library.Recents = recents
 	return writeLibrary(target, library)
 }
 

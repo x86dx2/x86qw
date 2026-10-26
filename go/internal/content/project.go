@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 
 	"github.com/x86dx2/x86qw/go/internal/atomicfile"
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
@@ -184,7 +185,7 @@ func loadPolicy(path string) (map[string]*Object, []string, error) {
 			return nil, nil, fmt.Errorf("invalid component declaration: %s", pyRepr(name))
 		}
 		consumers, ok := pyjson.StrList(component.Value("consumers"))
-		if !ok || len(consumers) == 0 || contains(consumers, "") {
+		if !ok || len(consumers) == 0 || slices.Contains(consumers, "") {
 			return nil, nil, fmt.Errorf("component has no explicit consumer: %s", name)
 		}
 		prefixes, ok := pyjson.StrList(component.Value("distribution_prefixes"))
@@ -198,15 +199,6 @@ func loadPolicy(path string) (map[string]*Object, []string, error) {
 		result[name] = component
 	}
 	return result, components.Keys(), nil
-}
-
-func contains(values []string, wanted string) bool {
-	for _, value := range values {
-		if value == wanted {
-			return true
-		}
-	}
-	return false
 }
 
 func hasPrefixAny(value string, prefixes []string) bool {

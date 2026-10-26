@@ -19,12 +19,10 @@ import (
 
 // Operation drives one `host`, `proxy` or `qtv` invocation like services.main.
 type Operation struct {
-	Action string
-	Host   *HostOptions
-	Proxy  *ProxyOptions
-	Qtv    *QtvOptions
-	// Args are the raw command-line arguments (re-used by --background).
-	Args    []string
+	Action  string
+	Host    *HostOptions
+	Proxy   *ProxyOptions
+	Qtv     *QtvOptions
 	Stdin   io.Reader
 	Console *Console
 	// Output receives the runtimes' stdout/stderr.

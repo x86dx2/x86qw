@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"os/signal"
 	"syscall"
 	"time"
 
@@ -62,9 +63,17 @@ func processStillMatches(entry map[string]any) bool {
 	if status != "dead" {
 		return false
 	}
+	return orphanedGroup(entry)
+}
+
+// orphanedGroup reports whether the recorded leader is gone but its process
+// group lives on. A token from before the last boot owns no group: another
+// job may hold that number now.
+func orphanedGroup(entry map[string]any) bool {
 	pid, _ := intField(entry["pid"])
 	group, ok := intField(entry["process_group"])
-	return ok && group == pid && group > 1 && processGroupStatus(group) == "alive"
+	token, _ := entry["creation_token"].(string)
+	return ok && group == pid && group > 1 && lock.ThisBoot(token) && processGroupStatus(group) == "alive"
 }
 
 // terminateRecordedProcess ends a journaled process (and its group) once it
@@ -74,7 +83,8 @@ func terminateRecordedProcess(entry map[string]any) (string, error) {
 	pid, _ := intField(entry["pid"])
 	if status == "dead" {
 		group, ok := intField(entry["process_group"])
-		if !ok || group != pid || group <= 1 {
+		token, _ := entry["creation_token"].(string)
+		if !ok || group != pid || group <= 1 || !lock.ThisBoot(token) {
 			return "already_dead", nil
 		}
 		switch processGroupStatus(group) {
@@ -181,7 +191,15 @@ func exitCode(state *os.ProcessState) int {
 	return state.ExitCode()
 }
 
-var serviceSignals = []os.Signal{syscall.SIGINT, syscall.SIGTERM}
+// serviceSignals end a stack: Ctrl+C, a kill, and a closed terminal or a
+// dropped SSH session, unless nohup asked to ignore that.
+var serviceSignals = func() []os.Signal {
+	signals := []os.Signal{syscall.SIGINT, syscall.SIGTERM}
+	if !signal.Ignored(syscall.SIGHUP) {
+		signals = append(signals, syscall.SIGHUP)
+	}
+	return signals
+}()
 
 func signalNumber(sig os.Signal) int {
 	if number, ok := sig.(syscall.Signal); ok {
@@ -210,7 +228,5 @@ func spawnBackgroundController(executable string, arguments []string, request []
 	}
 	return command, nil
 }
-
-var _ = lock.Identity
 
 // replaceFile atomically moves temporary over path.

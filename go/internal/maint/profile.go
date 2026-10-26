@@ -11,11 +11,11 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/atomicfile"
-	"github.com/x86dx2/x86qw/go/internal/fspath"
 	"github.com/x86dx2/x86qw/go/internal/pyjson"
 )
 
@@ -99,7 +99,7 @@ func ClassifyInstallData(target string) DataReport {
 			sort.Slice(names, func(a, b int) bool { return lessCodepoints(names[a], names[b]) })
 			for _, name := range names {
 				relative := root + "/" + name
-				if !contains(report.Profile, relative) && IsUserProfilePath(relative) && regular(filepath.Join(dir, name)) {
+				if !slices.Contains(report.Profile, relative) && IsUserProfilePath(relative) && regular(filepath.Join(dir, name)) {
 					report.Profile = append(report.Profile, relative)
 				}
 			}
@@ -116,15 +116,6 @@ func ClassifyInstallData(target string) DataReport {
 		}
 	}
 	return report
-}
-
-func contains(values []string, wanted string) bool {
-	for _, value := range values {
-		if value == wanted {
-			return true
-		}
-	}
-	return false
 }
 
 func lessCodepoints(a, b string) bool {
@@ -151,12 +142,6 @@ func RenderProfile(report DataReport) string {
 	}
 	return strings.Join(lines, "\n") + "\n"
 }
-
-// resolve and inside are fspath's, under the names this package uses.
-var (
-	resolve = fspath.Resolve
-	inside  = fspath.Inside
-)
 
 // BackupProfile writes a zip of user-owned profile files.
 func BackupProfile(target, destination string) (string, error) {

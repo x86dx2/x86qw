@@ -37,6 +37,9 @@ func observing(ctx context.Context) *Observer {
 }
 
 func (o *Observer) begin(ctx context.Context, id string, size int64) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if o.Wait != nil {
 		if err := o.Wait(ctx); err != nil {
 			return err

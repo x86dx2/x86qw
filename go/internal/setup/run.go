@@ -33,6 +33,9 @@ func RunRecipe(ctx context.Context, b Backend, options Options, report RecipeRep
 	if blocked {
 		return Progress{}, ErrBlocked
 	}
+	if err := ctx.Err(); err != nil {
+		return Progress{}, err
+	}
 	landed := map[string]bool{}
 	var last Progress
 	for progress := range b.Install(ctx, options, nil) {

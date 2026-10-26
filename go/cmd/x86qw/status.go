@@ -10,6 +10,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/output"
 	"github.com/x86dx2/x86qw/go/internal/services"
+	"github.com/x86dx2/x86qw/go/internal/setup"
 )
 
 func runStatus(args []string, stdout, stderr io.Writer) int {
@@ -29,7 +30,7 @@ func runStatus(args []string, stdout, stderr io.Writer) int {
 	if options.Target == "" {
 		options.Target = install.DefaultTarget()
 	}
-	target, _ := filepath.Abs(expandHome(options.Target))
+	target, _ := filepath.Abs(setup.ExpandHome(options.Target))
 	target = lock.Resolve(target)
 	if asJSON {
 		if options.Stop {
@@ -53,7 +54,7 @@ func runStatus(args []string, stdout, stderr io.Writer) int {
 		console.Error("No x86QW service stack is running.")
 		return output.ExitFailure
 	}
-	if proceed, code := confirm("Stop the running stack?", "x86qw status --stop "+target, options.Yes, stdout, stderr); !proceed {
+	if proceed, code := confirm("Stop the running stack?", []string{"x86qw", "status", "--stop", target}, options.Yes, stdout, stderr); !proceed {
 		return code
 	}
 	if err := services.RequestStop(target, 15*time.Second); err != nil {

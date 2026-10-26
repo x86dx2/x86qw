@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
 
@@ -54,10 +53,12 @@ func runRepair(args []string, stdout, stderr io.Writer) int {
 		return output.ExitSuccess
 	}
 	question := fmt.Sprintf("Repair %d item(s) in %s?", len(planned.Operations), target)
-	if proceed, code := confirm(question, "x86qw repair "+target, a.yes, stdout, stderr); !proceed {
+	if proceed, code := confirm(question, []string{"x86qw", "repair", target}, a.yes, stdout, stderr); !proceed {
 		return code
 	}
-	result, err := install.Repair(context.Background(), input)
+	ctx, stop := interruptible()
+	defer stop()
+	result, err := install.Repair(ctx, input)
 	if err != nil {
 		fmt.Fprintf(stderr, "✗ %v\n", err)
 		return output.ExitFailure
@@ -72,6 +73,6 @@ func runRepair(args []string, stdout, stderr io.Writer) int {
 func init() {
 	register(command{name: "repair", group: "Install and maintain", order: 60, synopsis: "[TARGET]",
 		summary: "restores what verify reports",
-		about:   "Downloads again what is missing or does not match the catalog, without touching what you edited. Shows the plan and asks first; without a terminal, needs --yes.",
+		about:   "Downloads again what is missing or does not match the catalog and keeps a copy of what you changed beside it, as .x86qw-kept. Shows the plan and asks first; without a terminal, needs --yes.",
 		flags:   (&planArgs{}).parser, run: noName(runRepair)})
 }

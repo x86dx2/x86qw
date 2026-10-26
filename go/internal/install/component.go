@@ -85,7 +85,7 @@ func PreparePackage(artifact string, pkg catalog.Package, stage string) (*Prepar
 		if !strings.HasPrefix(member.Path, "payload/") && !strings.HasPrefix(member.Path, "defaults/") {
 			return nil, fmt.Errorf("invalid internal destination in package %s: %s", id, member.Path)
 		}
-		digest, err := fileSHA256(filepath.Join(root, filepath.FromSlash(member.Path)))
+		digest, err := archive.FileSHA256(filepath.Join(root, filepath.FromSlash(member.Path)))
 		if err != nil || digest != member.SHA256 {
 			return nil, fmt.Errorf("invalid internal file in package %s: %s", id, member.Path)
 		}
@@ -142,9 +142,12 @@ func PreparePackage(artifact string, pkg catalog.Package, stage string) (*Prepar
 	return prepared, nil
 }
 
+// hostOS and hostArch are this machine (tests stand in for another).
+var hostOS, hostArch = runtime.GOOS, runtime.GOARCH
+
 // HostVariant is the runtime variant (runtimes.json) for this machine.
 func HostVariant() (string, error) {
-	switch runtime.GOOS + "/" + runtime.GOARCH {
+	switch hostOS + "/" + hostArch {
 	case "darwin/arm64":
 		return "macos-arm64", nil
 	case "linux/amd64":
@@ -152,7 +155,20 @@ func HostVariant() (string, error) {
 	case "windows/amd64":
 		return "windows-x64", nil
 	}
-	return "", fmt.Errorf("platform %s/%s has no x86QW servers", runtime.GOOS, runtime.GOARCH)
+	return "", fmt.Errorf("platform %s/%s has no x86QW servers", hostOS, hostArch)
+}
+
+// hostRuns refuses, before anything downloads, components that have no
+// build for this machine.
+func hostRuns(inventory *catalog.Inventory, ids []string) error {
+	for _, id := range ids {
+		if component, _ := inventory.Get(id); len(component.PlatformFiles()) > 0 {
+			if _, err := HostVariant(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // NormalizePlatform keeps only this host's executable of a multi-platform

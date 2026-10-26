@@ -1,11 +1,8 @@
 package maint
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -13,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/atomicfile"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
@@ -95,19 +93,6 @@ func changeBaseline(target string) (map[string]managedFile, error) {
 	return managed, nil
 }
 
-func fileSHA256(name string) (string, error) {
-	file, err := os.Open(name)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
 func ignored(path string, ignoredPaths []string) bool {
 	for _, item := range ignoredPaths {
 		if path == item || strings.HasPrefix(path, item+"/") {
@@ -129,7 +114,7 @@ func InspectChanges(target string) ([]Change, error) {
 		path := filepath.Join(target, filepath.FromSlash(relative))
 		if !regular(path) {
 			changes = append(changes, Change{"D", relative, record.component})
-		} else if digest, _ := fileSHA256(path); digest != record.sha256 {
+		} else if digest, _ := archive.FileSHA256(path); digest != record.sha256 {
 			changes = append(changes, Change{"M", relative, record.component})
 		}
 	}

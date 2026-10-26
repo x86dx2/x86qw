@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 const noFollow = syscall.O_NOFOLLOW
@@ -43,6 +44,30 @@ func Identity(pid int) (ProcessIdentity, string) {
 		return linuxIdentity(pid)
 	}
 	return ProcessIdentity{}, "inconclusive"
+}
+
+// ThisBoot reports whether a creation token can name a process of the
+// running system: one from before the last boot names none, whatever now
+// holds its PID.
+func ThisBoot(token string) bool {
+	switch {
+	case strings.HasPrefix(token, "linux:"):
+		boot, _, _ := strings.Cut(strings.TrimPrefix(token, "linux:"), ":")
+		current, err := os.ReadFile("/proc/sys/kernel/random/boot_id")
+		return err != nil || boot == strings.TrimSpace(string(current))
+	case strings.HasPrefix(token, "macos:"):
+		started, err := time.ParseInLocation("Mon Jan 2 15:04:05 2006", strings.TrimPrefix(token, "macos:"), time.Local)
+		if err != nil {
+			return true
+		}
+		output, err := exec.Command("sysctl", "-n", "kern.boottime").Output()
+		var seconds int64
+		if _, scanErr := fmt.Sscanf(string(output), "{ sec = %d", &seconds); err != nil || scanErr != nil {
+			return true
+		}
+		return !started.Before(time.Unix(seconds, 0))
+	}
+	return true
 }
 
 func darwinIdentity(pid int) (ProcessIdentity, string) {
@@ -102,5 +127,6 @@ func linuxIdentity(pid int) (ProcessIdentity, string) {
 	if err != nil {
 		return ProcessIdentity{}, "inconclusive"
 	}
-	return ProcessIdentity{PID: pid, Token: "linux:" + boot + ":" + fields[19], Executable: realpath(exe)}, "alive"
+	// A binary replaced under the process reads "path (deleted)".
+	return ProcessIdentity{PID: pid, Token: "linux:" + boot + ":" + fields[19], Executable: realpath(strings.TrimSuffix(exe, " (deleted)"))}, "alive"
 }

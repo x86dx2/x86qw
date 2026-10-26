@@ -17,7 +17,7 @@ type uninstallArgs struct {
 func (a *uninstallArgs) parser() *cliargs.Parser {
 	p := cliargs.New()
 	targetFlag(p, &a.target)
-	p.Bool(&a.purge, "deletes the whole folder and the cache, personal data included", "--purge")
+	p.Bool(&a.purge, "also deletes personal data and the cache; what x86QW did not make stays", "--purge")
 	p.Bool(&a.yes, "does not ask", "--yes")
 	return p
 }
@@ -36,9 +36,9 @@ func runUninstall(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "✗ %v\n", err)
 		return output.ExitFailure
 	}
-	question, retry := "Remove x86QW from "+target+"? Settings, PAKs and demos stay.", "x86qw uninstall "+target
+	question, retry := "Remove x86QW from "+target+"? Settings, PAKs and demos stay.", []string{"x86qw", "uninstall", target}
 	if a.purge {
-		question, retry = "Delete all of "+target+", settings and demos included, and the x86QW cache?", "x86qw uninstall --purge "+target
+		question, retry = "Delete everything x86QW made in "+target+", settings and demos included, and the x86QW cache?", []string{"x86qw", "uninstall", "--purge", target}
 	}
 	if proceed, code := confirm(question, retry, a.yes, stdout, stderr); !proceed {
 		return code
@@ -68,7 +68,7 @@ func runUninstall(args []string, stdout, stderr io.Writer) int {
 
 func init() {
 	register(command{name: "uninstall", group: "Install and maintain", order: 70, synopsis: "[TARGET]",
-		summary: "removes the installation (with --purge, everything)",
-		about:   "Removes what x86QW installed and keeps settings, PAKs, demos and files you edited. With --purge, deletes the whole folder and the cache. Asks first; without a terminal, needs --yes.",
+		summary: "removes the installation (with --purge, personal data too)",
+		about:   "Removes what x86QW installed and keeps settings, PAKs, demos and files you edited. With --purge, also deletes personal data and the cache; files that were in the folder before x86QW stay. Asks first; without a terminal, needs --yes.",
 		flags:   (&uninstallArgs{}).parser, run: noName(runUninstall)})
 }

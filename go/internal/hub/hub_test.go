@@ -3,6 +3,8 @@ package hub
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/x86dx2/x86qw/go/internal/play"
 )
 
 func TestProjectsClosedShape(t *testing.T) {
@@ -71,5 +73,27 @@ func TestReadableTurnsTheQuakeWorldCharsetIntoText(t *testing.T) {
 		if got := readable(raw); got != want {
 			t.Errorf("%q: %q, want %q", raw, got, want)
 		}
+	}
+}
+
+// Every server the list shows can be joined, and its stream watched, through
+// x86qw open; an address it cannot reach is left out.
+func TestListedServersCanBeJoined(t *testing.T) {
+	players := []any{map[string]any{"is_bot": false}}
+	servers, err := Project([]any{
+		map[string]any{"address": "[2001:db8::1]:27500", "players": players},
+		map[string]any{"address": "qw_eu.example.org:27500", "players": players, "qtv_stream": "1234567@qtv.example.org:28000"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(servers) != 1 || servers[0].Address != "qw_eu.example.org:27500" || servers[0].QTVStream == nil {
+		t.Fatalf("servers: %+v", servers)
+	}
+	if _, err := play.OpenArguments(t.TempDir(), "qw://"+servers[0].Address); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := play.OpenArguments(t.TempDir(), "qw://"+*servers[0].QTVStream+"/qtvplay"); err != nil {
+		t.Fatal(err)
 	}
 }

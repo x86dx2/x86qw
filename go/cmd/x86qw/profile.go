@@ -9,6 +9,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/doctor"
 	"github.com/x86dx2/x86qw/go/internal/maint"
 	"github.com/x86dx2/x86qw/go/internal/output"
+	"github.com/x86dx2/x86qw/go/internal/setup"
 )
 
 type profileArgs struct{ target, backup, restore string }
@@ -34,7 +35,7 @@ func runProfile(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprint(stdout, maint.RenderProfile(maint.ClassifyInstallData(target)))
 	if a.backup != "" {
-		destination, err := doctor.BundleDestination(expandHome(a.backup), target)
+		destination, err := doctor.BundleDestination(setup.ExpandHome(a.backup), target)
 		if err == nil {
 			destination, err = maint.BackupProfile(target, destination)
 		}
@@ -45,7 +46,7 @@ func runProfile(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "✓ Profile written: %s\n", destination)
 	}
 	if a.restore != "" {
-		restored, err := maint.RestoreProfile(expandHome(a.restore), target)
+		restored, err := maint.RestoreProfile(setup.ExpandHome(a.restore), target)
 		if err != nil {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
 			return output.ExitFailure

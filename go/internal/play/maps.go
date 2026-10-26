@@ -1,6 +1,7 @@
 package play
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -255,7 +256,7 @@ func CompatibleMaps(root string, game Game, requirements []Requirement, assets m
 		for index, requirement := range requirements {
 			keys[index] = requirement.Asset
 		}
-		return nil, errorf("No installed map has the asset %s needs: %s.", label, strings.Join(keys, ", "))
+		return nil, fmt.Errorf("No installed map has the asset %s needs: %s.", label, strings.Join(keys, ", "))
 	}
 	return filtered, nil
 }
@@ -272,5 +273,5 @@ func ResolveMap(root string, game Game, requested string, requirements []Require
 			return name, nil
 		}
 	}
-	return "", errorf("Map %s is not available or not compatible with %s.", requested, label)
+	return "", fmt.Errorf("Map %s is not available or not compatible with %s.", requested, label)
 }

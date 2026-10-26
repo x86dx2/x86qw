@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -339,7 +340,7 @@ func ValidateComponentCatalog(value any) error {
 				missing = append(missing, dependency)
 			}
 		}
-		if len(missing) > 0 || contains(dependencies[identifier], identifier) {
+		if len(missing) > 0 || slices.Contains(dependencies[identifier], identifier) {
 			if len(missing) == 0 {
 				missing = []string{identifier}
 			}
@@ -379,7 +380,7 @@ func ValidateComponentCatalog(value any) error {
 		return fmt.Errorf("stable/nightly compatibility must cover every client content component")
 	}
 	verified, ok := pyjson.StrList(compatibility.Value("verified"))
-	if !ok || len(verified) == 0 || contains(verified, "") {
+	if !ok || len(verified) == 0 || slices.Contains(verified, "") {
 		return fmt.Errorf("invalid stable/nightly verification scope")
 	}
 
@@ -400,7 +401,7 @@ func ValidateComponentCatalog(value any) error {
 		if !ok {
 			return fmt.Errorf("invalid profile history: %s", name)
 		}
-		if !contains(fingerprints, ProfileFingerprint(profiles[name])) {
+		if !slices.Contains(fingerprints, ProfileFingerprint(profiles[name])) {
 			return fmt.Errorf("profile history omits current definition: %s", name)
 		}
 		for _, fingerprint := range fingerprints {

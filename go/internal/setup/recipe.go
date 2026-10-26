@@ -8,13 +8,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
-)
 
-// RecipeFlags are the flags Recipe writes, and --recipe for the file
-// RecipeJSON writes; --intent or --recipe makes `x86qw setup` install
-// without asking.
-var RecipeFlags = []string{"recipe", "intent", "nick", "content", "keys", "sensitivity", "invert-mouse", "experience", "video", "volume",
-	"server-name", "hostname", "servers", "base-port", "qtv", "qwfwd", "local", "slots", "no-record", "integrate"}
+	"github.com/x86dx2/x86qw/go/internal/catalog"
+	"github.com/x86dx2/x86qw/go/internal/play"
+)
 
 // AddRecipeFlags declares the recipe flags on flags and returns how to
 // read them into options once parsed. target is the installation folder.
@@ -101,12 +98,16 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 			o.Server.Hostname = strings.ToLower(*hostname)
 		}
 		if given["servers"] {
+			modes, _ := play.LoadModes()
 			o.Server.Instances = nil
 			for _, item := range splitList(*servers) {
 				bots := strings.HasSuffix(item, "+bots")
 				mode, mapName, ok := strings.Cut(strings.TrimSuffix(item, "+bots"), ":")
 				if !ok || mode == "" || mapName == "" {
 					return o, fmt.Errorf("--servers: %q is not MODE:MAP", item)
+				}
+				if found, err := play.FindMode(modes, mode); err == nil {
+					mode = found.Key // an alias keeps the mode's own name
 				}
 				o.Server.Instances = append(o.Server.Instances, Instance{Mode: mode, Map: mapName, Bots: bots})
 			}
@@ -158,8 +159,29 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 				}
 			}
 		}
-		return o, o.Validate()
+		if err := o.Validate(); err != nil {
+			return o, err
+		}
+		return o, knownComponents(o)
 	}
+}
+
+// knownComponents refuses a custom selection naming a component the
+// inventory does not have, which the install would skip.
+func knownComponents(o Options) error {
+	if !o.Intent.WantsClient() || o.Content != "custom" {
+		return nil
+	}
+	inventory, err := catalog.LoadInventory()
+	if err != nil {
+		return err
+	}
+	for _, id := range o.Components {
+		if _, ok := inventory.Get(id); !ok {
+			return problem("content", "v.component", id)
+		}
+	}
+	return nil
 }
 
 // ReadRecipe reads what RecipeJSON wrote. The folder of the machine that
@@ -167,7 +189,8 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 // server gets an rcon password of its own; the recipe carries none. The
 // options are validated once Target is set (Options.Validate).
 func ReadRecipe(r io.Reader) (Options, error) {
-	var file recipeFile
+	// What the file leaves out keeps its default, not a zero.
+	file := recipeFile{Options: Defaults("", "")}
 	decoder := json.NewDecoder(io.LimitReader(r, 1<<20))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&file); err != nil {

@@ -147,8 +147,6 @@ func FindMode(modes []Mode, requested string) (Mode, error) {
 	return Mode{}, fmt.Errorf("Unknown KTX mode: %s. Available: %s.", requested, strings.Join(keys, ", "))
 }
 
-func errorf(format string, args ...any) error { return fmt.Errorf(format, args...) }
-
 // requirementLabels name the map assets KTX modes need; the signed
 // modes.json names them in Portuguese.
 var requirementLabels = map[string]string{

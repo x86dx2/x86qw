@@ -91,7 +91,7 @@ func TestConfirmAsksOnATerminal(t *testing.T) {
 	for answer, want := range map[string]bool{"y\n": true, "yes\n": true, "s\n": true, "\n": false, "n\n": false} {
 		stdin = strings.NewReader(answer)
 		var stdout, stderr bytes.Buffer
-		if proceed, code := confirm("Continue?", "x86qw x", false, &stdout, &stderr); proceed != want || code != 0 {
+		if proceed, code := confirm("Continue?", []string{"x86qw", "x"}, false, &stdout, &stderr); proceed != want || code != 0 {
 			t.Errorf("%q: %v %d", answer, proceed, code)
 		}
 	}

@@ -12,11 +12,13 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
+	"github.com/x86dx2/x86qw/go/internal/fspath"
 )
 
 // Component payload resolution: which files go into each package.
@@ -52,7 +54,7 @@ func meta(pairs ...any) *Object { return object(pairs...) }
 // live in one tree laid out like the nQuake repository; each one must come
 // from the revision its owner pins (the revision in its manifest URL).
 func LoadSourceContext(distribution string, catalog, releases *Object) (*SourceContext, error) {
-	distribution = resolve(distribution)
+	distribution = fspath.Resolve(distribution)
 	snapshot := filepath.Join(distribution, filepath.FromSlash(nquakeDir))
 	if !isDir(snapshot) || isSymlink(snapshot) {
 		return nil, fmt.Errorf("canonical nQuake source tree is missing: %s", snapshot)
@@ -893,7 +895,7 @@ func (c *SourceContext) applyArchiveLayers(identifier string, component, release
 		if err != nil {
 			return nil, err
 		}
-		if owner != identifier || !contains(c.Partition[identifier], referenceSource) || destination != targetArchive || mode != "archive-base" {
+		if owner != identifier || !slices.Contains(c.Partition[identifier], referenceSource) || destination != targetArchive || mode != "archive-base" {
 			return nil, fmt.Errorf("archive layer reference is not the declared base of %s: %s", identifier, referenceSource)
 		}
 		packageMember := "payload/" + targetArchive

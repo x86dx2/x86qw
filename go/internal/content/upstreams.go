@@ -1,14 +1,12 @@
 package content
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"regexp"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
@@ -124,19 +122,6 @@ func ValidateUpstreams(value any) error {
 	return nil
 }
 
-func fileSHA256(path string) (string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-	digest := sha256.New()
-	if _, err := io.Copy(digest, file); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(digest.Sum(nil)), nil
-}
-
 // VerifyPreservedSources checks every preserved source in the distribution
 // and returns how many there are.
 func (p *Project) VerifyPreservedSources(registry *Object, distribution string) (int, error) {
@@ -154,7 +139,7 @@ func (p *Project) VerifyPreservedSources(registry *Object, distribution string) 
 				if !pyjson.EqInt(source.Value("size"), info.Size()) {
 					return 0, fmt.Errorf("preserved source is missing or has the wrong size: %s", path)
 				}
-				digest, err := fileSHA256(path)
+				digest, err := archive.FileSHA256(path)
 				if err != nil {
 					return 0, err
 				}

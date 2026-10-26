@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
+	"unicode"
 
 	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/maint"
@@ -53,7 +56,12 @@ func runChanges(args []string, stdout, stderr io.Writer) int {
 		if change.Component != "" {
 			component = "  [" + change.Component + "]"
 		}
-		fmt.Fprintf(stdout, "%s  %s%s\n", change.Status, change.Path, component)
+		path := change.Path
+		if strings.IndexFunc(path, unicode.IsControl) >= 0 {
+			// A name a server chose must not drive the terminal.
+			path = strconv.Quote(path)
+		}
+		fmt.Fprintf(stdout, "%s  %s%s\n", change.Status, path, component)
 	}
 	if len(changes) > 0 {
 		fmt.Fprintf(stdout, "· %d difference(s): A new, M modified, D removed.\n", len(changes))

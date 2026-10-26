@@ -106,7 +106,7 @@ func Open(source string, limits Limits) (*Plan, error) {
 	if info.Size() > limits.MaxSourceSize {
 		return nil, fail("ZIP file exceeds %d bytes", limits.MaxSourceSize)
 	}
-	digest, err := fileSHA256(source)
+	digest, err := FileSHA256(source)
 	if err != nil {
 		return nil, err
 	}
@@ -386,7 +386,8 @@ func extractMember(root string, member Member) error {
 	return os.Chmod(target, mode)
 }
 
-func fileSHA256(name string) (string, error) {
+// FileSHA256 is the hex SHA-256 of the file at name.
+func FileSHA256(name string) (string, error) {
 	file, err := os.Open(name)
 	if err != nil {
 		return "", err

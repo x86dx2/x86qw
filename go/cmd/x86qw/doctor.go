@@ -10,6 +10,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/doctor"
 	"github.com/x86dx2/x86qw/go/internal/output"
+	"github.com/x86dx2/x86qw/go/internal/setup"
 )
 
 type doctorArgs struct {
@@ -41,7 +42,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 	if a.bundle != "" {
 		var envelope bytes.Buffer
 		output.Success("doctor", report).Write(&envelope)
-		written, err := doctor.WriteBundle(envelope.Bytes(), expandHome(a.bundle), target)
+		written, err := doctor.WriteBundle(envelope.Bytes(), setup.ExpandHome(a.bundle), target)
 		if err != nil {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
 			return output.ExitFailure

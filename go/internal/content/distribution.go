@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/content/pyjson"
 )
 
@@ -172,7 +173,7 @@ func distributionFiles(root string) (map[string]bool, error) {
 	for _, relative := range files {
 		name := posixName(relative)
 		suffix := pathSuffix(name)
-		if name == "manifest.json" || name == ".DS_Store" || contains(strings.Split(relative, "/"), "__pycache__") || suffix == ".pyc" || suffix == ".pyo" {
+		if name == "manifest.json" || name == ".DS_Store" || slices.Contains(strings.Split(relative, "/"), "__pycache__") || suffix == ".pyc" || suffix == ".pyo" {
 			continue
 		}
 		actual[relative] = true
@@ -266,7 +267,7 @@ func (p *Project) VerifyDistribution(root string, manifest *Object) (int, error)
 		if isSymlink(path) || !pyjson.EqInt(metadata.Value("size"), info.Size()) {
 			return 0, fmt.Errorf("distribution file failed integrity verification: %s", relative)
 		}
-		digest, err := fileSHA256(path)
+		digest, err := archive.FileSHA256(path)
 		if err != nil {
 			return 0, err
 		}
@@ -276,19 +277,4 @@ func (p *Project) VerifyDistribution(root string, manifest *Object) (int, error)
 		checked++
 	}
 	return checked, nil
-}
-
-// resolve makes path absolute and follows the links in the part of it that
-// exists.
-func resolve(path string) string {
-	absolute, _ := filepath.Abs(path)
-	if resolved, err := filepath.EvalSymlinks(absolute); err == nil {
-		return resolved
-	}
-	// Resolve the longest existing prefix, keeping the missing tail.
-	dir, tail := filepath.Split(absolute)
-	if dir == absolute || dir == "" {
-		return absolute
-	}
-	return filepath.Join(resolve(filepath.Clean(dir)), tail)
 }

@@ -43,7 +43,6 @@ type Package struct {
 	SourceCommit           string   `json:"source_commit"`
 	RedistributionReviewed bool     `json:"redistribution_reviewed"`
 	DistributionPath       string   `json:"distribution_path"`
-	Current                bool     `json:"current"`
 }
 
 // Catalog is a parsed catalog.json (format 1).

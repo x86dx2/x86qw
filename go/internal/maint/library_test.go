@@ -44,6 +44,33 @@ func TestFavoritesAreNormalizedNewestFirstAndUnique(t *testing.T) {
 	}
 }
 
+// Joined servers go to the recents, newest first and once each; past 20 the
+// oldest leaves.
+func TestRecentsKeepTheLastServersJoined(t *testing.T) {
+	root := t.TempDir()
+	now := time.Now()
+	for index := 0; index <= maxRecents; index++ {
+		if err := AddRecent(root, fmt.Sprintf("server%d.example:27500", index), now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := AddRecent(root, "SERVER5.example:27500", now); err != nil {
+		t.Fatal(err)
+	}
+	library, err := LoadLibrary(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var addresses []string
+	for _, entry := range library.Recents {
+		addresses = append(addresses, entry.Address)
+	}
+	if len(addresses) != 20 || addresses[0] != "server5.example:27500" || addresses[1] != "server20.example:27500" ||
+		addresses[19] != "server1.example:27500" || strings.Count(strings.Join(addresses, ","), "server5.") != 1 {
+		t.Fatalf("recents: %v", addresses)
+	}
+}
+
 func TestFavoritesStopAtTheLimit(t *testing.T) {
 	root := t.TempDir()
 	now := time.Now()
@@ -101,5 +128,17 @@ func TestLibraryRefusesASymlink(t *testing.T) {
 	}
 	if !strings.Contains(read(t, outside), `"favorites": []`) {
 		t.Fatal("the outside file was changed")
+	}
+}
+
+// A favorite is a server x86qw open can join: an address it refuses would sit
+// in the list and fail on every enter.
+func TestFavoritesAreServersOpenCanJoin(t *testing.T) {
+	root := t.TempDir()
+	if err := AddFavorite(root, "[2001:db8::1]:27500", time.Now()); err == nil {
+		t.Fatal("an address open refuses became a favorite")
+	}
+	if err := AddFavorite(root, "qw_eu.example.org:27500", time.Now()); err != nil {
+		t.Fatal(err)
 	}
 }

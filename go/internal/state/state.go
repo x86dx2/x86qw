@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -26,11 +27,27 @@ var (
 	componentID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}$`)
 	// Profiles accepted in persisted state.
 	Profiles = map[string]bool{"none": true, "custom": true, "essential": true, "recommended": true, "complete": true}
-	// legacyReplacements and legacyRemovals are the component ids renamed or
-	// dropped since the nQuake era.
-	legacyReplacements = map[string]string{"nquake-bootstrap": "x86qw-client-bootstrap", "nquake-ktx": "ktx"}
-	legacyRemovals     = map[string]bool{"nquake-sounds": true}
+	// LegacyReplacements and LegacyRemovals are the component ids renamed or
+	// dropped since the nQuake era, in the order plans list them.
+	LegacyReplacements = []struct{ Legacy, Replacement string }{
+		{"nquake-bootstrap", "x86qw-client-bootstrap"}, {"nquake-ktx", "ktx"},
+	}
+	LegacyRemovals = []string{"nquake-sounds"}
 )
+
+// currentID is the id a recorded component goes by now; false when it was
+// dropped.
+func currentID(id string) (string, bool) {
+	if slices.Contains(LegacyRemovals, id) {
+		return "", false
+	}
+	for _, legacy := range LegacyReplacements {
+		if legacy.Legacy == id {
+			return legacy.Replacement, true
+		}
+	}
+	return id, true
+}
 
 // Error describes an invalid state document.
 type Error struct {
@@ -166,12 +183,10 @@ func components(document map[string]any, field string) ([]string, error) {
 func (s *State) Installed() []string {
 	var result []string
 	seen := map[string]bool{}
-	for _, id := range s.RecordedComponents {
-		if legacyRemovals[id] {
+	for _, recorded := range s.RecordedComponents {
+		id, ok := currentID(recorded)
+		if !ok {
 			continue
-		}
-		if replacement, ok := legacyReplacements[id]; ok {
-			id = replacement
 		}
 		if !seen[id] {
 			seen[id] = true
@@ -214,12 +229,10 @@ func (s *State) Migrate(targetVersion string) map[string]any {
 	replace := func(ids []string) []any {
 		result := []any{}
 		seen := map[string]bool{}
-		for _, id := range ids {
-			if legacyRemovals[id] {
+		for _, recorded := range ids {
+			id, ok := currentID(recorded)
+			if !ok {
 				continue
-			}
-			if replacement, ok := legacyReplacements[id]; ok {
-				id = replacement
 			}
 			if !seen[id] {
 				seen[id] = true

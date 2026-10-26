@@ -138,7 +138,7 @@ func TestConsoleShowsTheInstallation(t *testing.T) {
 	m := started(t, true)
 	toConsole(m)
 	view := stripANSI(m.View().Content)
-	if !strings.Contains(view, shortPath(m.existing.Target)) {
+	if !strings.Contains(view, setup.ShortPath(m.existing.Target)) {
 		t.Fatalf("Console names the folder of the installation:\n%s", view)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -36,7 +37,7 @@ func (p *Project) ValidateRecipe(value any, label string) (string, error) {
 		return "", fmt.Errorf("%s.package.expected_members must not be empty", label)
 	}
 	names, ok := pyjson.StrList(members)
-	if !ok || contains(names, "") {
+	if !ok || slices.Contains(names, "") {
 		return "", fmt.Errorf("%s.package.expected_members must contain paths", label)
 	}
 	if !uniqueStrings(names) {
@@ -78,7 +79,7 @@ func RecipePaths(root string) ([]string, error) {
 		}
 		relative, _ := filepath.Rel(root, path)
 		parts := strings.Split(filepath.ToSlash(relative), "/")
-		if contains(parts, "sources") {
+		if slices.Contains(parts, "sources") {
 			return nil
 		}
 		paths = append(paths, parts)

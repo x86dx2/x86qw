@@ -3,8 +3,8 @@ package tui
 import (
 	"fmt"
 	"net/netip"
-	"os"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -30,10 +30,12 @@ func (m *Model) openModal(kind string) {
 	m.modal.field["hostname"].Accept = func(r rune) bool {
 		return r == '.' || r == '-' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
 	}
-	// The game's console reads these between quotes.
-	for _, name := range []string{"srv.name", "rcon", "password", "spectator"} {
+	// The game's console reads these between quotes; the server name goes
+	// out in the Quake charset too.
+	for _, name := range []string{"rcon", "password", "spectator"} {
 		m.modal.field[name].Accept = setup.NameRune
 	}
+	m.modal.field["srv.name"].Accept = setup.PlainRune
 	if picker(kind) {
 		add("filter", "", 30)
 	}
@@ -404,7 +406,7 @@ func (m *Model) bindKey(action, key string) {
 	if name, ok := names[key]; ok {
 		key = name
 	}
-	if len([]rune(key)) != 1 && !strings.HasSuffix(key, "arrow") && key != "space" {
+	if !setup.KeyName(key) || (len(key) != 1 && !strings.HasSuffix(key, "arrow") && key != "space") {
 		m.say(fmt.Sprintf(m.t("key.unknown"), key))
 		return
 	}
@@ -508,9 +510,9 @@ func (m *Model) modalRows() []formRow {
 		}
 	case "integ":
 		in := &o.Integration
-		short := m.t("i.short." + platform())
+		short := m.t("i.short." + setup.HostPlatform())
 		path := m.t("i.path.unix")
-		if platform() == "windows" {
+		if setup.HostPlatform() == "windows" {
 			path = m.t("i.path.windows")
 		}
 		// Only what this system can do is offered.
@@ -533,7 +535,7 @@ func (m *Model) modalRows() []formRow {
 		if m.existing != nil {
 			// The installation lives where it is; the setup changes it there.
 			return []formRow{
-				{kind: rowInfo, label: m.t("sec.folder"), value: shortPath(m.existing.Target)},
+				{kind: rowInfo, label: m.t("sec.folder"), value: setup.ShortPath(m.existing.Target)},
 				{kind: rowInfo, label: "", value: m.t("folder.locked"), tone: "dim"},
 			}
 		}
@@ -581,7 +583,7 @@ func (m *Model) compRows() []formRow {
 			rows = append(rows, formRow{id: component.ID, kind: rowInfo, label: label, value: m.t("always") + "  " + m.size(component.Size), tone: "dim"})
 			continue
 		}
-		if m.existing != nil && contains(m.existing.Installed, component.ID) {
+		if m.existing != nil && slices.Contains(m.existing.Installed, component.ID) {
 			// The setup adds to an installation; removing is uninstalling.
 			rows = append(rows, formRow{id: component.ID, kind: rowInfo, label: label, value: m.t("installed") + "  " + m.size(component.Size), tone: "dim"})
 			continue
@@ -590,8 +592,8 @@ func (m *Model) compRows() []formRow {
 			if o.Content != "custom" {
 				o.Components, o.Content = m.clientSelection(), "custom"
 			}
-			if contains(o.Components, component.ID) {
-				o.Components = remove(o.Components, component.ID)
+			if slices.Contains(o.Components, component.ID) {
+				o.Components = slices.DeleteFunc(slices.Clone(o.Components), func(id string) bool { return id == component.ID })
 			} else {
 				o.Components = append(o.Components, component.ID)
 			}
@@ -833,12 +835,12 @@ func (m *Model) networkRows() []formRow {
 
 func (m *Model) recipeRows() []formRow {
 	t := m.theme
-	text := shellJoin(m.opts.Recipe())
+	text := setup.ShellJoin(m.opts.Recipe())
 	if m.modal.json {
 		data, _ := m.opts.RecipeJSON()
 		text = string(data)
 	}
-	width := min(m.w-8, 84) - 8
+	width := m.dialogWidth() - 8
 	var lines []string
 	style := lipgloss.NewStyle().Background(t.Sunken).Foreground(t.Text2)
 	lines = append(lines, style.Render(strings.Repeat(" ", width)))
@@ -864,7 +866,7 @@ func (m *Model) recipeRows() []formRow {
 // tabs, then the rows; long dialogs scroll with the focus.
 func (m *Model) modalView() ([]string, []hit, *[2]int) {
 	t := m.theme
-	width := max(minWidth, min(m.w-8, modalWidth))
+	width := m.dialogWidth()
 	inner := width - 4
 	p := newPage(t, m.glyphs, inner)
 	p.gap(1)
@@ -1018,32 +1020,12 @@ func toggledPort(port, fallback int) int {
 	return fallback
 }
 
-func contains(list []string, s string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
-}
-
-func remove(list []string, s string) []string {
-	var out []string
-	for _, v := range list {
-		if v != s {
-			out = append(out, v)
-		}
-	}
-	return out
-}
-
-func homeDir() string {
-	home, _ := os.UserHomeDir()
-	return home
-}
-
 // modalWidth is the widest a dialog grows.
 const modalWidth = 84
+
+// dialogWidth is how wide a dialog draws: the terminal's, kept between
+// minWidth and modalWidth.
+func (m *Model) dialogWidth() int { return max(minWidth, min(m.w-8, modalWidth)) }
 
 // accessRows decide who reaches the server and how many play.
 func (m *Model) accessRows() []formRow {

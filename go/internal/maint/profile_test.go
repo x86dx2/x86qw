@@ -3,6 +3,7 @@ package maint
 import (
 	"archive/zip"
 	"github.com/x86dx2/x86qw/go/internal/doctor"
+	"github.com/x86dx2/x86qw/go/internal/fspath"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -150,8 +151,8 @@ func TestInsideUsesTheOSSeparator(t *testing.T) {
 		filepath.Join(root+"-sibling", "a.zip"):    false,
 		filepath.Join(filepath.Dir(root), "a.zip"): false,
 	} {
-		if inside(name, root) != want {
-			t.Errorf("inside(%s) should be %v", name, want)
+		if fspath.Inside(name, root) != want {
+			t.Errorf("fspath.Inside(%s) should be %v", name, want)
 		}
 	}
 }
@@ -174,7 +175,7 @@ func TestBundleDestinationNeverLandsInsideTheInstallation(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	root := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "bundle.zip")
-	if got, err := doctor.BundleDestination(outside, root); err != nil || got != filepath.Join(resolve(filepath.Dir(outside)), "bundle.zip") {
+	if got, err := doctor.BundleDestination(outside, root); err != nil || got != filepath.Join(fspath.Resolve(filepath.Dir(outside)), "bundle.zip") {
 		t.Fatalf("outside the installation: %s %v", got, err)
 	}
 	if _, err := doctor.BundleDestination(filepath.Join(root, "sub", "bundle.zip"), root); err == nil {
@@ -183,7 +184,7 @@ func TestBundleDestinationNeverLandsInsideTheInstallation(t *testing.T) {
 	previous, _ := os.Getwd()
 	defer os.Chdir(previous)
 	os.Chdir(root)
-	if got, err := doctor.BundleDestination("bundle.zip", root); err != nil || got != filepath.Join(resolve(home), "bundle.zip") {
+	if got, err := doctor.BundleDestination("bundle.zip", root); err != nil || got != filepath.Join(fspath.Resolve(home), "bundle.zip") {
 		t.Fatalf("a bare name inside the installation should go to home: %s %v", got, err)
 	}
 }

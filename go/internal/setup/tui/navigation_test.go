@@ -186,6 +186,92 @@ func TestPreflightWarningWaitsAndCorrects(t *testing.T) {
 	m.cancel()
 }
 
+// twoWarnings is the demo whose preflight warns twice, about the folder and
+// the ports: the tallest dock the review shows.
+type twoWarnings struct{ *setup.Demo }
+
+func (b twoWarnings) Preflight(ctx context.Context, options setup.Options) <-chan setup.Check {
+	out := make(chan setup.Check)
+	go func() {
+		defer close(out)
+		for check := range b.Demo.Preflight(ctx, options) {
+			if check.State != setup.CheckRunning && (check.ID == "folder" || check.ID == "ports") {
+				check.State = setup.CheckWarning
+				check.Says.Value, check.Says.Detail, check.Says.Fix = setup.Say("folder.full"), setup.Say("folder.full.d", "~/Games/x86qw", 3), setup.Say("folder.full.fix")
+			}
+			out <- check
+		}
+	}()
+	return out
+}
+
+// At the smallest size the app asks for, a preflight with two warnings
+// still draws: the body scrolls in what the dock leaves it.
+func TestTwoWarningsDrawAtTheSmallestSize(t *testing.T) {
+	m := New(Config{Backend: twoWarnings{&setup.Demo{Speed: 50}}, Target: shortTarget(t), Lang: EN, Theme: "dark"})
+	drive(m, tea.WindowSizeMsg{Width: 60, Height: 18})
+	drive(m, run(m.Init())...)
+	drive(m, typeText("x86dx2")...)
+	drive(m, key("down"), key("down"), key("enter"), key("i"))
+	if m.screen != scConfigure || m.preflightOutcome() != setup.CheckWarning {
+		t.Fatalf("the warnings should wait on the review: screen %d", m.screen)
+	}
+}
+
+// Keys pressed while the catalog loads wait for it, as the footer, which
+// offers only ctrl+c, says.
+func TestKeysWaitForTheCatalog(t *testing.T) {
+	m := New(Config{Backend: &setup.Demo{Speed: 50}, Target: shortTarget(t), Lang: EN, Theme: "dark"})
+	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
+	drive(m, key("down"), key("enter"), key("down"), key("enter"))
+	if m.screen != scIntent || m.catalog != nil {
+		t.Fatalf("the keys moved the loading app to screen %d", m.screen)
+	}
+}
+
+// The key editor takes only what the client binds, as the install refuses
+// the rest; a semicolon is a key like any other.
+func TestKeyEditorTakesOnlyBindableKeys(t *testing.T) {
+	m := started(t, false)
+	before := m.opts.Keys
+	for _, key := range []string{`"`, "ç"} {
+		m.bindKey("jump", key)
+	}
+	if m.opts.Keys != before {
+		t.Fatalf("keys: %+v", m.opts.Keys)
+	}
+	if m.bindKey("right", ";"); m.opts.Keys.Right != ";" {
+		t.Fatalf("keys: %+v", m.opts.Keys)
+	}
+}
+
+// withoutServer is an installation whose recorded choices hold no server,
+// as a play recipe that left the field out made before it got the defaults.
+type withoutServer struct {
+	*setup.Demo
+	existing *setup.Existing
+}
+
+func (b withoutServer) Existing(ctx context.Context, target string) (*setup.Existing, error) {
+	return b.existing, nil
+}
+
+// Adding a server to such an installation starts from the default one.
+func TestAddingAServerToChoicesWithoutOne(t *testing.T) {
+	target := shortTarget(t)
+	options := setup.Defaults(setup.Play, target)
+	options.Nick, options.Server = "x86dx2", setup.Server{}
+	existing := &setup.Existing{Target: target, Installed: []string{"x86qw-client-bootstrap", "ktx"}, Options: options}
+	m := New(Config{Backend: withoutServer{&setup.Demo{Speed: 50}, existing}, Target: target, Lang: EN, Theme: "dark"})
+	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
+	drive(m, run(m.Init())...)
+	toContext(m, "3")
+	drive(m, key("enter"))
+	if m.screen != scConfigure || len(m.opts.Server.Instances) == 0 || m.opts.Server.Validate() != nil {
+		t.Fatalf("screen %d, server %+v", m.screen, m.opts.Server)
+	}
+}
+
 func TestBodyKeepsItsPlace(t *testing.T) {
 	m := started(t, false)
 	drive(m, typeText("x86dx2")...)
@@ -379,4 +465,12 @@ func TestCtrlCQuitsAfterAFailedInstall(t *testing.T) {
 	if _, cmd := m.Update(key("ctrl+c")); cmd == nil || m.cancelling {
 		t.Fatal("ctrl+c twice must quit, not cancel what already ended")
 	}
+}
+
+// The recipe dialog still draws in a terminal narrower than 16 columns.
+func TestTheRecipeDialogDrawsWhenVeryNarrow(t *testing.T) {
+	m := started(t, false)
+	drive(m, typeText("x86dx2")...)
+	m.openModal("recipe")
+	drive(m, tea.WindowSizeMsg{Width: 14, Height: 34}, key("down"))
 }
