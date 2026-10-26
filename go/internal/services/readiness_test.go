@@ -4,10 +4,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
@@ -90,5 +93,30 @@ func TestPreflightSeesAPortTakenOnEveryInterface(t *testing.T) {
 	free.Close()
 	if err := PreflightPorts([]PortRequest{{"MVDSV", "0.0.0.0", freePort, "udp"}}); err != nil {
 		t.Fatalf("a free port: %v", err)
+	}
+}
+
+// QTV closes the connection of the readiness probe, which leaves the port
+// in TIME_WAIT for up to a minute after it stops. QTV binds it again, so a
+// restart right away finds it free.
+func TestPreflightTakesAPortQTVJustLeft(t *testing.T) {
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { io.WriteString(w, "ok") })}
+	go server.Serve(listener)
+	connection, err := net.Dial("tcp", Endpoint("127.0.0.1", port))
+	if err != nil {
+		t.Fatal(err)
+	}
+	connection.Write([]byte("GET /nowplaying/ HTTP/1.0\r\nHost: x86qw.local\r\n\r\n"))
+	io.ReadAll(connection)
+	connection.Close()
+	time.Sleep(100 * time.Millisecond)
+	server.Close()
+	if err := PreflightPorts([]PortRequest{{"QTV", "127.0.0.1", port, "tcp"}}); err != nil {
+		t.Fatal(err)
 	}
 }
