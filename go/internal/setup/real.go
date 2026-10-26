@@ -693,12 +693,26 @@ func (r *Real) apply(ctx context.Context, options Options, control <-chan bool) 
 		in.Profile, in.Requested = r.profileFor(Selected(cat, options), options)
 	}
 	return track(ctx, newTracker(lanes, labels), control, func(ctx context.Context) ([]Text, error) {
-		result, err := install.Apply(ctx, "upgrade", in, planned)
-		if err != nil {
-			return nil, err
-		}
-		return append(rawTexts(result.Warnings), r.finish(target, options)...), nil
+		return r.applyPlanned(ctx, options, in, planned)
 	})
+}
+
+// applyPlanned installs the plan, then finish applies the rest. With
+// nothing to install the settings come first: a running server holds the
+// installation, and then only the content choice waits for the next time.
+func (r *Real) applyPlanned(ctx context.Context, options Options, in plan.Input, planned *plan.Plan) ([]Text, error) {
+	if len(planned.Operations) == 0 {
+		warnings := r.finish(options.Target, options)
+		if _, err := install.Apply(ctx, "upgrade", in, planned); err != nil {
+			warnings = append(warnings, Say("warn.of", Say("warn.profile"), Raw(err.Error())))
+		}
+		return warnings, nil
+	}
+	result, err := install.Apply(ctx, "upgrade", in, planned)
+	if err != nil {
+		return nil, err
+	}
+	return append(rawTexts(result.Warnings), r.finish(options.Target, options)...), nil
 }
 
 func rawTexts(lines []string) []Text {

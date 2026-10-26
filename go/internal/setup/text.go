@@ -204,6 +204,7 @@ var messages = map[string][2]string{
 	"warn.presets":    {"presets do servidor", "server presets"},
 	"warn.cli":        {"comando x86qw", "x86qw command"},
 	"warn.integ":      {"integração", "integration"},
+	"warn.profile":    {"escolha de conteúdo", "content choice"},
 	"v.intent":        {"intenção inválida: %q", "invalid intent: %q"},
 	"v.nick":          {"escolha um nick", "pick a nick"},
 	"v.nick.chars":    {"o nick aceita só letras sem acento, números e sinais comuns: nada de aspas, barras invertidas nem ponto e vírgula", "the nick takes letters without accents, digits and plain signs: no quotes, backslashes or semicolons"},

@@ -14,6 +14,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/lock"
+	"github.com/x86dx2/x86qw/go/internal/plan"
 	"github.com/x86dx2/x86qw/go/internal/play"
 	"github.com/x86dx2/x86qw/go/internal/services"
 	"github.com/x86dx2/x86qw/go/internal/trust"
@@ -385,6 +386,31 @@ func TestFinishLeavesTheCLIWhileTheInstallationIsBusy(t *testing.T) {
 	r.finish(target, Defaults(Host, target))
 	if published {
 		t.Fatal("the CLI was published under a held lock")
+	}
+}
+
+// With nothing to install the settings are saved also while a server
+// holds the installation; recording the content choice only warns then.
+func TestApplyingNothingSavesTheSettingsUnderALock(t *testing.T) {
+	target := t.TempDir()
+	held, err := lock.Acquire(target, "host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Release()
+	inv, err := catalog.LoadInventory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	options := Defaults(Play, target)
+	options.Nick = "tester"
+	in := plan.Input{Root: target, Inventory: inv, Profile: "custom"}
+	warnings, err := (&Real{}).applyPlanned(context.Background(), options, in, &plan.Plan{})
+	if err != nil || len(warnings) != 1 {
+		t.Fatalf("warnings %v, err %v", warnings, err)
+	}
+	if saved, err := LoadChoices(target); err != nil || saved.Nick != "tester" {
+		t.Fatalf("choices: %+v %v", saved, err)
 	}
 }
 

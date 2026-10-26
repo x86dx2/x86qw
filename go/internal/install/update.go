@@ -109,6 +109,14 @@ func Apply(ctx context.Context, command string, in plan.Input, planned *plan.Pla
 	if err := stalePlan(in.Root, planned, labels); err != nil {
 		return nil, err
 	}
+	if len(outdated)+len(missing)+len(clients) == 0 && cliPackage == nil {
+		// Only the content choice changed: nothing installs, nothing to verify.
+		payload, err := stateDocument(in, current)
+		if err != nil {
+			return nil, err
+		}
+		return result, atomicfile.Write(filepath.Join(in.Root, ".x86qw", "state.json"), payload, 0o644)
+	}
 	paks := map[string]string{}
 	for _, name := range []string{"id1/pak0.pak", "id1/pak1.pak"} {
 		if paks[name], err = archive.FileSHA256(filepath.Join(in.Root, name)); err != nil {

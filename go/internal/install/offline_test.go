@@ -710,6 +710,25 @@ func TestOfflineApplyRecordsTheChosenProfile(t *testing.T) {
 	}
 }
 
+// Recording only the content choice installs nothing, so a managed file
+// the user edited does not stop it: there is nothing to verify.
+func TestOfflineApplyRecordsTheProfileBesideAnEdit(t *testing.T) {
+	f := newFixture(t)
+	root := filepath.Join(t.TempDir(), "x86qw")
+	f.install(root, "essential")
+	if err := os.WriteFile(filepath.Join(root, "qw", "maps", "x86qw-fixture.bsp"), bsp("my map"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	in := f.input(root)
+	in.Profile, in.Requested = "custom", []string{"fixture-maps"}
+	if _, err := Apply(f.ctx, "upgrade", in, &plan.Plan{}); err != nil {
+		t.Fatal(err)
+	}
+	if current, err := state.Read(root); err != nil || current.Profile != "custom" {
+		t.Fatalf("state.json: %+v %v", current, err)
+	}
+}
+
 // A server component has builds for some machines only: on another one the
 // install stops before it downloads anything. A Linux ezQuake built for
 // x86-64 on an arm64 machine installs with a warning: only an emulator runs it.
