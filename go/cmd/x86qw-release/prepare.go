@@ -22,6 +22,9 @@ import (
 
 const releaseBase = "https://github.com/x86dx2/x86qw/releases/download/"
 
+// maxAsset bounds each download; the binaries are about 14 MiB.
+const maxAsset = 64 << 20
+
 // Where the checkout names the current CLI release, besides the catalog,
 // product.json and the bootstraps: README.md by tag and the page by span.
 var (
@@ -133,7 +136,11 @@ func download(version, dir string) error {
 		}
 		file, err := os.Create(filepath.Join(dir, name))
 		if err == nil {
-			_, err = io.Copy(file, response.Body)
+			var n int64
+			n, err = io.Copy(file, io.LimitReader(response.Body, maxAsset+1))
+			if err == nil && n > maxAsset {
+				err = fmt.Errorf("%s is larger than %d MiB", name, maxAsset>>20)
+			}
 			err = errors.Join(err, file.Close())
 		}
 		response.Body.Close()
