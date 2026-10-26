@@ -1,6 +1,7 @@
 package play
 
 import (
+	"archive/zip"
 	"fmt"
 	"os"
 	"path"
@@ -68,24 +69,24 @@ func LocalMapNames(root, gamedir string) ([]string, error) {
 			if !entry.Type().IsRegular() {
 				continue
 			}
+			// A package that cannot be read hides only its own maps.
 			package_ := filepath.Join(base, entry.Name())
 			switch strings.ToLower(filepath.Ext(entry.Name())) {
 			case ".pk3":
-				plan, err := archive.Open(package_, archive.DefaultLimits)
+				// Only names are read here, and mapFromMember checks them:
+				// archive.Open would also hash every package, every time.
+				reader, err := zip.OpenReader(package_)
 				if err != nil {
-					return nil, err
+					continue
 				}
-				for _, member := range plan.Members {
+				for _, member := range reader.File {
 					if name := mapFromMember(member.Name); name != "" {
 						found[name] = true
 					}
 				}
-				plan.Close()
+				reader.Close()
 			case ".pak":
-				names, err := install.PakNames(package_)
-				if err != nil {
-					return nil, err
-				}
+				names, _ := install.PakNames(package_)
 				for _, member := range names {
 					if name := mapFromMember(member); name != "" {
 						found[name] = true
