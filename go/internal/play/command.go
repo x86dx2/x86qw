@@ -52,7 +52,8 @@ func RulesetArguments(ruleset string) []string {
 // Build assembles the ezQuake arguments of a local match and, when the mode
 // needs them, the commands of its KTX cfg.
 func Build(game Game, mode *Mode, mapName string, assets map[string]bool, o Options, ruleset string) (*Launch, error) {
-	args := RulesetArguments(ruleset)
+	// Any free UDP port: a server hosted on this machine may hold 27500.
+	args := append([]string{"-port", "0"}, RulesetArguments(ruleset)...)
 	flag := "0"
 	if ruleset == defaultRuleset {
 		flag = "1"

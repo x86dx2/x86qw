@@ -3,6 +3,7 @@ package play
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -110,6 +111,29 @@ func TestLaunchCommandsFitTheConsoleLine(t *testing.T) {
 					t.Errorf("%s %s: a %d-byte command", ruleset, mode.Key, len(line))
 				}
 			}
+		}
+	}
+}
+
+// A server hosted on this machine holds UDP 27500, ezQuake's default: the
+// local match's server takes any free port, or it never comes up.
+func TestTheLocalMatchTakesAnyFreePort(t *testing.T) {
+	games, err := LoadGames()
+	if err != nil {
+		t.Fatal(err)
+	}
+	modes, _ := LoadModes()
+	for _, game := range games {
+		var mode *Mode
+		if game.UsesModeCatalog() {
+			mode = &modes[0]
+		}
+		launch, err := Build(game, mode, "dm6", map[string]bool{}, DefaultOptions(), defaultRuleset)
+		if err != nil {
+			t.Fatalf("%s: %v", game.ID, err)
+		}
+		if !slices.Equal(launch.Arguments[:2], []string{"-port", "0"}) {
+			t.Errorf("%s: %v", game.ID, launch.Arguments)
 		}
 	}
 }
