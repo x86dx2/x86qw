@@ -121,6 +121,19 @@ for it yet: plan the work before June 2027.
   Actions create PRs) and `RELEASE_GH_TOKEN` only pushes the branch, whose
   required checks run on `push`. Before that, the missing PR permission on
   that token left v56 unrecorded (#355).
+- **The renewal published, but failed at "Verify the public chain and the
+  published timestamp"** (no `bot/tuf-timestamp-vN` branch). Production
+  serves vN and `main` the one before, so every deploy refuses. Record what
+  production serves on a branch from `main`, then open the PR and merge it;
+  the merge deploys `main` again:
+
+  ```sh
+  go -C go run ./cmd/x86qw-release live-timestamp \
+    --out site/public/api/v1/trust/metadata/timestamp.json
+  ```
+
+  The check now waits up to five minutes for the edge to serve the new
+  timestamp; before, one read right after the deploy left v65 unrecorded.
 - **The renewal PR (`bot/tuf-timestamp-vN`) failed CI and stayed open.**
   Production stays ahead of `main` until it merges. Fix what CI pointed out on
   the branch itself and merge; the deploy and the monitor go back to normal.

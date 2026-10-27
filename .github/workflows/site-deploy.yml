@@ -78,7 +78,15 @@ jobs:
             --strict
       - name: Verify the public chain against main
         working-directory: go
-        run: '"$RUNNER_TEMP/x86qw-release" monitor --warning-hours 72 --checkout --checkout-time "$(git log -1 --format=%cI)"'
+        # Right after the deploy one edge can still serve the old chain: wait
+        # up to five minutes for production to serve main.
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 30); do
+            "$RUNNER_TEMP/x86qw-release" monitor --warning-hours 72 --checkout --checkout-time "$(git log -1 --format=%cI)" && break
+            [ "$attempt" = 30 ] && exit 1
+            sleep 10
+          done
       - name: Mark the served CLI release as latest
         env:
           GH_TOKEN: ${{ github.token }}

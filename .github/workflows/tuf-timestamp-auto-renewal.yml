@@ -92,8 +92,14 @@ jobs:
         run: |
           set -euo pipefail
           (cd go && "$RUNNER_TEMP/x86qw-release" monitor --warning-hours 72)
-          "$RUNNER_TEMP/x86qw-release" live-timestamp --out "$RUNNER_TEMP/published.json"
-          cmp "$RUNNER_TEMP/published.json" site/public/api/v1/trust/metadata/timestamp.json
+          # Right after a deploy one edge can still serve the old timestamp:
+          # wait up to five minutes for every read to bring the new one.
+          for attempt in $(seq 30); do
+            "$RUNNER_TEMP/x86qw-release" live-timestamp --out "$RUNNER_TEMP/published.json"
+            cmp -s "$RUNNER_TEMP/published.json" site/public/api/v1/trust/metadata/timestamp.json && break
+            [ "$attempt" = 30 ] && cmp "$RUNNER_TEMP/published.json" site/public/api/v1/trust/metadata/timestamp.json
+            sleep 10
+          done
       # The release token pushes the record branch, so its push runs the
       # required checks; the job's own token opens and merges the PR (it
       # needs no extra permission on the release token, and starts no
