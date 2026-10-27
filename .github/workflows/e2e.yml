@@ -78,12 +78,12 @@ jobs:
           if [ "$RUNNER_OS" = Linux ]; then
             for entry in x86qw.desktop x86qw-open.desktop; do
               grep -F "Exec=$target/x86qw " "$HOME/.local/share/applications/$entry"
-              ! grep -F x86qw.sh "$HOME/.local/share/applications/$entry"
+              if grep -F x86qw.sh "$HOME/.local/share/applications/$entry"; then echo "$entry still runs x86qw.sh" >&2; exit 1; fi
             done
           else
             script="$(osadecompile "$target/.x86qw/handlers/x86QW.app/Contents/Resources/Scripts/main.scpt")"
             echo "$script" | grep -F "\"$target/x86qw\""
-            ! echo "$script" | grep -F x86qw.sh
+            if echo "$script" | grep -F x86qw.sh; then echo "the handler still runs x86qw.sh" >&2; exit 1; fi
           fi
           "$HOME/.local/bin/x86qw" verify --target "$target"
           "$target/x86qw" doctor
