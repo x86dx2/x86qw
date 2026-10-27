@@ -317,7 +317,7 @@
         {
           "architecture": "x64",
           "format": "pe-x64",
-          "origin": "official",
+          "origin": "x86qw-build",
           "support": "preview",
           "system": "windows",
           "test_required": true,

@@ -1,6 +1,6 @@
 # Dedicated hosting, QTV and QWFWD
 
-x86QW distributes MVDSV `1.11+x86qw.4`, QTV `0+025ca949aca0+x86qw.3` and QWFWD
+x86QW distributes MVDSV `1.11+x86qw.5`, QTV `0+025ca949aca0+x86qw.3` and QWFWD
 `1.30+x86qw.4`. They come in when the installation hosts (the Host or Play and
 host intent) or in the complete profile of someone who hosts. Each runtime
 has its own package, receipt and verification. The commands download no

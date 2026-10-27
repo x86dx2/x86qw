@@ -67,7 +67,7 @@
       "platforms": [
         {"system": "macos", "architecture": "arm64", "variant": "macos-arm64", "executable": "mvdsv", "runtime_path": "mvdsv", "format": "macho-arm64", "permissions": "executable", "support": "preview", "validation": "portable-contract", "origin": "x86qw-build", "test_required": true},
         {"system": "linux", "architecture": "amd64", "variant": "linux-amd64", "executable": "mvdsv", "runtime_path": "mvdsv", "format": "elf-amd64", "permissions": "executable", "support": "preview", "validation": "portable-contract", "origin": "official", "test_required": true},
-        {"system": "windows", "architecture": "x64", "variant": "windows-x64", "executable": "mvdsv.exe", "runtime_path": "mvdsv.exe", "format": "pe-x64", "permissions": "native", "support": "preview", "validation": "portable-contract", "origin": "official", "test_required": true}
+        {"system": "windows", "architecture": "x64", "variant": "windows-x64", "executable": "mvdsv.exe", "runtime_path": "mvdsv.exe", "format": "pe-x64", "permissions": "native", "support": "preview", "validation": "portable-contract", "origin": "x86qw-build", "test_required": true}
       ],
       "architectures": ["arm64", "amd64", "x64"],
       "executable": {"macos-arm64": "mvdsv", "linux-amd64": "mvdsv", "windows-x64": "mvdsv.exe"},
