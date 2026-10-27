@@ -10,8 +10,11 @@
       "sha256": "6227295a2e636182e819e63fbd61231252157cda6206eb19e1376bd3e6d10f16"
     },
     "windows-x64": {
-      "origin": "official-release",
-      "sha256": "a615c693ddfd7e6bdfad2c2a0bd017396b8f72eda7993394e1d80872d0bd9365"
+      "origin": "x86qw-reproducible-build",
+      "toolchain": "x86_64-w64-mingw32-gcc (GCC) 13-win32; CMake 3.28.3; ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac (linux/amd64)",
+      "command": "SOURCE_DATE_EPOCH=1740682713 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=tools/cross-cmake/windows-x64.cmake -DCMAKE_C_FLAGS='-D_CONSOLE -ffile-prefix-map=/b=.' -DCMAKE_EXE_LINKER_FLAGS=-Wl,--no-insert-timestamp && cmake --build build",
+      "notes": "Built in /b with gcc-mingw-w64-x86-64-win32 from Ubuntu 24.04. Without _CONSOLE the same command reproduces the official release byte for byte but for the link time and checksum in the PE header; _CONSOLE builds the console server, which opens no window.",
+      "sha256": "8dab46ebbdd361e052494deddfcc380b2390c2a72ff0d513ff4bda92f578d38e"
     },
     "macos-arm64": {
       "origin": "x86qw-reproducible-build",

@@ -446,7 +446,7 @@
       ],
       "project_sources": [
         {"path": "dist/servers/mvdsv/1.11/upstream/linux-amd64/mvdsv", "destination": "platforms/mvdsv/linux-amd64/mvdsv", "install_destination": "mvdsv", "platform": "linux-amd64", "mode": "overlay"},
-        {"path": "dist/servers/mvdsv/1.11/upstream/windows-x64/mvdsv.exe", "destination": "platforms/mvdsv/windows-x64/mvdsv.exe", "install_destination": "mvdsv.exe", "platform": "windows-x64", "mode": "overlay"},
+        {"path": "dist/servers/mvdsv/1.11/x86qw/runtime/windows-x64/mvdsv.exe", "destination": "platforms/mvdsv/windows-x64/mvdsv.exe", "install_destination": "mvdsv.exe", "platform": "windows-x64", "mode": "overlay"},
         {"path": "dist/servers/mvdsv/1.11/x86qw/runtime/macos-arm64/mvdsv", "destination": "platforms/mvdsv/macos-arm64/mvdsv", "install_destination": "mvdsv", "platform": "macos-arm64", "mode": "overlay"},
         {"path": "dist/servers/mvdsv/1.11/x86qw/server.cfg", "destination": "qw/x86qw-mvdsv-user.cfg", "mode": "default"}
       ],
