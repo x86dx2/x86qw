@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-10-27T00:15:45Z",
+  "generated_at": "2026-10-27T02:23:32Z",
   "packages": [
     {
       "component": "core",
@@ -261,7 +261,8 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/mvdsv-1.11-x86qw.5/mvdsv-1.11+x86qw.5.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/mvdsv-1.11-x86qw.5/mvdsv-1.11+x86qw.5.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/mvdsv/1.11+x86qw.5/mvdsv-1.11+x86qw.5.zip"
       ],
       "mirror_title": "x86QW Content · Dedicated MVDSV 1.11+x86qw.5",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
