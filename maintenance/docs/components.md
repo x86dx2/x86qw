@@ -88,7 +88,7 @@ and auditable, not a second way of organizing.
 | Pro-X | `1.1+x86qw.6` | public 1.1 release and x86QW gameplay | complete official runtime; the ENT fixes only four obsolete fields; optional x86QW Ruleset and personal configuration loaded last |
 | Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.7` | 2.9 gamecode recompiled over nQuake assets | 2.8 gamecode removed from `misc.pak`; nQuake media kept; optional x86QW Ruleset before the personal layer |
 | Total Destruction 2 | `2.22+x86qw.6` | independent package recompiled from upstream | complete runtime with optional x86QW Ruleset, spells, special, runes, voting, audio and personal configuration loaded last |
-| Dedicated MVDSV | `1.11+x86qw.4` | official release and a reproduced build per platform | KTX dedicated server for macOS arm64, Linux amd64 and Windows x64; a minimal patch fixes QVM argument passing in 64 bits on Apple Silicon |
+| Dedicated MVDSV | `1.11+x86qw.5` | official release and a reproduced build per platform | KTX dedicated server for macOS arm64, Linux amd64 and Windows x64; a minimal patch fixes QVM argument passing in 64 bits on Apple Silicon, and Windows runs the console build, which opens no window |
 | QTV broadcast | `0+025ca949aca0+x86qw.3` | immutable upstream commit and reproduced builds | optional HTTP/MVD relay, loopback and upload off by default |
 | QWFWD proxy | `1.30+x86qw.4` | official release and builds per platform | optional proxy, with no automatic master queries in the managed profile |
 

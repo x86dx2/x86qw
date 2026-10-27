@@ -374,14 +374,14 @@
       ]
     },
     "mvdsv": {
-      "version": "1.11+x86qw.4",
+      "version": "1.11+x86qw.5",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "mvdsv",
-      "distribution_tag": "mvdsv-1.11-x86qw.4",
+      "distribution_tag": "mvdsv-1.11-x86qw.5",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/mvdsv/blob/1.11/LICENSE.md",
-      "notes": "MVDSV 1.11 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag com correção mínima para alargamento dos argumentos QVM de 32 para 64 bits. O bootstrap instala somente o executável da plataforma selecionada no diretório operacional do jogo.",
+      "notes": "MVDSV 1.11 oficial para Linux, build Windows x64 reproduzível do mesmo tag como programa de console (_CONSOLE), que não abre janela, e build macOS arm64 reproduzível do mesmo tag com correção mínima para alargamento dos argumentos QVM de 32 para 64 bits. O bootstrap instala somente o executável da plataforma selecionada no diretório operacional do jogo.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",

@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-10-22T01:12:08Z",
+  "generated_at": "2026-10-27T00:15:45Z",
   "packages": [
     {
       "component": "core",
@@ -245,14 +245,14 @@
     {
       "component": "mvdsv",
       "package": "mvdsv",
-      "version": "1.11+x86qw.4",
+      "version": "1.11+x86qw.5",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "mvdsv-1.11+x86qw.4.zip",
-      "size": 1121507,
-      "sha256": "bab39df86491aa86f2b23d22f44295b4ed8df3882233f893be0597416bee604b",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/mvdsv-1.11-x86qw.4/mvdsv-1.11+x86qw.4.zip",
+      "filename": "mvdsv-1.11+x86qw.5.zip",
+      "size": 1115927,
+      "sha256": "5f2bccc2ec8d6aef813aa35096f52acee5cf20ac15cd589015bca97123d5feba",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/mvdsv-1.11-x86qw.5/mvdsv-1.11+x86qw.5.zip",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/mvdsv/blob/1.11/LICENSE.md",
       "source_urls": [
@@ -261,15 +261,14 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/mvdsv-1.11-x86qw.4/mvdsv-1.11+x86qw.4.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/mvdsv/1.11+x86qw.4/mvdsv-1.11+x86qw.4.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/mvdsv-1.11-x86qw.5/mvdsv-1.11+x86qw.5.zip"
       ],
-      "mirror_title": "x86QW Content · MVDSV dedicado 1.11+x86qw.4",
+      "mirror_title": "x86QW Content · Dedicated MVDSV 1.11+x86qw.5",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_revision": "a1312d109587fdc62d6373b3ba321926730d08de82ad6a9f4360ca81b9398e31",
       "release_url": "https://github.com/QW-Group/mvdsv/releases/tag/1.11",
-      "release_notes": "MVDSV 1.11 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag com correção mínima para alargamento dos argumentos QVM de 32 para 64 bits. O bootstrap instala somente o executável da plataforma selecionada no diretório operacional do jogo.",
+      "release_notes": "MVDSV 1.11 oficial para Linux, build Windows x64 reproduzível do mesmo tag como programa de console (_CONSOLE), que não abre janela, e build macOS arm64 reproduzível do mesmo tag com correção mínima para alargamento dos argumentos QVM de 32 para 64 bits. O bootstrap instala somente o executável da plataforma selecionada no diretório operacional do jogo.",
       "upstream_version": "1.11"
     },
     {
@@ -756,7 +755,7 @@
         "https://github.com/x86dx2/x86qw/releases/download/nquake-dfb2ac9299f72cbe399bf637dc3f7adc24295edb/x86qw-client-bootstrap-dfb2ac9299f7+x86qw.4.zip",
         "https://gitlab.com/api/v4/projects/84813414/packages/generic/x86qw-client-bootstrap/dfb2ac9299f7+x86qw.4/x86qw-client-bootstrap-dfb2ac9299f7+x86qw.4.zip"
       ],
-      "mirror_title": "x86QW Content · Base e inicialização do cliente x86QW dfb2ac9299f7+x86qw.4",
+      "mirror_title": "x86QW Content · x86QW client base and startup dfb2ac9299f7+x86qw.4",
       "mirror_notes": "Pacotes de conteúdo versionados da distribuição x86QW.",
       "mirror_latest": false,
       "source_commit": "dfb2ac9299f72cbe399bf637dc3f7adc24295edb"
