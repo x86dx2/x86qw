@@ -452,6 +452,7 @@
       ],
       "project_inputs": [
         {"path": "dist/servers/mvdsv/1.11/x86qw/BUILD.json", "purpose": "build-provenance"},
+        {"path": "dist/servers/mvdsv/1.11/upstream/windows-x64/mvdsv.exe", "purpose": "upstream-reference-build"},
         {"path": "dist/servers/mvdsv/1.11/x86qw/source/0001-detect-macos-arm64-as-64-bit.patch", "purpose": "source-patch"}
       ]
     },
