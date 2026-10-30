@@ -14,7 +14,8 @@ import (
 
 // Purge run by the installation's own x86qw.exe, as a user runs it: Windows
 // will not delete that running executable, so it goes once the command
-// ends, and the folder with it; the command still succeeds.
+// ends, and the folder and an empty ~/Games with it; the command still
+// succeeds.
 func TestPurgeByTheInstalledCLI(t *testing.T) {
 	if target := os.Getenv("X86QW_TEST_PURGE"); target != "" {
 		if _, err := Purge(target); err != nil {
@@ -25,7 +26,7 @@ func TestPurgeByTheInstalledCLI(t *testing.T) {
 	}
 	cache := isolate(t)
 	ownedCache(t, cache)
-	root := managedInstall(t)
+	root, games := inGames(t, managedInstall(t))
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +43,7 @@ func TestPurgeByTheInstalledCLI(t *testing.T) {
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("%v\n%s", err, output)
 	}
-	for deadline := time.Now().Add(30 * time.Second); exists(root); time.Sleep(100 * time.Millisecond) {
+	for deadline := time.Now().Add(30 * time.Second); exists(games); time.Sleep(100 * time.Millisecond) {
 		if time.Now().After(deadline) {
 			entries, _ := os.ReadDir(root)
 			t.Fatalf("the installation folder stayed: %v", entries)

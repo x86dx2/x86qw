@@ -76,6 +76,52 @@ func removeShellIntegration(target string) {
 	}
 	if command := filepath.Join(home, ".local", "bin", "x86qw"); cli.PointsAt(command, target) {
 		os.Remove(command)
+		// Only an empty folder goes, so the second stays if the first does.
+		os.Remove(filepath.Dir(command))
+		os.Remove(filepath.Dir(filepath.Dir(command)))
+	}
+}
+
+// removeLocalPanels removes the folders x86qw ui made in the temporary folder.
+func removeLocalPanels() {
+	panels, _ := filepath.Glob(filepath.Join(os.TempDir(), "x86qw-ui-*"))
+	for _, panel := range panels {
+		os.RemoveAll(panel)
+	}
+}
+
+// isGamesFolder reports whether folder is ~/Games, which the installer makes
+// for its default installation. A link there is the user's, so it is not.
+func isGamesFolder(folder string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	games, err := os.Lstat(filepath.Join(home, "Games"))
+	if err != nil {
+		return false
+	}
+	info, err := os.Lstat(folder)
+	return err == nil && os.SameFile(info, games)
+}
+
+// removeGamesFolder removes target's folder when it is an empty ~/Games.
+// shortcut: an empty ~/Games the user made goes too, nothing records who made
+// it; record it at install if that ever matters.
+func removeGamesFolder(target string) {
+	if parent := filepath.Dir(target); isGamesFolder(parent) {
+		os.Remove(parent)
+	}
+}
+
+// removeEmptyParents removes the folders that removing path left empty, up to
+// target. A linked folder is the user's, and so is wherever it leads.
+func removeEmptyParents(path, target, root string) {
+	for dir := filepath.Dir(path); dir != target; dir = filepath.Dir(dir) {
+		info, err := os.Lstat(dir)
+		if err != nil || !info.IsDir() || !fspath.Inside(fspath.Resolve(dir), root) || os.Remove(dir) != nil {
+			return
+		}
 	}
 }
 
@@ -108,6 +154,7 @@ func removeComponent(target, id string, report *Report) (int, error) {
 				return removed, err
 			}
 			removed++
+			removeEmptyParents(path, target, root)
 		} else {
 			report.warn("Modified file kept: %s", path)
 		}
@@ -205,10 +252,13 @@ func Uninstall(target string) (*Report, error) {
 	}
 	removeEmptyMetadata(target, false)
 	removeShellIntegration(target)
+	removeLocalPanels()
 	held.Release()
 	released = true
-	// After the lock is gone the sessions directory may be empty too.
-	removeEmptyMetadata(target, false)
+	// After the lock is gone the sessions directory may be empty too, and with
+	// nothing personal to keep, so may the installation.
+	removeEmptyMetadata(target, true)
+	removeGamesFolder(target)
 	if cliPresent {
 		report.success("Permanent x86QW CLI removed.")
 	}
@@ -230,33 +280,23 @@ func legacyLayout(target string) bool {
 	return false
 }
 
-// removeEmptyMetadata removes .x86qw when it holds only empty directories
-// (and the target too when includeTarget and nothing else remains).
+// removeEmptyMetadata removes the empty directories of .x86qw, and .x86qw
+// when that is all it held (and the target too when includeTarget and nothing
+// else remains).
 func removeEmptyMetadata(target string, includeTarget bool) {
 	root := filepath.Join(target, metadataDirectory)
 	if info, err := os.Lstat(root); err == nil && info.IsDir() {
-		hasFiles := false
 		var dirs []string
 		filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-			if err != nil {
-				hasFiles = true
-				return err
-			}
-			if entry.IsDir() {
+			if err == nil && entry.IsDir() {
 				dirs = append(dirs, path)
-			} else {
-				hasFiles = true
 			}
 			return nil
 		})
-		if hasFiles {
-			return
-		}
 		sort.Slice(dirs, func(a, b int) bool { return len(dirs[a]) > len(dirs[b]) })
 		for _, dir := range dirs {
-			if os.Remove(dir) != nil {
-				return
-			}
+			// Only an empty one goes.
+			os.Remove(dir)
 		}
 	}
 	if includeTarget {
@@ -327,6 +367,7 @@ func Purge(target string) (*Report, error) {
 		return nil, err
 	}
 	removeShellIntegration(target)
+	removeLocalPanels()
 	if held != nil {
 		report.info("Installation content removed; the lock folder goes when the operation ends.")
 	}
@@ -346,6 +387,7 @@ func Purge(target string) (*Report, error) {
 			return nil, err
 		}
 		removeEmptyMetadata(target, true)
+		removeGamesFolder(target)
 		if lexists(filepath.Join(target, metadataDirectory)) || (kept == 0 && !onlyRemovedAfterExit(target)) {
 			return nil, errors.New("What is left of the installation is not empty and was kept.")
 		}

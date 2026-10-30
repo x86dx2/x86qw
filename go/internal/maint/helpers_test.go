@@ -26,6 +26,10 @@ func isolate(t *testing.T) (cache string) {
 	t.Setenv("LOCALAPPDATA", filepath.Join(home, "AppData", "Local"))
 	cache = filepath.Join(t.TempDir(), "x86qw-cache")
 	t.Setenv(download.CacheEnv, cache)
+	temporary := t.TempDir()
+	for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(name, temporary)
+	}
 	return cache
 }
 

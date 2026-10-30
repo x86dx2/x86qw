@@ -3,11 +3,13 @@ package maint
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/cli"
+	"github.com/x86dx2/x86qw/go/internal/receipt"
 )
 
 func TestUninstallRemovesManagedFilesAndKeepsPersonalOnes(t *testing.T) {
@@ -78,6 +80,171 @@ func TestUninstallOfACLIOnlyFolderKeepsPersonalFiles(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(report.Lines, "\n"), "Permanent x86QW CLI removed") {
 		t.Fatalf("report: %v", report.Lines)
+	}
+}
+
+// What uninstall empties goes too, up to the installation; a folder the user
+// made and the ones holding what stays do not.
+func TestUninstallRemovesTheFoldersItEmptied(t *testing.T) {
+	isolate(t)
+	root := managedInstall(t)
+	record(t, root, "mvdsv", map[string]string{"docs/licenses/mvdsv.md": "license"})
+	write(t, filepath.Join(root, filepath.FromSlash(receipt.PersonalDir), "receipt"), "the personal files")
+	if err := os.MkdirAll(filepath.Join(root, "qw", "mine"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Uninstall(root); err != nil {
+		t.Fatal(err)
+	}
+	for _, gone := range []string{"docs", "qw/maps", ".x86qw/clients", ".x86qw/components"} {
+		if exists(filepath.Join(root, filepath.FromSlash(gone))) {
+			t.Errorf("%s should have been removed", gone)
+		}
+	}
+	for _, kept := range []string{"qw/mine", "qw/demos/match.mvd", receipt.PersonalDir + "/receipt"} {
+		if !exists(filepath.Join(root, filepath.FromSlash(kept))) {
+			t.Errorf("%s should have been kept", kept)
+		}
+	}
+}
+
+// inGames moves a managed install to ~/Games/x86qw, the default folder.
+func inGames(t *testing.T, root string) (target, games string) {
+	t.Helper()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	games = filepath.Join(home, "Games")
+	target = filepath.Join(games, "x86qw")
+	if err := os.MkdirAll(games, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(root, target); err != nil {
+		t.Fatal(err)
+	}
+	return target, games
+}
+
+// The installer makes ~/Games for its default folder: it goes with the last
+// thing in it, and only then.
+func TestPurgeRemovesTheGamesFolderOnceEmpty(t *testing.T) {
+	isolate(t)
+	target, games := inGames(t, managedInstall(t))
+	if _, err := Purge(target); err != nil {
+		t.Fatal(err)
+	}
+	if exists(games) {
+		t.Fatal("the empty Games folder stayed")
+	}
+	target, games = inGames(t, managedInstall(t))
+	write(t, filepath.Join(games, "Doom", "save.dsg"), "another game's save")
+	if _, err := Purge(target); err != nil {
+		t.Fatal(err)
+	}
+	if exists(target) || !exists(filepath.Join(games, "Doom", "save.dsg")) {
+		t.Fatalf("installation %v, the other game %v", exists(target), exists(filepath.Join(games, "Doom", "save.dsg")))
+	}
+}
+
+// Any other folder holding the installation was the user's choice.
+func TestPurgeKeepsTheFolderTheUserChose(t *testing.T) {
+	isolate(t)
+	root := managedInstall(t)
+	if _, err := Purge(root); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(filepath.Dir(root)) {
+		t.Fatal("the chosen folder was removed")
+	}
+}
+
+// With nothing personal to keep, uninstall leaves no folder at all.
+func TestUninstallOfACLIOnlyFolderLeavesNothing(t *testing.T) {
+	isolate(t)
+	root := filepath.Join(t.TempDir(), "x86qw")
+	write(t, filepath.Join(root, ".x86qw", "cli", "receipt"), `{"version":"2.3.2"}`)
+	write(t, cli.Command(root), "#!/bin/sh\n")
+	target, games := inGames(t, root)
+	if _, err := Uninstall(target); err != nil {
+		t.Fatal(err)
+	}
+	if exists(games) {
+		t.Fatal("folders stayed")
+	}
+}
+
+// ~/.local/bin holds only the link on a machine nothing else uses it on.
+func TestUninstallRemovesTheFoldersOfTheUserCommand(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no ~/.local/bin on Windows")
+	}
+	isolate(t)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := managedInstall(t)
+	if _, err := cli.LinkUserCommand(root, home); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Uninstall(root); err != nil {
+		t.Fatal(err)
+	}
+	if exists(filepath.Join(home, ".local")) {
+		t.Fatal("the empty ~/.local stayed")
+	}
+	root = managedInstall(t)
+	if _, err := cli.LinkUserCommand(root, home); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(home, ".local", "bin", "other-tool"), "not x86QW's")
+	if _, err := Uninstall(root); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(filepath.Join(home, ".local", "bin", "other-tool")) {
+		t.Fatal("the other tool was removed")
+	}
+}
+
+// A kept uninstall leaves the personal files and their record: a later purge
+// recognizes the folder by it and removes the rest, the cache included.
+func TestPurgeAfterAnUninstallRemovesTheRest(t *testing.T) {
+	cache := isolate(t)
+	ownedCache(t, cache)
+	root := managedInstall(t)
+	record(t, root, "personal", map[string]string{"qw/x86qw-user.cfg": "seeded"})
+	if err := os.Rename(filepath.Join(root, filepath.FromSlash(componentsRelative), "personal"), filepath.Join(root, filepath.FromSlash(receipt.PersonalDir))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Uninstall(root); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(cache) || !exists(filepath.Join(root, "qw", "x86qw-user.cfg")) {
+		t.Fatal("the uninstall should keep the cache and the personal files")
+	}
+	if _, err := Purge(root); err != nil {
+		t.Fatal(err)
+	}
+	if exists(root) || exists(cache) {
+		t.Fatalf("installation (%v) or cache (%v) left behind", exists(root), exists(cache))
+	}
+}
+
+// The panels x86qw ui left in the temporary folder go, and only those.
+func TestUninstallRemovesTheLocalPanels(t *testing.T) {
+	isolate(t)
+	panel := filepath.Join(os.TempDir(), "x86qw-ui-123", "x86qw.html")
+	other := filepath.Join(os.TempDir(), "another-tool", "page.html")
+	for _, remove := range []func(string) (*Report, error){Uninstall, Purge} {
+		write(t, panel, "panel")
+		write(t, other, "not x86QW's")
+		if _, err := remove(managedInstall(t)); err != nil {
+			t.Fatal(err)
+		}
+		if exists(filepath.Dir(panel)) || !exists(other) {
+			t.Fatalf("panel %v, the other tool's page %v", exists(filepath.Dir(panel)), exists(other))
+		}
 	}
 }
 

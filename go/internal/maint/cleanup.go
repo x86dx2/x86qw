@@ -84,6 +84,10 @@ func ManagedIdentity(target string) ([]string, error) {
 	if regular(filepath.Join(target, filepath.FromSlash(nquakeReceipt))) {
 		evidence = append(evidence, "nquake")
 	}
+	// All a kept uninstall leaves of x86QW's.
+	if _, err := receipt.Load(filepath.Join(target, filepath.FromSlash(receipt.PersonalDir))); err == nil {
+		evidence = append(evidence, "personal")
+	}
 	for _, id := range componentRecordIDs(target) {
 		if _, err := receipt.Load(filepath.Join(target, filepath.FromSlash(componentsRelative), id)); err == nil {
 			evidence = append(evidence, "component:"+id)

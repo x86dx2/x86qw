@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 )
 
 func TestLockFormat(t *testing.T) {
@@ -82,11 +83,17 @@ func TestProbeOfAControllerWhoseBinaryWasReplaced(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("/proc/<pid>/exe is Linux's")
 	}
-	sleep, err := exec.LookPath("sleep")
-	if err != nil {
-		t.Skip(err)
+	if os.Getenv("X86QW_TEST_CONTROLLER") != "" {
+		time.Sleep(30 * time.Second)
+		return
 	}
-	payload, err := os.ReadFile(sleep)
+	// This test's own binary: a copy of sleep may be a multi-call coreutils,
+	// which will not run under another name.
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(self)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +101,8 @@ func TestProbeOfAControllerWhoseBinaryWasReplaced(t *testing.T) {
 	if err := os.WriteFile(binary, payload, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	child := exec.Command(binary, "30")
+	child := exec.Command(binary, "-test.run=^TestProbeOfAControllerWhoseBinaryWasReplaced$")
+	child.Env = append(os.Environ(), "X86QW_TEST_CONTROLLER=1")
 	if err := child.Start(); err != nil {
 		t.Fatal(err)
 	}
