@@ -56,7 +56,7 @@ In PowerShell or the Command Prompt:
 powershell -c "irm https://qw.x86.com.br/install.ps1 | iex"
 ```
 
-The bootstrap downloads the `x86qw` native CLI from the `x86qw-cli-2.5.3` release on
+The bootstrap downloads the `x86qw` native CLI from the `x86qw-cli-2.5.4` release on
 GitHub, checks the size and SHA-256 pinned in the script itself and runs
 `x86qw setup`. On a terminal, that opens the app's installer; it queries the
 public TUF catalog and asks what to install and where. Nothing beyond the
@@ -86,7 +86,7 @@ curl -fsS https://qw.x86.com.br/install.sh | bash -s -- --platform windows
 ```
 
 The accepted values are `macos`, `linux` and `windows`. The CLI binaries are also
-in the [`x86qw-cli-2.5.3` release](https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.5.3),
+in the [`x86qw-cli-2.5.4` release](https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.5.4),
 with `SHA256SUMS` and a build provenance attestation
 (`gh attestation verify FILE --repo x86dx2/x86qw`).
 
@@ -302,7 +302,7 @@ docs/           architecture, hosting, runbooks and decisions
 
 ## Project status
 
-The current CLI is the one from the `x86qw-cli-2.5.3` release, in `owner-only` mode: one user,
+The current CLI is the one from the `x86qw-cli-2.5.4` release, in `owner-only` mode: one user,
 the maintainer, who uses it on an Apple M3 Mac. The macOS, Windows
 and Linux binaries are in the catalog and in the release; the CI tests run on Linux and
 Windows, but there is no versioned record of a native smoke test of the 2.x versions, so

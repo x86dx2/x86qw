@@ -3,56 +3,56 @@
     "binaries": [
       {
         "architecture": "arm64",
-        "filename": "x86qw-2.5.3-darwin-arm64",
+        "filename": "x86qw-2.5.4-darwin-arm64",
         "platform": "macos",
-        "sha256": "a6031bbd45b1d6e230c3e5e139f91d22977d484fca2b414fc23e012a46319e47",
-        "size": 13353682,
+        "sha256": "87bad4ee4fdc236ea40b9a98847413d244aa324d97b52ab55742531158617719",
+        "size": 13403602,
         "urls": [
-          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.3/x86qw-2.5.3-darwin-arm64"
+          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.4/x86qw-2.5.4-darwin-arm64"
         ]
       },
       {
         "architecture": "x86_64",
-        "filename": "x86qw-2.5.3-darwin-amd64",
+        "filename": "x86qw-2.5.4-darwin-amd64",
         "platform": "macos",
-        "sha256": "fcc43458c231e7e81d11a52b1af42f746cac25350f1225ce4e6e051fc21d0d33",
-        "size": 14409712,
+        "sha256": "2c258f09f7b4a8324270eb3dc6de410d83eaad03621490de0686c2e1925056d6",
+        "size": 14483824,
         "urls": [
-          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.3/x86qw-2.5.3-darwin-amd64"
+          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.4/x86qw-2.5.4-darwin-amd64"
         ]
       },
       {
         "architecture": "x86_64",
-        "filename": "x86qw-2.5.3-linux-amd64",
+        "filename": "x86qw-2.5.4-linux-amd64",
         "platform": "linux",
-        "sha256": "81cb7304aa6b9e5b344aeb4457d2220a6f5341153f7d2933cab830aa907a93ff",
-        "size": 14114976,
+        "sha256": "189e625bd5dddab265099e1efcee707c83096da32640e9592ee7b8d29b0e22cf",
+        "size": 14180512,
         "urls": [
-          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.3/x86qw-2.5.3-linux-amd64"
+          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.4/x86qw-2.5.4-linux-amd64"
         ]
       },
       {
         "architecture": "arm64",
-        "filename": "x86qw-2.5.3-linux-arm64",
+        "filename": "x86qw-2.5.4-linux-arm64",
         "platform": "linux",
-        "sha256": "4748e365412b959107243a19fcc9201d8d9deeb7ac7fa7bd66a4a92a2217fefb",
-        "size": 12976288,
+        "sha256": "54cbb2cd94c9984fc945c3f63d67f02b7e5324e698fea3793cf0025f581aa2c6",
+        "size": 13107360,
         "urls": [
-          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.3/x86qw-2.5.3-linux-arm64"
+          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.4/x86qw-2.5.4-linux-arm64"
         ]
       },
       {
         "architecture": "x64",
-        "filename": "x86qw-2.5.3-windows-amd64.exe",
+        "filename": "x86qw-2.5.4-windows-amd64.exe",
         "platform": "windows",
-        "sha256": "b5cb6f820cc6bcd760462f6c62c9ecfee2de98f6c49da1723bc3d2fe3f264740",
-        "size": 14620160,
+        "sha256": "c29270579c96c1339f3534db7d12c32ad47af91917154805a29d7b06a7dd812a",
+        "size": 14699520,
         "urls": [
-          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.3/x86qw-2.5.3-windows-amd64.exe"
+          "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.4/x86qw-2.5.4-windows-amd64.exe"
         ]
       }
     ],
-    "version": "2.5.3"
+    "version": "2.5.4"
   },
   "commands": [
     "play",
@@ -420,5 +420,5 @@
       ]
     }
   ],
-  "version": "2.5.3"
+  "version": "2.5.4"
 }
