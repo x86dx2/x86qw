@@ -5,17 +5,17 @@
 set -eu
 
 x86qw_install_main() {
-VERSION="2.5.3"
+VERSION="2.5.4"
 URL_BASE="https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-${VERSION}"
 PROTOCOLS="=https"
 # Test hook: a local mirror of the same pinned files (still size+SHA-256 checked).
 if [ -n "${X86QW_BOOTSTRAP_MIRROR:-}" ]; then URL_BASE=$X86QW_BOOTSTRAP_MIRROR; PROTOCOLS="=https,file"; fi
 
 case "$(uname -s)/$(uname -m)" in
-  Darwin/arm64) FILE="x86qw-${VERSION}-darwin-arm64"; SHA256="a6031bbd45b1d6e230c3e5e139f91d22977d484fca2b414fc23e012a46319e47"; SIZE="13353682" ;;
-  Darwin/x86_64) FILE="x86qw-${VERSION}-darwin-amd64"; SHA256="fcc43458c231e7e81d11a52b1af42f746cac25350f1225ce4e6e051fc21d0d33"; SIZE="14409712" ;;
-  Linux/x86_64|Linux/amd64) FILE="x86qw-${VERSION}-linux-amd64"; SHA256="81cb7304aa6b9e5b344aeb4457d2220a6f5341153f7d2933cab830aa907a93ff"; SIZE="14114976" ;;
-  Linux/aarch64|Linux/arm64) FILE="x86qw-${VERSION}-linux-arm64"; SHA256="4748e365412b959107243a19fcc9201d8d9deeb7ac7fa7bd66a4a92a2217fefb"; SIZE="12976288" ;;
+  Darwin/arm64) FILE="x86qw-${VERSION}-darwin-arm64"; SHA256="87bad4ee4fdc236ea40b9a98847413d244aa324d97b52ab55742531158617719"; SIZE="13403602" ;;
+  Darwin/x86_64) FILE="x86qw-${VERSION}-darwin-amd64"; SHA256="2c258f09f7b4a8324270eb3dc6de410d83eaad03621490de0686c2e1925056d6"; SIZE="14483824" ;;
+  Linux/x86_64|Linux/amd64) FILE="x86qw-${VERSION}-linux-amd64"; SHA256="189e625bd5dddab265099e1efcee707c83096da32640e9592ee7b8d29b0e22cf"; SIZE="14180512" ;;
+  Linux/aarch64|Linux/arm64) FILE="x86qw-${VERSION}-linux-arm64"; SHA256="54cbb2cd94c9984fc945c3f63d67f02b7e5324e698fea3793cf0025f581aa2c6"; SIZE="13107360" ;;
   *) echo "x86QW: unsupported system: $(uname -s)/$(uname -m)" >&2; exit 1 ;;
 esac
 
