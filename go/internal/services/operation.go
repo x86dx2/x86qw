@@ -12,6 +12,8 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/x86dx2/x86qw/go/internal/archive"
+	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/play"
 	"github.com/x86dx2/x86qw/go/internal/pyjson"
@@ -530,6 +532,23 @@ func (op *Operation) secrets() map[string]any {
 	return values
 }
 
+// controllerExecutable is the installed CLI when it is this same program,
+// else this process: a bootstrap runs from a copy it deletes on exit, which
+// a controller left running would hold.
+func controllerExecutable(target string) (string, error) {
+	running, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	installed := cli.Command(target)
+	if want, err := archive.FileSHA256(running); err == nil {
+		if got, err := archive.FileSHA256(installed); err == nil && got == want {
+			return installed, nil
+		}
+	}
+	return running, nil
+}
+
 // launchBackground starts the controller in the background and waits until
 // the session is up.
 func (op *Operation) launchBackground(hosted *Hosted) int {
@@ -544,7 +563,7 @@ func (op *Operation) launchBackground(hosted *Hosted) int {
 		return 1
 	}
 	request += "\n"
-	executable, err := os.Executable()
+	executable, err := controllerExecutable(target)
 	if err != nil {
 		c.Error("Could not create the background controller: " + err.Error())
 		return 1

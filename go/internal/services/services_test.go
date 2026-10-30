@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/x86dx2/x86qw/go/internal/cli"
 	"github.com/x86dx2/x86qw/go/internal/play"
 )
 
@@ -155,5 +156,36 @@ func TestJournalPathsStayInside(t *testing.T) {
 	}
 	if _, ok := JournalPath("/srv/x86qw", "qw/xh_session.cfg"); !ok {
 		t.Fatal("a plain path was refused")
+	}
+}
+
+// A bootstrap runs x86QW from a copy it deletes on exit: the background
+// controller runs the installed CLI when it is that same program, and never
+// an installed CLI of another build, which may read its arguments otherwise.
+func TestTheControllerRunsTheInstalledCLI(t *testing.T) {
+	running, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	self, err := os.ReadFile(running)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := t.TempDir()
+	installed := cli.Command(target)
+	if got, _ := controllerExecutable(target); got != running {
+		t.Fatalf("no installed CLI: %s", got)
+	}
+	if err := os.WriteFile(installed, self, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := controllerExecutable(target); got != installed {
+		t.Fatalf("the same program installed: %s", got)
+	}
+	if err := os.WriteFile(installed, append(self, 0), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := controllerExecutable(target); got != running {
+		t.Fatalf("another build installed: %s", got)
 	}
 }
