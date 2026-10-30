@@ -207,6 +207,30 @@ func TestUninstallRemovesTheFoldersOfTheUserCommand(t *testing.T) {
 	}
 }
 
+// A kept uninstall leaves the personal files and their record: a later purge
+// recognizes the folder by it and removes the rest, the cache included.
+func TestPurgeAfterAnUninstallRemovesTheRest(t *testing.T) {
+	cache := isolate(t)
+	ownedCache(t, cache)
+	root := managedInstall(t)
+	record(t, root, "personal", map[string]string{"qw/x86qw-user.cfg": "seeded"})
+	if err := os.Rename(filepath.Join(root, filepath.FromSlash(componentsRelative), "personal"), filepath.Join(root, filepath.FromSlash(receipt.PersonalDir))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Uninstall(root); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(cache) || !exists(filepath.Join(root, "qw", "x86qw-user.cfg")) {
+		t.Fatal("the uninstall should keep the cache and the personal files")
+	}
+	if _, err := Purge(root); err != nil {
+		t.Fatal(err)
+	}
+	if exists(root) || exists(cache) {
+		t.Fatalf("installation (%v) or cache (%v) left behind", exists(root), exists(cache))
+	}
+}
+
 // The panels x86qw ui left in the temporary folder go, and only those.
 func TestUninstallRemovesTheLocalPanels(t *testing.T) {
 	isolate(t)
