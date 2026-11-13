@@ -3,10 +3,10 @@ module github.com/x86dx2/x86qw/go
 go 1.27.3
 
 require (
-	charm.land/bubbletea/v2 v2.1.0
+	charm.land/bubbletea/v2 v2.1.1
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/charmbracelet/x/ansi v0.11.9
-	github.com/sigstore/sigstore v1.11.0
+	github.com/sigstore/sigstore v1.11.2
 	github.com/theupdateframework/go-tuf/v2 v2.4.2
 	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.47.0
