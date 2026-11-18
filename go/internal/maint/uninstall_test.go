@@ -341,6 +341,30 @@ func TestPurgeKeepsWhatX86QWDidNotMake(t *testing.T) {
 	}
 }
 
+// A .gitignore is x86QW's only when x86QW generated it: purge keeps the
+// user's own and removes the generated one.
+func TestPurgeKeepsTheUsersGitignore(t *testing.T) {
+	isolate(t)
+	root := managedInstall(t)
+	write(t, filepath.Join(root, ".gitignore"), "*.secret\n")
+	if _, err := Purge(root); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(filepath.Join(root, ".gitignore")) {
+		t.Fatal("purge deleted the user's .gitignore")
+	}
+	root = managedInstall(t)
+	if err := SyncGitignore(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Purge(root); err != nil {
+		t.Fatal(err)
+	}
+	if exists(root) {
+		t.Fatal("the generated .gitignore stayed")
+	}
+}
+
 func TestPurgeRemovesTheInstallationAndTheCache(t *testing.T) {
 	cache := isolate(t)
 	ownedCache(t, cache)

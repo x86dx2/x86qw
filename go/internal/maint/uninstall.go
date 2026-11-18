@@ -336,6 +336,8 @@ func Purge(target string) (*Report, error) {
 		for _, child := range children {
 			switch path := filepath.Join(target, child.Name()); {
 			case path == metadata:
+			case child.Name() == ".gitignore" && !generatedGitignore(path):
+				kept++
 			// The copy repair keeps of a changed file (name.x86qw-kept[.N]) goes with it,
 			// as does what a write cut short left beside it (.name.N.tmp).
 			case own[strings.SplitN(child.Name(), ".x86qw-kept", 2)[0]] || strings.HasPrefix(child.Name(), ".x86qw-") || own[cutShort(child.Name())]:

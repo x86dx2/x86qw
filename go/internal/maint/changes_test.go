@@ -75,3 +75,19 @@ func TestGitignoreListsOperationalAndManagedPaths(t *testing.T) {
 		}
 	}
 }
+
+// A .gitignore x86QW did not write is the user's: sync refuses to replace
+// it, and refreshes its own.
+func TestSyncGitignoreKeepsTheUsersOwn(t *testing.T) {
+	root := managedInstall(t)
+	write(t, filepath.Join(root, ".gitignore"), "*.secret\n")
+	if err := SyncGitignore(root); err == nil || read(t, filepath.Join(root, ".gitignore")) != "*.secret\n" {
+		t.Fatalf("the user's .gitignore was replaced: %v", err)
+	}
+	os.Remove(filepath.Join(root, ".gitignore"))
+	for range 2 {
+		if err := SyncGitignore(root); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
