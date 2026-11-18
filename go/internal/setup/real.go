@@ -273,7 +273,11 @@ func (r *Real) Existing(ctx context.Context, target string) (*Existing, error) {
 	}
 	ids := r.idsByLabel()
 	for _, row := range planned.Operations {
-		existing.Updates = append(existing.Updates, Update{ID: ids[row.Item], Label: row.Item, From: planText(row.Installed), To: row.Available, Note: planText(row.Kind)})
+		update := Update{ID: ids[row.Item], Label: row.Item, From: planText(row.Installed), To: row.Available, Note: planText(row.Kind)}
+		if row.Size != nil {
+			update.Size = *row.Size
+		}
+		existing.Updates = append(existing.Updates, update)
 	}
 	return existing, nil
 }

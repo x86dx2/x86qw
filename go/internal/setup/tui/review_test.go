@@ -98,6 +98,20 @@ func TestUpdateRunsFromHomeAndBack(t *testing.T) {
 	}
 }
 
+// The size Apply shows is what the update downloads, packages that are not
+// components (ezQuake, the CLI, the core data) included.
+func TestApplyShowsWhatTheUpdateDownloads(t *testing.T) {
+	m := started(t, true)
+	toConsole(m)
+	m.focus = homeRow(m, "update")
+	drive(m, key("enter"), key("enter"))
+	shown := m.totalBytes()
+	drive(m, key("i"))
+	if shown != m.progress.Total {
+		t.Fatalf("Apply shows %d bytes, the update downloads %d", shown, m.progress.Total)
+	}
+}
+
 func TestNothingToDownloadReadsAsDone(t *testing.T) {
 	m := started(t, true)
 	m.screen, m.progress = scInstall, setup.Progress{Finished: true}
