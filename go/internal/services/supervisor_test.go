@@ -184,8 +184,9 @@ func TestALocalServerTakesHashedRcon(t *testing.T) {
 func TestABackgroundSessionLogsItsCleanup(t *testing.T) {
 	target := t.TempDir()
 	os.MkdirAll(filepath.Join(target, ".x86qw"), 0o700)
-	// A QTV stand-in that replaces its session cfg and quits.
-	fakeRuntime(t, target, "qtv", []byte("#!/bin/sh\nrm -f \"$2\" && : > \"$2\"\nexit 3\n"))
+	// A QTV stand-in that replaces its session cfg and quits. The new file
+	// exists before the old one goes, so Linux cannot hand it the same inode.
+	fakeRuntime(t, target, "qtv", []byte("#!/bin/sh\n: > \"$2.new\" && mv \"$2.new\" \"$2\"\nexit 3\n"))
 	os.WriteFile(filepath.Join(target, "qtv", "qtv.cfg"), nil, 0o644)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
