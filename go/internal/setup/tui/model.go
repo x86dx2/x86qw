@@ -1337,7 +1337,7 @@ func (m *Model) checkUpdates() tea.Cmd {
 }
 
 // freshUpdates takes what a quiet check found: only the updates change,
-// never the choices on screen.
+// and a catalog that could not be read, never the choices on screen.
 func (m *Model) freshUpdates(msg freshMsg) {
 	if msg.err != nil || msg.existing == nil || m.existing == nil || m.screen == scInstall {
 		return
@@ -1345,5 +1345,8 @@ func (m *Model) freshUpdates(msg freshMsg) {
 	if len(msg.existing.Updates) > len(m.existing.Updates) {
 		m.say(m.t("upd.new"))
 	}
-	m.existing.Updates = msg.existing.Updates
+	m.existing.Updates, m.existing.UpdatesErr = msg.existing.Updates, msg.existing.UpdatesErr
+	if m.catalog.Unavailable != nil {
+		m.catalog = msg.catalog
+	}
 }
