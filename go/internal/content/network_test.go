@@ -496,6 +496,34 @@ func TestPublishRejectsChangedMirror(t *testing.T) {
 	}
 }
 
+// A mirror holds the pinned bytes, holds nothing (404) or holds other bytes,
+// which is an error and never a quiet "not found".
+func TestRemoteFingerprintFindsOnlyThePinnedBytes(t *testing.T) {
+	pinned := []byte("published")
+	web := &fakeWeb{handler: func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/same":
+			w.Write(pinned)
+		case "/other":
+			w.Write([]byte("different"))
+		default:
+			http.NotFound(w, r)
+		}
+	}}
+	project := NewProject(t.TempDir())
+	project.HTTP = web.client()
+	size, digest := int64(len(pinned)), sha256Hex(pinned)
+	if found, err := project.RemoteFingerprint("https://mirror.example/same", size, digest); !found || err != nil {
+		t.Fatalf("pinned bytes: %v %v", found, err)
+	}
+	if found, err := project.RemoteFingerprint("https://mirror.example/missing", size, digest); found || err != nil {
+		t.Fatalf("missing: %v %v", found, err)
+	}
+	if found, err := project.RemoteFingerprint("https://mirror.example/other", size, digest); found || err == nil {
+		t.Fatalf("other bytes: %v %v", found, err)
+	}
+}
+
 func TestGitLabUploadNeverFollowsRedirects(t *testing.T) {
 	project, filename := publishFixture(t, []byte("published"), false)
 	url := ArtifactURL(object("package", "nquake-maps", "version", "test", "filename", filename))

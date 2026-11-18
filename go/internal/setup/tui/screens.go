@@ -261,7 +261,7 @@ func (m *Model) totalBytes() int64 {
 		if m.opts.Upgrade {
 			for _, update := range m.existing.Updates {
 				have[update.ID] = true
-				total += m.componentSize(update.ID)
+				total += update.Size
 			}
 		}
 	} else {

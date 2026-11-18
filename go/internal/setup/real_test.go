@@ -281,7 +281,7 @@ func TestRealCancelThenInstallAgain(t *testing.T) {
 	if !errors.Is(last.Err, context.Canceled) {
 		t.Fatalf("should end canceled: %+v", last.Err)
 	}
-	if Installed(target) {
+	if install.Installed(target) {
 		t.Fatal("what the cancel left behind passed as an installation")
 	}
 	for progress := range r.Install(context.Background(), options, nil) {

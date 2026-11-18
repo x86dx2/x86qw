@@ -21,20 +21,19 @@ import (
 // api/v1/health, which exist only in the deploy; site/public/_headers
 // already keeps product.json out of the CDN cache.
 //
-//	x86qw-release site --source site/public --out DIR --commit SHA [--validate-run N --deploy-run N]
+//	x86qw-release site --source site/public --out DIR --commit SHA [--deploy-run N]
 func runSite(args []string) int {
 	flags := flag.NewFlagSet("site", flag.ExitOnError)
 	source := flags.String("source", "site/public", "site projection in the checkout")
 	out := flags.String("out", "", "output folder (new)")
 	commit := flags.String("commit", "", "deployed commit (40 hex)")
-	validateRun := flags.Int64("validate-run", 0, "Validate run")
 	deployRun := flags.Int64("deploy-run", 0, "deploy run")
 	flags.Parse(args)
 	if *out == "" || len(*commit) != 40 {
 		flags.Usage()
 		return 2
 	}
-	if err := assembleSite(*source, *out, *commit, *validateRun, *deployRun); err != nil {
+	if err := assembleSite(*source, *out, *commit, *deployRun); err != nil {
 		fmt.Fprintln(os.Stderr, "x86qw-release site:", err)
 		return 1
 	}
@@ -83,7 +82,7 @@ func encodeIndented(value any) []byte {
 	return buffer.Bytes()
 }
 
-func assembleSite(source, out, commit string, validateRun, deployRun int64) error {
+func assembleSite(source, out, commit string, deployRun int64) error {
 	if _, err := os.Stat(out); err == nil {
 		return fmt.Errorf("destination already exists: %s", out)
 	}
@@ -118,11 +117,10 @@ func assembleSite(source, out, commit string, validateRun, deployRun int64) erro
 	version := map[string]any{
 		"catalog_sha256": hex.EncodeToString(sum[:]), "commit": commit, "deploy_run_id": deployRun,
 		"external_public": false, "format": 1, "project": "x86qw", "release_audience": "owner-only",
-		"validate_run_id": validateRun,
 	}
 	health := map[string]any{
 		"commit": commit, "deploy_run_id": deployRun, "external_public": false, "format": 1,
-		"project": "x86qw", "release_audience": "owner-only", "status": "ok", "validate_run_id": validateRun,
+		"project": "x86qw", "release_audience": "owner-only", "status": "ok",
 	}
 	for _, relative := range []string{"version", "api/v1/version"} {
 		if err := os.WriteFile(filepath.Join(out, filepath.FromSlash(relative)), encodeIndented(version), 0o644); err != nil {

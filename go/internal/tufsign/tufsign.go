@@ -232,5 +232,18 @@ func RenewTimestamp(current []byte, keyPath, rootPath string, lease time.Duratio
 	renewed := metadata.Timestamp(expires)
 	renewed.Signed.Version = old.Signed.Version + 1
 	renewed.Signed.Meta = old.Signed.Meta
-	return sign(renewed, []signature.Signer{signer})
+	payload, err := sign(renewed, []signature.Signer{signer})
+	if err != nil {
+		return nil, err
+	}
+	// The renewal deploys these bytes before any client reads them: check
+	// what was serialized, as a client would.
+	parsed, err := metadata.Timestamp().FromBytes(payload)
+	if err == nil {
+		err = root.VerifyDelegate(metadata.TIMESTAMP, parsed)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("the renewed timestamp does not verify against the root: %w", err)
+	}
+	return payload, nil
 }

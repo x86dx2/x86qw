@@ -1,11 +1,13 @@
 package services
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/cliargs"
+	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/play"
 )
 
@@ -268,7 +270,8 @@ func ParseHost(args []string, games []play.Game) (*HostOptions, error) {
 		if o.Selection != "" {
 			return nil, usagef("--preset cannot be combined with a game on the command line")
 		}
-		presets, err := LoadPresets(o.Target)
+		// The command defaults --target only later, after parsing.
+		presets, err := LoadPresets(cmp.Or(o.Target, install.DefaultTarget()))
 		if err != nil {
 			return nil, usagef("%s", err.Error())
 		}
@@ -309,6 +312,9 @@ func ParseHost(args []string, games []play.Game) (*HostOptions, error) {
 			return nil, usagef("bot, CTF and Race options only work with the KTX game")
 		}
 		o.Game = "ktx"
+	}
+	if len(o.Instances) > 0 && o.Game != "" && o.Game != "ktx" {
+		return nil, usagef("--instance only works with the KTX game")
 	}
 	o.KtxOptions = k
 	return o, nil
