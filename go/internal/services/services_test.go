@@ -85,6 +85,23 @@ func TestPresetRoundTrip(t *testing.T) {
 	}
 }
 
+// Without --target a preset comes from the installation the command acts
+// on, whatever folder it runs from.
+func TestAPresetNeedsNoTarget(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	options := &HostOptions{Game: "ktx", Mode: "duel", Map: "dm6", Bind: "127.0.0.1", Port: 28501, Maxclients: 16,
+		QtvBind: "127.0.0.1", QtvPort: 28000, ProxyBind: "127.0.0.1", ProxyPort: 30000}
+	if _, err := SavePreset(filepath.Join(home, "Games", "x86qw"), "duel", options); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(t.TempDir())
+	if loaded, err := ParseHost([]string{"--preset", "duel"}, games(t)); err != nil || loaded.Map != "dm6" {
+		t.Fatalf("%+v %v", loaded, err)
+	}
+}
+
 func TestReadPasswordFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "pw")
