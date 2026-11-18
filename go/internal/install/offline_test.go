@@ -558,6 +558,24 @@ func TestOfflineRepairRebuildsAMissingState(t *testing.T) {
 	}
 }
 
+// A file the system left among the records, such as Finder's .DS_Store,
+// is no record: repair goes ahead, as verify does.
+func TestOfflineRepairIgnoresAFileAmongTheRecords(t *testing.T) {
+	f := newFixture(t)
+	root := filepath.Join(t.TempDir(), "x86qw")
+	f.install(root, "essential")
+	if err := os.WriteFile(filepath.Join(root, ".x86qw", "components", ".DS_Store"), []byte("finder"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(filepath.Join(root, "qw", "pak.lst"))
+	if _, err := Repair(f.ctx, f.input(root)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Verify(root); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestOfflineRepairRestoresTheExecuteBit(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows has no POSIX execute bit")

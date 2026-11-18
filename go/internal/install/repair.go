@@ -64,6 +64,9 @@ func assessRepair(in plan.Input) (*RepairAssessment, error) {
 	valid := map[string]*receipt.Record{}
 	entries, _ := os.ReadDir(filepath.Join(root, receipt.ComponentsDir))
 	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue // like receipt.LoadComponents, which verify uses
+		}
 		record, err := receipt.Load(filepath.Join(root, receipt.ComponentsDir, entry.Name()))
 		if err != nil {
 			assessment.diagnostics = append(assessment.diagnostics, fmt.Sprintf("%s: %v", entry.Name(), err))
