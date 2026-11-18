@@ -426,6 +426,36 @@ func TestQuarantineRestoresEverythingWhenOneMoveFails(t *testing.T) {
 	}
 }
 
+// A delete that fails (on Windows, the runtime of a game still running)
+// stops the uninstall with everything not yet deleted back in place, the
+// state and the CLI included, so it can run again.
+func TestUninstallPutsBackWhatAFailedDeleteLeft(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("a read-only folder does not stop this delete here")
+	}
+	isolate(t)
+	root := managedInstall(t)
+	game := filepath.Join(root, catalog.ClientSpecs[1].Runtime("nightly"))
+	os.Remove(game)
+	write(t, filepath.Join(game, "locked", "file"), "cannot go")
+	os.Chmod(filepath.Join(game, "locked"), 0o555)
+	t.Cleanup(func() { os.Chmod(filepath.Join(game, "locked"), 0o755) })
+	if _, err := Uninstall(root); err == nil {
+		t.Fatal("the uninstall should fail")
+	}
+	for _, kept := range []string{stateRelative, cli.BinaryName(), filepath.Base(game) + "/locked/file", "qw/maps/x86qw-a.bsp"} {
+		if !exists(filepath.Join(root, filepath.FromSlash(kept))) {
+			t.Errorf("%s is gone", kept)
+		}
+	}
+	entries, _ := os.ReadDir(root)
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), "-quarantine.") {
+			t.Errorf("left set aside: %s", entry.Name())
+		}
+	}
+}
+
 func TestMinimalRemovalPathsDropsDescendants(t *testing.T) {
 	sep := string(filepath.Separator)
 	got := minimalRemovalPaths([]string{"a" + sep + "b" + sep + "c", "a" + sep + "b", "a" + sep + "bc", "a" + sep + "b"})

@@ -208,7 +208,7 @@ func minimalRemovalPaths(paths []string) []string {
 }
 
 // quarantineRemove moves every path aside first (so a failure restores all),
-// then deletes them.
+// then deletes them; a delete that fails puts back what is not deleted yet.
 func quarantineRemove(paths []string) error {
 	type moved struct{ original, aside string }
 	var done []moved
@@ -232,12 +232,17 @@ func quarantineRemove(paths []string) error {
 		}
 		done = append(done, moved{path, aside})
 	}
-	var errs []error
-	for _, item := range done {
+	for index, item := range done {
 		if err := os.RemoveAll(item.aside); err != nil && !removeAfterExit(item.original, item.aside) {
-			errs = append(errs, err)
+			// The state and the running CLI stay with them, so the operation
+			// can run again.
+			for _, rest := range done[index:] {
+				os.Rename(rest.aside, rest.original)
+			}
+			return fmt.Errorf("Removing %s failed; what was not removed yet was put back: %w", item.original, err)
 		}
 	}
+	var errs []error
 	for _, path := range running {
 		errs = append(errs, os.Remove(path))
 	}
