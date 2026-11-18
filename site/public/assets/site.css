@@ -582,7 +582,8 @@ footer nav a:hover {
   border-color: oklch(0.72 0.16 25);
 }
 
-.copy-status {
+.copy-status,
+.copy-hint {
   position: absolute;
   width: 1px;
   height: 1px;

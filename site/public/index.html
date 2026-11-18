@@ -143,7 +143,8 @@
           <div class="install-command" aria-label="Install commands">
             <div class="install-command-row">
               <p>macOS / Linux</p>
-              <button class="install-command-control" type="button" data-copy-install data-copy-target="install-unix-command" aria-label="Copy the command for macOS and Linux">
+              <button class="install-command-control" type="button" data-copy-install data-copy-target="install-unix-command">
+                <span class="copy-hint">Copy the command for macOS and Linux: </span>
                 <span class="command-prompt" aria-hidden="true">$</span>
                 <code id="install-unix-command" data-install-command>curl -fsS https://qw.x86.com.br/install.sh | bash</code>
                 <span class="install-copy-icon" aria-hidden="true">
@@ -155,7 +156,8 @@
             </div>
             <div class="install-command-row">
               <p>Windows (PowerShell or Command Prompt)</p>
-              <button class="install-command-control" type="button" data-copy-install data-copy-target="install-windows-command" aria-label="Copy the command for Windows">
+              <button class="install-command-control" type="button" data-copy-install data-copy-target="install-windows-command">
+                <span class="copy-hint">Copy the command for Windows: </span>
                 <span class="command-prompt" aria-hidden="true">&gt;</span>
                 <code id="install-windows-command" data-install-command>powershell -c &quot;irm https://qw.x86.com.br/install.ps1 | iex&quot;</code>
                 <span class="install-copy-icon" aria-hidden="true">
