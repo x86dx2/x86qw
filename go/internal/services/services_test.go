@@ -38,6 +38,7 @@ func TestParseHost(t *testing.T) {
 		{"ktx", "--bot-skill", "3"},
 		{"nosuch"},
 		{"ktx", "--bind", "host"},
+		{"td2", "--map", "dm6", "--instance", "duel:dm3:27501"},
 	} {
 		if _, err := ParseHost(args, games(t)); err == nil || !IsUsage(err) {
 			t.Errorf("%v: want usage error, got %v", args, err)

@@ -313,6 +313,9 @@ func ParseHost(args []string, games []play.Game) (*HostOptions, error) {
 		}
 		o.Game = "ktx"
 	}
+	if len(o.Instances) > 0 && o.Game != "" && o.Game != "ktx" {
+		return nil, usagef("--instance only works with the KTX game")
+	}
 	o.KtxOptions = k
 	return o, nil
 }
