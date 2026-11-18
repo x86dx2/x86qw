@@ -91,14 +91,15 @@ func removeLocalPanels() {
 }
 
 // isGamesFolder reports whether folder is ~/Games, which the installer makes
-// for its default installation. A link there is the user's, so it is not.
+// for its default installation. A link there (a junction on Windows) is the
+// user's, so it is not, even when folder is that same link.
 func isGamesFolder(folder string) bool {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return false
 	}
 	games, err := os.Lstat(filepath.Join(home, "Games"))
-	if err != nil {
+	if err != nil || !games.IsDir() {
 		return false
 	}
 	info, err := os.Lstat(folder)

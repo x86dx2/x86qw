@@ -147,6 +147,32 @@ func TestPurgeRemovesTheGamesFolderOnceEmpty(t *testing.T) {
 	}
 }
 
+// A ~/Games that links elsewhere is the user's, also when the installation
+// is reached through it.
+func TestUninstallKeepsALinkedGamesFolder(t *testing.T) {
+	isolate(t)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	games := filepath.Join(t.TempDir(), "Games")
+	if err := os.MkdirAll(games, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(games, filepath.Join(home, "Games")); err != nil {
+		t.Skip(err)
+	}
+	if err := os.Rename(managedInstall(t), filepath.Join(games, "x86qw")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Uninstall(filepath.Join(home, "Games", "x86qw")); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(filepath.Join(home, "Games")) {
+		t.Fatal("the ~/Games link was removed")
+	}
+}
+
 // Any other folder holding the installation was the user's choice.
 func TestPurgeKeepsTheFolderTheUserChose(t *testing.T) {
 	isolate(t)
