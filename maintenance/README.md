@@ -40,25 +40,10 @@ x86qw-content commit --push
   release;
 - `commit`: adds to Git only `dist/`, inventories, recipes and the catalog.
 
-`update --commit --push` exists for automation, but the recommended routine
-is to keep review and publication apart:
-
-```sh
-x86qw-content check
-x86qw-content update --dry-run
-x86qw-content update
-x86qw-content verify
-git diff --stat
-x86qw-content commit --push
-# after review, green checks and separate approval:
-x86qw-content publish
-```
-
-The catalog that `update`, `add` or `build --register` changed only counts
-once signed: run `go -C go run ./cmd/x86qw-release sign` and
-`x86qw-content verify` before the PR. The merge publishes the site; the step
-by step is in the
-[release runbook](../docs/runbooks/release.md#publish-content).
+A content release follows the
+[release runbook](../docs/runbooks/release.md#publish-content): `publish`
+comes before `x86qw-release sign`, because it adds the GitLab mirror URLs to
+the catalog, and the merge deploys the site.
 
 Comparisons with public upstreams use GitHub's official HTTPS API and public
 release and download URLs. `check` and `update` need no GitHub account, token

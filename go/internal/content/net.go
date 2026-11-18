@@ -173,21 +173,19 @@ func (p *Project) pinnedOnce(url, destination string, size int64, digest string)
 }
 
 // RemoteFingerprint downloads a pinned artifact to a temporary file and
-// returns its (size, sha256); a 404 returns ok=false.
-func (p *Project) RemoteFingerprint(url string, size int64, digest string) (int64, string, bool, error) {
+// reports whether url serves exactly those bytes; a 404 is not found, and
+// other bytes are an IntegrityError.
+func (p *Project) RemoteFingerprint(url string, size int64, digest string) (bool, error) {
 	dir, err := os.MkdirTemp("", "x86qw-mirror-verify-")
 	if err != nil {
-		return 0, "", false, err
+		return false, err
 	}
 	defer os.RemoveAll(dir)
 	err = p.Pinned(url, filepath.Join(dir, "artifact"), size, digest, 1)
 	if IsHTTPStatus(err, 404) {
-		return 0, "", false, nil
+		return false, nil
 	}
-	if err != nil {
-		return 0, "", false, err
-	}
-	return size, digest, true, nil
+	return err == nil, err
 }
 
 // Put uploads payload (GitLab generic packages). Like the curl upload it

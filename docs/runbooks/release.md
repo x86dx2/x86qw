@@ -121,8 +121,8 @@ for it yet: plan the work before June 2027.
   Actions create PRs) and `RELEASE_GH_TOKEN` only pushes the branch, whose
   required checks run on `push`. Before that, the missing PR permission on
   that token left v56 unrecorded (#355).
-- **The renewal published, but failed at "Verify the public chain and the
-  published timestamp"** (no `bot/tuf-timestamp-vN` branch). Production
+- **The renewal published, but failed at "Verify the published
+  timestamp"** (no `bot/tuf-timestamp-vN` branch). Production
   serves vN and `main` the one before, so every deploy refuses. Record what
   production serves on a branch from `main`, then open the PR and merge it;
   the merge deploys `main` again:
