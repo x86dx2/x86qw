@@ -136,6 +136,24 @@ func TestOldAccentedNamesLoadPlain(t *testing.T) {
 	}
 }
 
+// A recipe carries no password, so one applied to an installation keeps the
+// passwords it has: the server stays closed and its rcon still works.
+func TestARecipeKeepsTheInstallationsPasswords(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "x86qw")
+	saved := Defaults(Both, target)
+	saved.Nick, saved.Server.Rcon, saved.Server.Password, saved.Server.Spectators = "p", "rcon1", "players", "watchers"
+	if err := SaveChoices(target, saved); err != nil {
+		t.Fatal(err)
+	}
+	o, err := parseRecipe([]string{"--intent", "both", "--nick", "p", "--target", target})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.Server.Rcon != "rcon1" || o.Server.Password != "players" || o.Server.Spectators != "watchers" {
+		t.Fatalf("rcon %q, password %q, spectators %q", o.Server.Rcon, o.Server.Password, o.Server.Spectators)
+	}
+}
+
 // A comma separates the five keys of --keys, so it cannot be one of them:
 // the command that repeats the installation would not read back.
 func TestACommaIsNoKey(t *testing.T) {
