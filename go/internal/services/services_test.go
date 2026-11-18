@@ -3,6 +3,7 @@ package services
 import (
 	"github.com/x86dx2/x86qw/go/internal/privfs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -99,6 +100,37 @@ func TestAPresetNeedsNoTarget(t *testing.T) {
 	t.Chdir(t.TempDir())
 	if loaded, err := ParseHost([]string{"--preset", "duel"}, games(t)); err != nil || loaded.Map != "dm6" {
 		t.Fatalf("%+v %v", loaded, err)
+	}
+}
+
+// A stop that left a server running does not mark the session clean:
+// recovery skips clean journals, so nothing would ever end that server.
+func TestASessionWhoseServerOutlivedTheStopIsNotClean(t *testing.T) {
+	journal := testJournal(t)
+	t.Setenv("X86QW_TEST_CHILD", "sleep")
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := exec.Command(self)
+	if err := server.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer server.Process.Kill()
+	if err := journal.RecordProcess(&Spec{Label: "MVDSV", Arguments: server.Args}, server.Process.Pid); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"interrupted", "clean"} {
+		if want == "clean" {
+			server.Process.Kill()
+			server.Wait()
+		}
+		if err := journal.SetStatus("clean"); err != nil {
+			t.Fatal(err)
+		}
+		if data, err := LoadJournal(journal.Path); err != nil || data["status"] != want {
+			t.Fatalf("want %s: %v %v", want, data["status"], err)
+		}
 	}
 }
 
