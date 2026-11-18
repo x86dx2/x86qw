@@ -3,6 +3,7 @@ package setup
 import (
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -151,6 +152,21 @@ func TestARecipeKeepsTheInstallationsPasswords(t *testing.T) {
 	}
 	if o.Server.Rcon != "rcon1" || o.Server.Password != "players" || o.Server.Spectators != "watchers" {
 		t.Fatalf("rcon %q, password %q, spectators %q", o.Server.Rcon, o.Server.Password, o.Server.Spectators)
+	}
+}
+
+// The client base runs x86qw-user.cfg, which applies the nick, keys and
+// video: a player gets it whatever the content, as the app shows.
+func TestAPlayerAlwaysGetsTheClientBase(t *testing.T) {
+	cat := &Catalog{Components: []Component{{ID: "x86qw-client-bootstrap", Kind: "core"}, {ID: "nquake-documentation", Kind: "documentation"}}}
+	for _, content := range []string{"nquake-documentation", ""} {
+		o, err := parseRecipe([]string{"--intent", "play", "--nick", "p", "--content=" + content})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if selected := Selected(cat, o); !slices.Contains(selected, "x86qw-client-bootstrap") {
+			t.Errorf("--content=%s selects %v", content, selected)
+		}
 	}
 }
 
