@@ -40,7 +40,7 @@ func runChanges(args []string, stdout, stderr io.Writer) int {
 	}
 	if a.syncGitignore {
 		if err := maint.SyncGitignore(target); err != nil {
-			fmt.Fprintf(stderr, "✗ Could not update the installation's Git filter: %s/.gitignore\n", target)
+			fmt.Fprintf(stderr, "✗ Could not update the installation's Git filter: %v\n", err)
 			return output.ExitFailure
 		}
 		fmt.Fprintf(stdout, "· Selective Git filter updated: %s/.gitignore\n", target)

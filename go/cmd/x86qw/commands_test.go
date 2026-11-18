@@ -148,6 +148,15 @@ func TestChangesShowsWhatTheUserEdited(t *testing.T) {
 	}
 }
 
+// A .gitignore the user wrote stays, and the refusal says why.
+func TestSyncGitignoreSaysWhyItKeepsTheUsersOwn(t *testing.T) {
+	root := fixtureInstall(t)
+	writeFile(t, filepath.Join(root, ".gitignore"), "*.secret\n")
+	if out := runOK(t, 1, "changes", root, "--sync-gitignore"); !strings.Contains(out, "x86QW did not write") {
+		t.Fatalf("changes --sync-gitignore: %s", out)
+	}
+}
+
 // A file a server named may hold terminal control codes: changes prints its
 // name escaped, never raw.
 func TestChangesEscapesControlCharacters(t *testing.T) {
