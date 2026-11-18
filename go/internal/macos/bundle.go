@@ -238,5 +238,8 @@ func EnsureProcessAbsent(name string) error {
 		return nil
 	}
 	detail := strings.TrimSpace(string(stderr) + string(stdout))
+	if detail == "" {
+		detail = err.Error()
+	}
 	return fmt.Errorf("Could not check whether %s is open: %s", name, detail)
 }
