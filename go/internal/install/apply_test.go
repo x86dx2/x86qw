@@ -194,6 +194,33 @@ func TestACaseOnlyRenameKeepsTheFile(t *testing.T) {
 	}
 }
 
+// A file renamed only in case whose bytes also change is still the managed
+// file: the update replaces it instead of keeping it as personal and then
+// deleting it as stale.
+func TestACaseOnlyRenameWithNewBytesReplacesTheFile(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "probe"), nil, 0o644)
+	if _, err := os.Stat(filepath.Join(root, "PROBE")); err != nil {
+		t.Skip("case-sensitive volume")
+	}
+	first, err := overlay(t, root, "comp", map[string]string{"qw/Foo.cfg": "v1", "qw/keep.cfg": "v1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Close()
+	tx, err := overlay(t, root, "comp", map[string]string{"qw/foo.cfg": "v2", "qw/keep.cfg": "v2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx.Close()
+	if data, err := os.ReadFile(filepath.Join(root, "qw", "foo.cfg")); err != nil || string(data) != "v2" {
+		t.Fatalf("qw/foo.cfg after the update: %q %v (warnings %v)", data, err, tx.Warnings)
+	}
+	if got := inventory(t, root, "comp"); got["qw/foo.cfg"] != digestOf([]byte("v2")) {
+		t.Fatalf("inventory: %v", got)
+	}
+}
+
 // A managed folder the user turned into a link to elsewhere leads out of the
 // installation: a file a new version drops is not deleted there.
 func TestAnUpdateDeletesNothingOutsideTheInstallation(t *testing.T) {

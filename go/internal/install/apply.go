@@ -122,6 +122,10 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 	t.observer().files(id, len(files))
 	var entries []receipt.Entry
 	var changed []string
+	oldFolded := map[string]string{}
+	for name := range old {
+		oldFolded[strings.ToLower(name)] = name
+	}
 	for _, relative := range files {
 		if err := validate(relative); err != nil {
 			return 0, err
@@ -139,8 +143,16 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 			if err != nil {
 				return 0, err
 			}
+			// Renamed only in case, on a volume that ignores case: the old
+			// entry is this same file.
+			expected, owned := old[relative]
+			if name, ok := oldFolded[strings.ToLower(relative)]; ok && !owned {
+				if other, err := os.Lstat(t.path(name)); err == nil && os.SameFile(info, other) {
+					expected, owned = old[name], true
+				}
+			}
 			// Bytes already new are what an interrupted run copied.
-			if expected, owned := old[relative]; current != digest && (!owned || current != expected) {
+			if current != digest && (!owned || current != expected) {
 				if !owned || !t.repair {
 					t.warn("Personal or modified file kept: %s", destination)
 					t.observer().file(id, relative, info.Size(), true)
