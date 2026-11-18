@@ -55,3 +55,11 @@ func TestFloatsAreWrittenLikePython(t *testing.T) {
 		}
 	}
 }
+
+// A file name on Linux need not be valid UTF-8: its bytes count as U+FFFD,
+// which plain string order would put after every multi-byte character.
+func TestLessCodepointsIsNotByteOrder(t *testing.T) {
+	if !LessCodepoints("\xff", "\U0001F600") || LessCodepoints("\U0001F600", "\xff") {
+		t.Fatal("an invalid byte should sort as U+FFFD, before U+1F600")
+	}
+}

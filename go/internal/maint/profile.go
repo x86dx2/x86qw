@@ -96,7 +96,7 @@ func ClassifyInstallData(target string) DataReport {
 			for index, entry := range entries {
 				names[index] = entry.Name()
 			}
-			sort.Slice(names, func(a, b int) bool { return lessCodepoints(names[a], names[b]) })
+			sort.Slice(names, func(a, b int) bool { return pyjson.LessCodepoints(names[a], names[b]) })
 			for _, name := range names {
 				relative := root + "/" + name
 				if !slices.Contains(report.Profile, relative) && IsUserProfilePath(relative) && regular(filepath.Join(dir, name)) {
@@ -116,16 +116,6 @@ func ClassifyInstallData(target string) DataReport {
 		}
 	}
 	return report
-}
-
-func lessCodepoints(a, b string) bool {
-	ra, rb := []rune(a), []rune(b)
-	for index := 0; index < len(ra) && index < len(rb); index++ {
-		if ra[index] != rb[index] {
-			return ra[index] < rb[index]
-		}
-	}
-	return len(ra) < len(rb)
 }
 
 // RenderProfile is the classification as `x86qw profile` prints it.

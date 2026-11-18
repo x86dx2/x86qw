@@ -13,6 +13,7 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/archive"
 	"github.com/x86dx2/x86qw/go/internal/atomicfile"
 	"github.com/x86dx2/x86qw/go/internal/catalog"
+	"github.com/x86dx2/x86qw/go/internal/pyjson"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 	"github.com/x86dx2/x86qw/go/internal/services"
 )
@@ -43,7 +44,7 @@ func changeIgnoredPaths() []string {
 	for path := range paths {
 		sorted = append(sorted, path)
 	}
-	sort.Slice(sorted, func(a, b int) bool { return lessCodepoints(sorted[a], sorted[b]) })
+	sort.Slice(sorted, func(a, b int) bool { return pyjson.LessCodepoints(sorted[a], sorted[b]) })
 	return sorted
 }
 
@@ -143,7 +144,7 @@ func InspectChanges(target string) ([]Change, error) {
 	if err != nil {
 		return nil, err
 	}
-	sort.Slice(changes, func(a, b int) bool { return lessCodepoints(changes[a].Path, changes[b].Path) })
+	sort.Slice(changes, func(a, b int) bool { return pyjson.LessCodepoints(changes[a].Path, changes[b].Path) })
 	return changes, nil
 }
 
@@ -185,7 +186,7 @@ func RenderGitignore(target string) (string, error) {
 		for path := range group {
 			sorted = append(sorted, path)
 		}
-		sort.Slice(sorted, func(a, b int) bool { return lessCodepoints(sorted[a], sorted[b]) })
+		sort.Slice(sorted, func(a, b int) bool { return pyjson.LessCodepoints(sorted[a], sorted[b]) })
 		for _, path := range sorted {
 			lines = append(lines, "/"+path)
 		}
