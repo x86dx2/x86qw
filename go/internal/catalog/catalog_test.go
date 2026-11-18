@@ -81,3 +81,27 @@ func TestResolveRejectsCycles(t *testing.T) {
 		t.Fatal("cycle accepted")
 	}
 }
+
+// The CLI carries the asset name the release gives it, like the other
+// packages: a mirror whose name decodes to a path cannot lead the download
+// out of the cache.
+func TestCLIPackageNeedsItsAssetName(t *testing.T) {
+	cat, err := Parse(repoFile(t, "site", "public", "api", "v1", "catalog.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, platform := range [][2]string{{"darwin", "arm64"}, {"darwin", "amd64"}, {"linux", "amd64"}, {"linux", "arm64"}, {"windows", "amd64"}} {
+		if _, ok, err := cat.CLIPackage(platform[0], platform[1]); err != nil || !ok {
+			t.Fatalf("%s/%s: %v %v", platform[0], platform[1], ok, err)
+		}
+	}
+	for index := range cat.Packages {
+		if pkg := &cat.Packages[index]; pkg.Package == "x86qw-cli" && pkg.Platform == "linux" && pkg.Architecture == "x86_64" {
+			pkg.Filename = "../../evil"
+			pkg.URLs = []string{"https://github.com/x86dx2/x86qw/releases/download/%252E%252E%252F%252E%252E%252Fevil"}
+		}
+	}
+	if _, _, err := cat.CLIPackage("linux", "amd64"); err == nil {
+		t.Fatal("a CLI named ../../evil was accepted")
+	}
+}

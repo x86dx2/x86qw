@@ -268,6 +268,13 @@ func (c *Catalog) CLIPackage(goos, goarch string) (Package, bool, error) {
 		if !semver.Valid(matches[0].Version) {
 			return Package{}, false, fmt.Errorf("invalid x86QW CLI version in the catalog")
 		}
+		expected := "x86qw-" + matches[0].Version + "-" + goos + "-" + goarch
+		if goos == "windows" {
+			expected += ".exe"
+		}
+		if matches[0].Filename != expected {
+			return Package{}, false, fmt.Errorf("inconsistent identity for package x86qw-cli")
+		}
 		return matches[0], true, matches[0].validateArtifact("x86qw-cli")
 	}
 	return Package{}, false, fmt.Errorf("the catalog publishes more than one x86QW CLI for %s/%s", platform, architecture)
