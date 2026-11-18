@@ -27,6 +27,10 @@ func drive(m *Model, msgs ...tea.Msg) {
 	}
 }
 
+// cmdWait is how long run waits for a command before dropping it; tests
+// against the network raise it, or a slow catalog is dropped as if absent.
+var cmdWait = 3 * time.Second
+
 func run(cmd tea.Cmd) []tea.Msg {
 	if cmd == nil {
 		return nil
@@ -46,7 +50,7 @@ func run(cmd tea.Cmd) []tea.Msg {
 			return nil
 		}
 		return []tea.Msg{msg}
-	case <-time.After(3 * time.Second):
+	case <-time.After(cmdWait):
 		return nil
 	}
 }
