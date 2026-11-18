@@ -123,11 +123,12 @@ type Existing struct {
 	Note Text
 }
 
-// Update is one component with a newer version. ID is the component, the
-// core package, "client" or "cli".
+// Update is one package with a newer version. ID is the component or
+// "cli", empty for what is not a component, ezQuake included.
 type Update struct {
 	ID, Label, To string
 	From, Note    Text
+	Size          int64 // what it downloads
 }
 
 // Backend is what the interfaces talk to; the demo backend fakes it for
