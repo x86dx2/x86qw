@@ -269,7 +269,7 @@ func (op *Operation) Run() (code int) {
 		if err != nil {
 			return fail(err)
 		}
-		defer log.Close()
+		// Left open: the cleanup deferred above reports here; the exit closes it.
 		c.Out, c.Err, op.Output = log, log, log
 	}
 	if err := RecoverSessions(target, c.Warning); err != nil {
