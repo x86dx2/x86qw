@@ -276,7 +276,7 @@ func CleanupSelection(target string, downloads, personalData bool) ([]string, []
 		return nil, nil, nil
 	}
 	var cachePaths, personalPaths []string
-	for _, relative := range []string{"ezquake/sb/cache", "ezquake/temp"} {
+	for _, relative := range cacheRoots {
 		path := filepath.Join(target, filepath.FromSlash(relative))
 		if _, err := os.Lstat(path); err == nil {
 			cachePaths = append(cachePaths, path)
