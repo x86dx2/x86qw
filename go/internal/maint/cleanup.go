@@ -325,6 +325,7 @@ func CleanupSelection(target string, downloads, personalData bool) ([]string, []
 		}
 	}
 	if personalData {
+		// Unlike personalRoot, it keeps the player's qw/demos, qw/screenshots and ezquake/qconsole.log on purpose: only purge removes them.
 		for _, relative := range []string{"ezquake/.ezquake_history", "qw/qconsole.log", "logs", "td2/demos"} {
 			path := filepath.Join(target, filepath.FromSlash(relative))
 			if _, err := os.Lstat(path); err == nil {
