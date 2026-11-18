@@ -439,9 +439,6 @@ func HostSpec(target string, o *HostOptions, hosted *Hosted, session *Session, j
 				names = k.BotNamesProfile
 			}
 			parameters = append(parameters, [2]string{"bot_skill", k.BotSkill}, [2]string{"bot_names", names})
-			if k.BotTeam != nil {
-				parameters = append(parameters, [2]string{"bot_team", *k.BotTeam})
-			}
 			if k.BotWeapon != nil {
 				parameters = append(parameters, [2]string{"bot_weapon", *k.BotWeapon})
 			}

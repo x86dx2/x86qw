@@ -645,9 +645,6 @@ func ktxCLIArguments(o play.Options) []string {
 		if o.BotNamesProfile != "default" {
 			arguments = append(arguments, "--bot-names", o.BotNamesProfile)
 		}
-		if o.BotTeam != nil {
-			arguments = append(arguments, "--bot-team", *o.BotTeam)
-		}
 		if o.BotWeapon != nil {
 			arguments = append(arguments, "--bot-weapon", *o.BotWeapon)
 		}

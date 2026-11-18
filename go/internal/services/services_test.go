@@ -46,6 +46,20 @@ func TestParseHost(t *testing.T) {
 	}
 }
 
+// A background controller gets the KTX options back as flags: every flag
+// it is handed is one the host command takes.
+func TestTheBackgroundControllerTakesItsKTXFlags(t *testing.T) {
+	team, weapon, hook, runes, style, scoring := "red", "3", "fast", "on", "match", "win"
+	health, breaks := 150, true
+	options := play.Options{Bots: 3, BotSkill: "7", BotNamesProfile: "x86qw", BotTeam: &team, BotWeapon: &weapon,
+		BotHealth: &health, BotBreakOnDeath: &breaks, CTFHook: &hook, CTFRunes: &runes, CTFBasedSpawn: true,
+		RaceStyle: &style, RaceScoring: &scoring}
+	args := append([]string{"--mode", "ctf", "--map", "e1m3"}, ktxCLIArguments(options)...)
+	if _, err := ParseHost(args, games(t)); err != nil {
+		t.Fatalf("%v: %v", args, err)
+	}
+}
+
 func TestParseQtvAndProxy(t *testing.T) {
 	q, err := ParseQtv([]string{"--upstream", "127.0.0.1:28501", "--password", "abc"})
 	if err != nil || q.Upstream != "127.0.0.1:28501" || q.QtvPassword != "abc" || q.Hostname != "x86QW QTV" {
