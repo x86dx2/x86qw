@@ -4,8 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -1294,13 +1292,6 @@ func (m *Model) footerHints() [][2]string {
 	return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"esc", m.t("k.back")}}
 }
 
-// DefaultTarget is where x86QW installs unless told otherwise, on every
-// system.
-func DefaultTarget() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, "Games", "x86qw")
-}
-
 // Run shows the interface until it quits.
 func Run(cfg Config) error {
 	_, err := tea.NewProgram(New(cfg)).Run()
@@ -1337,7 +1328,7 @@ func (m *Model) checkUpdates() tea.Cmd {
 }
 
 // freshUpdates takes what a quiet check found: only the updates change,
-// never the choices on screen.
+// and a catalog that could not be read, never the choices on screen.
 func (m *Model) freshUpdates(msg freshMsg) {
 	if msg.err != nil || msg.existing == nil || m.existing == nil || m.screen == scInstall {
 		return
@@ -1345,5 +1336,8 @@ func (m *Model) freshUpdates(msg freshMsg) {
 	if len(msg.existing.Updates) > len(m.existing.Updates) {
 		m.say(m.t("upd.new"))
 	}
-	m.existing.Updates = msg.existing.Updates
+	m.existing.Updates, m.existing.UpdatesErr = msg.existing.Updates, msg.existing.UpdatesErr
+	if m.catalog.Unavailable != nil {
+		m.catalog = msg.catalog
+	}
 }

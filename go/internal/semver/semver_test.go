@@ -1,6 +1,9 @@
 package semver
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestPrecedenceMatchesSemVerSpec(t *testing.T) {
 	ordered := []string{
@@ -24,7 +27,7 @@ func TestRejectsNonStrictVersions(t *testing.T) {
 			t.Fatalf("%q accepted", value)
 		}
 	}
-	if got, _ := Parse("1.2.3-rc.1+b.5"); got.String() != "1.2.3-rc.1+b.5" {
-		t.Fatalf("round-trip %s", got)
+	if got, _ := Parse("1.2.3-rc.1+b.5"); !reflect.DeepEqual(got, Version{1, 2, 3, []string{"rc", "1"}, []string{"b", "5"}}) {
+		t.Fatalf("parsed %+v", got)
 	}
 }
