@@ -1,6 +1,6 @@
 module github.com/x86dx2/x86qw/go
 
-go 1.27.3
+go 1.27.4
 
 require (
 	charm.land/bubbletea/v2 v2.1.0
