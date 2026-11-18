@@ -109,9 +109,9 @@ func demoInstalled() []string {
 
 // demoUpdates are the demo installation's pending updates.
 var demoUpdates = []Update{
-	{ID: "x86qw-client-bootstrap", Label: "x86QW client base and startup", From: Raw("e4cb23d40aa2+x86qw.4"), To: "dfb2ac9299f7+x86qw.4", Note: Say("plan.component")},
-	{ID: "ktx", Label: "KTX x86QW", From: Raw("1.47+x86qw.19"), To: "1.47+x86qw.20", Note: Say("plan.component")},
-	{ID: corePackage, Label: "Quake data", From: Raw("0.1.0"), To: "0.1.1", Note: Say("plan.component")},
+	{ID: "x86qw-client-bootstrap", Label: "x86QW client base and startup", From: Raw("e4cb23d40aa2+x86qw.4"), To: "dfb2ac9299f7+x86qw.4", Note: Say("plan.component"), Size: 28919},
+	{ID: "ktx", Label: "KTX x86QW", From: Raw("1.47+x86qw.19"), To: "1.47+x86qw.20", Note: Say("plan.component"), Size: 2542965},
+	{ID: corePackage, Label: "Quake data", From: Raw("0.1.0"), To: "0.1.1", Note: Say("plan.component"), Size: demoCore},
 }
 
 // Existing reports the demo installation when ExistingInstall is set.
@@ -238,7 +238,7 @@ func (d *Demo) lanes(options Options) []Lane {
 		}
 		if options.Upgrade {
 			for _, update := range demoUpdates {
-				lanes = append(lanes, Lane{ID: update.ID, Label: labels[update.ID], Size: sizes[update.ID]})
+				lanes = append(lanes, Lane{ID: update.ID, Label: labels[update.ID], Size: update.Size})
 				have[update.ID] = true
 			}
 		}

@@ -74,7 +74,7 @@ func (p *Project) CheckUpdates(releases *Object, online bool) ([]UpdateResult, e
 		} else if online && strategy == "upstream-package" {
 			artifact := objects(release.Value("artifacts"))[0]
 			size, digest := int64Of(artifact.Value("size")), pyjson.Repr(artifact.Value("sha256"))
-			gotSize, gotDigest, found, err := p.RemoteFingerprint(pyjson.Repr(artifact.Value("url")), size, digest)
+			found, err := p.RemoteFingerprint(pyjson.Repr(artifact.Value("url")), size, digest)
 			var integrity *IntegrityError
 			if err != nil && !errors.As(err, &integrity) {
 				results = append(results, UpdateResult{identifier, expected, expected, "unavailable", strategy, err.Error()})
@@ -85,7 +85,7 @@ func (p *Project) CheckUpdates(releases *Object, online bool) ([]UpdateResult, e
 				results = append(results, UpdateResult{identifier, expected, expected, "unavailable", strategy, failure})
 				continue
 			}
-			if err != nil || gotSize != size || gotDigest != digest {
+			if err != nil {
 				actual, status = "source-artifact-changed", "update-available"
 			}
 		}

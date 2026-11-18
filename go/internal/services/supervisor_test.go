@@ -5,6 +5,7 @@ package services
 import (
 	"encoding/json"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -160,7 +161,7 @@ func TestRecoveryEndsOnlyGroupsOfThisBoot(t *testing.T) {
 func TestALocalServerTakesHashedRcon(t *testing.T) {
 	journal := testJournal(t)
 	target := journal.Target
-	fakeRuntime(t, target, "mvdsv")
+	fakeRuntime(t, target, "mvdsv", nil)
 	os.MkdirAll(filepath.Join(target, "qw"), 0o755)
 	session := &Session{}
 	game := play.Game{ID: "ktx", Label: "KTX", Gamedir: "qw", PersonalConfig: "qw/x86qw-ktx-user.cfg"}
@@ -175,5 +176,33 @@ func TestALocalServerTakesHashedRcon(t *testing.T) {
 	}
 	if !hashed {
 		t.Fatal("the local server takes rcon only in plain text")
+	}
+}
+
+// A background session has only its log: what the cleanup reports after the
+// services stopped lands there too.
+func TestABackgroundSessionLogsItsCleanup(t *testing.T) {
+	target := t.TempDir()
+	os.MkdirAll(filepath.Join(target, ".x86qw"), 0o700)
+	// A QTV stand-in that replaces its session cfg and quits.
+	fakeRuntime(t, target, "qtv", []byte("#!/bin/sh\nrm -f \"$2\" && : > \"$2\"\nexit 3\n"))
+	os.WriteFile(filepath.Join(target, "qtv", "qtv.cfg"), nil, 0o644)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+	const log = ".x86qw/logs/service-test.log"
+	options := &QtvOptions{Bind: "127.0.0.1", Port: port, Hostname: "x86QW QTV",
+		Common: Common{Target: target, BackgroundChild: true, BackgroundLog: log}}
+	request := `{"format": 1, "project": "x86qw", "secrets": {"password": "", "spectator_password": "", "rcon_password": "", "qtv_password": ""}}`
+	op := &Operation{Action: "qtv", Qtv: options, Stdin: strings.NewReader(request), Console: quiet()}
+	if code := op.Run(); code == 0 {
+		t.Fatal("the session did not fail")
+	}
+	written, _ := os.ReadFile(filepath.Join(target, filepath.FromSlash(log)))
+	if !strings.Contains(string(written), "A replaced sensitive temporary file was kept") {
+		t.Fatalf("log:\n%s", written)
 	}
 }

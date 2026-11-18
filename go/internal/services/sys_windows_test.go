@@ -65,6 +65,24 @@ func TestJobObjectKillsOnClose(t *testing.T) {
 	command.Wait()
 }
 
+// A service that exited gave its PID back, and Windows hands PIDs out again
+// soon: the stop leaves alone whatever process holds that number now.
+func TestTheStopSparesThePIDOfAnExitedService(t *testing.T) {
+	other := exec.Command(child(t)[0])
+	if err := other.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { other.Process.Kill(); other.Wait() }()
+	pid := other.Process.Pid
+	waitStatus(t, pid, "alive")
+	if err := stopGroups([]*exec.Cmd{{Process: other.Process}}, map[int]bool{pid: true}); err != nil {
+		t.Fatal(err)
+	}
+	if processGroupStatus(pid) != "alive" {
+		t.Fatal("the stop ended the process that now holds an exited service's PID")
+	}
+}
+
 func TestTerminateRecordedProcess(t *testing.T) {
 	command := exec.Command(child(t)[0])
 	if err := command.Start(); err != nil {

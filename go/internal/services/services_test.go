@@ -3,6 +3,7 @@ package services
 import (
 	"github.com/x86dx2/x86qw/go/internal/privfs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -37,10 +38,25 @@ func TestParseHost(t *testing.T) {
 		{"ktx", "--bot-skill", "3"},
 		{"nosuch"},
 		{"ktx", "--bind", "host"},
+		{"td2", "--map", "dm6", "--instance", "duel:dm3:27501"},
 	} {
 		if _, err := ParseHost(args, games(t)); err == nil || !IsUsage(err) {
 			t.Errorf("%v: want usage error, got %v", args, err)
 		}
+	}
+}
+
+// A background controller gets the KTX options back as flags: every flag
+// it is handed is one the host command takes.
+func TestTheBackgroundControllerTakesItsKTXFlags(t *testing.T) {
+	team, weapon, hook, runes, style, scoring := "red", "3", "fast", "on", "match", "win"
+	health, breaks := 150, true
+	options := play.Options{Bots: 3, BotSkill: "7", BotNamesProfile: "x86qw", BotTeam: &team, BotWeapon: &weapon,
+		BotHealth: &health, BotBreakOnDeath: &breaks, CTFHook: &hook, CTFRunes: &runes, CTFBasedSpawn: true,
+		RaceStyle: &style, RaceScoring: &scoring}
+	args := append([]string{"--mode", "ctf", "--map", "e1m3"}, ktxCLIArguments(options)...)
+	if _, err := ParseHost(args, games(t)); err != nil {
+		t.Fatalf("%v: %v", args, err)
 	}
 }
 
@@ -82,6 +98,54 @@ func TestPresetRoundTrip(t *testing.T) {
 	o.Password = "secret"
 	if _, err := SavePreset(target, "with-secret", o); err == nil {
 		t.Fatal("preset stored a password")
+	}
+}
+
+// Without --target a preset comes from the installation the command acts
+// on, whatever folder it runs from.
+func TestAPresetNeedsNoTarget(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	options := &HostOptions{Game: "ktx", Mode: "duel", Map: "dm6", Bind: "127.0.0.1", Port: 28501, Maxclients: 16,
+		QtvBind: "127.0.0.1", QtvPort: 28000, ProxyBind: "127.0.0.1", ProxyPort: 30000}
+	if _, err := SavePreset(filepath.Join(home, "Games", "x86qw"), "duel", options); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(t.TempDir())
+	if loaded, err := ParseHost([]string{"--preset", "duel"}, games(t)); err != nil || loaded.Map != "dm6" {
+		t.Fatalf("%+v %v", loaded, err)
+	}
+}
+
+// A stop that left a server running does not mark the session clean:
+// recovery skips clean journals, so nothing would ever end that server.
+func TestASessionWhoseServerOutlivedTheStopIsNotClean(t *testing.T) {
+	journal := testJournal(t)
+	t.Setenv("X86QW_TEST_CHILD", "sleep")
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := exec.Command(self)
+	if err := server.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer server.Process.Kill()
+	if err := journal.RecordProcess(&Spec{Label: "MVDSV", Arguments: server.Args}, server.Process.Pid); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"interrupted", "clean"} {
+		if want == "clean" {
+			server.Process.Kill()
+			server.Wait()
+		}
+		if err := journal.SetStatus("clean"); err != nil {
+			t.Fatal(err)
+		}
+		if data, err := LoadJournal(journal.Path); err != nil || data["status"] != want {
+			t.Fatalf("want %s: %v %v", want, data["status"], err)
+		}
 	}
 }
 

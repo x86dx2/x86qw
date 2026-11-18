@@ -147,6 +147,32 @@ func TestPurgeRemovesTheGamesFolderOnceEmpty(t *testing.T) {
 	}
 }
 
+// A ~/Games that links elsewhere is the user's, also when the installation
+// is reached through it.
+func TestUninstallKeepsALinkedGamesFolder(t *testing.T) {
+	isolate(t)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	games := filepath.Join(t.TempDir(), "Games")
+	if err := os.MkdirAll(games, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(games, filepath.Join(home, "Games")); err != nil {
+		t.Skip(err)
+	}
+	if err := os.Rename(managedInstall(t), filepath.Join(games, "x86qw")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Uninstall(filepath.Join(home, "Games", "x86qw")); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(filepath.Join(home, "Games")) {
+		t.Fatal("the ~/Games link was removed")
+	}
+}
+
 // Any other folder holding the installation was the user's choice.
 func TestPurgeKeepsTheFolderTheUserChose(t *testing.T) {
 	isolate(t)
@@ -204,6 +230,33 @@ func TestUninstallRemovesTheFoldersOfTheUserCommand(t *testing.T) {
 	}
 	if !exists(filepath.Join(home, ".local", "bin", "other-tool")) {
 		t.Fatal("the other tool was removed")
+	}
+}
+
+// What uninstall could not undo outside the installation (here the user
+// command, in a folder it may not write) is said, not passed over.
+func TestUninstallWarnsAboutIntegrationItCouldNotRemove(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("no ~/.local/bin on Windows; root writes anywhere")
+	}
+	isolate(t)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := managedInstall(t)
+	command, err := cli.LinkUserCommand(root, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Chmod(filepath.Dir(command), 0o555)
+	t.Cleanup(func() { os.Chmod(filepath.Dir(command), 0o755) })
+	report, err := Uninstall(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(report.Warnings, "\n"), command) {
+		t.Fatalf("warnings: %v", report.Warnings)
 	}
 }
 
@@ -341,6 +394,30 @@ func TestPurgeKeepsWhatX86QWDidNotMake(t *testing.T) {
 	}
 }
 
+// A .gitignore is x86QW's only when x86QW generated it: purge keeps the
+// user's own and removes the generated one.
+func TestPurgeKeepsTheUsersGitignore(t *testing.T) {
+	isolate(t)
+	root := managedInstall(t)
+	write(t, filepath.Join(root, ".gitignore"), "*.secret\n")
+	if _, err := Purge(root); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(filepath.Join(root, ".gitignore")) {
+		t.Fatal("purge deleted the user's .gitignore")
+	}
+	root = managedInstall(t)
+	if err := SyncGitignore(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Purge(root); err != nil {
+		t.Fatal(err)
+	}
+	if exists(root) {
+		t.Fatal("the generated .gitignore stayed")
+	}
+}
+
 func TestPurgeRemovesTheInstallationAndTheCache(t *testing.T) {
 	cache := isolate(t)
 	ownedCache(t, cache)
@@ -399,6 +476,36 @@ func TestQuarantineRestoresEverythingWhenOneMoveFails(t *testing.T) {
 	entries, _ := os.ReadDir(root)
 	if len(entries) != 1 {
 		t.Fatalf("quarantine left behind: %v", entries)
+	}
+}
+
+// A delete that fails (on Windows, the runtime of a game still running)
+// stops the uninstall with everything not yet deleted back in place, the
+// state and the CLI included, so it can run again.
+func TestUninstallPutsBackWhatAFailedDeleteLeft(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("a read-only folder does not stop this delete here")
+	}
+	isolate(t)
+	root := managedInstall(t)
+	game := filepath.Join(root, catalog.ClientSpecs[1].Runtime("nightly"))
+	os.Remove(game)
+	write(t, filepath.Join(game, "locked", "file"), "cannot go")
+	os.Chmod(filepath.Join(game, "locked"), 0o555)
+	t.Cleanup(func() { os.Chmod(filepath.Join(game, "locked"), 0o755) })
+	if _, err := Uninstall(root); err == nil {
+		t.Fatal("the uninstall should fail")
+	}
+	for _, kept := range []string{stateRelative, cli.BinaryName(), filepath.Base(game) + "/locked/file", "qw/maps/x86qw-a.bsp"} {
+		if !exists(filepath.Join(root, filepath.FromSlash(kept))) {
+			t.Errorf("%s is gone", kept)
+		}
+	}
+	entries, _ := os.ReadDir(root)
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), "-quarantine.") {
+			t.Errorf("left set aside: %s", entry.Name())
+		}
 	}
 }
 

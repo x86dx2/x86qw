@@ -15,7 +15,8 @@ import (
 // lives, so a new terminal finds the x86qw command. Only the user's own
 // PATH changes, read and written in the registry as stored: entries such
 // as %USERPROFILE%\bin stay unexpanded and the value keeps its kind.
-// Entries are compared without case or trailing backslash.
+// Entries are compared without case or trailing backslash, and adding one
+// that is already there changes nothing.
 const userPathScript = `param(
   [ValidateSet("add", "remove")][string]$Mode,
   [string]$Dir
@@ -30,8 +31,12 @@ try {
     $Kind = $Key.GetValueKind("Path")
     $Current = [string]$Key.GetValue("Path", "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
   }
-  $Parts = @($Current -split ';' | Where-Object { $_ -ne '' -and $_.TrimEnd('\') -ine $Wanted })
-  if ($Mode -eq "add") { $Parts += $Wanted }
+  $Entries = @($Current -split ';' | Where-Object { $_ -ne '' })
+  $Parts = @($Entries | Where-Object { $_.TrimEnd('\') -ine $Wanted })
+  if ($Mode -eq "add") {
+    if ($Parts.Count -lt $Entries.Count) { return }
+    $Parts += $Wanted
+  }
   $Key.SetValue("Path", ($Parts -join ';'), $Kind)
 } finally {
   $Key.Close()
@@ -45,6 +50,8 @@ try {
 func AddUserPath(root string) error { return runUserPathScript("add", root) }
 
 // RemoveUserPath takes root off the Windows user PATH.
+// shortcut: it also drops an entry the user had there before the install,
+// as nothing records who added it; record that at install if users hit it.
 func RemoveUserPath(root string) error { return runUserPathScript("remove", root) }
 
 func runUserPathScript(mode, root string) error {

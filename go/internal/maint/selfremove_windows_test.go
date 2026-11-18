@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,5 +49,16 @@ func TestPurgeByTheInstalledCLI(t *testing.T) {
 			entries, _ := os.ReadDir(root)
 			t.Fatalf("the installation folder stayed: %v", entries)
 		}
+	}
+}
+
+// The running x86qw.exe goes however long the app that ran the uninstall
+// stays open; x86qw.cmd waits for its cmd.exe at most a minute.
+func TestRemovalWaitsForTheCLIWithoutALimit(t *testing.T) {
+	if script := removalScript([]int{1}, `C:\x86qw\x86qw.exe`, 0); !strings.HasPrefix(script, "Wait-Process -Id 1 -ErrorAction") {
+		t.Fatalf("script: %s", script)
+	}
+	if script := removalScript([]int{1, 2}, `C:\x86qw\x86qw.cmd`, 60); !strings.HasPrefix(script, "Wait-Process -Id 1,2 -Timeout 60 ") {
+		t.Fatalf("script: %s", script)
 	}
 }

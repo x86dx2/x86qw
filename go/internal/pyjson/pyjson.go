@@ -144,7 +144,7 @@ func writeMap(b *strings.Builder, items map[string]any, indent, depth int) error
 	for key := range items {
 		keys = append(keys, key)
 	}
-	sort.Slice(keys, func(a, c int) bool { return lessCodepoints(keys[a], keys[c]) })
+	sort.Slice(keys, func(a, c int) bool { return LessCodepoints(keys[a], keys[c]) })
 	b.WriteByte('{')
 	for index, key := range keys {
 		if index > 0 {
@@ -169,8 +169,9 @@ func writeMap(b *strings.Builder, items map[string]any, indent, depth int) error
 	return nil
 }
 
-// lessCodepoints orders strings by code point.
-func lessCodepoints(a, b string) bool {
+// LessCodepoints orders strings by code point, as Python sorts str. It is
+// not plain string order: an invalid UTF-8 byte counts as U+FFFD.
+func LessCodepoints(a, b string) bool {
 	ra, rb := []rune(a), []rune(b)
 	for index := 0; index < len(ra) && index < len(rb); index++ {
 		if ra[index] != rb[index] {

@@ -14,6 +14,8 @@ func Selected(catalog *Catalog, options Options) []string {
 		for _, id := range ids {
 			chosen[id] = true
 		}
+		// Its autoexec runs x86qw-user.cfg, which applies the client choices.
+		chosen["x86qw-client-bootstrap"] = true
 	}
 	kinds := map[string]string{}
 	requires := map[string][]string{}

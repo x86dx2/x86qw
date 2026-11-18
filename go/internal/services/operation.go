@@ -269,7 +269,7 @@ func (op *Operation) Run() (code int) {
 		if err != nil {
 			return fail(err)
 		}
-		defer log.Close()
+		// Left open: the cleanup deferred above reports here; the exit closes it.
 		c.Out, c.Err, op.Output = log, log, log
 	}
 	if err := RecoverSessions(target, c.Warning); err != nil {
@@ -644,9 +644,6 @@ func ktxCLIArguments(o play.Options) []string {
 		arguments = append(arguments, "--bot-skill", o.BotSkill)
 		if o.BotNamesProfile != "default" {
 			arguments = append(arguments, "--bot-names", o.BotNamesProfile)
-		}
-		if o.BotTeam != nil {
-			arguments = append(arguments, "--bot-team", *o.BotTeam)
 		}
 		if o.BotWeapon != nil {
 			arguments = append(arguments, "--bot-weapon", *o.BotWeapon)

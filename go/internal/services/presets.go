@@ -88,6 +88,9 @@ func isNumber(value any, want int64) bool {
 }
 
 func intField(value any) (int, bool) {
+	if recorded, ok := value.(int); ok {
+		return recorded, true // written by this process, not read back
+	}
 	number, ok := value.(json.Number)
 	if !ok {
 		return 0, false

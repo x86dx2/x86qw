@@ -16,16 +16,18 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 )
 
-// fakeRuntime records component as installed in target with a stand-in
-// for its runtime binary.
-func fakeRuntime(t *testing.T, target, component string) {
+// fakeRuntime records component as installed in target with binary, or a
+// stand-in when nil, as its runtime.
+func fakeRuntime(t *testing.T, target, component string, binary []byte) {
 	t.Helper()
 	variant, err := install.HostVariant()
 	if err != nil {
 		t.Skip(err)
 	}
 	relative := runtimePaths[component][variant]
-	binary := []byte(component + " stand-in")
+	if binary == nil {
+		binary = []byte(component + " stand-in")
+	}
 	os.MkdirAll(filepath.Dir(filepath.Join(target, filepath.FromSlash(relative))), 0o755)
 	os.WriteFile(filepath.Join(target, filepath.FromSlash(relative)), binary, 0o755)
 	digest := sha256.Sum256(binary)
@@ -44,7 +46,7 @@ func fakeRuntime(t *testing.T, target, component string) {
 // took is not ready.
 func TestQWFWDOnEveryInterfaceIsReady(t *testing.T) {
 	target := t.TempDir()
-	fakeRuntime(t, target, "qwfwd")
+	fakeRuntime(t, target, "qwfwd", nil)
 	os.WriteFile(filepath.Join(target, "qwfwd", "qwfwd.cfg"), nil, 0o644)
 	held, err := net.ListenPacket("udp4", "0.0.0.0:0")
 	if err != nil {
