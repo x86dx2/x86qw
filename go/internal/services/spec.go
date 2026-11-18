@@ -145,15 +145,7 @@ func SelectHosted(target string, o *HostOptions) (*Hosted, error) {
 	if installed == nil {
 		return nil, errorf("%s is not installed. Add the %s component with the x86QW bootstrap.", game.Label, game.Component)
 	}
-	component := installed.Component
-	if !hasRecord(target, component) {
-		for _, legacy := range installed.LegacyComponents {
-			if hasRecord(target, legacy) {
-				component = legacy
-			}
-		}
-	}
-	if _, err := install.VerifyComponentRecord(target, component); err != nil {
+	if _, err := install.VerifyComponentRecord(target, install.InstalledComponent(target, *installed)); err != nil {
 		return nil, err
 	}
 	issues, _, err := install.PlaySupportIssues(target, available)
@@ -201,11 +193,6 @@ func SelectHosted(target string, o *HostOptions) (*Hosted, error) {
 	}
 	hosted.Map, err = play.ResolveMap(target, game, o.Map, nil, nil, game.Label)
 	return hosted, err
-}
-
-func hasRecord(target, id string) bool {
-	_, err := os.Stat(filepath.Join(target, ".x86qw", "components", id, "receipt"))
-	return err == nil
 }
 
 func gameMarkerPath(target string, game install.Game) string {
