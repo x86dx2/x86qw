@@ -289,7 +289,7 @@ func stopGroups(commands []*exec.Cmd, exited map[int]bool) error {
 		for time.Now().Before(deadline) && !exited[pid] && processGroupStatus(pid) == "alive" {
 			time.Sleep(50 * time.Millisecond)
 		}
-		if processGroupStatus(pid) == "alive" {
+		if !exited[pid] && processGroupStatus(pid) == "alive" {
 			if _, err := terminateProcess(pid, time.Second); err != nil {
 				return errorf("Could not force-stop PID %d.", pid)
 			}

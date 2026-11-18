@@ -139,8 +139,16 @@ func (j *Journal) relatives() func(absolute string) (string, error) {
 	}
 }
 
-// SetStatus updates the session status.
+// SetStatus updates the session status. Recovery skips a clean session, so
+// one whose process may have outlived the stop stays interrupted instead.
 func (j *Journal) SetStatus(status string) error {
+	if status == "clean" {
+		for _, entry := range j.list("processes") {
+			if probe := processProbe(entry); probe == "alive" || probe == "inconclusive" {
+				status = "interrupted"
+			}
+		}
+	}
 	j.Data["status"] = status
 	return j.write()
 }
