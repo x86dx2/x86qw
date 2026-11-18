@@ -49,6 +49,31 @@ func TestOfflineInstallationStillOpensAndNewOneRetries(t *testing.T) {
 	}
 }
 
+// Once the network comes back, the quiet check that reaches the catalog
+// unblocks Update and Change without restarting the app.
+func TestTheNetworkComingBackUnblocksUpdateAndChange(t *testing.T) {
+	m := New(Config{Backend: offline{&setup.Demo{ExistingInstall: true, Speed: 50}}, Target: shortTarget(t), Lang: PT})
+	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
+	drive(m, run(m.Init())...)
+	m.existing.UpdatesErr = errors.New("no network")
+	online := &setup.Demo{ExistingInstall: true}
+	cat, _ := online.Catalog(context.Background())
+	found, _ := online.Existing(context.Background(), m.existing.Target)
+	drive(m, freshMsg{catalog: cat, existing: found})
+	toConsole(m)
+	m.focus = homeRow(m, "update")
+	drive(m, key("enter"))
+	if m.panelView != "update" {
+		t.Fatalf("Update stays refused: %q", m.toast)
+	}
+	drive(m, key("esc"))
+	m.focus = homeRow(m, "change")
+	drive(m, key("enter"))
+	if m.screen != scConfigure {
+		t.Fatalf("Change stays refused: %q", m.toast)
+	}
+}
+
 // TestUpdateRunsFromHomeAndBack: Atualizar applies from home and esc, or
 // the end, returns there.
 func TestUpdateRunsFromHomeAndBack(t *testing.T) {
@@ -70,6 +95,20 @@ func TestUpdateRunsFromHomeAndBack(t *testing.T) {
 	}
 	if m.screen != scPanel || !strings.Contains(m.toast, m.t("done.applied")) || m.panelRows()[m.focus].id != "update" {
 		t.Fatalf("the end goes back home: screen %d", m.screen)
+	}
+}
+
+// The size Apply shows is what the update downloads, packages that are not
+// components (ezQuake, the CLI, the core data) included.
+func TestApplyShowsWhatTheUpdateDownloads(t *testing.T) {
+	m := started(t, true)
+	toConsole(m)
+	m.focus = homeRow(m, "update")
+	drive(m, key("enter"), key("enter"))
+	shown := m.totalBytes()
+	drive(m, key("i"))
+	if shown != m.progress.Total {
+		t.Fatalf("Apply shows %d bytes, the update downloads %d", shown, m.progress.Total)
 	}
 }
 

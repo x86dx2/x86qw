@@ -3,6 +3,7 @@ package setup
 import (
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -133,6 +134,39 @@ func TestOldAccentedNamesLoadPlain(t *testing.T) {
 	recipe, err := ReadRecipe(strings.NewReader(`{"format":1,"intent":"play","nick":"Zé"}`))
 	if err != nil || recipe.Nick != "Ze" {
 		t.Fatalf("recipe: %+v %v", recipe, err)
+	}
+}
+
+// A recipe carries no password, so one applied to an installation keeps the
+// passwords it has: the server stays closed and its rcon still works.
+func TestARecipeKeepsTheInstallationsPasswords(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "x86qw")
+	saved := Defaults(Both, target)
+	saved.Nick, saved.Server.Rcon, saved.Server.Password, saved.Server.Spectators = "p", "rcon1", "players", "watchers"
+	if err := SaveChoices(target, saved); err != nil {
+		t.Fatal(err)
+	}
+	o, err := parseRecipe([]string{"--intent", "both", "--nick", "p", "--target", target})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.Server.Rcon != "rcon1" || o.Server.Password != "players" || o.Server.Spectators != "watchers" {
+		t.Fatalf("rcon %q, password %q, spectators %q", o.Server.Rcon, o.Server.Password, o.Server.Spectators)
+	}
+}
+
+// The client base runs x86qw-user.cfg, which applies the nick, keys and
+// video: a player gets it whatever the content, as the app shows.
+func TestAPlayerAlwaysGetsTheClientBase(t *testing.T) {
+	cat := &Catalog{Components: []Component{{ID: "x86qw-client-bootstrap", Kind: "core"}, {ID: "nquake-documentation", Kind: "documentation"}}}
+	for _, content := range []string{"nquake-documentation", ""} {
+		o, err := parseRecipe([]string{"--intent", "play", "--nick", "p", "--content=" + content})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if selected := Selected(cat, o); !slices.Contains(selected, "x86qw-client-bootstrap") {
+			t.Errorf("--content=%s selects %v", content, selected)
+		}
 	}
 }
 

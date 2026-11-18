@@ -160,6 +160,10 @@ func AddRecipeFlags(flags *flag.FlagSet) func(target string) (Options, error) {
 				}
 			}
 		}
+		// A recipe carries no password: an installation keeps its own.
+		if saved, _ := LoadChoices(target); saved != nil {
+			o.Server.Rcon, o.Server.Password, o.Server.Spectators = saved.Server.Rcon, saved.Server.Password, saved.Server.Spectators
+		}
 		if err := o.Validate(); err != nil {
 			return o, err
 		}

@@ -55,17 +55,6 @@ func Valid(value string) bool {
 	return err == nil
 }
 
-func (v Version) String() string {
-	result := fmt.Sprintf("%d.%d.%d", v.Major, v.Minor, v.Patch)
-	if len(v.Prerelease) > 0 {
-		result += "-" + strings.Join(v.Prerelease, ".")
-	}
-	if len(v.Build) > 0 {
-		result += "+" + strings.Join(v.Build, ".")
-	}
-	return result
-}
-
 // Compare returns -1, 0 or 1 by SemVer precedence.
 func Compare(a, b Version) int {
 	for _, pair := range [][2]uint64{{a.Major, b.Major}, {a.Minor, b.Minor}, {a.Patch, b.Patch}} {
