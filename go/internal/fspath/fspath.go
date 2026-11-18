@@ -3,6 +3,7 @@
 package fspath
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -28,4 +29,18 @@ func Resolve(name string) string {
 func Inside(name, root string) bool {
 	relative, err := filepath.Rel(root, name)
 	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+}
+
+// RealFolders reports whether every folder from root (excluded) down to
+// name's is a real one. Lstat shows neither a link nor a Windows junction as
+// a folder, and Resolve cannot see where a junction leads: EvalSymlinks
+// follows links only.
+func RealFolders(name, root string) bool {
+	root = filepath.Clean(root)
+	for dir := filepath.Dir(filepath.Clean(name)); dir != root; dir = filepath.Dir(dir) {
+		if info, err := os.Lstat(dir); err != nil || !info.IsDir() || filepath.Dir(dir) == dir {
+			return false
+		}
+	}
+	return true
 }

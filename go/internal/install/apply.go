@@ -87,7 +87,7 @@ func (t *Transaction) path(relative string) string {
 // outside reports whether path leads out of the installation, through a
 // folder the user turned into a link: nothing there is x86QW's to delete.
 func (t *Transaction) outside(path string) bool {
-	return !fspath.Inside(fspath.Resolve(path), fspath.Resolve(t.Root))
+	return !fspath.Inside(fspath.Resolve(path), fspath.Resolve(t.Root)) || !fspath.RealFolders(path, t.Root)
 }
 
 func loadRecord(root, id string) (*receipt.Record, map[string]string, error) {
