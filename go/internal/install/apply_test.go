@@ -270,3 +270,34 @@ func TestCopyFileStreams(t *testing.T) {
 		t.Fatalf("copy: %v %v", info, err)
 	}
 }
+
+// A removal that fails after it deleted files puts them back on rollback.
+func TestAFailedRemovalRollsBack(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Getuid() == 0 {
+		t.Skip("needs a folder the user cannot write to")
+	}
+	root := t.TempDir()
+	first, err := overlay(t, root, "comp", map[string]string{"qw/a.cfg": "a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Close()
+	tx, err := NewTransaction(root, ".test.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Close()
+	// The record cannot move, so the removal fails once the file is gone.
+	records := filepath.Join(root, filepath.FromSlash(receipt.ComponentsDir))
+	os.Chmod(records, 0o555)
+	t.Cleanup(func() { os.Chmod(records, 0o755) })
+	if err := tx.RemoveComponent("comp"); err == nil {
+		t.Fatal("the removal should fail")
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "qw", "a.cfg")); string(data) != "a" {
+		t.Fatalf("qw/a.cfg after the rollback: %q", data)
+	}
+}

@@ -377,7 +377,21 @@ func (t *Transaction) RemoveComponent(id string) error {
 	if err != nil {
 		return err
 	}
+	dir := filepath.Join(t.Root, receipt.ComponentsDir, id)
+	metadata := filepath.Join(backup, ".metadata")
 	var removed []string
+	moved := false
+	// Registered first, so a removal that fails halfway is put back too.
+	t.undo = append(t.undo, func() error {
+		var errs []error
+		if moved {
+			errs = append(errs, os.Rename(metadata, dir))
+		}
+		for _, name := range removed {
+			errs = append(errs, copyFile(filepath.Join(backup, filepath.FromSlash(name)), t.path(name), keepMode))
+		}
+		return errors.Join(errs...)
+	})
 	for name, digest := range entries {
 		path := t.path(name)
 		if current, err := archive.FileSHA256(path); err == nil && current == digest && !t.outside(path) {
@@ -390,19 +404,10 @@ func (t *Transaction) RemoveComponent(id string) error {
 			removed = append(removed, name)
 		}
 	}
-	dir := filepath.Join(t.Root, receipt.ComponentsDir, id)
-	metadata := filepath.Join(backup, ".metadata")
 	if err := os.Rename(dir, metadata); err != nil {
 		return err
 	}
-	t.undo = append(t.undo, func() error {
-		var errs []error
-		errs = append(errs, os.Rename(metadata, dir))
-		for _, name := range removed {
-			errs = append(errs, copyFile(filepath.Join(backup, filepath.FromSlash(name)), t.path(name), keepMode))
-		}
-		return errors.Join(errs...)
-	})
+	moved = true
 	return nil
 }
 
