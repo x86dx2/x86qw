@@ -22,6 +22,7 @@ import (
 
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/download"
+	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/plan"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 	"github.com/x86dx2/x86qw/go/internal/state"
@@ -573,6 +574,25 @@ func TestOfflineRepairIgnoresAFileAmongTheRecords(t *testing.T) {
 	}
 	if _, err := Verify(root); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Repair reads the installation only once no other operation is changing
+// it: a record another one is still writing is not damage to report.
+func TestOfflineRepairWaitsForTheOperationInProgress(t *testing.T) {
+	f := newFixture(t)
+	root := filepath.Join(t.TempDir(), "x86qw")
+	f.install(root, "essential")
+	held, err := lock.Acquire(root, "update")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Release()
+	if err := os.MkdirAll(filepath.Join(root, ".x86qw", "components", "fixture-new"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Repair(f.ctx, f.input(root)); err == nil || !strings.Contains(err.Error(), "operation is running") {
+		t.Fatalf("repair during another operation: %v", err)
 	}
 }
 

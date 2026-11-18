@@ -272,6 +272,12 @@ func RepairPlan(in plan.Input) (*plan.Plan, *RepairAssessment, error) {
 
 // Repair applies the repair plan; it refuses fatal diagnostics.
 func Repair(ctx context.Context, in plan.Input) (*Result, error) {
+	// Assess under the lock: an operation still running is no damage.
+	held, err := lock.Acquire(in.Root, "repair")
+	if err != nil {
+		return nil, err
+	}
+	defer held.Release()
 	planned, assessment, err := RepairPlan(in)
 	if err != nil {
 		return nil, err
@@ -290,11 +296,6 @@ func Repair(ctx context.Context, in plan.Input) (*Result, error) {
 			return nil, errors.New("The plan needs a validated payload. The installed CLI downloads no content during repair; run the install.sh bootstrap again on the same target.")
 		}
 	}
-	held, err := lock.Acquire(in.Root, "repair")
-	if err != nil {
-		return nil, err
-	}
-	defer held.Release()
 	tx, err := NewTransaction(in.Root, ".x86qw-repair.")
 	if tx != nil {
 		tx.observe, tx.repair = observing(ctx), true
