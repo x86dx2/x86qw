@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -21,6 +22,9 @@ func TestInterfaceInstallsForReal(t *testing.T) {
 	}
 	t.Setenv("X86QW_CACHE_DIR", t.TempDir())
 	t.Setenv("X86QW_NO_MACOS_PREFERENCES", "1")
+	wait := cmdWait
+	cmdWait = time.Minute
+	t.Cleanup(func() { cmdWait = wait })
 	target := filepath.Join(t.TempDir(), "x86qw")
 	m := New(Config{Backend: &setup.Real{Trust: trust.Options{CacheDir: t.TempDir()}}, Target: target, Lang: PT})
 	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
