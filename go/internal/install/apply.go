@@ -673,11 +673,7 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
-	data, err := io.ReadAll(in)
-	if err != nil {
-		return err
-	}
-	return atomicfile.Write(dst, data, mode)
+	return atomicfile.WriteFrom(dst, in, mode)
 }
 
 func ignoreMissing(err error) error {

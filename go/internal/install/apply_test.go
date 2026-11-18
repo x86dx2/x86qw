@@ -246,3 +246,27 @@ func TestAnUpdateDeletesNothingOutsideTheInstallation(t *testing.T) {
 		t.Fatal("the update deleted a file outside the installation")
 	}
 }
+
+// copyFile streams: a package of hundreds of MB never sits whole in memory.
+func TestCopyFileStreams(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "big.pk3")
+	file, err := os.Create(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file.Truncate(32 << 20)
+	file.Close()
+	destination := filepath.Join(t.TempDir(), "qw", "big.pk3")
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	if err := copyFile(source, destination, keepMode); err != nil {
+		t.Fatal(err)
+	}
+	runtime.ReadMemStats(&after)
+	if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 4<<20 {
+		t.Fatalf("copying 32 MB allocated %d bytes", allocated)
+	}
+	if info, err := os.Stat(destination); err != nil || info.Size() != 32<<20 {
+		t.Fatalf("copy: %v %v", info, err)
+	}
+}
