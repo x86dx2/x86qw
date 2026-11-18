@@ -59,12 +59,18 @@ func lexists(path string) bool {
 
 // removeShellIntegration drops ~/.local/bin/x86qw and the Linux desktop
 // entry (or, on Windows, the shortcuts and the PATH entry), and the qw://
-// and demo handlers, when they point at this installation.
-func removeShellIntegration(target string) {
-	cli.SetHandlers(target, false, false)
+// and demo handlers, when they point at this installation, and warns about
+// what it could not.
+func removeShellIntegration(target string, report *Report) {
+	warn := func(err error) {
+		if err != nil {
+			report.warn("%v", err)
+		}
+	}
+	warn(cli.SetHandlers(target, false, false))
 	if runtime.GOOS == "windows" {
-		cli.RemoveShortcuts(target)
-		cli.RemoveUserPath(target)
+		warn(cli.RemoveShortcuts(target))
+		warn(cli.RemoveUserPath(target))
 		return
 	}
 	home, err := os.UserHomeDir()
@@ -72,10 +78,10 @@ func removeShellIntegration(target string) {
 		return
 	}
 	if runtime.GOOS == "linux" {
-		cli.RemoveDesktopEntry(target, home)
+		warn(cli.RemoveDesktopEntry(target, home))
 	}
 	if command := filepath.Join(home, ".local", "bin", "x86qw"); cli.PointsAt(command, target) {
-		os.Remove(command)
+		warn(os.Remove(command))
 		// Only an empty folder goes, so the second stays if the first does.
 		os.Remove(filepath.Dir(command))
 		os.Remove(filepath.Dir(filepath.Dir(command)))
@@ -252,7 +258,7 @@ func Uninstall(target string) (*Report, error) {
 		}
 	}
 	removeEmptyMetadata(target, false)
-	removeShellIntegration(target)
+	removeShellIntegration(target, report)
 	removeLocalPanels()
 	held.Release()
 	released = true
@@ -369,7 +375,7 @@ func Purge(target string) (*Report, error) {
 		}
 		return nil, err
 	}
-	removeShellIntegration(target)
+	removeShellIntegration(target, report)
 	removeLocalPanels()
 	if held != nil {
 		report.info("Installation content removed; the lock folder goes when the operation ends.")

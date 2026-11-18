@@ -233,6 +233,33 @@ func TestUninstallRemovesTheFoldersOfTheUserCommand(t *testing.T) {
 	}
 }
 
+// What uninstall could not undo outside the installation (here the user
+// command, in a folder it may not write) is said, not passed over.
+func TestUninstallWarnsAboutIntegrationItCouldNotRemove(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("no ~/.local/bin on Windows; root writes anywhere")
+	}
+	isolate(t)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := managedInstall(t)
+	command, err := cli.LinkUserCommand(root, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Chmod(filepath.Dir(command), 0o555)
+	t.Cleanup(func() { os.Chmod(filepath.Dir(command), 0o755) })
+	report, err := Uninstall(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(report.Warnings, "\n"), command) {
+		t.Fatalf("warnings: %v", report.Warnings)
+	}
+}
+
 // A kept uninstall leaves the personal files and their record: a later purge
 // recognizes the folder by it and removes the rest, the cache included.
 func TestPurgeAfterAnUninstallRemovesTheRest(t *testing.T) {
