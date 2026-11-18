@@ -105,11 +105,7 @@ func (p *Project) assetFingerprint(remote *Object, artifact mirrorArtifact) (boo
 	if text, ok := remote.Value("digest").(string); ok {
 		return pyjson.Eq(remote.Value("size"), size) && strings.TrimPrefix(text, "sha256:") == digest, nil
 	}
-	gotSize, gotDigest, found, err := p.RemoteFingerprint(artifact.primary, int64Of(size), digest)
-	if err != nil {
-		return false, err
-	}
-	return found && pyjson.EqInt(size, gotSize) && gotDigest == digest, nil
+	return p.RemoteFingerprint(artifact.primary, int64Of(size), digest)
 }
 
 // PublishGitHub uploads the catalog's artifacts to their GitHub releases.
@@ -319,7 +315,7 @@ func (p *Project) PublishGitLab(out io.Writer, catalogPath string) error {
 		url := ArtifactURL(pkg)
 		size, digest := int64Of(pkg.Value("size")), pyjson.Repr(pkg.Value("sha256"))
 		filename := pyjson.Repr(pkg.Value("filename"))
-		gotSize, gotDigest, found, err := p.RemoteFingerprint(url, size, digest)
+		found, err := p.RemoteFingerprint(url, size, digest)
 		if err != nil {
 			return err
 		}
@@ -332,11 +328,11 @@ func (p *Project) PublishGitLab(out io.Writer, catalogPath string) error {
 			if err := p.uploadGitLab(path, url); err != nil {
 				return err
 			}
-			if gotSize, gotDigest, found, err = p.RemoteFingerprint(url, size, digest); err != nil {
+			if found, err = p.RemoteFingerprint(url, size, digest); err != nil {
 				return err
 			}
 		}
-		if !found || gotSize != size || gotDigest != digest {
+		if !found {
 			return fmt.Errorf("GitLab mirror differs from catalog: %s", filename)
 		}
 		urls, _ := pkg.Value("urls").([]any)
