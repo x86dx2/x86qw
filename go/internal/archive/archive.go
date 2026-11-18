@@ -87,7 +87,6 @@ type Member struct {
 // Plan is a validated archive ready for extraction.
 type Plan struct {
 	Members []Member
-	SHA256  string
 	reader  *zip.ReadCloser
 }
 
@@ -106,15 +105,11 @@ func Open(source string, limits Limits) (*Plan, error) {
 	if info.Size() > limits.MaxSourceSize {
 		return nil, fail("ZIP file exceeds %d bytes", limits.MaxSourceSize)
 	}
-	digest, err := FileSHA256(source)
-	if err != nil {
-		return nil, err
-	}
 	reader, err := zip.OpenReader(source)
 	if err != nil {
 		return nil, fail("invalid ZIP: %v", err)
 	}
-	plan := &Plan{SHA256: digest, reader: reader}
+	plan := &Plan{reader: reader}
 	if err := plan.validate(limits); err != nil {
 		reader.Close()
 		return nil, err
