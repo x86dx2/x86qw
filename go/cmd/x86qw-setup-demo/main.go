@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/x86dx2/x86qw/go/internal/install"
 	"github.com/x86dx2/x86qw/go/internal/setup"
 	"github.com/x86dx2/x86qw/go/internal/setup/tui"
 )
@@ -20,7 +21,7 @@ func main() {
 	flag.Parse()
 	err := tui.Run(tui.Config{
 		Backend: &setup.Demo{ExistingInstall: *existing, Speed: *speed},
-		Target:  tui.DefaultTarget(), Lang: tui.Lang(*lang), Demo: true, Theme: *theme, Start: *start,
+		Target:  install.DefaultTarget(), Lang: tui.Lang(*lang), Demo: true, Theme: *theme, Start: *start,
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

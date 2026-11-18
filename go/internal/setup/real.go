@@ -212,10 +212,6 @@ func (r *Real) Catalog(ctx context.Context) (*Catalog, error) {
 // HostPlatform is this machine's catalog platform: macos, linux or windows.
 func HostPlatform() string { return install.HostPlatform() }
 
-// Installed reports whether target holds an x86QW installation: its state
-// or a client receipt. What a rolled-back install leaves in .x86qw is not.
-func Installed(target string) bool { return install.Installed(target) }
-
 func (r *Real) planInput(target string) plan.Input {
 	return install.PlanInput(target, r.current(), r.inv)
 }
@@ -224,7 +220,7 @@ func (r *Real) planInput(target string) plan.Input {
 // It reads the installation alone; the updates need the published
 // catalog, and when it does not answer UpdatesErr says so.
 func (r *Real) Existing(ctx context.Context, target string) (*Existing, error) {
-	if !Installed(target) {
+	if !install.Installed(target) {
 		return nil, nil
 	}
 	existing := &Existing{Target: target, CLIVersion: cli.InstalledVersion(target)}
@@ -302,7 +298,7 @@ func (r *Real) CheckHostname(ctx context.Context, hostname string, network Netwo
 // required is what installing options downloads, in bytes: everything for
 // a new folder, only what the plan adds or updates for an installation.
 func (r *Real) required(options Options) int64 {
-	if Installed(options.Target) {
+	if install.Installed(options.Target) {
 		planned, err := r.applyPlan(options)
 		if err != nil {
 			return 0
@@ -386,7 +382,7 @@ func (r *Real) checkFolder(o Options) found {
 		check.State, check.Detail = CheckFailed, Say("folder.plus")
 		return check
 	}
-	if Installed(o.Target) {
+	if install.Installed(o.Target) {
 		check.Detail = Say("folder.existing")
 		if held, err := lock.Acquire(o.Target, "setup"); err != nil {
 			check.State, check.Detail = CheckFailed, Raw(err.Error())
@@ -590,7 +586,7 @@ func (r *Real) Install(ctx context.Context, options Options, control <-chan bool
 	if err := r.load(); err != nil {
 		return failed(unavailable(err))
 	}
-	if Installed(options.Target) {
+	if install.Installed(options.Target) {
 		return r.apply(ctx, options, control)
 	}
 	cat, err := r.Catalog(ctx)

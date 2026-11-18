@@ -4,8 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -1292,13 +1290,6 @@ func (m *Model) footerHints() [][2]string {
 		return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", action}, {"esc", m.t("k.contexts")}}
 	}
 	return [][2]string{{"↑↓", m.t("k.choose")}, {"enter", m.t("k.next")}, {"esc", m.t("k.back")}}
-}
-
-// DefaultTarget is where x86QW installs unless told otherwise, on every
-// system.
-func DefaultTarget() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, "Games", "x86qw")
 }
 
 // Run shows the interface until it quits.
