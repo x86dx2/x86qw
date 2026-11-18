@@ -15,7 +15,7 @@ func TestSiteShipsOneGenerationAndProvenance(t *testing.T) {
 	source := filepath.Join("..", "..", "..", filepath.FromSlash(siteDir))
 	out := filepath.Join(t.TempDir(), "public")
 	commit := strings.Repeat("a", 40)
-	if err := assembleSite(source, out, commit, 1, 2); err != nil {
+	if err := assembleSite(source, out, commit, 2); err != nil {
 		t.Fatal(err)
 	}
 	generation, err := tufsign.ReadGeneration(filepath.Join(out, "api", "v1", "trust"))
@@ -42,8 +42,12 @@ func TestSiteShipsOneGenerationAndProvenance(t *testing.T) {
 		if err == nil {
 			err = json.Unmarshal(payload, &fields)
 		}
-		if err != nil || fields["commit"] != commit {
+		if err != nil || fields["commit"] != commit || fields["deploy_run_id"] != 2.0 {
 			t.Fatalf("%s: %v %v", document, fields, err)
+		}
+		// No workflow knows the Validate run, so the field only ever said 0.
+		if _, ok := fields["validate_run_id"]; ok {
+			t.Fatalf("%s still carries validate_run_id", document)
 		}
 	}
 	headers, _ := os.ReadFile(filepath.Join(out, "_headers"))
