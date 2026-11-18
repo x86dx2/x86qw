@@ -48,14 +48,6 @@ jobs:
       - name: Build the release tooling
         working-directory: go
         run: go build -o "$RUNNER_TEMP/x86qw-release" ./cmd/x86qw-release
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: site/package-lock.json
-      - name: Install the pinned site toolchain
-        working-directory: site
-        run: npm ci
       - name: Refuse a checkout that diverges from production
         run: |
           set -euo pipefail
@@ -75,6 +67,16 @@ jobs:
             --out "$RUNNER_TEMP/timestamp.json"
           rm -f "$RUNNER_TEMP/timestamp-key.pem"
           cp "$RUNNER_TEMP/timestamp.json" site/public/api/v1/trust/metadata/timestamp.json
+      # npm install scripts run after the key is gone: whatever they leave
+      # running for the rest of the job never sees it.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Install the pinned site toolchain
+        working-directory: site
+        run: npm ci
       - name: Assemble and deploy the site generation
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
