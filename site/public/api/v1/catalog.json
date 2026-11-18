@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-10-30T15:53:48Z",
+  "generated_at": "2026-11-18T23:24:15Z",
   "packages": [
     {
       "component": "core",
@@ -764,112 +764,112 @@
     {
       "component": "x86qw",
       "package": "x86qw-cli",
-      "version": "2.5.4",
+      "version": "2.5.5",
       "channel": "stable",
       "platform": "macos",
       "architecture": "arm64",
-      "filename": "x86qw-2.5.4-darwin-arm64",
-      "size": 13403602,
-      "sha256": "87bad4ee4fdc236ea40b9a98847413d244aa324d97b52ab55742531158617719",
+      "filename": "x86qw-2.5.5-darwin-arm64",
+      "size": 13420130,
+      "sha256": "ebdbee9c3b1b122ed93012e4234ebf0e266a6a2f33e024330ce1be844b7e93c6",
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.4/x86qw-2.5.4-darwin-arm64"
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.5/x86qw-2.5.5-darwin-arm64"
       ],
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.4/x86qw-2.5.4-darwin-arm64",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.5/x86qw-2.5.5-darwin-arm64",
       "license": "MIT",
       "license_url": "https://github.com/x86dx2/x86qw/blob/main/LICENSE",
       "source_urls": [
         "https://github.com/x86dx2/x86qw"
       ],
       "redistribution_reviewed": true,
-      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.5.4"
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.5.5"
     },
     {
       "component": "x86qw",
       "package": "x86qw-cli",
-      "version": "2.5.4",
+      "version": "2.5.5",
       "channel": "stable",
       "platform": "macos",
       "architecture": "x86_64",
-      "filename": "x86qw-2.5.4-darwin-amd64",
-      "size": 14483824,
-      "sha256": "2c258f09f7b4a8324270eb3dc6de410d83eaad03621490de0686c2e1925056d6",
+      "filename": "x86qw-2.5.5-darwin-amd64",
+      "size": 14492016,
+      "sha256": "b16c152e0a56b7436312fc9ad18ad4c0743787d3d45b053fbc40a003bf6d373e",
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.4/x86qw-2.5.4-darwin-amd64"
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.5/x86qw-2.5.5-darwin-amd64"
       ],
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.4/x86qw-2.5.4-darwin-amd64",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.5/x86qw-2.5.5-darwin-amd64",
       "license": "MIT",
       "license_url": "https://github.com/x86dx2/x86qw/blob/main/LICENSE",
       "source_urls": [
         "https://github.com/x86dx2/x86qw"
       ],
       "redistribution_reviewed": true,
-      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.5.4"
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.5.5"
     },
     {
       "component": "x86qw",
       "package": "x86qw-cli",
-      "version": "2.5.4",
+      "version": "2.5.5",
       "channel": "stable",
       "platform": "linux",
       "architecture": "x86_64",
-      "filename": "x86qw-2.5.4-linux-amd64",
-      "size": 14180512,
-      "sha256": "189e625bd5dddab265099e1efcee707c83096da32640e9592ee7b8d29b0e22cf",
+      "filename": "x86qw-2.5.5-linux-amd64",
+      "size": 14188704,
+      "sha256": "a8c6f7cc3c4dfa7dbfcca289d3fd58a6cc1f1374df4926de0ca4e8da7f0408d8",
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.4/x86qw-2.5.4-linux-amd64"
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.5/x86qw-2.5.5-linux-amd64"
       ],
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.4/x86qw-2.5.4-linux-amd64",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.5/x86qw-2.5.5-linux-amd64",
       "license": "MIT",
       "license_url": "https://github.com/x86dx2/x86qw/blob/main/LICENSE",
       "source_urls": [
         "https://github.com/x86dx2/x86qw"
       ],
       "redistribution_reviewed": true,
-      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.5.4"
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.5.5"
     },
     {
       "component": "x86qw",
       "package": "x86qw-cli",
-      "version": "2.5.4",
+      "version": "2.5.5",
       "channel": "stable",
       "platform": "linux",
       "architecture": "arm64",
-      "filename": "x86qw-2.5.4-linux-arm64",
+      "filename": "x86qw-2.5.5-linux-arm64",
       "size": 13107360,
-      "sha256": "54cbb2cd94c9984fc945c3f63d67f02b7e5324e698fea3793cf0025f581aa2c6",
+      "sha256": "c849cc4c6b7e73d0cf0c171335027fb95deb0dbb8fb1469be413d47d2ec01554",
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.4/x86qw-2.5.4-linux-arm64"
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.5/x86qw-2.5.5-linux-arm64"
       ],
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.4/x86qw-2.5.4-linux-arm64",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.5/x86qw-2.5.5-linux-arm64",
       "license": "MIT",
       "license_url": "https://github.com/x86dx2/x86qw/blob/main/LICENSE",
       "source_urls": [
         "https://github.com/x86dx2/x86qw"
       ],
       "redistribution_reviewed": true,
-      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.5.4"
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.5.5"
     },
     {
       "component": "x86qw",
       "package": "x86qw-cli",
-      "version": "2.5.4",
+      "version": "2.5.5",
       "channel": "stable",
       "platform": "windows",
       "architecture": "x64",
-      "filename": "x86qw-2.5.4-windows-amd64.exe",
-      "size": 14699520,
-      "sha256": "c29270579c96c1339f3534db7d12c32ad47af91917154805a29d7b06a7dd812a",
+      "filename": "x86qw-2.5.5-windows-amd64.exe",
+      "size": 14707712,
+      "sha256": "ef876ec07dc27bff7cd827322f265413e05581515e0e5698fb6d0b56d4164c55",
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.4/x86qw-2.5.4-windows-amd64.exe"
+        "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.5/x86qw-2.5.5-windows-amd64.exe"
       ],
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.4/x86qw-2.5.4-windows-amd64.exe",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/x86qw-cli-2.5.5/x86qw-2.5.5-windows-amd64.exe",
       "license": "MIT",
       "license_url": "https://github.com/x86dx2/x86qw/blob/main/LICENSE",
       "source_urls": [
         "https://github.com/x86dx2/x86qw"
       ],
       "redistribution_reviewed": true,
-      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.5.4"
+      "release_url": "https://github.com/x86dx2/x86qw/releases/tag/x86qw-cli-2.5.5"
     }
   ]
 }
