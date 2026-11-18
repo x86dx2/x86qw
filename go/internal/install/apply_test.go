@@ -194,6 +194,33 @@ func TestACaseOnlyRenameKeepsTheFile(t *testing.T) {
 	}
 }
 
+// A file renamed only in case whose bytes also change is still the managed
+// file: the update replaces it instead of keeping it as personal and then
+// deleting it as stale.
+func TestACaseOnlyRenameWithNewBytesReplacesTheFile(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "probe"), nil, 0o644)
+	if _, err := os.Stat(filepath.Join(root, "PROBE")); err != nil {
+		t.Skip("case-sensitive volume")
+	}
+	first, err := overlay(t, root, "comp", map[string]string{"qw/Foo.cfg": "v1", "qw/keep.cfg": "v1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Close()
+	tx, err := overlay(t, root, "comp", map[string]string{"qw/foo.cfg": "v2", "qw/keep.cfg": "v2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx.Close()
+	if data, err := os.ReadFile(filepath.Join(root, "qw", "foo.cfg")); err != nil || string(data) != "v2" {
+		t.Fatalf("qw/foo.cfg after the update: %q %v (warnings %v)", data, err, tx.Warnings)
+	}
+	if got := inventory(t, root, "comp"); got["qw/foo.cfg"] != digestOf([]byte("v2")) {
+		t.Fatalf("inventory: %v", got)
+	}
+}
+
 // A managed folder the user turned into a link to elsewhere leads out of the
 // installation: a file a new version drops is not deleted there.
 func TestAnUpdateDeletesNothingOutsideTheInstallation(t *testing.T) {
@@ -217,5 +244,79 @@ func TestAnUpdateDeletesNothingOutsideTheInstallation(t *testing.T) {
 	tx.Close()
 	if _, err := os.Stat(filepath.Join(shared, "b.bsp")); err != nil {
 		t.Fatal("the update deleted a file outside the installation")
+	}
+}
+
+// copyFile streams: a package of hundreds of MB never sits whole in memory.
+func TestCopyFileStreams(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "big.pk3")
+	file, err := os.Create(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file.Truncate(32 << 20)
+	file.Close()
+	destination := filepath.Join(t.TempDir(), "qw", "big.pk3")
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	if err := copyFile(source, destination, keepMode); err != nil {
+		t.Fatal(err)
+	}
+	runtime.ReadMemStats(&after)
+	if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 4<<20 {
+		t.Fatalf("copying 32 MB allocated %d bytes", allocated)
+	}
+	if info, err := os.Stat(destination); err != nil || info.Size() != 32<<20 {
+		t.Fatalf("copy: %v %v", info, err)
+	}
+}
+
+// A removal that fails after it deleted files puts them back on rollback.
+func TestAFailedRemovalRollsBack(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Getuid() == 0 {
+		t.Skip("needs a folder the user cannot write to")
+	}
+	root := t.TempDir()
+	first, err := overlay(t, root, "comp", map[string]string{"qw/a.cfg": "a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Close()
+	tx, err := NewTransaction(root, ".test.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Close()
+	// The record cannot move, so the removal fails once the file is gone.
+	records := filepath.Join(root, filepath.FromSlash(receipt.ComponentsDir))
+	os.Chmod(records, 0o555)
+	t.Cleanup(func() { os.Chmod(records, 0o755) })
+	if err := tx.RemoveComponent("comp"); err == nil {
+		t.Fatal("the removal should fail")
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "qw", "a.cfg")); string(data) != "a" {
+		t.Fatalf("qw/a.cfg after the rollback: %q", data)
+	}
+}
+
+// A copy that differs from the plan is taken back, also when the file is new.
+func TestACopyThatDiffersFromThePlanIsTakenBack(t *testing.T) {
+	root := t.TempDir()
+	tx, err := NewTransaction(root, ".test.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Close()
+	destination := filepath.Join(root, "qw", "a.cfg")
+	// Another writer changes the file right after the copy.
+	tx.observe = &Observer{File: func(string, string, int64, bool) { os.WriteFile(destination, []byte("other"), 0o644) }}
+	if _, err := tx.InstallOverlay("comp", tree(t, map[string]string{"qw/a.cfg": "a"}), "v", "test", ValidateManagedPath); err == nil {
+		t.Fatal("a copy that differs from the plan was accepted")
+	}
+	if _, err := os.Lstat(destination); err == nil {
+		t.Fatal("the new file stayed after the failed install")
 	}
 }

@@ -22,6 +22,7 @@ import (
 
 	"github.com/x86dx2/x86qw/go/internal/catalog"
 	"github.com/x86dx2/x86qw/go/internal/download"
+	"github.com/x86dx2/x86qw/go/internal/lock"
 	"github.com/x86dx2/x86qw/go/internal/plan"
 	"github.com/x86dx2/x86qw/go/internal/receipt"
 	"github.com/x86dx2/x86qw/go/internal/state"
@@ -555,6 +556,43 @@ func TestOfflineRepairRebuildsAMissingState(t *testing.T) {
 	current, err := state.Read(root)
 	if err != nil || strings.Join(current.Installed(), ",") != "fixture-maps" {
 		t.Fatalf("state.json rebuilt: %+v %v", current, err)
+	}
+}
+
+// A file the system left among the records, such as Finder's .DS_Store,
+// is no record: repair goes ahead, as verify does.
+func TestOfflineRepairIgnoresAFileAmongTheRecords(t *testing.T) {
+	f := newFixture(t)
+	root := filepath.Join(t.TempDir(), "x86qw")
+	f.install(root, "essential")
+	if err := os.WriteFile(filepath.Join(root, ".x86qw", "components", ".DS_Store"), []byte("finder"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(filepath.Join(root, "qw", "pak.lst"))
+	if _, err := Repair(f.ctx, f.input(root)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Verify(root); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Repair reads the installation only once no other operation is changing
+// it: a record another one is still writing is not damage to report.
+func TestOfflineRepairWaitsForTheOperationInProgress(t *testing.T) {
+	f := newFixture(t)
+	root := filepath.Join(t.TempDir(), "x86qw")
+	f.install(root, "essential")
+	held, err := lock.Acquire(root, "update")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Release()
+	if err := os.MkdirAll(filepath.Join(root, ".x86qw", "components", "fixture-new"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Repair(f.ctx, f.input(root)); err == nil || !strings.Contains(err.Error(), "operation is running") {
+		t.Fatalf("repair during another operation: %v", err)
 	}
 }
 

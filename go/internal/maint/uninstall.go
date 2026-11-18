@@ -150,7 +150,7 @@ func removeComponent(target, id string, report *Report) (int, error) {
 		if err != nil {
 			continue
 		}
-		if !info.Mode().IsRegular() || !fspath.Inside(fspath.Resolve(path), root) {
+		if !info.Mode().IsRegular() || !fspath.Inside(fspath.Resolve(path), root) || !fspath.RealFolders(path, target) {
 			// A link or folder the user put there is theirs, like an edit,
 			// and so is wherever a linked folder leads.
 			report.warn("Modified file kept: %s", path)

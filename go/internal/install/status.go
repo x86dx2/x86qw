@@ -62,10 +62,11 @@ func ReadStatus(target string) Status {
 		if json.Unmarshal(payload, &document) != nil {
 			continue
 		}
+		controller, _ := document["controller"].(map[string]any)
 		status.Sessions = append(status.Sessions, Session{
 			SessionID: stringField(document, "session_id", entry.Name()),
 			Status:    stringField(document, "status", "unknown"),
-			Command:   stringField(document, "command", "unknown"),
+			Command:   stringField(controller, "command", "unknown"),
 		})
 	}
 	return status

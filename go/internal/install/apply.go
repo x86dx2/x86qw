@@ -87,7 +87,7 @@ func (t *Transaction) path(relative string) string {
 // outside reports whether path leads out of the installation, through a
 // folder the user turned into a link: nothing there is x86QW's to delete.
 func (t *Transaction) outside(path string) bool {
-	return !fspath.Inside(fspath.Resolve(path), fspath.Resolve(t.Root))
+	return !fspath.Inside(fspath.Resolve(path), fspath.Resolve(t.Root)) || !fspath.RealFolders(path, t.Root)
 }
 
 func loadRecord(root, id string) (*receipt.Record, map[string]string, error) {
@@ -122,6 +122,10 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 	t.observer().files(id, len(files))
 	var entries []receipt.Entry
 	var changed []string
+	oldFolded := map[string]string{}
+	for name := range old {
+		oldFolded[strings.ToLower(name)] = name
+	}
 	for _, relative := range files {
 		if err := validate(relative); err != nil {
 			return 0, err
@@ -139,8 +143,16 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 			if err != nil {
 				return 0, err
 			}
+			// Renamed only in case, on a volume that ignores case: the old
+			// entry is this same file.
+			expected, owned := old[relative]
+			if name, ok := oldFolded[strings.ToLower(relative)]; ok && !owned {
+				if other, err := os.Lstat(t.path(name)); err == nil && os.SameFile(info, other) {
+					expected, owned = old[name], true
+				}
+			}
 			// Bytes already new are what an interrupted run copied.
-			if expected, owned := old[relative]; current != digest && (!owned || current != expected) {
+			if current != digest && (!owned || current != expected) {
 				if !owned || !t.repair {
 					t.warn("Personal or modified file kept: %s", destination)
 					t.observer().file(id, relative, info.Size(), true)
@@ -253,12 +265,12 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 		if err := copyFile(source, destination, mode); err != nil {
 			return fail(err)
 		}
+		if !existed {
+			created = append(created, entry.Path)
+		}
 		t.observer().file(id, entry.Path, info.Size(), false)
 		if digest, _ := archive.FileSHA256(destination); digest != entry.SHA256 {
 			return fail(fmt.Errorf("copied file differs from the plan: %s", destination))
-		}
-		if !existed {
-			created = append(created, entry.Path)
 		}
 	}
 	for _, name := range stale {
@@ -365,7 +377,21 @@ func (t *Transaction) RemoveComponent(id string) error {
 	if err != nil {
 		return err
 	}
+	dir := filepath.Join(t.Root, receipt.ComponentsDir, id)
+	metadata := filepath.Join(backup, ".metadata")
 	var removed []string
+	moved := false
+	// Registered first, so a removal that fails halfway is put back too.
+	t.undo = append(t.undo, func() error {
+		var errs []error
+		if moved {
+			errs = append(errs, os.Rename(metadata, dir))
+		}
+		for _, name := range removed {
+			errs = append(errs, copyFile(filepath.Join(backup, filepath.FromSlash(name)), t.path(name), keepMode))
+		}
+		return errors.Join(errs...)
+	})
 	for name, digest := range entries {
 		path := t.path(name)
 		if current, err := archive.FileSHA256(path); err == nil && current == digest && !t.outside(path) {
@@ -378,19 +404,10 @@ func (t *Transaction) RemoveComponent(id string) error {
 			removed = append(removed, name)
 		}
 	}
-	dir := filepath.Join(t.Root, receipt.ComponentsDir, id)
-	metadata := filepath.Join(backup, ".metadata")
 	if err := os.Rename(dir, metadata); err != nil {
 		return err
 	}
-	t.undo = append(t.undo, func() error {
-		var errs []error
-		errs = append(errs, os.Rename(metadata, dir))
-		for _, name := range removed {
-			errs = append(errs, copyFile(filepath.Join(backup, filepath.FromSlash(name)), t.path(name), keepMode))
-		}
-		return errors.Join(errs...)
-	})
+	moved = true
 	return nil
 }
 
@@ -661,11 +678,7 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
-	data, err := io.ReadAll(in)
-	if err != nil {
-		return err
-	}
-	return atomicfile.Write(dst, data, mode)
+	return atomicfile.WriteFrom(dst, in, mode)
 }
 
 func ignoreMissing(err error) error {

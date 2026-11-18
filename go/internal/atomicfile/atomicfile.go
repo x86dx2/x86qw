@@ -3,7 +3,9 @@
 package atomicfile
 
 import (
+	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -12,11 +14,17 @@ import (
 // (CreateTemp, so concurrent writers never collide), synced, then renamed
 // over path.
 func Write(path string, data []byte, mode os.FileMode) error {
+	return WriteFrom(path, bytes.NewReader(data), mode)
+}
+
+// WriteFrom is Write for the bytes of source, streamed: a large file never
+// sits whole in memory.
+func WriteFrom(path string, source io.Reader, mode os.FileMode) error {
 	temporary, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return err
 	}
-	_, writeErr := temporary.Write(data)
+	_, writeErr := io.Copy(temporary, source)
 	err = errors.Join(writeErr, temporary.Sync(), temporary.Close())
 	if err == nil {
 		err = os.Chmod(temporary.Name(), mode)

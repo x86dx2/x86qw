@@ -55,6 +55,19 @@ func TestStatusOfMissingTarget(t *testing.T) {
 	}
 }
 
+// A session's command is its controller's, where the journal keeps it.
+func TestStatusNamesTheCommandOfASession(t *testing.T) {
+	root := t.TempDir()
+	journal := filepath.Join(root, ".x86qw", "sessions", "20261118T120000Z-0123456789ab", "session.json")
+	os.MkdirAll(filepath.Dir(journal), 0o700)
+	os.WriteFile(journal, []byte(`{"format": 1, "project": "x86qw", "session_id": "20261118T120000Z-0123456789ab", "status": "running",
+  "controller": {"pid": 42, "creation_token": "t", "executable": "/x86qw", "command": "host"}}`), 0o600)
+	sessions := ReadStatus(root).Sessions
+	if len(sessions) != 1 || sessions[0].Command != "host" || sessions[0].Status != "running" {
+		t.Fatalf("%+v", sessions)
+	}
+}
+
 func TestVerifyDetectsTamperedFile(t *testing.T) {
 	root := t.TempDir()
 	write := func(name, content string) {
