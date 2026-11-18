@@ -301,3 +301,22 @@ func TestAFailedRemovalRollsBack(t *testing.T) {
 		t.Fatalf("qw/a.cfg after the rollback: %q", data)
 	}
 }
+
+// A copy that differs from the plan is taken back, also when the file is new.
+func TestACopyThatDiffersFromThePlanIsTakenBack(t *testing.T) {
+	root := t.TempDir()
+	tx, err := NewTransaction(root, ".test.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Close()
+	destination := filepath.Join(root, "qw", "a.cfg")
+	// Another writer changes the file right after the copy.
+	tx.observe = &Observer{File: func(string, string, int64, bool) { os.WriteFile(destination, []byte("other"), 0o644) }}
+	if _, err := tx.InstallOverlay("comp", tree(t, map[string]string{"qw/a.cfg": "a"}), "v", "test", ValidateManagedPath); err == nil {
+		t.Fatal("a copy that differs from the plan was accepted")
+	}
+	if _, err := os.Lstat(destination); err == nil {
+		t.Fatal("the new file stayed after the failed install")
+	}
+}

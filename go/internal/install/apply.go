@@ -265,12 +265,12 @@ func (t *Transaction) InstallOverlay(id, managed, selection, source string, vali
 		if err := copyFile(source, destination, mode); err != nil {
 			return fail(err)
 		}
+		if !existed {
+			created = append(created, entry.Path)
+		}
 		t.observer().file(id, entry.Path, info.Size(), false)
 		if digest, _ := archive.FileSHA256(destination); digest != entry.SHA256 {
 			return fail(fmt.Errorf("copied file differs from the plan: %s", destination))
-		}
-		if !existed {
-			created = append(created, entry.Path)
 		}
 	}
 	for _, name := range stale {
