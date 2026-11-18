@@ -208,7 +208,7 @@ func minimalRemovalPaths(paths []string) []string {
 }
 
 // quarantineRemove moves every path aside first (so a failure restores all),
-// then deletes them.
+// then deletes them; a delete that fails puts back what is not deleted yet.
 func quarantineRemove(paths []string) error {
 	type moved struct{ original, aside string }
 	var done []moved
@@ -232,12 +232,17 @@ func quarantineRemove(paths []string) error {
 		}
 		done = append(done, moved{path, aside})
 	}
-	var errs []error
-	for _, item := range done {
+	for index, item := range done {
 		if err := os.RemoveAll(item.aside); err != nil && !removeAfterExit(item.original, item.aside) {
-			errs = append(errs, err)
+			// The state and the running CLI stay with them, so the operation
+			// can run again.
+			for _, rest := range done[index:] {
+				os.Rename(rest.aside, rest.original)
+			}
+			return fmt.Errorf("Removing %s failed; what was not removed yet was put back: %w", item.original, err)
 		}
 	}
+	var errs []error
 	for _, path := range running {
 		errs = append(errs, os.Remove(path))
 	}
@@ -271,7 +276,7 @@ func CleanupSelection(target string, downloads, personalData bool) ([]string, []
 		return nil, nil, nil
 	}
 	var cachePaths, personalPaths []string
-	for _, relative := range []string{"ezquake/sb/cache", "ezquake/temp"} {
+	for _, relative := range cacheRoots {
 		path := filepath.Join(target, filepath.FromSlash(relative))
 		if _, err := os.Lstat(path); err == nil {
 			cachePaths = append(cachePaths, path)
@@ -320,6 +325,7 @@ func CleanupSelection(target string, downloads, personalData bool) ([]string, []
 		}
 	}
 	if personalData {
+		// Unlike personalRoot, it keeps the player's qw/demos, qw/screenshots and ezquake/qconsole.log on purpose: only purge removes them.
 		for _, relative := range []string{"ezquake/.ezquake_history", "qw/qconsole.log", "logs", "td2/demos"} {
 			path := filepath.Join(target, filepath.FromSlash(relative))
 			if _, err := os.Lstat(path); err == nil {

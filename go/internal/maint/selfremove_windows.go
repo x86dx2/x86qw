@@ -27,7 +27,8 @@ func removeAfterExit(original, aside string) bool {
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return false
 	}
-	return removeWhenGone([]int{os.Getpid()}, aside)
+	// However long the app that ran the uninstall stays open.
+	return removeWhenGone([]int{os.Getpid()}, aside, 0)
 }
 
 // deferLauncher keeps x86qw.cmd in place while the cmd.exe running it is
@@ -38,26 +39,13 @@ func deferLauncher(path string) bool {
 	if !strings.EqualFold(filepath.Base(path), "x86qw.cmd") {
 		return false
 	}
-	return removeWhenGone([]int{os.Getpid(), os.Getppid()}, path)
+	// An interactive cmd.exe outlives the batch file: a minute is enough.
+	return removeWhenGone([]int{os.Getpid(), os.Getppid()}, path, 60)
 }
 
-// removeWhenGone starts a hidden PowerShell that waits (at most a minute)
-// for pids to exit and then removes path, and its folder if that is left
-// empty (the installation folder after a purge), and then an empty ~/Games.
-func removeWhenGone(pids []int, path string) bool {
-	ids := make([]string, len(pids))
-	for index, pid := range pids {
-		ids[index] = fmt.Sprint(pid)
-	}
-	quote := func(path string) string { return "'" + strings.ReplaceAll(path, "'", "''") + "'" }
-	folder := filepath.Dir(path)
-	remove := "[IO.Directory]::Delete(" + quote(folder) + ")"
-	if parent := filepath.Dir(folder); isGamesFolder(parent) {
-		remove += "; [IO.Directory]::Delete(" + quote(parent) + ")"
-	}
-	script := fmt.Sprintf("Wait-Process -Id %s -Timeout 60 -ErrorAction SilentlyContinue; Remove-Item -LiteralPath %s -Recurse -Force; "+
-		"try { %s } catch {}", strings.Join(ids, ","), quote(path), remove)
-	command := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script)
+// removeWhenGone starts a hidden PowerShell that runs removalScript.
+func removeWhenGone(pids []int, path string, limit int) bool {
+	command := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", removalScript(pids, path, limit))
 	// Its working folder must not be one it removes.
 	command.Dir = os.TempDir()
 	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NO_WINDOW | windows.CREATE_NEW_PROCESS_GROUP}
@@ -66,6 +54,28 @@ func removeWhenGone(pids []int, path string) bool {
 	}
 	command.Process.Release()
 	return true
+}
+
+// removalScript waits for pids to exit (at most limit seconds, when limit is
+// not 0) and then removes path, and its folder if that is left empty (the
+// installation folder after a purge), and then an empty ~/Games.
+func removalScript(pids []int, path string, limit int) string {
+	ids := make([]string, len(pids))
+	for index, pid := range pids {
+		ids[index] = fmt.Sprint(pid)
+	}
+	wait := "Wait-Process -Id " + strings.Join(ids, ",")
+	if limit > 0 {
+		wait += fmt.Sprintf(" -Timeout %d", limit)
+	}
+	quote := func(path string) string { return "'" + strings.ReplaceAll(path, "'", "''") + "'" }
+	folder := filepath.Dir(path)
+	remove := "[IO.Directory]::Delete(" + quote(folder) + ")"
+	if parent := filepath.Dir(folder); isGamesFolder(parent) {
+		remove += "; [IO.Directory]::Delete(" + quote(parent) + ")"
+	}
+	return fmt.Sprintf("%s -ErrorAction SilentlyContinue; Remove-Item -LiteralPath %s -Recurse -Force; "+
+		"try { %s } catch {}", wait, quote(path), remove)
 }
 
 // removesItself is never true on Windows, where a running executable cannot

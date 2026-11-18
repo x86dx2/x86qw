@@ -58,24 +58,31 @@ func TestShortcutsLifecycle(t *testing.T) {
 	}
 }
 
-func TestUserPathKeepsOtherEntriesUnexpanded(t *testing.T) {
+// userPath opens the user's Environment key and puts its Path back as it
+// was once the test ends.
+func userPath(t *testing.T) registry.Key {
+	t.Helper()
 	key, err := registry.OpenKey(registry.CURRENT_USER, "Environment", registry.QUERY_VALUE|registry.SET_VALUE)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer key.Close()
 	original, kind, err := key.GetStringValue("Path")
-	if err == nil {
-		t.Cleanup(func() {
-			if kind == registry.EXPAND_SZ {
-				key.SetExpandStringValue("Path", original)
-			} else {
-				key.SetStringValue("Path", original)
-			}
-		})
-	} else {
-		t.Cleanup(func() { key.DeleteValue("Path") })
-	}
+	t.Cleanup(func() {
+		switch {
+		case err != nil:
+			key.DeleteValue("Path")
+		case kind == registry.EXPAND_SZ:
+			key.SetExpandStringValue("Path", original)
+		default:
+			key.SetStringValue("Path", original)
+		}
+		key.Close()
+	})
+	return key
+}
+
+func TestUserPathKeepsOtherEntriesUnexpanded(t *testing.T) {
+	key := userPath(t)
 	if err := key.SetExpandStringValue("Path", `%USERPROFILE%\bin;C:\Tools`); err != nil {
 		t.Fatal(err)
 	}
@@ -94,6 +101,22 @@ func TestUserPathKeepsOtherEntriesUnexpanded(t *testing.T) {
 	}
 	if value, _, _ := key.GetStringValue("Path"); value != `%USERPROFILE%\bin;C:\Tools` {
 		t.Fatalf("PATH after removing: %q", value)
+	}
+}
+
+// An entry already on the PATH, however the user wrote it, keeps its place.
+func TestUserPathAddLeavesAnEntryWhereItIs(t *testing.T) {
+	key := userPath(t)
+	root := t.TempDir()
+	path := `C:\First;` + strings.ToUpper(root) + `\;C:\Last`
+	if err := key.SetExpandStringValue("Path", path); err != nil {
+		t.Fatal(err)
+	}
+	if err := AddUserPath(root); err != nil {
+		t.Fatal(err)
+	}
+	if value, _, _ := key.GetStringValue("Path"); value != path {
+		t.Fatalf("PATH after adding: %q", value)
 	}
 }
 
