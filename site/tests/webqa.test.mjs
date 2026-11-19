@@ -124,3 +124,45 @@ test('home has no serious axe violations at 320, 390 and 1440', async (t) => {
     });
   }
 });
+
+// A browser that refuses the clipboard gets the whole command selected and
+// a status in text, not only a red border around a truncated command.
+test('a refused copy selects the whole command and says so', async (t) => {
+  const { server, origin } = await servePublic();
+  const browser = await chromium.launch();
+  t.after(async () => {
+    await browser.close();
+    await new Promise((resolve, reject) => {
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+  });
+  const page = await browser.newPage({ viewport: { width: 320, height: 720 } });
+  await page.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, 'clipboard', {
+      get: () => ({ writeText: () => Promise.reject(new Error('denied')) }),
+    });
+  });
+  await page.goto(`${origin}/`, { waitUntil: 'load' });
+  await page.locator('[data-copy-target="install-windows-command"]').click();
+  // Past the 2.4 s after which a successful copy goes back to idle.
+  await page.waitForTimeout(2600);
+
+  const result = await page.evaluate(() => {
+    const button = document.querySelector('[data-copy-target="install-windows-command"]');
+    const code = document.getElementById('install-windows-command');
+    const status = button.querySelector('[data-copy-status]');
+    return {
+      state: button.dataset.copyState,
+      selected: String(window.getSelection()),
+      command: code.textContent.trim(),
+      hidden: code.scrollWidth - code.clientWidth,
+      status: status.textContent,
+      statusWidth: status.getBoundingClientRect().width,
+    };
+  });
+  assert.equal(result.state, 'error');
+  assert.equal(result.selected, result.command);
+  assert.ok(result.hidden <= 1, `${result.hidden}px of the command hidden`);
+  assert.match(result.status, /selected/i);
+  assert.ok(result.statusWidth > 40, `status ${result.statusWidth}px wide`);
+});

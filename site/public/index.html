@@ -126,8 +126,8 @@
             <dd>Dedicated server, relay and proxy in the same tree, with passwords kept off the command line.</dd>
           </div>
           <div>
-            <dt>Your PAKs</dt>
-            <dd>Quake still belongs to id Software. The registered PAKs are obtained separately from the installer and stay under id Software's terms.</dd>
+            <dt>The PAKs</dt>
+            <dd>Quake still belongs to id Software. The registered PAKs are a copy the maintainer provides, shipped as the separate package <code>x86qw-core-id1</code> under id Software's terms; PAKs already in the folder are kept.</dd>
           </div>
         </dl>
       </section>
@@ -159,7 +159,7 @@
               <button class="install-command-control" type="button" data-copy-install data-copy-target="install-windows-command">
                 <span class="copy-hint">Copy the command for Windows: </span>
                 <span class="command-prompt" aria-hidden="true">&gt;</span>
-                <code id="install-windows-command" data-install-command>powershell -c &quot;irm https://qw.x86.com.br/install.ps1 | iex&quot;</code>
+                <code id="install-windows-command" data-install-command>powershell -c &quot;[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://qw.x86.com.br/install.ps1 | iex&quot;</code>
                 <span class="install-copy-icon" aria-hidden="true">
                   <svg class="copy-icon" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h1"></path></svg>
                   <svg class="check-icon" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></svg>
@@ -208,7 +208,7 @@
           <div><dt>Identity</dt><dd>Version, size and SHA-256</dd></div>
           <div><dt>Authentication</dt><dd>Catalog signed with TUF; timestamp and snapshot expire</dd></div>
           <div><dt>Redundancy</dt><dd>Two ordered mirrors, with failover</dd></div>
-          <div><dt>Base</dt><dd>Registered PAKs, validated by SHA-256, stay yours</dd></div>
+          <div><dt>Base</dt><dd>Registered PAKs in the separate package x86qw-core-id1, validated by SHA-256; PAKs already in the folder are kept</dd></div>
         </dl>
 
         <p class="trust-links">
@@ -272,7 +272,7 @@
 
     <footer>
       <a class="brand brand-footer" href="#top" aria-label="x86QW, back to the top">x86QW</a>
-      <p>An independent QuakeWorld distribution maintained by x86dx2.<br>Quake is a trademark of id Software. Your original PAKs stay yours.</p>
+      <p>An independent QuakeWorld distribution maintained by x86dx2.<br>Quake is a trademark of id Software. Its registered PAKs ship as a separate package, under id Software's terms.</p>
       <nav aria-label="Footer links">
         <a href="https://github.com/x86dx2/x86qw">Code</a>
         <a href="https://github.com/x86dx2/x86qw/releases">Releases</a>

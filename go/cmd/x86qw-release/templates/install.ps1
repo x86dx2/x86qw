@@ -17,6 +17,8 @@ New-Item -ItemType Directory -Path $Work | Out-Null
 $Binary = Join-Path $Work "x86qw.exe"
 try {
   Write-Host "- Downloading x86QW $Version ($File)"
+  # Windows PowerShell 5.1 may offer only TLS 1.0, which GitHub refuses.
+  [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072
   Add-Type -AssemblyName System.Net.Http
   $Client = [System.Net.Http.HttpClient]::new()
   # A slow link has half an hour; a dropped one gets one more try.
