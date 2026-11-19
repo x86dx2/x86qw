@@ -68,13 +68,19 @@ func (f *Field) Key(msg tea.KeyPressMsg) bool {
 	return true
 }
 
-// Insert types text at the caret, dropping what the field refuses.
-func (f *Field) Insert(text string) {
+// Insert types text at the caret, dropping what the field refuses; full
+// reports that the limit left some of it out.
+func (f *Field) Insert(text string) (full bool) {
 	for _, r := range strings.ReplaceAll(text, "\n", " ") {
-		if !unicode.IsPrint(r) || (f.Accept != nil && !f.Accept(r)) || (f.Limit > 0 && len(f.Value) >= f.Limit) {
+		if !unicode.IsPrint(r) || (f.Accept != nil && !f.Accept(r)) {
+			continue
+		}
+		if f.Limit > 0 && len(f.Value) >= f.Limit {
+			full = true
 			continue
 		}
 		f.Value = append(f.Value[:f.Caret], append([]rune{r}, f.Value[f.Caret:]...)...)
 		f.Caret++
 	}
+	return full
 }

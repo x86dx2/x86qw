@@ -147,6 +147,7 @@ type modal struct {
 	field   map[string]*Field
 	json    bool
 	height  int // the tallest the dialog has been, so it never jumps
+	top     int // the row it opened on, kept while it fits
 	// before is what the choices were when the dialog opened; esc puts
 	// them back.
 	before     setup.Options
@@ -347,6 +348,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
 		clear(m.tops)
+		if m.modal != nil {
+			m.modal.top = 0
+		}
 	case tea.BackgroundColorMsg:
 		if !m.themed {
 			if msg.IsDark() {
@@ -471,7 +475,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.PasteMsg:
 		if field := m.activeField(); field != nil {
-			field.Insert(msg.Content)
+			// A copied line brings its line break along.
+			if field.Insert(strings.TrimRight(msg.Content, "\r\n")) {
+				m.say(fmt.Sprintf(m.t("field.full"), field.Limit))
+			}
 			return m, m.fieldChanged()
 		}
 	case tea.MouseMotionMsg:
@@ -1054,10 +1061,11 @@ func (m *Model) View() tea.View {
 		top = min(top, last)
 	}
 	m.tops[m.screen] = top
+	// What does not fit below the top scrolls; the top stays.
+	room = max(1, room-(top-first))
 	offset := 0
 	if total := len(body.lines); total > room {
 		// Scroll just enough to keep the focused block on screen.
-		top = first
 		offset = min(m.scroll[m.screen], total-room)
 		if body.focusBottom >= offset+room {
 			offset = body.focusBottom - room + 1
@@ -1099,6 +1107,11 @@ func (m *Model) View() tea.View {
 		lines, hits, caret := m.modalView()
 		mw := lipgloss.Width(lines[0])
 		mx, my := (m.w-mw)/2, max(1, (m.h-1-len(lines))/2)
+		// A dialog that grows keeps the row it opened on while it fits.
+		if m.modal.top > 0 && m.modal.top+len(lines) <= m.h-1 {
+			my = m.modal.top
+		}
+		m.modal.top = my
 		place(strings.Join(lines, "\n"), mx, my)
 		for _, h := range hits {
 			m.hits = append(m.hits, hit{y: h.y + my, x0: h.x0 + mx, x1: h.x1 + mx, id: h.id})

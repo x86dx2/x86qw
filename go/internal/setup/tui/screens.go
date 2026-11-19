@@ -693,11 +693,17 @@ func (m *Model) installPage(p *page) {
 	}
 	// Big percentage on the left, figures on the right.
 	digits := bigNumber(int(fraction*100+0.0001), m.glyphs)
+	// A narrow body shortens the speed chart, never the speed: room is kept
+	// for the widest one, "99.9 MB/s", so the chart does not twitch.
+	spark := sparkline(m, pr)
+	if over := 2 + max(digitsWidth, lipgloss.Width(digits[3])) + 2 + sparkColumns + 2 + 9 - p.width; over > 0 {
+		spark = ansi.Cut(spark, over, sparkColumns)
+	}
 	stats := []string{
 		p.st(t.Text).Bold(true).Render(m.size(pr.Done)) + p.st(t.Gray).Render(" "+m.t("inst.of")+" "+m.size(pr.Total)),
 		p.st(t.Text).Render(duration(pr.ETA)) + p.st(t.Gray).Render(" "+m.t("inst.left")),
 		m.filesLine(p, pr),
-		sparkline(m, pr) + p.st(t.Text2).Render("  "+m.size(int64(pr.Speed))+"/s"),
+		spark + p.st(t.Text2).Render("  "+m.size(int64(pr.Speed))+"/s"),
 	}
 	switch {
 	case pr.Paused && pr.Holding:
@@ -737,11 +743,11 @@ func (m *Model) installPage(p *page) {
 		}
 		for _, line := range log {
 			mark := p.st(t.Success).Render("+")
-			detail := p.st(t.Dim).Render(m.size(line.Size))
+			detail := p.st(t.Gray).Render(m.size(line.Size))
 			if line.Kind == '=' {
-				mark, detail = p.st(t.Gray).Render("="), p.st(t.Dim).Render(m.t("unchanged"))
+				mark, detail = p.st(t.Gray).Render("="), p.st(t.Gray).Render(m.t("unchanged"))
 			}
-			p.add(spread(p.st(t.Dim).Render(fmt.Sprintf("  %6.1fs  ", line.At.Seconds()))+mark+p.st(t.Text2).Render(" "+line.Path), detail+p.st(t.Base).Render("  "), p.width, t.Base))
+			p.add(spread(p.st(t.Gray).Render(fmt.Sprintf("  %6.1fs  ", line.At.Seconds()))+mark+p.st(t.Text2).Render(" "+line.Path), detail+p.st(t.Base).Render("  "), p.width, t.Base))
 		}
 		return
 	}
@@ -1085,9 +1091,9 @@ func (m *Model) panelPage(p *page) {
 				label = m.label("plan", u.Label, u.Label)
 			}
 			left := p.st(t.Text2).Render("  "+label) + note
-			right := p.st(t.Dim).Render(m.in(u.From)+"  → ") + p.st(t.Success).Render(to) + p.st(t.Base).Render("  ")
+			right := p.st(t.Gray).Render(m.in(u.From)+"  → ") + p.st(t.Success).Render(to) + p.st(t.Base).Render("  ")
 			if lipgloss.Width(left)+lipgloss.Width(right)+2 > p.width {
-				right = p.st(t.Dim).Render("→ ") + p.st(t.Success).Render(to) + p.st(t.Base).Render("  ")
+				right = p.st(t.Gray).Render("→ ") + p.st(t.Success).Render(to) + p.st(t.Base).Render("  ")
 			}
 			// The versions always show; the name gives way.
 			if room := p.width - lipgloss.Width(right) - 2; lipgloss.Width(left) > room {

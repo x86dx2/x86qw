@@ -177,6 +177,10 @@ func hints(theme Theme, items [][2]string, width int, hover string) (string, []h
 		x += w
 	}
 	line := strings.Join(parts, "")
+	if lipgloss.Width(line) > width && len(items) > 1 {
+		// Whole hints go from before the last one, esc, the way out.
+		return hints(theme, append(items[:len(items)-2:len(items)-2], items[len(items)-1]), width, hover)
+	}
 	if lipgloss.Width(line) > width {
 		line = ansi.Truncate(line, width, "…")
 	}

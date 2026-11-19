@@ -11,6 +11,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/x86dx2/x86qw/go/internal/setup"
 )
@@ -473,4 +474,37 @@ func TestTheRecipeDialogDrawsWhenVeryNarrow(t *testing.T) {
 	drive(m, typeText("x86dx2")...)
 	m.openModal("recipe")
 	drive(m, tea.WindowSizeMsg{Width: 14, Height: 34}, key("down"))
+}
+
+// The setup keeps its place while the preflight's checks fill the dock: the
+// dock covers the body's last rows, the body does not move.
+func TestPreflightLeavesTheSetupInPlace(t *testing.T) {
+	for _, size := range [][2]int{{80, 24}, {60, 18}} {
+		m := New(Config{Backend: &setup.Demo{Speed: 50}, Target: shortTarget(t), Lang: EN})
+		drive(m, tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+		drive(m, run(m.Init())...)
+		drive(m, typeText("x86dx2")...)
+		drive(m, key("down"), key("down"), key("enter"))
+		title := func() int {
+			for row, line := range strings.Split(ansi.Strip(m.View().Content), "\n") {
+				// The scrollbar may share the row.
+				if words := strings.Fields(line); len(words) > 0 && words[0] == m.t("conf.title") {
+					return row
+				}
+			}
+			return -1
+		}
+		cmd := m.startPreflight(true)
+		want := title()
+		for cmd != nil {
+			msgs := run(cmd)
+			cmd = nil
+			for _, msg := range msgs {
+				_, cmd = m.Update(msg)
+				if got := title(); got != want {
+					t.Fatalf("%dx%d: the title moved from row %d to %d with %d checks", size[0], size[1], want, got, len(m.checks))
+				}
+			}
+		}
+	}
 }

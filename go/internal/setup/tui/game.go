@@ -849,7 +849,7 @@ func (m *Model) serversPage(p *page) {
 		start := len(p.lines)
 		p.band(spread(left, right, p.width, bg), bg, fmt.Sprintf("row:srv%d", index))
 		if focused {
-			p.add(p.st(t.Base).Render("    ") + p.st(t.Dim).Render(server.Address))
+			p.add(p.st(t.Base).Render("    ") + p.st(t.Gray).Render(server.Address))
 			p.keep(start, len(p.lines)-1)
 		}
 	}

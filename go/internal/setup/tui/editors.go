@@ -664,7 +664,8 @@ func (m *Model) keyboard() []string {
 		for _, r := range row {
 			line.WriteString(cap(string(r), strings.ToUpper(string(r))))
 		}
-		pad := 46 - lipgloss.Width(line.String())
+		// The arrows start at column 44: ↑ over ↓, and → fits the narrowest dialog.
+		pad := 44 - lipgloss.Width(line.String())
 		line.WriteString(t.Style(t.Base).Render(strings.Repeat(" ", max(1, pad))))
 		for _, arrow := range arrows[index] {
 			if arrow == "" {
@@ -684,7 +685,9 @@ func (m *Model) keyboard() []string {
 	for _, pair := range [][2]string{{o.Forward, "a.fwd"}, {o.Back, "a.back"}, {o.Left, "a.left"}, {o.Right, "a.right"}, {o.Jump, "a.jump"}} {
 		legend = append(legend, t.Style(t.Text2).Bold(true).Render(m.keyName(pair[0]))+t.Style(t.Gray).Render(" "+m.t(pair[1])))
 	}
-	return append([]string{""}, append(lines, "", t.Style(t.Base).Render("    ")+strings.Join(legend, t.Style(t.Dim).Render("  ·  ")))...)
+	// Two lines whatever the keys, so a rebinding never changes the height.
+	lead, sep := t.Style(t.Base).Render("    "), t.Style(t.Dim).Render("  ·  ")
+	return append([]string{""}, append(lines, "", lead+strings.Join(legend[:3], sep), lead+strings.Join(legend[3:], sep))...)
 }
 
 // keyName is a bound key as the interface names it.

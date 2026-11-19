@@ -3,11 +3,14 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/x86dx2/x86qw/go/internal/setup"
 )
@@ -373,5 +376,190 @@ func TestTheFocusFollowsANewFavorite(t *testing.T) {
 	drive(m, key("ctrl+f"))
 	if focused := m.focusedServer(); focused == nil || focused.Address != address || !focused.Favorite {
 		t.Fatalf("the focus left %s for %+v", address, focused)
+	}
+}
+
+// A copied line brings its line break along: pasted, it adds no space to
+// the folder; and what a field's limit leaves out is said.
+func TestPasteDropsTheLineBreakAndSaysWhatIsCut(t *testing.T) {
+	m := started(t, false)
+	drive(m, typeText("x86dx2")...)
+	drive(m, key("enter"))
+	m.openModal("folder")
+	m.modal.field["folder"].Set("")
+	drive(m, tea.PasteMsg{Content: "/Users/x86/Games/qw\r\n"})
+	if m.opts.Target != "/Users/x86/Games/qw" {
+		t.Fatalf("pasted folder %q", m.opts.Target)
+	}
+	m.modal = nil
+	m.openModal("server")
+	m.modal.tab = 1
+	for index, row := range focusables(m.modalRows()) {
+		if row.id == "password" {
+			m.modal.focus = index
+		}
+	}
+	m.toast = ""
+	drive(m, tea.PasteMsg{Content: strings.Repeat("Ab3", 14)})
+	if len(m.opts.Server.Password) != 32 || m.toast == "" {
+		t.Fatalf("password %q, toast %q", m.opts.Server.Password, m.toast)
+	}
+}
+
+// The caret sits after the last character typed, in columns: a CJK name
+// takes two each, an accent written as its own mark none.
+func TestTheCaretFollowsWideAndCombiningCharacters(t *testing.T) {
+	for _, target := range []string{"/Users/田中太郎/Games/x86qw", "/Users/田中太郎/ゲーム/クエイク/x86qw", "/Users/x86/Música/x86qw"} {
+		m := New(Config{Backend: &setup.Demo{Speed: 50}, Target: target, Lang: EN})
+		drive(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+		drive(m, run(m.Init())...)
+		drive(m, typeText("x86dx2")...)
+		drive(m, key("enter"))
+		m.openModal("folder")
+		lines, _, caret := m.modalView()
+		if caret == nil {
+			t.Fatalf("%s: no caret", target)
+		}
+		if before := ansi.Strip(ansi.Cut(lines[caret[1]], 0, caret[0])); !strings.HasSuffix(before, "/x86qw") {
+			t.Errorf("%s: the caret follows %q", target, before)
+		}
+	}
+}
+
+// A dialog that grows (an instance added, a port shown) keeps its top row
+// while it fits: nothing in it moves.
+func TestAGrowingDialogKeepsItsTop(t *testing.T) {
+	m := started(t, false)
+	drive(m, tea.WindowSizeMsg{Width: 100, Height: 40})
+	drive(m, typeText("x86dx2")...)
+	drive(m, key("down"), key("down"), key("enter"))
+	m.openModal("server")
+	top := func() int {
+		for row, line := range strings.Split(ansi.Strip(m.View().Content), "\n") {
+			if strings.Contains(line, "╭─") {
+				return row
+			}
+		}
+		return -1
+	}
+	want := top()
+	for _, row := range focusables(m.modalRows()) {
+		if row.id == "add" {
+			row.activate()
+		}
+	}
+	if got := top(); got != want {
+		t.Fatalf("the dialog moved from row %d to %d", want, got)
+	}
+}
+
+// The Keys tab shows the whole keyboard and every binding from the
+// narrowest dialog up.
+func TestTheKeysTabShowsEveryBinding(t *testing.T) {
+	for _, width := range []int{60, 64, 69, 72, 80} {
+		for _, lang := range []Lang{EN, PT} {
+			m := New(Config{Backend: &setup.Demo{Speed: 50}, Target: shortTarget(t), Lang: lang})
+			drive(m, tea.WindowSizeMsg{Width: width, Height: 40})
+			drive(m, run(m.Init())...)
+			drive(m, typeText("x86dx2")...)
+			drive(m, key("enter"))
+			m.opts.Keys = setup.KeyPresets["arrows"]
+			m.openModal("config")
+			lines, _, _ := m.modalView()
+			text := ansi.Strip(strings.Join(lines, "\n"))
+			for _, line := range strings.Split(text, "\n") {
+				if strings.Contains(line, " Z ") && !strings.Contains(line, "→") {
+					t.Errorf("%d columns: the → key is cut: %q", width, line)
+				}
+			}
+			if !strings.Contains(text, m.t("a.jump")) {
+				t.Errorf("%d columns, %s: the jump binding is cut", width, lang)
+			}
+		}
+	}
+}
+
+// A footer too wide for the window drops whole hints before the last one:
+// esc, the way out, always shows, and no hint is cut in half.
+func TestTheFooterKeepsEscAndWholeHints(t *testing.T) {
+	m := New(Config{Backend: &setup.Demo{ExistingInstall: true, Speed: 50}, Target: shortTarget(t), Lang: PT, Start: "servers"})
+	drive(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+	drive(m, run(m.Init())...)
+	items := m.footerHints()
+	line, hits := hints(m.theme, items, m.w-4, "")
+	text := ansi.Strip(line)
+	last := items[len(items)-1]
+	if strings.Contains(text, "…") || !strings.HasSuffix(text, last[0]+" "+last[1]) {
+		t.Fatalf("footer %q", text)
+	}
+	if end := hits[len(hits)-1]; end.id != "hint:"+last[0] || end.x1 != lipgloss.Width(line) {
+		t.Fatalf("the last hit %+v does not end the line of %d", end, lipgloss.Width(line))
+	}
+}
+
+// On the narrowest windows the speed chart gives way, not the speed.
+func TestTheInstallSpeedShowsWhenNarrow(t *testing.T) {
+	for _, width := range []int{60, 62, 64, 80} {
+		m := New(Config{Backend: &setup.Demo{Speed: 50}, Target: shortTarget(t), Lang: EN})
+		drive(m, tea.WindowSizeMsg{Width: width, Height: 24})
+		drive(m, run(m.Init())...)
+		drive(m, typeText("x86dx2")...)
+		drive(m, key("enter"))
+		m.startInstall()
+		m.progress = <-m.instCh
+		m.progress.Speed = 12_345_678
+		_, bodyWidth, _ := m.bodyBox()
+		speed := m.size(int64(m.progress.Speed)) + "/s"
+		found := false
+		for _, line := range m.body(bodyWidth).lines {
+			found = found || strings.Contains(ansi.Strip(line), speed)
+		}
+		if !found {
+			t.Errorf("%d columns: no %s on the install screen", width, speed)
+		}
+		m.cancel()
+		for range m.instCh {
+		}
+	}
+}
+
+// What the user reads is never in the faintest grey, under 3:1 on either
+// theme: the focused server's address, an update's installed version, the
+// install log.
+func TestInformationIsNotFaint(t *testing.T) {
+	m := New(Config{Backend: &setup.Demo{ExistingInstall: true, Speed: 50}, Target: shortTarget(t), Lang: EN, Start: "servers"})
+	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
+	drive(m, run(m.Init())...)
+	gray := m.theme.Style(m.theme.Gray)
+	_, width, _ := m.bodyBox()
+	body := strings.Join(m.body(width).lines, "\n")
+	if server := m.focusedServer(); server == nil || !strings.Contains(body, gray.Render(server.Address)) {
+		t.Error("the focused server's address is faint")
+	}
+	toConsole(m)
+	m.panelView = "update"
+	body = strings.Join(m.body(width).lines, "\n")
+	shown := false
+	for _, update := range m.existing.Updates {
+		shown = shown || strings.Contains(body, gray.Render(m.in(update.From)+"  → "))
+	}
+	if !shown {
+		t.Error("the installed version is faint")
+	}
+	n := started(t, false)
+	drive(n, typeText("x86dx2")...)
+	drive(n, key("enter"))
+	n.startInstall()
+	for n.progress.Err == nil && len(n.progress.Log) == 0 {
+		n.progress = <-n.instCh
+	}
+	n.showLog = true
+	line := n.progress.Log[0]
+	body = strings.Join(n.body(width).lines, "\n")
+	if !strings.Contains(body, gray.Render(fmt.Sprintf("  %6.1fs  ", line.At.Seconds()))) || !strings.Contains(body, gray.Render(n.size(line.Size))) {
+		t.Error("the install log is faint")
+	}
+	n.cancel()
+	for range n.instCh {
 	}
 }
