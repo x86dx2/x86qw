@@ -227,7 +227,8 @@ one's usage and options. Options can come before or after the folder.
 | `version` | Shows the version |
 
 Whatever changes or stops something — `update`, `upgrade`, `repair`, `uninstall`,
-`status --stop` and recipes — shows what it will do and asks on the terminal.
+`cleanup --downloads` or `--personal-data`, `profile --restore`, `status --stop`
+and recipes — shows what it will do and asks on the terminal.
 Without a terminal, it needs `--yes` and exits with code 2 when it is missing. `--dry-run` only
 shows the plan. `verify`, `doctor`, `hub`, `catalog`, `version`, `status` and the
 `update`, `upgrade` and `repair` plans with `--dry-run` accept `--json` and

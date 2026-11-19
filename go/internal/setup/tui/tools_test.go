@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -71,6 +74,27 @@ func TestToolButtonsAct(t *testing.T) {
 	drive(m, key("enter"))
 	if view := m.View().Content; !strings.Contains(view, "Safe cleanup") {
 		t.Fatalf("the second enter did not run it:\n%s", view)
+	}
+}
+
+// The app asks before a tool deletes or overwrites files, so the command
+// it runs must not ask again: inside the app nobody could answer it.
+func TestToolsThatChangeFilesSayYes(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	if err := os.WriteFile(filepath.Join(home, backupPrefix+"20260101-000000.zip"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := started(t, true)
+	for _, name := range []string{"profile", "cleanup"} {
+		for _, action := range toolNamed(name).actions {
+			args := action.args(m)
+			changes := slices.Contains(args, "--restore") || slices.Contains(args, "--downloads") || slices.Contains(args, "--personal-data")
+			if changes != slices.Contains(args, "--yes") {
+				t.Errorf("%s %s: %v", name, action.id, args)
+			}
+		}
 	}
 }
 

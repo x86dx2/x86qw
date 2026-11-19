@@ -12,13 +12,17 @@ import (
 	"github.com/x86dx2/x86qw/go/internal/setup"
 )
 
-type profileArgs struct{ target, backup, restore string }
+type profileArgs struct {
+	target, backup, restore string
+	yes                     bool
+}
 
 func (a *profileArgs) parser() *cliargs.Parser {
 	p := cliargs.New()
 	targetFlag(p, &a.target)
 	p.Optional(&a.backup, "x86qw-profile.zip", "FILE.zip", "writes a backup of the personal settings", "--backup")
 	p.String(&a.restore, "FILE.zip", "restores a backup", "--restore")
+	p.Bool(&a.yes, "restores without asking", "--yes")
 	p.Exclusive("--backup", "--restore")
 	return p
 }
@@ -46,6 +50,10 @@ func runProfile(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "✓ Profile written: %s\n", destination)
 	}
 	if a.restore != "" {
+		question := "Replace the personal settings in " + target + " with those in " + a.restore + "?"
+		if proceed, code := confirm(question, []string{"x86qw", "profile", "--restore", a.restore, target}, a.yes, stdout, stderr); !proceed {
+			return code
+		}
 		restored, err := maint.RestoreProfile(setup.ExpandHome(a.restore), target)
 		if err != nil {
 			fmt.Fprintf(stderr, "✗ %v\n", err)
