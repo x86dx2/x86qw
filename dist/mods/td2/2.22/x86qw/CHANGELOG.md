@@ -1,41 +1,41 @@
-# Total Destruction 2 2.22 no x86QW
+# Total Destruction 2 2.22 in x86QW
 
-## Original preservado
+## Original preserved
 
-- `source/quakeworld-TD2.22QW-server_PTBR.tar.gz`: distribuição completa original com fonte, manuais, gamecode, modelos e sons, 567029 bytes, SHA-256 `b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93`.
+- `source/quakeworld-TD2.22QW-server_PTBR.tar.gz`: complete original distribution with source, manuals, gamecode, models and sounds, 567029 bytes, SHA-256 `b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93`.
 
-## Alterações x86QW
+## x86QW changes
 
-- restaura `saw_down.wav` copiando `saw.wav`, que é o único byte original verificável para a referência ausente;
-- `source/0001-runtime-compatibility.patch` restaura o campo worldspawn padrão `wad`;
-- remove `easyrecord`, `stop` e centenas de `wait`, deixando gravações sob controle do jogador;
-- remove binds e `scr_centertime` remotos, já fornecidos pelo perfil local;
-- remove alterações persistentes de gamma e mantém a duração visual da bomba de luz com os efeitos de entidade originais;
-- remove o ramo morto de `monster_vomit` que chamava `vomitus/v_sight1.wav`, arquivo inexistente também no código-base Quake 1.06;
-- inicia o diretório do mod uma única vez com `-game` e publica `*gamedir`
-  separadamente, sem recarregar o filesystem durante o startup;
-- deixa o console limpo ao iniciar e mantém a ajuda em `F10` somente sob demanda;
-- `runtime/qwprogs.dat` foi recompilado com FTEQCC e promovido após smoke em stable e nightly.
+- restores `saw_down.wav` by copying `saw.wav`, the only verifiable original bytes for the missing reference;
+- `source/0001-runtime-compatibility.patch` restores the standard `wad` worldspawn field;
+- removes `easyrecord`, `stop` and hundreds of `wait` commands, leaving recordings under the player's control;
+- removes remote binds and `scr_centertime`, which the local profile already provides;
+- removes persistent gamma changes and keeps the visual duration of the flash bomb with the original entity effects;
+- removes the dead `monster_vomit` branch that called `vomitus/v_sight1.wav`, a file that does not exist in the Quake 1.06 code base either;
+- starts the mod directory only once with `-game` and publishes `*gamedir`
+  separately, without reloading the filesystem during startup;
+- leaves the console clean at startup and keeps the help on `F10`, on demand only;
+- `runtime/qwprogs.dat` was recompiled with FTEQCC and promoted after a smoke test on stable and nightly.
 
-## Lacunas conhecidas
+## Known gaps
 
-- a lista de votação cita 30 mapas externos não incluídos na distribuição original preservada;
-- o build produz 14 warnings históricos que ainda precisam ser classificados.
+- the voting list names 30 external maps not included in the preserved original distribution;
+- the build produces 14 historical warnings that still need to be classified.
 
-## Validação de runtime
+## Runtime validation
 
-- 30/07/2026: ezQuake 3.6.9 e nightly `20260616-101233_a86996a` em `dm6` com `temp1 65560`;
-- jogador entrou, armas e efeitos carregaram e o `td2qw 2.22` foi preservado;
-- nenhuma demo automática, `stop`, gamma persistente, bind remoto ou erro `wad`/`vomitus`.
+- 2026-07-30: ezQuake 3.6.9 and nightly `20260616-101233_a86996a` on `dm6` with `temp1 65560`;
+- the player joined, weapons and effects loaded and `td2qw 2.22` was preserved;
+- no automatic demo, `stop`, persistent gamma, remote bind or `wad`/`vomitus` error.
 
-## Correções encaminhadas ao cliente
+## Fixes sent to the client
 
-- o falso erro de QVM antes do fallback PR1 foi enviado ao ezQuake no
+- the false QVM error before the PR1 fallback was sent to ezQuake in
   [PR #1149](https://github.com/QW-Group/ezquake-source/pull/1149);
-- o ruído de registros duplicados após `vid_restart` foi enviado separadamente
-  no [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150).
+- the duplicate registration noise after `vid_restart` was sent separately
+  in [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150).
 
-## Deliberadamente não alterado
+## Deliberately unchanged
 
-- `temp1 65560` e as regras de armas, magias, runas e poderes foram mantidos;
-- nenhum mapa externo, menu, modo, som ou mecânica foi adicionado.
+- `temp1 65560` and the rules for weapons, spells, runes and powers were kept;
+- no external map, menu, mode, sound or mechanic was added.
