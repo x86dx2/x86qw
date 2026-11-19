@@ -582,6 +582,22 @@ footer nav a:hover {
   border-color: oklch(0.72 0.16 25);
 }
 
+.install-command-control[data-copy-state="error"] code {
+  overflow-wrap: anywhere;
+  user-select: text;
+  white-space: normal;
+}
+
+.install-command-control[data-copy-state="error"] .copy-status {
+  position: static;
+  grid-column: 1 / -1;
+  width: auto;
+  height: auto;
+  clip: auto;
+  clip-path: none;
+  white-space: normal;
+}
+
 .copy-status,
 .copy-hint {
   position: absolute;

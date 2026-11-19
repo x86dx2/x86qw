@@ -3,7 +3,8 @@ const catalogLive = document.querySelectorAll('[data-catalog-live]');
 
 copyInstallButtons.forEach((button) => {
   button.addEventListener('click', async () => {
-    const command = document.getElementById(button.dataset.copyTarget)?.textContent?.trim();
+    const code = document.getElementById(button.dataset.copyTarget);
+    const command = code?.textContent?.trim();
     const status = button.querySelector('[data-copy-status]');
     if (!command) return;
     try {
@@ -11,10 +12,15 @@ copyInstallButtons.forEach((button) => {
       button.dataset.copyState = 'copied';
       if (status) status.textContent = 'Copied';
     } catch {
+      // Selected, whole and said in text until the next click: the keyboard
+      // copies what the clipboard API refused.
       button.dataset.copyState = 'error';
-      if (status) status.textContent = 'Select the command';
+      if (status) status.textContent = 'Command selected: copy it with Ctrl+C or Cmd+C';
+      window.getSelection()?.selectAllChildren(code);
+      return;
     }
     window.setTimeout(() => {
+      if (button.dataset.copyState !== 'copied') return;
       button.dataset.copyState = 'idle';
       if (status) status.textContent = '';
     }, 2400);
