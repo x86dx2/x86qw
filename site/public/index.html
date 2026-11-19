@@ -159,7 +159,7 @@
               <button class="install-command-control" type="button" data-copy-install data-copy-target="install-windows-command">
                 <span class="copy-hint">Copy the command for Windows: </span>
                 <span class="command-prompt" aria-hidden="true">&gt;</span>
-                <code id="install-windows-command" data-install-command>powershell -c &quot;irm https://qw.x86.com.br/install.ps1 | iex&quot;</code>
+                <code id="install-windows-command" data-install-command>powershell -c &quot;[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://qw.x86.com.br/install.ps1 | iex&quot;</code>
                 <span class="install-copy-icon" aria-hidden="true">
                   <svg class="copy-icon" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h1"></path></svg>
                   <svg class="check-icon" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></svg>
