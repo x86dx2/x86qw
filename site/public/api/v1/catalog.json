@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-11-19T02:52:59Z",
+  "generated_at": "2026-11-19T03:29:25Z",
   "packages": [
     {
       "component": "core",
@@ -182,14 +182,14 @@
     {
       "component": "final-arena",
       "package": "final-arena",
-      "version": "1.20+nquake.e4cb23d40aa2+x86qw.5",
+      "version": "1.20+nquake.e4cb23d40aa2+x86qw.6",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "final-arena-1.20+nquake.e4cb23d40aa2+x86qw.5.zip",
-      "size": 6984652,
-      "sha256": "5856160fd23b45fca62984597bdae33819a63f98c80cda1516eb223bbca944eb",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/final-arena-1.20/final-arena-1.20+nquake.e4cb23d40aa2+x86qw.5.zip",
+      "filename": "final-arena-1.20+nquake.e4cb23d40aa2+x86qw.6.zip",
+      "size": 6984622,
+      "sha256": "050291d9df32b5d41f55ddc6eca722b5516f236265ff48ab586d033c38f1485a",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/final-arena-1.20/final-arena-1.20+nquake.e4cb23d40aa2+x86qw.6.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/index.shtm",
       "source_urls": [
@@ -199,15 +199,15 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/final-arena-1.20/final-arena-1.20+nquake.e4cb23d40aa2+x86qw.5.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/final-arena/1.20+nquake.e4cb23d40aa2+x86qw.5/final-arena-1.20+nquake.e4cb23d40aa2+x86qw.5.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/final-arena-1.20/final-arena-1.20+nquake.e4cb23d40aa2+x86qw.6.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/final-arena/1.20+nquake.e4cb23d40aa2+x86qw.6/final-arena-1.20+nquake.e4cb23d40aa2+x86qw.6.zip"
       ],
-      "mirror_title": "x86QW Content · Final Arena 1.20+nquake.e4cb23d40aa2+x86qw.5",
+      "mirror_title": "x86QW Content · Final Arena 1.20+nquake.e4cb23d40aa2+x86qw.6",
       "mirror_notes": "Versioned content packages of the x86QW distribution.",
       "mirror_latest": false,
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/index.shtm",
-      "release_notes": "Preserva o cliente oficial 1.20 byte a byte por meio do conteúdo nQuake, mantém temporariamente o gamecode derivado por Rakk porque sua fonte pública não foi localizada, arquiva cliente, servidor e fonte oficiais e aplica somente o perfil de compatibilidade x86QW com plano de teclas impresso ao entrar.",
+      "release_notes": "Keeps the official 1.20 client byte for byte through the nQuake content, keeps for now the gamecode Rakk derived because its public source was not found, archives the official client, server and source and applies only the x86QW compatibility profile with a key plan printed on entry.",
       "upstream_version": "1.20"
     },
     {
@@ -587,14 +587,14 @@
     {
       "component": "pro-x",
       "package": "pro-x",
-      "version": "1.1+x86qw.6",
+      "version": "1.1+x86qw.7",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "pro-x-1.1+x86qw.6.zip",
-      "size": 9081189,
-      "sha256": "29d025648dfd356a3222c6b8e50bebab8ceaf684e5ba3907273ce2f9ada4571b",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/pro-x-1.1/pro-x-1.1+x86qw.6.zip",
+      "filename": "pro-x-1.1+x86qw.7.zip",
+      "size": 9081176,
+      "sha256": "1839593c849d629f1e87e8fe9664ee0b7405cfa93f54cd6042365c4489132075",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/pro-x-1.1/pro-x-1.1+x86qw.7.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
       "source_urls": [
@@ -603,15 +603,15 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/pro-x-1.1/pro-x-1.1+x86qw.6.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/pro-x/1.1+x86qw.6/pro-x-1.1+x86qw.6.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/pro-x-1.1/pro-x-1.1+x86qw.7.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/pro-x/1.1+x86qw.7/pro-x-1.1+x86qw.7.zip"
       ],
-      "mirror_title": "x86QW Content · Pro-X 1.1+x86qw.6",
+      "mirror_title": "x86QW Content · Pro-X 1.1+x86qw.7",
       "mirror_notes": "Versioned content packages of the x86QW distribution.",
       "mirror_latest": false,
       "source_revision": "8f68563cd5abec1a1fbf2b1ec2288a96693c7bad12b2ab6ce977451c1ee72010",
       "release_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
-      "release_notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1, reaplica o perfil de gameplay x86QW com plano de teclas impresso ao entrar e fornece um ENT derivado do BSP que remove somente quatro chaves obsoletas noname responsáveis por erros no console.",
+      "release_notes": "Updates the Pro-X 0.8b nQuake ships to the last public release, 1.1, reapplies the x86QW gameplay profile with a key plan printed on entry and provides an ENT derived from the BSP that removes only four obsolete noname keys responsible for console errors.",
       "upstream_version": "1.1"
     },
     {
@@ -677,14 +677,14 @@
     {
       "component": "td2",
       "package": "total-destruction-2",
-      "version": "2.22+x86qw.6",
+      "version": "2.22+x86qw.7",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "total-destruction-2-2.22+x86qw.6.zip",
-      "size": 502676,
-      "sha256": "3ee2bcda378cf235c839e0614031aac2e88e17a50cdd955eaf95aaedf233ad35",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.6.zip",
+      "filename": "total-destruction-2-2.22+x86qw.7.zip",
+      "size": 502663,
+      "sha256": "582e7c69b3036e116b4befab2150c962090f61130ea381d1c593956c518bd200",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.7.zip",
       "license": "GPL-2.0-or-later",
       "license_url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
       "source_urls": [
@@ -693,15 +693,15 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.6.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/total-destruction-2/2.22+x86qw.6/total-destruction-2-2.22+x86qw.6.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/total-destruction-2-2.22/total-destruction-2-2.22+x86qw.7.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/total-destruction-2/2.22+x86qw.7/total-destruction-2-2.22+x86qw.7.zip"
       ],
-      "mirror_title": "x86QW Content · Total Destruction 2 2.22+x86qw.6",
+      "mirror_title": "x86QW Content · Total Destruction 2 2.22+x86qw.7",
       "mirror_notes": "Versioned content packages of the x86QW distribution.",
       "mirror_latest": false,
       "source_revision": "b0b7632debe931e435008df939bade3791b5d21abfbb66f828790f1996beca93",
       "release_url": "https://arenacamper.ddns.net/repo/quakeworld/",
-      "release_notes": "Última distribuição completa TD2QW preservada no dist. O runtime usa gamecode recompilado com correções estritas de compatibilidade: campo wad restaurado, gravação e preferências do jogador preservadas, comandos remotos removidos, plano de teclas impresso ao entrar e referência de som morta eliminada; saw_down.wav continua restaurado do saw.wav byte-idêntico.",
+      "release_notes": "The last complete TD2QW distribution, kept in dist. The runtime uses gamecode recompiled with strict compatibility fixes: the wad field restored, the player's recordings and preferences preserved, remote commands removed, a key plan printed on entry and a dead sound reference dropped; saw_down.wav is still restored from the byte-identical saw.wav.",
       "upstream_version": "2.22"
     },
     {

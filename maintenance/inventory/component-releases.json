@@ -187,7 +187,7 @@
       "notes": "Keeps the QRP packages and replaces the legacy UTF-16 notice with UTF-8 x86QW documentation; pak.lst sets the priority."
     },
     "final-arena": {
-      "version": "1.20+nquake.e4cb23d40aa2+x86qw.5",
+      "version": "1.20+nquake.e4cb23d40aa2+x86qw.6",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-overlay",
       "freshness": "upstream-current",
@@ -196,7 +196,7 @@
       "embedded_version": "Final Arena 1.20",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/index.shtm",
-      "notes": "Preserva o cliente oficial 1.20 byte a byte por meio do conteúdo nQuake, mantém temporariamente o gamecode derivado por Rakk porque sua fonte pública não foi localizada, arquiva cliente, servidor e fonte oficiais e aplica somente o perfil de compatibilidade x86QW com plano de teclas impresso ao entrar.",
+      "notes": "Keeps the official 1.20 client byte for byte through the nQuake content, keeps for now the gamecode Rakk derived because its public source was not found, archives the official client, server and source and applies only the x86QW compatibility profile with a key plan printed on entry.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -234,7 +234,7 @@
       ]
     },
     "pro-x": {
-      "version": "1.1+x86qw.6",
+      "version": "1.1+x86qw.7",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
@@ -243,7 +243,7 @@
       "embedded_version": "Pro-X QW 1.1",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
-      "notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1, reaplica o perfil de gameplay x86QW com plano de teclas impresso ao entrar e fornece um ENT derivado do BSP que remove somente quatro chaves obsoletas noname responsáveis por erros no console.",
+      "notes": "Updates the Pro-X 0.8b nQuake ships to the last public release, 1.1, reapplies the x86QW gameplay profile with a key plan printed on entry and provides an ENT derived from the BSP that removes only four obsolete noname keys responsible for console errors.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
@@ -329,14 +329,14 @@
       ]
     },
     "total-destruction-2": {
-      "version": "2.22+x86qw.6",
+      "version": "2.22+x86qw.7",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "td2",
       "distribution_tag": "total-destruction-2-2.22",
       "license": "GPL-2.0-or-later",
       "license_url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
-      "notes": "Última distribuição completa TD2QW preservada no dist. O runtime usa gamecode recompilado com correções estritas de compatibilidade: campo wad restaurado, gravação e preferências do jogador preservadas, comandos remotos removidos, plano de teclas impresso ao entrar e referência de som morta eliminada; saw_down.wav continua restaurado do saw.wav byte-idêntico.",
+      "notes": "The last complete TD2QW distribution, kept in dist. The runtime uses gamecode recompiled with strict compatibility fixes: the wad field restored, the player's recordings and preferences preserved, remote commands removed, a key plan printed on entry and a dead sound reference dropped; saw_down.wav is still restored from the byte-identical saw.wav.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
