@@ -1,24 +1,24 @@
 x86QW
 =====
 
-x86QW e uma distribuicao QuakeWorld autocontida, baseada no ezQuake e nos
-componentes selecionados do nQuake, com mods e configuracoes mantidos pelo
-projeto.
+x86QW is a self-contained QuakeWorld distribution, based on ezQuake and on
+selected nQuake components, with mods and configurations maintained by the
+project.
 
-INICIAR
--------
+START
+-----
 
-Use o launcher da raiz do projeto:
+Use the launcher at the root of the installation:
 
   ./x86qw play
 
-Ele lista apenas os mods instalados, permite escolher o mapa e inicia o
-ezQuake no gamedir correto. Cada mod mostra seus controles ao carregar.
+It lists only the installed mods, lets you choose the map and starts
+ezQuake in the right gamedir. Each mod shows its controls when it loads.
 
-CONFIGURACOES PESSOAIS
+PERSONAL CONFIGURATION
 ----------------------
 
-As atualizacoes preservam os arquivos abaixo:
+Updates keep the files below:
 
   qw/x86qw-user.cfg
   qw/x86qw-ktx-user.cfg
@@ -27,12 +27,12 @@ As atualizacoes preservam os arquivos abaixo:
   fortress/x86qw-fortress-user.cfg
   td2/x86qw-td2-user.cfg
 
-Coloque customizacoes globais em qw/x86qw-user.cfg e ajustes de cada mod no
-arquivo correspondente. Nao edite autoexec.cfg ou os perfis x86qw-*.cfg,
-pois eles sao gerenciados pela distribuicao.
+Put global customizations in qw/x86qw-user.cfg and the settings of each mod
+in its own file. Do not edit autoexec.cfg or the x86qw-*.cfg profiles, because
+the distribution manages them.
 
-MANUTENCAO
-----------
+MAINTENANCE
+-----------
 
   ./x86qw verify
   ./x86qw update
@@ -41,11 +41,11 @@ MANUTENCAO
   ./x86qw uninstall
   ./x86qw uninstall --purge
 
-O cleanup remove caches regeneraveis. Downloads de servidores e dados
-pessoais so sao removidos quando solicitados explicitamente.
+cleanup removes caches that can be rebuilt. Server downloads and personal
+data are removed only when you ask for it explicitly.
 
-Os PAKs registrados ficam em id1/ e sao preservados por atualizacoes e pela
-desinstalacao comum. O modo uninstall --purge remove toda a instalacao.
+The registered PAKs live in id1/ and are kept by updates and by a plain
+uninstall. uninstall --purge removes the whole installation.
 
-Documentacao do ezQuake: https://ezquake.com/docs/
-Projeto x86QW: https://qw.x86.com.br/
+ezQuake documentation: https://ezquake.com/docs/
+x86QW project: https://qw.x86.com.br/

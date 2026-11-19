@@ -1,12 +1,12 @@
-Manual do ezQuake
-=================
+ezQuake manual
+==============
 
-Documentacao atual:
+Current documentation:
 
   https://ezquake.com/docs/
 
-Ajuda interna do cliente:
+The client's built-in help:
 
   /help
-  /describe <comando>
-  /cvarlist *termo*
+  /describe <command>
+  /cvarlist *term*

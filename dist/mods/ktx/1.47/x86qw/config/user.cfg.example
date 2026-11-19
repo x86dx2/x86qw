@@ -1,7 +1,7 @@
-// Personalizacoes locais do KTX.
-// Criado como qw/x86qw-ktx-user.cfg, carregado depois do perfil e nunca sobrescrito.
-// Exemplos:
+// Local KTX customizations.
+// Created as qw/x86qw-ktx-user.cfg, loaded after the profile and never overwritten.
+// Examples:
 // bind MOUSE2 "weapon 7"
 // bind z "tp_msgquaddead"
-// alias x86qw_ktx_help "echo Meus controles KTX"
-// Os nomes pessoais dos Frogbots ficam em qw/x86qw-frogbot-names.json.
+// alias x86qw_ktx_help "echo My KTX controls"
+// Personal Frogbot names live in qw/x86qw-frogbot-names.json.
