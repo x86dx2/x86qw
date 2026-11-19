@@ -273,7 +273,7 @@
       ]
     },
     "team-fortress": {
-      "version": "2.9+nquake.e4cb23d40aa2+x86qw.8",
+      "version": "2.9+nquake.e4cb23d40aa2+x86qw.9",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-overlay",
       "freshness": "upstream-current",
@@ -282,7 +282,7 @@
       "embedded_version": "Team Fortress 2.9",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.frag-net.com/mod_quake_fortress.html",
-      "notes": "Preserva mapas, modelos, sons e LOCs Team Fortress do nQuake, arquiva o cliente completo 2.8 exigido pela atualização server-only 2.9, restaura bounce2.wav de origem KTX verificável e usa gamecode 2.9 recompilado sem binds remotos forçados; controles permanecem no perfil local x86QW e a ajuda aparece somente sob demanda.",
+      "notes": "Keeps the nQuake Team Fortress maps, models, sounds and LOCs, archives the complete 2.8 client the server-only 2.9 update requires, restores bounce2.wav from a verifiable KTX source and uses the 2.9 gamecode recompiled without forced remote binds; the controls stay in the local x86QW profile and the help shows only on demand.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
