@@ -234,7 +234,7 @@
       ]
     },
     "pro-x": {
-      "version": "1.1+x86qw.6",
+      "version": "1.1+x86qw.7",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
@@ -243,7 +243,7 @@
       "embedded_version": "Pro-X QW 1.1",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.quakeworld.nu/forum/topic/3741/prox-11-released",
-      "notes": "Atualiza o Pro-X 0.8b incorporado pelo nQuake para a última versão pública 1.1, reaplica o perfil de gameplay x86QW com plano de teclas impresso ao entrar e fornece um ENT derivado do BSP que remove somente quatro chaves obsoletas noname responsáveis por erros no console.",
+      "notes": "Updates the Pro-X 0.8b nQuake ships to the last public release, 1.1, reapplies the x86QW gameplay profile with a key plan printed on entry and provides an ENT derived from the BSP that removes only four obsolete noname keys responsible for console errors.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
