@@ -233,7 +233,8 @@ sensitive configurations use a protected DACL with access only for the current
 user and `LOCAL SYSTEM`. The object is born private, before the first write;
 an inconclusive volume or ACL makes the operation fail closed. External
 password files are only validated and read through the same handle, never
-reconfigured by x86QW. See [ADR 0003](adr/0003-private-windows-dacl.md).
+reconfigured by x86QW. The code is in `go/internal/privfs`; the decision is
+[ADR 0003](adr/0003-private-windows-dacl.md).
 
 Non-sensitive temporary files the session created are removed when they still
 match their hash; modified files and pre-existing data are kept and reported.
@@ -277,5 +278,6 @@ hard links, such as exFAT, stops the session with that reason. The journal recor
 the whole payload in one write before any member is published, so a session
 that dies halfway is cleaned up on the next run. A different personal file is
 never overwritten. Personal
-configurations, logs and demos are not treated as managed content. See the
+configurations, logs and demos are not treated as managed content. The code
+is in `go/internal/archive`; the decision is the
 [file boundary ADR](adr/0002-single-archive-boundary.md).

@@ -271,8 +271,9 @@ The CLI inspects ZIP and PK3 files before any extraction, with limits, canonical
 modes and atomic promotion. On Windows, the installation's private state is created
 with a protected DACL, limited to the current user and `LOCAL SYSTEM`; external password
 files are only accepted with that same restriction and are never rewritten.
-See [ADR 0002](docs/adr/0002-single-archive-boundary.md) and
-[ADR 0003](docs/adr/0003-private-windows-dacl.md).
+The code is in `go/internal/archive` and `go/internal/privfs`; the decisions,
+written for the Python line, are [ADR 0002](docs/adr/0002-single-archive-boundary.md)
+and [ADR 0003](docs/adr/0003-private-windows-dacl.md).
 
 ## Architecture
 

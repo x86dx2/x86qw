@@ -70,4 +70,6 @@ than an hour or when the workflow itself stops running.
 The documents in [releases/](releases/), [post-1.0/](post-1.0/),
 [implementation/](implementation/) and [contracts/1.0.md](contracts/1.0.md)
 record the Python 0.x/1.0 line and its decisions. They do not describe the
-current CLI.
+current CLI. [ADRs](adr/) 0001 to 0006 were written for that line too: the Go
+CLI keeps the same rules, but their file paths, Python details and status
+lines are history.
