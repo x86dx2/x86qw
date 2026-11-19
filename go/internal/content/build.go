@@ -18,7 +18,7 @@ import (
 
 const (
 	gitlabProjectID  = "84813414"
-	coreVersion      = "0.1.1"
+	coreVersion      = "0.1.2"
 	corePackage      = "x86qw-core-id1"
 	coreReleaseTag   = "x86qw-content-core-" + coreVersion
 	maxCorePakBytes  = 128 * 1024 * 1024
@@ -390,7 +390,10 @@ func (p *Project) BuildCorePackage(distribution, output, ownershipOutput string)
 		"component", "core", "package", corePackage, "version", coreVersion, "channel", "content",
 		"platform", "any", "architecture", "any", "filename", filename,
 		"size", intNumber(len(packageBytes)), "sha256", sha256Hex(packageBytes), "origin_url", mirror,
-		"license", "id-software-registered-game-data", "license_url", license,
+		// The MIT license covers only the generated metadata; the game data's
+		// terms are in the provenance record.
+		"license", "id-software-registered-game-data",
+		"license_url", "https://github.com/x86dx2/x86qw/blob/"+coreReleaseTag+"/maintenance/docs/provenance.md",
 		"source_urls", []any{"https://github.com/x86dx2/x86qw/tree/main/dist/game-data/id1"},
 		"redistribution_reviewed", true, "urls", []any{mirror},
 		"source_revision", revision, "mirror_title", "x86QW Content · Base game data "+coreVersion,

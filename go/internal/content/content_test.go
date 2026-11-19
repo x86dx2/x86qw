@@ -278,3 +278,19 @@ func TestMirrorMetadataIsEnglish(t *testing.T) {
 		}
 	}
 }
+
+// The core package holds id Software's registered game data: its license
+// link leads to the provenance record, not to x86QW's MIT license.
+func TestCorePackageLinksItsProvenance(t *testing.T) {
+	root := repoRoot(t)
+	requireHydrated(t, root)
+	project := NewProject(root)
+	core, err := project.BuildCorePackage(project.Path(DistDir), t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "https://github.com/x86dx2/x86qw/blob/" + coreReleaseTag + "/maintenance/docs/provenance.md"
+	if got := core.Value("license_url"); got != want {
+		t.Fatalf("core license_url %v, want %s", got, want)
+	}
+}
