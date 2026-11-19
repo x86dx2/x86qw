@@ -51,7 +51,7 @@
       ],
       "distribution_path": "clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage",
       "mirror_title": "x86QW Content · ezQuake nightly 20260616-101233_a86996a",
-      "mirror_notes": "Cliente ezQuake nightly 20260616-101233_a86996a preservado pela distribuição x86QW.",
+      "mirror_notes": "ezQuake nightly client 20260616-101233_a86996a, preserved by the x86QW distribution.",
       "mirror_latest": false
     },
     {
@@ -76,7 +76,7 @@
       ],
       "distribution_path": "clients/ezquake/nightly/20260616-101233_a86996a/macos-universal/20260616-101233_a86996a_ezQuake-macOS-universal.zip",
       "mirror_title": "x86QW Content · ezQuake nightly 20260616-101233_a86996a",
-      "mirror_notes": "Cliente ezQuake nightly 20260616-101233_a86996a preservado pela distribuição x86QW.",
+      "mirror_notes": "ezQuake nightly client 20260616-101233_a86996a, preserved by the x86QW distribution.",
       "mirror_latest": false
     },
     {
@@ -101,7 +101,7 @@
       ],
       "distribution_path": "clients/ezquake/nightly/20260616-101233_a86996a/windows-x64/20260616-101233_a86996a_ezquake.exe",
       "mirror_title": "x86QW Content · ezQuake nightly 20260616-101233_a86996a",
-      "mirror_notes": "Cliente ezQuake nightly 20260616-101233_a86996a preservado pela distribuição x86QW.",
+      "mirror_notes": "ezQuake nightly client 20260616-101233_a86996a, preserved by the x86QW distribution.",
       "mirror_latest": false
     },
     {
@@ -126,7 +126,7 @@
       ],
       "distribution_path": "clients/ezquake/stable/3.6.9/linux-x86_64/ezQuake-linux-x86_64.zip",
       "mirror_title": "x86QW Content · ezQuake stable 3.6.9",
-      "mirror_notes": "Cliente ezQuake stable 3.6.9 preservado pela distribuição x86QW.",
+      "mirror_notes": "ezQuake stable client 3.6.9, preserved by the x86QW distribution.",
       "mirror_latest": false
     },
     {
@@ -151,7 +151,7 @@
       ],
       "distribution_path": "clients/ezquake/stable/3.6.9/macos-universal/ezQuake-macOS-universal.zip",
       "mirror_title": "x86QW Content · ezQuake stable 3.6.9",
-      "mirror_notes": "Cliente ezQuake stable 3.6.9 preservado pela distribuição x86QW.",
+      "mirror_notes": "ezQuake stable client 3.6.9, preserved by the x86QW distribution.",
       "mirror_latest": false
     },
     {
@@ -176,7 +176,7 @@
       ],
       "distribution_path": "clients/ezquake/stable/3.6.9/windows-x64/ezQuake-windows-x64.zip",
       "mirror_title": "x86QW Content · ezQuake stable 3.6.9",
-      "mirror_notes": "Cliente ezQuake stable 3.6.9 preservado pela distribuição x86QW.",
+      "mirror_notes": "ezQuake stable client 3.6.9, preserved by the x86QW distribution.",
       "mirror_latest": false
     },
     {
