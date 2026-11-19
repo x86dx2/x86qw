@@ -18,8 +18,8 @@ old installations, a period of use by third parties and key custody.
 - **Content:** 21 components in 28 packages, five games, ezQuake stable and
   nightly, MVDSV, QTV and QWFWD.
 - **Trust:** a catalog authenticated by TUF. Root v1 (expires 2027-08-10),
-  snapshot and targets signed offline (expire 2027-01-19) and a timestamp
-  renewed every week with a 30-day lease.
+  snapshot and targets signed offline (valid 90 days from each signing) and a
+  timestamp renewed every week with a 30-day lease.
 
 The Python `0.x` and `1.0.x` installers were retired with CLI 2.0 and remain
 historical on the mirrors; their records are in [releases/](releases/).
