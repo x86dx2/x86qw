@@ -450,3 +450,29 @@ func TestAGrowingDialogKeepsItsTop(t *testing.T) {
 		t.Fatalf("the dialog moved from row %d to %d", want, got)
 	}
 }
+
+// The Keys tab shows the whole keyboard and every binding from the
+// narrowest dialog up.
+func TestTheKeysTabShowsEveryBinding(t *testing.T) {
+	for _, width := range []int{60, 64, 69, 72, 80} {
+		for _, lang := range []Lang{EN, PT} {
+			m := New(Config{Backend: &setup.Demo{Speed: 50}, Target: shortTarget(t), Lang: lang})
+			drive(m, tea.WindowSizeMsg{Width: width, Height: 40})
+			drive(m, run(m.Init())...)
+			drive(m, typeText("x86dx2")...)
+			drive(m, key("enter"))
+			m.opts.Keys = setup.KeyPresets["arrows"]
+			m.openModal("config")
+			lines, _, _ := m.modalView()
+			text := ansi.Strip(strings.Join(lines, "\n"))
+			for _, line := range strings.Split(text, "\n") {
+				if strings.Contains(line, " Z ") && !strings.Contains(line, "→") {
+					t.Errorf("%d columns: the → key is cut: %q", width, line)
+				}
+			}
+			if !strings.Contains(text, m.t("a.jump")) {
+				t.Errorf("%d columns, %s: the jump binding is cut", width, lang)
+			}
+		}
+	}
+}
