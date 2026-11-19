@@ -13,3 +13,14 @@ test('the Windows command turns on TLS 1.2 first', async () => {
     'powershell -c &quot;[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://qw.x86.com.br/install.ps1 | iex&quot;',
   );
 });
+
+// Opened in a browser, a bootstrap shows as text to read before running it;
+// without this, Cloudflare sends install.ps1 with no type and install.sh as
+// application/x-sh, and with nosniff both download.
+test('the bootstraps are served as text', async () => {
+  const rules = (await page('_headers')).split(/\n(?=\S)/);
+  for (const script of ['/install.sh', '/install.ps1']) {
+    const rule = rules.find((block) => block.startsWith(`${script}\n`)) ?? '';
+    assert.match(rule, /^ {2}Content-Type: text\/plain; charset=utf-8$/m, script);
+  }
+});
