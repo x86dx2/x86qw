@@ -82,7 +82,7 @@ and auditable, not a second way of organizing.
 | Base textures | `e4cb23d40aa2` | curated nQuake collection | current in the reference repository |
 | nQuake map selection | `e4cb23d40aa2` | curated nQuake collection | no bulk external download |
 | Match information | `e4cb23d40aa2` | curated nQuake collection | optional; outside the recommended profile |
-| Documentation and licenses | `e4cb23d40aa2+x86qw.2` | the snapshot's licenses and x86QW manuals | historical shortcuts and readmes do not go into the runtime |
+| Documentation and licenses | `e4cb23d40aa2+x86qw.3` | the snapshot's licenses and x86QW manuals | historical shortcuts and readmes do not go into the runtime |
 | QRP high resolution | `e4cb23d40aa2+x86qw.2` | nQuake snapshot with a UTF-8 x86QW manual | holds maps 1.00 and items 0.73; explicit order in `pak.lst` |
 | Final Arena | `1.20+nquake.e4cb23d40aa2+x86qw.6` | nQuake snapshot and x86QW's own gameplay | queue, statistics and the mod's options accessible; optional x86QW Ruleset before the personal layer; original 1.20 files and base source kept |
 | Pro-X | `1.1+x86qw.7` | public 1.1 release and x86QW gameplay | complete official runtime; the ENT fixes only four obsolete fields; optional x86QW Ruleset and personal configuration loaded last |
