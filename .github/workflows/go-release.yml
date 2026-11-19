@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "SemVer da CLI nativa (ex.: 2.0.0)"
+        description: "native CLI SemVer (e.g. 2.0.0)"
         required: true
         type: string
 
