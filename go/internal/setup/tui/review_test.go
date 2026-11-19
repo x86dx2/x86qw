@@ -495,3 +495,29 @@ func TestTheFooterKeepsEscAndWholeHints(t *testing.T) {
 		t.Fatalf("the last hit %+v does not end the line of %d", end, lipgloss.Width(line))
 	}
 }
+
+// On the narrowest windows the speed chart gives way, not the speed.
+func TestTheInstallSpeedShowsWhenNarrow(t *testing.T) {
+	for _, width := range []int{60, 62, 64, 80} {
+		m := New(Config{Backend: &setup.Demo{Speed: 50}, Target: shortTarget(t), Lang: EN})
+		drive(m, tea.WindowSizeMsg{Width: width, Height: 24})
+		drive(m, run(m.Init())...)
+		drive(m, typeText("x86dx2")...)
+		drive(m, key("enter"))
+		m.startInstall()
+		m.progress = <-m.instCh
+		m.progress.Speed = 12_345_678
+		_, bodyWidth, _ := m.bodyBox()
+		speed := m.size(int64(m.progress.Speed)) + "/s"
+		found := false
+		for _, line := range m.body(bodyWidth).lines {
+			found = found || strings.Contains(ansi.Strip(line), speed)
+		}
+		if !found {
+			t.Errorf("%d columns: no %s on the install screen", width, speed)
+		}
+		m.cancel()
+		for range m.instCh {
+		}
+	}
+}

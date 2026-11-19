@@ -693,11 +693,17 @@ func (m *Model) installPage(p *page) {
 	}
 	// Big percentage on the left, figures on the right.
 	digits := bigNumber(int(fraction*100+0.0001), m.glyphs)
+	// A narrow body shortens the speed chart, never the speed: room is kept
+	// for the widest one, "99.9 MB/s", so the chart does not twitch.
+	spark := sparkline(m, pr)
+	if over := 2 + max(digitsWidth, lipgloss.Width(digits[3])) + 2 + sparkColumns + 2 + 9 - p.width; over > 0 {
+		spark = ansi.Cut(spark, over, sparkColumns)
+	}
 	stats := []string{
 		p.st(t.Text).Bold(true).Render(m.size(pr.Done)) + p.st(t.Gray).Render(" "+m.t("inst.of")+" "+m.size(pr.Total)),
 		p.st(t.Text).Render(duration(pr.ETA)) + p.st(t.Gray).Render(" "+m.t("inst.left")),
 		m.filesLine(p, pr),
-		sparkline(m, pr) + p.st(t.Text2).Render("  "+m.size(int64(pr.Speed))+"/s"),
+		spark + p.st(t.Text2).Render("  "+m.size(int64(pr.Speed))+"/s"),
 	}
 	switch {
 	case pr.Paused && pr.Holding:
