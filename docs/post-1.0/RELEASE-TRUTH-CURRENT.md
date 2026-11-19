@@ -1,5 +1,9 @@
 # Release truth — current M3-first scope
 
+> **Historical.** This records the Python 1.0 line. The `release-truth.json`
+> URL and `maintenance/tools/` below no longer exist; today's state is in
+> [PROJECT-STATUS.md](../PROJECT-STATUS.md).
+
 The current deployment state is exclusively
 `https://qw.x86.com.br/api/v1/release-truth.json`.
 [`release-truth-current.json`](release-truth-current.json) holds

@@ -347,33 +347,6 @@ func ActiveRequirements(mode Mode, o Options) []Requirement {
 	return active
 }
 
-func teamSequence(mode Mode, o Options) []string {
-	count := RequestedNames(o, &mode)
-	result := make([]string, count)
-	if o.BotTeam != nil {
-		for index := range result {
-			result[index] = *o.BotTeam
-		}
-		return result
-	}
-	if len(mode.BotTeams) == 0 {
-		return result
-	}
-	populations := make([]int, len(mode.BotTeams))
-	populations[0] = 1
-	for index := 0; index < count; index++ {
-		selected := 0
-		for candidate := range populations {
-			if populations[candidate] < populations[selected] {
-				selected = candidate
-			}
-		}
-		result[index] = mode.BotTeams[selected]
-		populations[selected]++
-	}
-	return result
-}
-
 // LaunchCommands are the KTX commands run after the map loads.
 func LaunchCommands(mode Mode, mapName string, assets map[string]bool, o Options) ([]string, error) {
 	var commands []string
@@ -429,18 +402,17 @@ func LaunchCommands(mode Mode, mapName string, assets map[string]bool, o Options
 		if o.FillBots && len(mode.BotTeams) == 0 {
 			commands = append(commands, "cmd botcmd fill "+o.BotSkill)
 		} else {
-			sequence := teamSequence(mode, o)
-			for index, selected := range sequence {
-				team := ""
-				if o.BotTeam != nil && selected != "" {
-					team = " " + selected
-				}
-				commands = append(commands, "cmd botcmd addbot "+o.BotSkill+team)
-				if index+1 < len(sequence) {
+			team := ""
+			if o.BotTeam != nil {
+				team = " " + *o.BotTeam
+			}
+			for index := 0; index < count; index++ {
+				if index > 0 {
 					for wait := 0; wait < frogbotAddWaitFrames; wait++ {
 						commands = append(commands, "wait")
 					}
 				}
+				commands = append(commands, "cmd botcmd addbot "+o.BotSkill+team)
 			}
 		}
 		if len(o.BotNamePool) > 0 {

@@ -72,6 +72,34 @@ func TestPlanForDuelWithBots(t *testing.T) {
 	}
 }
 
+// Frogbots join one at a time, frames apart; KTX picks their team unless
+// --bot-team names one.
+func TestFrogbotsJoinOnTheirTeam(t *testing.T) {
+	modes, _ := LoadModes()
+	waits := strings.Repeat("wait | ", frogbotAddWaitFrames)
+	blue := "blue"
+	for _, c := range []struct {
+		mode    string
+		options Options
+		want    string
+	}{
+		{"2on2", Options{Bots: 3, BotSkill: "5"}, "if ($k_maxclients < 4) then k_maxclients 4 | if ($maxclients < 4) then maxclients 4 | " +
+			"team red | cmd botcmd skill 5 | cmd botcmd addbot 5 | " + waits + "cmd botcmd addbot 5 | " + waits + "cmd botcmd addbot 5"},
+		{"2on2", Options{Bots: 2, BotSkill: "7", BotTeam: &blue}, "if ($k_maxclients < 3) then k_maxclients 3 | if ($maxclients < 3) then maxclients 3 | " +
+			"cmd botcmd skill 7 | cmd botcmd addbot 7 blue | " + waits + "cmd botcmd addbot 7 blue"},
+		{"2on2on2", Options{FillBots: true, BotSkill: "5"}, "if ($k_maxclients < 6) then k_maxclients 6 | if ($maxclients < 6) then maxclients 6 | " +
+			"team red | cmd botcmd skill 5 | " + strings.Repeat("cmd botcmd addbot 5 | "+waits, 4) + "cmd botcmd addbot 5"},
+		{"ffa", Options{Bots: 2, BotSkill: "5", BotTeam: &blue}, "if ($k_maxclients < 3) then k_maxclients 3 | if ($maxclients < 3) then maxclients 3 | " +
+			"cmd botcmd skill 5 | cmd botcmd addbot 5 blue | " + waits + "cmd botcmd addbot 5 blue"},
+	} {
+		mode, _ := FindMode(modes, c.mode)
+		commands, err := LaunchCommands(mode, "dm6", map[string]bool{"bots/maps/dm6.bot": true}, c.options)
+		if got := strings.Join(commands, " | "); err != nil || got != c.want {
+			t.Errorf("%s: %v\n got %s\nwant %s", c.mode, err, got, c.want)
+		}
+	}
+}
+
 // ezQuake runs each +command of its command line through a 1024-byte line:
 // whatever the ruleset and the mode, no command is longer, or its end is lost.
 func TestLaunchCommandsFitTheConsoleLine(t *testing.T) {

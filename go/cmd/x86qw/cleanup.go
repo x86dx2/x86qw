@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/x86dx2/x86qw/go/internal/cliargs"
 	"github.com/x86dx2/x86qw/go/internal/lock"
@@ -11,8 +12,8 @@ import (
 )
 
 type cleanupArgs struct {
-	target              string
-	downloads, personal bool
+	target                   string
+	downloads, personal, yes bool
 }
 
 func (a *cleanupArgs) parser() *cliargs.Parser {
@@ -20,6 +21,7 @@ func (a *cleanupArgs) parser() *cliargs.Parser {
 	targetFlag(p, &a.target)
 	p.Bool(&a.downloads, "also what no component installed in fortress/progs and fortress/sound, yours included", "--downloads")
 	p.Bool(&a.personal, "also history, logs and demos", "--personal-data")
+	p.Bool(&a.yes, "deletes without asking", "--yes")
 	return p
 }
 
@@ -42,6 +44,21 @@ func runCleanup(args []string, stdout, stderr io.Writer) int {
 	}
 	if err := maint.RequireManagedIdentity(target, "cleanup"); err != nil {
 		return fail(err)
+	}
+	// Caches come back by themselves; what these remove is the user's.
+	if a.downloads || a.personal {
+		var what []string
+		retry := []string{"x86qw", "cleanup"}
+		if a.downloads {
+			what, retry = append(what, "what no component installed in fortress/progs and fortress/sound"), append(retry, "--downloads")
+		}
+		if a.personal {
+			what, retry = append(what, "history, logs and demos"), append(retry, "--personal-data")
+		}
+		question := "Delete " + strings.Join(what, " and ") + " in " + target + "?"
+		if proceed, code := confirm(question, append(retry, target), a.yes, stdout, stderr); !proceed {
+			return code
+		}
 	}
 	held, err := lock.Acquire(target, "cleanup")
 	if err != nil {
@@ -90,6 +107,6 @@ func itemCount(count int) string {
 func init() {
 	register(command{name: "cleanup", group: "Your data", order: 50, synopsis: "[TARGET]",
 		summary: "deletes caches and, when asked, personal data",
-		about:   "Deletes what x86QW can regenerate: caches and temporary files. What no component installed in fortress/progs and fortress/sound (server downloads, your own files too) and your personal data go only when you ask.",
+		about:   "Deletes what x86QW can regenerate: caches and temporary files. What no component installed in fortress/progs and fortress/sound (server downloads, your own files too) and your personal data go only when you ask; then it asks first and, without a terminal, needs --yes.",
 		flags:   (&cleanupArgs{}).parser, run: noName(runCleanup)})
 }

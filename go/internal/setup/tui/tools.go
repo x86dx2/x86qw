@@ -52,15 +52,15 @@ var tools = []toolSpec{
 		}},
 		{id: "restore", armed: true, changes: true, args: func(m *Model) []string {
 			if latest := latestBackup(); latest != "" {
-				return []string{"profile", "--target", m.target(), "--restore", latest}
+				return []string{"profile", "--target", m.target(), "--restore", latest, "--yes"}
 			}
 			return nil
 		}},
 	}},
 	{name: "cleanup", actions: []toolAction{
 		{id: "caches", args: onTarget("cleanup")},
-		{id: "downloads", args: onTarget("cleanup", "--downloads")},
-		{id: "personal", armed: true, args: onTarget("cleanup", "--downloads", "--personal-data")},
+		{id: "downloads", args: onTarget("cleanup", "--downloads", "--yes")},
+		{id: "personal", armed: true, args: onTarget("cleanup", "--downloads", "--personal-data", "--yes")},
 	}},
 	{name: "ui", report: onTarget("ui"), actions: []toolAction{{id: "open", open: func(m *Model) error {
 		return setup.OpenInBrowser(strings.TrimSpace(strings.Join(m.toolPanel.lines, "\n")))

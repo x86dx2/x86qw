@@ -2,10 +2,12 @@ package play
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/x86dx2/x86qw/go/internal/launchguard"
+	"github.com/x86dx2/x86qw/go/internal/lock"
 )
 
 // startGrace is how long Start watches ezQuake after handing it a KTX cfg:
@@ -28,6 +30,12 @@ func CheckBasedir(target string) error {
 func Start(target, executable, binarySHA string, launch *Launch) error {
 	if err := CheckBasedir(target); err != nil {
 		return err
+	}
+	// An update, repair or uninstall replaces or removes the files the
+	// client would run from; a hosted server holds the lock too, and stays.
+	if owner, err := lock.ReadOwner(filepath.Join(target, ".x86qw", "sessions", "active.lock")); err == nil && owner.OperationKind == "maintenance" &&
+		lock.Probe(owner.ControllerPID, owner.ControllerStartToken, owner.ControllerExecutable) == "alive" {
+		return fmt.Errorf("x86QW is running %s in this installation; wait for it to finish, then start ezQuake again", owner.Command)
 	}
 	arguments := launch.Arguments
 	var config *RuntimeConfig
