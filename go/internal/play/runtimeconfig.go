@@ -29,8 +29,6 @@ type RuntimeConfig struct {
 	journal string
 	digest  string
 	size    int
-	device  uint64
-	inode   uint64
 	staging string
 }
 
@@ -41,12 +39,10 @@ type controller struct {
 }
 
 type configRecord struct {
-	Device      *uint64 `json:"device"`
-	Inode       *uint64 `json:"inode"`
-	Path        string  `json:"path"`
-	SHA256      string  `json:"sha256"`
-	Size        int     `json:"size"`
-	StagingPath string  `json:"staging_path"`
+	Path        string `json:"path"`
+	SHA256      string `json:"sha256"`
+	Size        int    `json:"size"`
+	StagingPath string `json:"staging_path"`
 }
 
 type journalDocument struct {
@@ -54,7 +50,6 @@ type journalDocument struct {
 	Controller controller   `json:"controller"`
 	Format     int          `json:"format"`
 	Project    string       `json:"project"`
-	State      string       `json:"state"`
 	Type       string       `json:"type"`
 }
 
@@ -171,7 +166,7 @@ func Create(target string, payload []byte) (*RuntimeConfig, error) {
 		return nil, err
 	}
 	document := journalDocument{
-		Format: 1, Project: "x86qw", Type: "ktx-runtime-config", State: "intent", Controller: owner,
+		Format: 1, Project: "x86qw", Type: "ktx-runtime-config", Controller: owner,
 		Config: configRecord{
 			Path: "qw/" + config.Name, StagingPath: journalDir + "/.x86qw-ktx-session-" + token + ".stage",
 			SHA256: config.digest, Size: config.size,
@@ -192,14 +187,6 @@ func Create(target string, payload []byte) (*RuntimeConfig, error) {
 	}
 	_, writeErr := file.Write(payload)
 	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
-		return fail(err)
-	}
-	if config.device, config.inode, err = fileIdentity(config.staging); err != nil {
-		return fail(err)
-	}
-	document.State = "ready"
-	document.Config.Device, document.Config.Inode = &config.device, &config.inode
-	if err := writeJournal(config.journal, document, false); err != nil {
 		return fail(err)
 	}
 	if err := os.Link(config.staging, config.config); err != nil {
