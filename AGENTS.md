@@ -34,7 +34,7 @@ Estas regras valem antes de qualquer outra instrução deste arquivo.
 - Mensagens de commit e de terminal: inglês.
 
 ## Releases
-- Releases são feitos apenas em Go. O `prepare` e o deploy disparam automaticamente no merge.
+- Releases são feitos apenas em Go. `make release V=X.Y.Z` e `make prepare V=X.Y.Z` são manuais (veja `docs/runbooks/release.md`); só o deploy dispara automaticamente no merge.
 - Não adicione gates, tiers nem papéis de agente ao fluxo de release.
 
 ## Fluxo de trabalho
