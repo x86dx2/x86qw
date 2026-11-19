@@ -1,9 +1,8 @@
-Quake Retexturing Project no x86QW
+Quake Retexturing Project in x86QW
 ==================================
 
-Este componente instala os pacotes de texturas e brush models em alta
-resolucao preservados pelo nQuake. O x86QW gera qw/pak.lst para assegurar que
-os pacotes QRP tenham prioridade deterministica sobre as texturas base quando
-o addon estiver instalado.
+This component installs the high resolution texture and brush model packages
+nQuake preserves. x86QW writes qw/pak.lst so that the QRP packages take a
+deterministic priority over the base textures when the addon is installed.
 
-O aviso upstream original permanece preservado no snapshot do dist.
+The original upstream notice stays preserved in the dist snapshot.

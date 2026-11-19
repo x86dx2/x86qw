@@ -179,7 +179,7 @@
       "notes": "Keeps the upstream licenses and installs current, cross-platform x86QW documentation in place of the historical readmes and shortcuts."
     },
     "qrp-hires": {
-      "version": "e4cb23d40aa2+x86qw.2",
+      "version": "e4cb23d40aa2+x86qw.3",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
