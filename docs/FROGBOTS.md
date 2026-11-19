@@ -63,7 +63,7 @@ strongest swordsman. See the official pages of [Roger][roger],
 The bootstrap creates, without overwriting later edits:
 
 ```text
-quake-world/qw/x86qw-frogbot-names.json
+~/Games/x86qw/qw/x86qw-frogbot-names.json
 ```
 
 Edit only the `characters` list, keeping the rest of the contract:
@@ -161,9 +161,9 @@ Essential profile.
 Regular personal routes can be added without rebuilding the component:
 
 ```text
-quake-world/qw/bots/maps/mymap.bot
-quake-world/qw/race/routes/mymap.route
-quake-world/id1/maps/ctf/mymap.ent
+~/Games/x86qw/qw/bots/maps/mymap.bot
+~/Games/x86qw/qw/race/routes/mymap.route
+~/Games/x86qw/id1/maps/ctf/mymap.ent
 ```
 
 The file name must match the BSP. Symlinks and unsafe names are not taken

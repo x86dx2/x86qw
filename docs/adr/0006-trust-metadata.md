@@ -1,6 +1,7 @@
 # ADR 0006 — Trust metadata for the catalog and releases
 
-- **Status:** implemented locally; not published
+- **Status:** superseded by [0006-tuf-trust-metadata](0006-tuf-trust-metadata.md);
+  this draft was implemented locally and never published
 - **Date:** 2026-08-04
 - **Issue:** #48
 - **Scope:** authenticate the catalog and the public metadata without changing

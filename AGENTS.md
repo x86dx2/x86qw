@@ -31,10 +31,11 @@ Estas regras valem antes de qualquer outra instrução deste arquivo.
 
 ## Idioma
 - App, documentação e site: inglês (en-US) como idioma principal. Traduções pt-BR só nas tabelas de tradução.
+- Exceção: os CHANGELOGs dos mods (`dist/mods/*/*/x86qw/CHANGELOG.md`) e o README da camada x86QW do KTX (`dist/mods/ktx/1.47/x86qw/README.md`) ficam em pt-BR, porque traduzi-los força novas versões de pacote sem nada mudar no jogo.
 - Mensagens de commit e de terminal: inglês.
 
 ## Releases
-- Releases são feitos apenas em Go. O `prepare` e o deploy disparam automaticamente no merge.
+- Releases são feitos apenas em Go. `make release V=X.Y.Z` e `make prepare V=X.Y.Z` são manuais (veja `docs/runbooks/release.md`); só o deploy dispara automaticamente no merge.
 - Não adicione gates, tiers nem papéis de agente ao fluxo de release.
 
 ## Fluxo de trabalho
