@@ -56,7 +56,7 @@ Its `qwprogs.qvm` member has 1,578,544 bytes and SHA-256
 `71b3b9798ff91aa9d168ce8e8a28c2f2d23d54ba4c5ad84839dd4844b37e9c96`.
 The packager keeps the other members of the reference `ktx.pk3`, swaps the
 QVM and adds its official symbol map. The resulting x86QW package is
-`1.47+x86qw.21`; sources, override, mode catalog, gameplay and hashes live in
+`1.47+x86qw.22`; sources, override, mode catalog, gameplay and hashes live in
 the versioned inventory and in the ZIP's internal metadata.
 
 The recompiled x86QW QVM has 1,580,404 bytes and SHA-256

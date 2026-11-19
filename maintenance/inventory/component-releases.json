@@ -41,15 +41,15 @@
       "freshness": "reference-payload-current"
     },
     "ktx": {
-      "version": "1.47+x86qw.21",
+      "version": "1.47+x86qw.22",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "upstream-composed",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
-      "distribution_tag": "ktx-1.47-x86qw.21",
+      "distribution_tag": "ktx-1.47-x86qw.22",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
-      "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos oficiais do KTX 1.47. O QVM reprodutível x86QW acrescenta nomes Frogbot declarativos, habilidade aleatória, balanceamento automático, nomes únicos por função e um Coach de Quad opt-in para partidas casuais. O launcher expõe 24 modos, planos contextuais de teclas sem comandos crus e oferece somente mapas compatíveis com os recursos instalados. Arma, vida e interrupção por morte ficam restritas ao ToT; camisa, calça, skins e cores relacionais continuam sob controle do KTX e da configuração pessoal.",
+      "notes": "Part of nQuake's KTX selection; keeps its unique content and uses the official KTX 1.47 resources. The reproducible x86QW QVM adds declarative Frogbot names, random skill, automatic balancing, unique names per role and an opt-in Quad Coach for casual matches. The launcher exposes 24 modes and contextual key plans without raw commands, and offers only maps the installed resources support. Weapon, health and stop on death are limited to ToT; shirt, pants, skins and relational colors stay under the control of KTX and of the personal configuration.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
