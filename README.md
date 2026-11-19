@@ -53,7 +53,7 @@ curl -fsS https://qw.x86.com.br/install.sh | bash
 In PowerShell or the Command Prompt:
 
 ```powershell
-powershell -c "irm https://qw.x86.com.br/install.ps1 | iex"
+powershell -c "[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://qw.x86.com.br/install.ps1 | iex"
 ```
 
 The bootstrap downloads the `x86qw` native CLI from the `x86qw-cli-2.5.5` release on
