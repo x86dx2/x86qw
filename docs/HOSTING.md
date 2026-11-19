@@ -32,8 +32,8 @@ x86qw host td2 --map dm6
 x86qw host --menu
 ```
 
-Without a game and without `--mode`, the command asks for the game; `--menu`
-opens the app's Host screen. `--instance MODE:MAP:PORT[:bots]` adds more KTX
+Without `--mode`, KTX (the default game) stops and asks for `--mode` or
+`--menu`; `--menu` opens the app's Host screen. `--instance MODE:MAP:PORT[:bots]` adds more KTX
 servers to the same session (repeatable); QTV and QWFWD stay with the first:
 
 ```sh
