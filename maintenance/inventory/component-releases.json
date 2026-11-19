@@ -329,14 +329,14 @@
       ]
     },
     "total-destruction-2": {
-      "version": "2.22+x86qw.6",
+      "version": "2.22+x86qw.7",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "td2",
       "distribution_tag": "total-destruction-2-2.22",
       "license": "GPL-2.0-or-later",
       "license_url": "https://arenacamper.ddns.net/repo/quakeworld/quakeworld-TD2.22QW-server_PTBR.tar.gz",
-      "notes": "Última distribuição completa TD2QW preservada no dist. O runtime usa gamecode recompilado com correções estritas de compatibilidade: campo wad restaurado, gravação e preferências do jogador preservadas, comandos remotos removidos, plano de teclas impresso ao entrar e referência de som morta eliminada; saw_down.wav continua restaurado do saw.wav byte-idêntico.",
+      "notes": "The last complete TD2QW distribution, kept in dist. The runtime uses gamecode recompiled with strict compatibility fixes: the wad field restored, the player's recordings and preferences preserved, remote commands removed, a key plan printed on entry and a dead sound reference dropped; saw_down.wav is still restored from the byte-identical saw.wav.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
