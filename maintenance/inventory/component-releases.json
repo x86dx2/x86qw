@@ -7,7 +7,7 @@
   },
   "components": {
     "x86qw-client-bootstrap": {
-      "version": "dfb2ac9299f7+x86qw.4",
+      "version": "dfb2ac9299f7+x86qw.5",
       "reference_revision": "dfb2ac9299f72cbe399bf637dc3f7adc24295edb",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",

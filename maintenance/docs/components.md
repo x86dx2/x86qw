@@ -70,7 +70,7 @@ and auditable, not a second way of organizing.
 
 | Component | Offered version | Strategy | State |
 | --- | --- | --- | --- |
-| x86QW client base and startup | `dfb2ac9299f7+x86qw.4` | nQuake snapshot with the x86QW bootstrap | assisted x86QW Ruleset, temporary aliases on demand and a maximum texture size consistent with Apple Silicon's OpenGL 4.1, over a base common to stable and nightly |
+| x86QW client base and startup | `dfb2ac9299f7+x86qw.5` | nQuake snapshot with the x86QW bootstrap | assisted x86QW Ruleset, temporary aliases on demand and a maximum texture size consistent with Apple Silicon's OpenGL 4.1, over a base common to stable and nightly |
 | nQuake interface and visuals | `e4cb23d40aa2` | nQuake snapshot | current in the reference repository |
 | KTX x86QW | `1.47+x86qw.21` | official release over nQuake resources and x86QW integration | 24 modes, maps filtered by the actual resources, opt-in casual Quad Coach, 77 Frogbot routes, 54 Race routes, complete CTF/Race options, a contextual key plan, a manageable roster and a reproducible QVM |
 | Player skins | `e4cb23d40aa2` | curated nQuake collection | current in the reference repository |
