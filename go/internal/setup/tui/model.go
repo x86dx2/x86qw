@@ -1057,10 +1057,11 @@ func (m *Model) View() tea.View {
 		top = min(top, last)
 	}
 	m.tops[m.screen] = top
+	// What does not fit below the top scrolls; the top stays.
+	room = max(1, room-(top-first))
 	offset := 0
 	if total := len(body.lines); total > room {
 		// Scroll just enough to keep the focused block on screen.
-		top = first
 		offset = min(m.scroll[m.screen], total-room)
 		if body.focusBottom >= offset+room {
 			offset = body.focusBottom - room + 1
