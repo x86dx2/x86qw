@@ -192,3 +192,19 @@ func TestSchemaVersions(t *testing.T) {
 		t.Error("foreign schema field accepted")
 	}
 }
+
+// A move whose destination another move of the same archive takes as its
+// source would drop that member: a→b then b→c leaves only c.
+func TestArchiveMovesRefuseAChain(t *testing.T) {
+	move := func(target, source, destination string) any {
+		return object("target_archive", target, "source", source, "destination", destination)
+	}
+	chained := object("archive_moves", []any{move("x.zip", "a", "b"), move("x.zip", "b", "c")})
+	if err := validateArchiveEdits(chained, "upstream-package", "test"); err == nil {
+		t.Error("chained archive moves accepted")
+	}
+	apart := object("archive_moves", []any{move("x.zip", "a", "b"), move("y.zip", "b", "c")})
+	if err := validateArchiveEdits(apart, "upstream-package", "test"); err != nil {
+		t.Errorf("moves in two archives refused: %v", err)
+	}
+}
