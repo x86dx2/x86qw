@@ -187,7 +187,7 @@
       "notes": "Keeps the QRP packages and replaces the legacy UTF-16 notice with UTF-8 x86QW documentation; pak.lst sets the priority."
     },
     "final-arena": {
-      "version": "1.20+nquake.e4cb23d40aa2+x86qw.5",
+      "version": "1.20+nquake.e4cb23d40aa2+x86qw.6",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-overlay",
       "freshness": "upstream-current",
@@ -196,7 +196,7 @@
       "embedded_version": "Final Arena 1.20",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.gamers.org/pub/idgames2/planetquake/servers/arena/index.shtm",
-      "notes": "Preserva o cliente oficial 1.20 byte a byte por meio do conteúdo nQuake, mantém temporariamente o gamecode derivado por Rakk porque sua fonte pública não foi localizada, arquiva cliente, servidor e fonte oficiais e aplica somente o perfil de compatibilidade x86QW com plano de teclas impresso ao entrar.",
+      "notes": "Keeps the official 1.20 client byte for byte through the nQuake content, keeps for now the gamecode Rakk derived because its public source was not found, archives the official client, server and source and applies only the x86QW compatibility profile with a key plan printed on entry.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
