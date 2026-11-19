@@ -479,7 +479,9 @@ func TestTheRecipeDialogDrawsWhenVeryNarrow(t *testing.T) {
 // The setup keeps its place while the preflight's checks fill the dock: the
 // dock covers the body's last rows, the body does not move.
 func TestPreflightLeavesTheSetupInPlace(t *testing.T) {
-	for _, size := range [][2]int{{80, 24}, {60, 18}} {
+	// Not 60×18: six checks fill it exactly, so a disk or port warning's detail
+	// row, real on a busy runner, has to push the body.
+	for _, size := range [][2]int{{80, 24}} {
 		m := New(Config{Backend: &setup.Demo{Speed: 50}, Target: shortTarget(t), Lang: EN})
 		drive(m, tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 		drive(m, run(m.Init())...)
