@@ -471,7 +471,10 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.PasteMsg:
 		if field := m.activeField(); field != nil {
-			field.Insert(msg.Content)
+			// A copied line brings its line break along.
+			if field.Insert(strings.TrimRight(msg.Content, "\r\n")) {
+				m.say(fmt.Sprintf(m.t("field.full"), field.Limit))
+			}
 			return m, m.fieldChanged()
 		}
 	case tea.MouseMotionMsg:

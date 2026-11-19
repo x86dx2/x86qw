@@ -319,6 +319,7 @@ var texts = map[string][2]string{
 	"m.updates.off":            {"atualizações indisponíveis", "updates unavailable"},
 	"m.change.off":             {"Sem o catálogo publicado, nada novo pode ser instalado.", "Without the published catalog, nothing new can be installed."},
 	"key.unknown":              {"%s não serve como tecla de movimento", "%s cannot be a movement key"},
+	"field.full":               {"O campo guarda até %d caracteres; o resto ficou de fora", "The field holds up to %d characters; the rest was left out"},
 	"key.space":                {"espaço", "space"},
 	"unit.cm":                  {"cm", "cm"},
 	"port.tcp":                 {"TCP", "TCP"},

@@ -375,3 +375,30 @@ func TestTheFocusFollowsANewFavorite(t *testing.T) {
 		t.Fatalf("the focus left %s for %+v", address, focused)
 	}
 }
+
+// A copied line brings its line break along: pasted, it adds no space to
+// the folder; and what a field's limit leaves out is said.
+func TestPasteDropsTheLineBreakAndSaysWhatIsCut(t *testing.T) {
+	m := started(t, false)
+	drive(m, typeText("x86dx2")...)
+	drive(m, key("enter"))
+	m.openModal("folder")
+	m.modal.field["folder"].Set("")
+	drive(m, tea.PasteMsg{Content: "/Users/x86/Games/qw\r\n"})
+	if m.opts.Target != "/Users/x86/Games/qw" {
+		t.Fatalf("pasted folder %q", m.opts.Target)
+	}
+	m.modal = nil
+	m.openModal("server")
+	m.modal.tab = 1
+	for index, row := range focusables(m.modalRows()) {
+		if row.id == "password" {
+			m.modal.focus = index
+		}
+	}
+	m.toast = ""
+	drive(m, tea.PasteMsg{Content: strings.Repeat("Ab3", 14)})
+	if len(m.opts.Server.Password) != 32 || m.toast == "" {
+		t.Fatalf("password %q, toast %q", m.opts.Server.Password, m.toast)
+	}
+}
