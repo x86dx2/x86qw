@@ -12,7 +12,7 @@
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
       "distribution_component": "x86qw",
-      "notes": "Preserva a base nQuake e acrescenta uma camada inicial x86QW aplicada uma vez depois dos defaults upstream, além do x86QW Ruleset, uma experiência assistida sobre o ruleset default do ezQuake com iDrive, smart jump, movimento moderno, feedback visual e camada pessoal carregada por último. Mantém aliases temporários, desativa o cache incompatível com -nohome, limita texturas a 16384 e remove comandos incompatíveis com os clientes suportados.",
+      "notes": "Keeps the nQuake base and adds an initial x86QW layer applied once after the upstream defaults, plus the x86QW Ruleset, an assisted experience over ezQuake's default ruleset with iDrive, smart jump, modern movement, visual feedback and a personal layer loaded last. Keeps aliases temporary, turns off the cache that does not work with -nohome, limits textures to 16384 and removes commands the supported clients do not accept.",
       "text_replacements": [
         {
           "target": "non-gpl/qw/nquake_default.cfg",
@@ -176,7 +176,7 @@
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
-      "notes": "Mantém as licenças upstream e instala documentação x86QW atual e multiplataforma no lugar dos readmes e atalhos históricos."
+      "notes": "Keeps the upstream licenses and installs current, cross-platform x86QW documentation in place of the historical readmes and shortcuts."
     },
     "qrp-hires": {
       "version": "e4cb23d40aa2+x86qw.2",
@@ -184,7 +184,7 @@
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
       "embedded_version": "maps-1.00+items-0.73",
-      "notes": "Preserva os pacotes QRP e substitui o aviso UTF-16 legado por documentação x86QW em UTF-8; a prioridade é controlada por pak.lst."
+      "notes": "Keeps the QRP packages and replaces the legacy UTF-16 notice with UTF-8 x86QW documentation; pak.lst sets the priority."
     },
     "final-arena": {
       "version": "1.20+nquake.e4cb23d40aa2+x86qw.5",
@@ -273,7 +273,7 @@
       ]
     },
     "team-fortress": {
-      "version": "2.9+nquake.e4cb23d40aa2+x86qw.8",
+      "version": "2.9+nquake.e4cb23d40aa2+x86qw.9",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-overlay",
       "freshness": "upstream-current",
@@ -282,7 +282,7 @@
       "embedded_version": "Team Fortress 2.9",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.frag-net.com/mod_quake_fortress.html",
-      "notes": "Preserva mapas, modelos, sons e LOCs Team Fortress do nQuake, arquiva o cliente completo 2.8 exigido pela atualização server-only 2.9, restaura bounce2.wav de origem KTX verificável e usa gamecode 2.9 recompilado sem binds remotos forçados; controles permanecem no perfil local x86QW e a ajuda aparece somente sob demanda.",
+      "notes": "Keeps the nQuake Team Fortress maps, models, sounds and LOCs, archives the complete 2.8 client the server-only 2.9 update requires, restores bounce2.wav from a verifiable KTX source and uses the 2.9 gamecode recompiled without forced remote binds; the controls stay in the local x86QW profile and the help shows only on demand.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",

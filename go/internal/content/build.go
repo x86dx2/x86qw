@@ -546,7 +546,7 @@ func (p *Project) NormalizeCatalogReleaseMetadata(catalog *Object) error {
 		case "ezquake":
 			channel := pyjson.Repr(getOr(item, "channel", ""))
 			setDefault(item, "mirror_title", "x86QW Content · ezQuake "+channel+" "+version)
-			setDefault(item, "mirror_notes", ezquakeMirrorNotes(channel, version))
+			item.Set("mirror_notes", ezquakeMirrorNotes(channel, version))
 			item.Set("mirror_latest", false)
 		default:
 			item.Set("mirror_latest", false)

@@ -1,19 +1,19 @@
-# Camada x86QW do KTX 1.47
+# The x86QW layer of KTX 1.47
 
-Este diretório é uma fronteira de autoria e proveniência, não uma árvore que é
-copiada integralmente para a instalação. Cada contexto possui uma função única:
+This directory is a boundary of authorship and provenance, not a tree that is
+copied whole into the installation. Each part has a single role:
 
-- `catalog/`: modos e dados declarativos do launcher; os perfis Frogbot ficam
-  isolados em `catalog/frogbots/`;
-- `config/`: configuração do cliente, ajuda por teclas e presets projetados
-  pelo inventário para `qw/`;
-- `runtime/`: QVM e mapa de símbolos efetivamente empacotados;
-- `source/`: cinco patches numerados usados para reproduzir o runtime (data
-  determinística, identidades/habilidade, balanceamento, nomes por função e
-  Coach de Quad opcional);
-- `policy/`: regras verificáveis de composição da camada `ktx.pk3`;
-- `CHANGELOG.md`: histórico da integração x86QW.
+- `catalog/`: modes and declarative launcher data; the Frogbot profiles stay
+  apart in `catalog/frogbots/`;
+- `config/`: client configuration, key help and presets the inventory places
+  in `qw/`;
+- `runtime/`: the QVM and symbol map that are actually packaged;
+- `source/`: five numbered patches used to reproduce the runtime (a
+  deterministic date, identities/skill, balancing, names per role and the
+  optional Quad Coach);
+- `policy/`: verifiable rules for composing the `ktx.pk3` layer;
+- `CHANGELOG.md`: history of the x86QW integration.
 
-`maintenance/inventory/components.json` declara explicitamente quais arquivos
-são instalados, quais entram no PK3 e quais existem apenas para build ou
-validação. Nenhuma dessas subpastas é criada no diretório do jogador.
+`maintenance/inventory/components.json` declares explicitly which files are
+installed, which go into the PK3 and which exist only for building or
+validation. None of these subfolders is created in the player's directory.

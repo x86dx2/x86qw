@@ -1,7 +1,7 @@
 {
   "format": 1,
   "project": "x86qw",
-  "generated_at": "2026-11-19T00:36:09Z",
+  "generated_at": "2026-11-19T02:30:49Z",
   "packages": [
     {
       "component": "core",
@@ -51,7 +51,7 @@
       ],
       "distribution_path": "clients/ezquake/nightly/20260616-101233_a86996a/linux-x86_64/20260616-101233_a86996a_ezQuake-x86_64.AppImage",
       "mirror_title": "x86QW Content · ezQuake nightly 20260616-101233_a86996a",
-      "mirror_notes": "Cliente ezQuake nightly 20260616-101233_a86996a preservado pela distribuição x86QW.",
+      "mirror_notes": "ezQuake nightly client 20260616-101233_a86996a, preserved by the x86QW distribution.",
       "mirror_latest": false
     },
     {
@@ -76,7 +76,7 @@
       ],
       "distribution_path": "clients/ezquake/nightly/20260616-101233_a86996a/macos-universal/20260616-101233_a86996a_ezQuake-macOS-universal.zip",
       "mirror_title": "x86QW Content · ezQuake nightly 20260616-101233_a86996a",
-      "mirror_notes": "Cliente ezQuake nightly 20260616-101233_a86996a preservado pela distribuição x86QW.",
+      "mirror_notes": "ezQuake nightly client 20260616-101233_a86996a, preserved by the x86QW distribution.",
       "mirror_latest": false
     },
     {
@@ -101,7 +101,7 @@
       ],
       "distribution_path": "clients/ezquake/nightly/20260616-101233_a86996a/windows-x64/20260616-101233_a86996a_ezquake.exe",
       "mirror_title": "x86QW Content · ezQuake nightly 20260616-101233_a86996a",
-      "mirror_notes": "Cliente ezQuake nightly 20260616-101233_a86996a preservado pela distribuição x86QW.",
+      "mirror_notes": "ezQuake nightly client 20260616-101233_a86996a, preserved by the x86QW distribution.",
       "mirror_latest": false
     },
     {
@@ -126,7 +126,7 @@
       ],
       "distribution_path": "clients/ezquake/stable/3.6.9/linux-x86_64/ezQuake-linux-x86_64.zip",
       "mirror_title": "x86QW Content · ezQuake stable 3.6.9",
-      "mirror_notes": "Cliente ezQuake stable 3.6.9 preservado pela distribuição x86QW.",
+      "mirror_notes": "ezQuake stable client 3.6.9, preserved by the x86QW distribution.",
       "mirror_latest": false
     },
     {
@@ -151,7 +151,7 @@
       ],
       "distribution_path": "clients/ezquake/stable/3.6.9/macos-universal/ezQuake-macOS-universal.zip",
       "mirror_title": "x86QW Content · ezQuake stable 3.6.9",
-      "mirror_notes": "Cliente ezQuake stable 3.6.9 preservado pela distribuição x86QW.",
+      "mirror_notes": "ezQuake stable client 3.6.9, preserved by the x86QW distribution.",
       "mirror_latest": false
     },
     {
@@ -176,7 +176,7 @@
       ],
       "distribution_path": "clients/ezquake/stable/3.6.9/windows-x64/ezQuake-windows-x64.zip",
       "mirror_title": "x86QW Content · ezQuake stable 3.6.9",
-      "mirror_notes": "Cliente ezQuake stable 3.6.9 preservado pela distribuição x86QW.",
+      "mirror_notes": "ezQuake stable client 3.6.9, preserved by the x86QW distribution.",
       "mirror_latest": false
     },
     {
@@ -707,14 +707,14 @@
     {
       "component": "team-fortress",
       "package": "team-fortress",
-      "version": "2.9+nquake.e4cb23d40aa2+x86qw.8",
+      "version": "2.9+nquake.e4cb23d40aa2+x86qw.9",
       "channel": "content",
       "platform": "any",
       "architecture": "any",
-      "filename": "team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.8.zip",
-      "size": 8566899,
-      "sha256": "cca80b9294e2c4b1d2b7046b2d6819d2b066ebb054c9a7d6efcf737deb9bc4a9",
-      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.8.zip",
+      "filename": "team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.9.zip",
+      "size": 8566864,
+      "sha256": "1ff4825edf9ff4a445795190d06a00fe100776dc59296819f3572f53258e5c0c",
+      "origin_url": "https://github.com/x86dx2/x86qw/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.9.zip",
       "license": "upstream-distfiles-terms",
       "license_url": "https://www.frag-net.com/mod_quake_fortress.html",
       "source_urls": [
@@ -724,15 +724,15 @@
       ],
       "redistribution_reviewed": true,
       "urls": [
-        "https://github.com/x86dx2/x86qw/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.8.zip",
-        "https://gitlab.com/api/v4/projects/84813414/packages/generic/team-fortress/2.9+nquake.e4cb23d40aa2+x86qw.8/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.8.zip"
+        "https://github.com/x86dx2/x86qw/releases/download/team-fortress-2.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.9.zip",
+        "https://gitlab.com/api/v4/projects/84813414/packages/generic/team-fortress/2.9+nquake.e4cb23d40aa2+x86qw.9/team-fortress-2.9+nquake.e4cb23d40aa2+x86qw.9.zip"
       ],
-      "mirror_title": "x86QW Content · Team Fortress 2.9+nquake.e4cb23d40aa2+x86qw.8",
+      "mirror_title": "x86QW Content · Team Fortress 2.9+nquake.e4cb23d40aa2+x86qw.9",
       "mirror_notes": "Versioned content packages of the x86QW distribution.",
       "mirror_latest": false,
       "source_commit": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "release_url": "https://www.frag-net.com/mod_quake_fortress.html",
-      "release_notes": "Preserva mapas, modelos, sons e LOCs Team Fortress do nQuake, arquiva o cliente completo 2.8 exigido pela atualização server-only 2.9, restaura bounce2.wav de origem KTX verificável e usa gamecode 2.9 recompilado sem binds remotos forçados; controles permanecem no perfil local x86QW e a ajuda aparece somente sob demanda.",
+      "release_notes": "Keeps the nQuake Team Fortress maps, models, sounds and LOCs, archives the complete 2.8 client the server-only 2.9 update requires, restores bounce2.wav from a verifiable KTX source and uses the 2.9 gamecode recompiled without forced remote binds; the controls stay in the local x86QW profile and the help shows only on demand.",
       "upstream_version": "2.9"
     },
     {

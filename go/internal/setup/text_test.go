@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/x86dx2/x86qw/go/internal/play"
 )
 
 func TestTextsSpeakBothLanguages(t *testing.T) {
@@ -153,5 +155,22 @@ func TestDemoAppliesOnlyWhatIsAdded(t *testing.T) {
 	stack, _ := d.Stack(context.Background(), "/x")
 	if len(stack.Processes) != 3 || stack.Processes[0].Address != "127.0.0.1" {
 		t.Fatalf("the demo server follows the choices: %+v", stack)
+	}
+}
+
+// modes.json speaks English, so the English interface shows each KTX mode
+// as the catalog has it, and the Portuguese one has a word for every mode.
+func TestModeDescriptionsSpeakBothLanguages(t *testing.T) {
+	modes, err := play.LoadModes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range modes {
+		if got := Localize(LangEN, "mode", mode.Key+".d", mode.Description); got != mode.Description {
+			t.Errorf("%s in English: %q, catalog %q", mode.Key, got, mode.Description)
+		}
+		if got := Localize(LangPT, "mode", mode.Key+".d", mode.Description); got == mode.Description {
+			t.Errorf("%s has no Portuguese description", mode.Key)
+		}
 	}
 }

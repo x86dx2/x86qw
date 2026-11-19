@@ -1,135 +1,135 @@
-# KTX 1.47 no x86QW
+# KTX 1.47 in x86QW
 
-## Camadas
+## Layers
 
-1. nQuake fornece a seleção histórica e os recursos exclusivos ainda úteis.
-2. KTX 1.47 substitui os arquivos compartilhados por configurações, bots, LOCs e recursos oficiais.
-3. x86QW aplica integração, perfil local e uma extensão QVM mínima e reproduzível para identidades Frogbot.
+1. nQuake provides the historical selection and the unique resources that are still useful.
+2. KTX 1.47 replaces the shared files with official configurations, bots, LOCs and resources.
+3. x86QW applies the integration, a local profile and a minimal, reproducible QVM extension for Frogbot identities.
 
-## Alterações x86QW
+## x86QW changes
 
-- adiciona o Coach de Quad opcional `k_x86qw_quadcoach`, ativado apenas pelo
-  x86QW Ruleset local, com avisos globais aos 15 e 5 segundos e no respawn;
-- recompila o QVM 1.47 com patches isolados que cacheiam identidades Frogbot
-  e distribuem inclusões automáticas pelo número de equipes do usermode;
-- corrige a tabela upstream de nomes Frogbot e usa o índice global do bot nas
-  listas de aliados e inimigos, evitando identidades repetidas nos modos com
-  três equipes;
-- remove do QVM x86QW as cvars experimentais de camisa e calça; nomes continuam
-  customizáveis, mas cores, skins e cores de equipe seguem somente o KTX;
-- fixa o metadado de compilação na data do tag 1.47, eliminando a variação de
-  `__DATE__` e `__TIME__` entre reconstruções do mesmo QVM;
-  quando não recebe um perfil, o sorteio e os nomes originais permanecem intactos;
-- configura o servidor local para `sv_progtype 2`;
-- deixa `k_defmap` sob controle do launcher, evitando a troca automática para
-  `dm3`, a segunda carga do QVM e o aviso `SV_PreSpawn_f from different level`;
-- deixa `k_defmode` sob controle do launcher e inicia diretamente no usermode
-  selecionado, sem aplicar primeiro o padrão 4on4;
-- declara em `catalog/modes.json` os 17 usermodes nativos do KTX 1.47 e sete variações
-  oficiais: Midair, DMM4, Instagib, LGC, Rocket Arena, Race e Practice;
-- ativa as sete variações por perfis estáticos de entrada única, somente
-  depois que o KTX confirma a conexão local; a remoção imediata do alias evita
-  alternância ou recarga em ciclo;
-- expõe no launcher os bots Frogbot por quantidade ou preenchimento, habilidade
-  1-20 e equipe; arma, vida e interrupção por morte ficam limitadas ao ToT;
-  habilita o subsistema antes do mapa e só oferece mapas que possuam uma rota
-  oficial empacotada ou uma rota pessoal regular;
-- preserva a nomenclatura nativa do KTX: `3on3` forma duas equipes de três e
-  `2on2on2` forma três equipes de dois; os aliases `3v3` e `2v2v2` continuam
-  aceitos pela CLI; modos com
-  elenco fixo oferecem exatamente as vagas restantes e distribuem os bots para
-  completar cada equipe;
-- oferece identidades Frogbot em três perfis: padrão KTX sem customização, catálogo
-  One Piece x86QW embaralhado por lançamento e lista pessoal preservada pelo
-  instalador; mantém o prefixo `/` e deixa camisa/calça sob controle do KTX;
-- filtra Race pelas 54 rotas oficiais ou rotas pessoais e expõe corrida solo, simultânea ou em
-  match, os três sistemas de pontuação, pacemaker e ocultação de corredores;
-- habilita CTF com os seis ENTs oficiais da rotação KTX (`e2m2`, `e1m5`,
-  `e1m3`, `e2m5`, `e1m4` e `e3m3`), cada um validado com uma bandeira por
-  equipe, e configura o carregamento dos ENTs antes de abrir o mapa;
-- declara Frogbot, CTF e Race como políticas de recurso de mapa no catálogo; o
-  menu cruza essas políticas com os BSPs efetivamente instalados antes de
-  mostrar uma escolha;
-- usa `dm4` como fallback Essential para Midair, DMM4, Instagib e LGC, e limita
-  o ToT aos três mapas que possuem configuração específica no upstream;
-- expõe no CTF os cinco estilos de gancho, gancho desligado, runas, troca de
-  equipes e spawn baseado na base; Race e CTF recusam bots como exige o QVM;
-- ao iniciar KTX, aplica exclusivamente ao perfil KTX o mapa de teclas
-  competitivo do nQuake, incluindo quick weapons, mensagens de equipe, timers
-  e comandos da partida;
-- reserva `F5`, `F6`, `F11` e, conforme o modo, `H`, `I`, `M`, `X` e `Z` para
-  ações contextuais; `INS`, `DEL`, `HOME` e `END` gerenciam sessões Frogbot;
-  carrega o arquivo pessoal ao fim do perfil e reaplica depois dele somente o
-  bind universal `F12` para sair, preservando todos os demais controles;
-- mantém os exemplos do arquivo pessoal independentes de aliases internos;
-- mantém em aliases de sessão o número atual de bots e a habilidade dos
-  próximos bots: a lotação do modo não pode ser excedida, `DEL` reabre a vaga e
-  `HOME`/`END` alteram a habilidade cumulativamente;
-- substitui a mensagem genérica do nQuake pela ajuda contextual composta apenas
-  por teclas realmente vinculadas;
-- apresenta em `F10`, em blocos coloridos e multilinha, todos os controles do
-  mapa nQuake usado pelo KTX, abrindo o console para que a referência completa
-  permaneça visível;
-- registra o preset escolhido no launcher e oferece `ktx_mode` para confirmá-lo
-  novamente no console e ao final da ajuda de `F10`;
-- imprime automaticamente o plano de teclas do modo assim que o mapa abre;
-- mantém os comandos oficiais no catálogo como dados de validação, mas mostra ao
-  jogador somente as teclas que os executam; o `F10` combina o mapa comum com
-  o plano do modo ativo;
-- compõe a ajuda contextual por aliases curtos, eliminando 24 CFGs duplicados;
-- padroniza em 26 caracteres a coluna de teclas e comandos e amplia o console
-  para 80% da tela quando a ajuda é solicitada;
-- aplica o perfil KTX no evento de entrada correspondente ao usermode, depois
-  que o QVM conclui a conexão local, tornando os binds e o `F10` determinísticos;
-- força a conexão local inicial como jogador; isso evita o caminho de espectador
-  incompatível entre o QVM atual e o servidor integrado do ezQuake 3.6.9;
-- aplica os valores de timing e salto do KTX somente ao KTX e restaura o padrão
-  nQuake ao abrir outro mod, impedindo o vazamento pelo `config.cfg` pessoal;
-- preserva a ordem determinística de pacotes.
-- preserva integralmente as skins e cores relacionais definidas pelo KTX e pela
-  configuração pessoal, inclusive nas sessões que contêm Frogbots;
-- não envia cores individuais dos perfis de nomes, mantendo camisa, calça e
-  cores de equipe sob as regras nativas do KTX;
-- força `k_fb_admin_only 1` somente em hosts com bots ligados a uma interface
-  externa, depois da configuração pessoal;
-- organiza a camada mantida pelo projeto em `catalog/`, `config/`, `runtime/`,
-  `source/` e `policy/`, sem alterar os caminhos instalados.
+- adds the optional Quad Coach `k_x86qw_quadcoach`, turned on only by the
+  local x86QW Ruleset, with global warnings at 15 and 5 seconds and at respawn;
+- recompiles the 1.47 QVM with isolated patches that cache Frogbot identities
+  and spread automatic additions over the usermode's number of teams;
+- fixes the upstream Frogbot name table and uses the bot's global index in the
+  ally and enemy lists, avoiding repeated identities in the modes with
+  three teams;
+- removes the experimental shirt and pants cvars from the x86QW QVM; names stay
+  customizable, but colors, skins and team colors follow KTX alone;
+- pins the build metadata to the date of the 1.47 tag, removing the variation of
+  `__DATE__` and `__TIME__` between rebuilds of the same QVM;
+  when it gets no profile, the draw and the original names stay intact;
+- sets the local server to `sv_progtype 2`;
+- leaves `k_defmap` under the launcher's control, avoiding the automatic switch to
+  `dm3`, the second QVM load and the `SV_PreSpawn_f from different level` warning;
+- leaves `k_defmode` under the launcher's control and starts directly in the
+  selected usermode, without applying the 4on4 default first;
+- declares in `catalog/modes.json` the 17 native KTX 1.47 usermodes and seven official
+  variations: Midair, DMM4, Instagib, LGC, Rocket Arena, Race and Practice;
+- turns the seven variations on through static single-entry profiles, only
+  after KTX confirms the local connection; removing the alias at once avoids
+  toggling or reloading in a loop;
+- exposes the Frogbot bots in the launcher by count or by filling, skill
+  1-20 and team; weapon, health and stop on death are limited to ToT;
+  enables the subsystem before the map and only offers maps that have an
+  official packaged route or a regular personal route;
+- keeps KTX's native naming: `3on3` forms two teams of three and
+  `2on2on2` forms three teams of two; the aliases `3v3` and `2v2v2` are still
+  accepted by the CLI; modes with
+  a fixed roster offer exactly the remaining slots and spread the bots to
+  complete each team;
+- offers Frogbot identities in three profiles: the KTX default without customization, the
+  x86QW One Piece catalog shuffled per launch and a personal list the installer
+  preserves; keeps the `/` prefix and leaves shirt/pants under KTX's control;
+- filters Race by the 54 official routes or personal routes and exposes solo, simultaneous or
+  match racing, the three scoring systems, pacemaker and hiding racers;
+- enables CTF with the six official ENTs of the KTX rotation (`e2m2`, `e1m5`,
+  `e1m3`, `e2m5`, `e1m4` and `e3m3`), each validated with one flag per
+  team, and sets up loading the ENTs before opening the map;
+- declares Frogbot, CTF and Race as map resource policies in the catalog; the
+  menu matches these policies against the BSPs actually installed before
+  showing a choice;
+- uses `dm4` as the Essential fallback for Midair, DMM4, Instagib and LGC, and limits
+  ToT to the three maps that have a specific configuration upstream;
+- exposes in CTF the five hook styles, hook off, runes, team
+  swapping and base spawns; Race and CTF refuse bots, as the QVM requires;
+- when KTX starts, applies to the KTX profile alone the competitive nQuake key
+  map, including quick weapons, team messages, timers
+  and match commands;
+- reserves `F5`, `F6`, `F11` and, depending on the mode, `H`, `I`, `M`, `X` and `Z` for
+  contextual actions; `INS`, `DEL`, `HOME` and `END` manage Frogbot sessions;
+  loads the personal file at the end of the profile and reapplies after it only the
+  universal `F12` bind to quit, preserving every other control;
+- keeps the examples of the personal file independent of internal aliases;
+- keeps the current number of bots and the skill of the next bots in session
+  aliases: the mode's capacity cannot be exceeded, `DEL` reopens the slot and
+  `HOME`/`END` change the skill cumulatively;
+- replaces nQuake's generic message with contextual help made only of
+  keys that are actually bound;
+- shows on `F10`, in colored multi-line blocks, every control of the
+  nQuake key map KTX uses, opening the console so that the complete reference
+  stays visible;
+- records the preset chosen in the launcher and offers `ktx_mode` to confirm it
+  again in the console and at the end of the `F10` help;
+- prints the mode's key plan automatically as soon as the map opens;
+- keeps the official commands in the catalog as validation data, but shows the
+  player only the keys that run them; `F10` combines the common map with
+  the active mode's plan;
+- builds the contextual help from short aliases, removing 24 duplicate CFGs;
+- standardizes the key and command column at 26 characters and widens the console
+  to 80% of the screen when the help is requested;
+- applies the KTX profile on the entry event matching the usermode, after
+  the QVM completes the local connection, making the binds and `F10` deterministic;
+- forces the first local connection as a player; this avoids the spectator path
+  that is incompatible between the current QVM and ezQuake 3.6.9's integrated server;
+- applies the KTX timing and jump values to KTX alone and restores the nQuake
+  default when another mod opens, preventing the leak through the personal `config.cfg`;
+- preserves the deterministic package order.
+- fully preserves the skins and relational colors set by KTX and by the
+  personal configuration, including in sessions that contain Frogbots;
+- does not send individual colors from the name profiles, keeping shirt, pants and
+  team colors under KTX's native rules;
+- forces `k_fb_admin_only 1` only on hosts with bots bound to an
+  external interface, after the personal configuration;
+- organizes the layer the project maintains into `catalog/`, `config/`, `runtime/`,
+  `source/` and `policy/`, without changing the installed paths.
 
-## Pendências conhecidas
+## Known pending items
 
-- `1.48-dev` é desenvolvimento no master, não uma release promovida.
+- `1.48-dev` is development on master, not a promoted release.
 
-## Validação de runtime
+## Runtime validation
 
-- 30/07/2026: ezQuake 3.6.9 e nightly `20260616-101233_a86996a` em `dm6`;
-- houve uma única carga do QVM 1.47, o mapa escolhido foi preservado e o jogador entrou;
-- nenhum `SV_PreSpawn_f from different level`, erro de QVM ou comando desconhecido.
-- 30/07/2026: Duel iniciou diretamente em `1on1`; Midair foi ativado uma vez
-  em `povdmm4`; Race carregou a rota de `dm6` sem ciclo de alternância; Practice
-  confirmou o servidor destravado. Todos os processos encerraram sem órfãos.
-- 30/07/2026: dois crashes reproduzidos no ezQuake 3.6.9 foram identificados
-  como `SIGSEGV` em `SV_SpawnSpectator`, ao receber `classname` nulo do runtime
-  QVM. A conexão local explícita com `spectator 0` permaneceu ativa no mesmo
-  cenário de Duel que encerrava em aproximadamente oito segundos.
-- 31/07/2026: CTF iniciou no ezQuake 3.6.9 em janela `1280x720`, carregou
-  `e2m2`, executou `configs/usermodes/ctf/default.cfg` e entrou em `standby`
-  com um jogador e 16 vagas. O teste usou `cfg_save_onquit 0` e preservou o
-  hash da configuração pessoal.
-- 01/08/2026: os 24 modos foram abertos no ezQuake 3.6.9 em janela
-  `1280x720`; os 22 modos compatíveis com Frogbot receberam o bot escolhido
-  durante a primeira entrada. CTF e Race permaneceram sem bots, conforme o
-  contrato do QVM. Practice deixou de aguardar uma segunda entrada inexistente.
+- 2026-07-30: ezQuake 3.6.9 and nightly `20260616-101233_a86996a` on `dm6`;
+- the 1.47 QVM loaded once, the chosen map was kept and the player joined;
+- no `SV_PreSpawn_f from different level`, QVM error or unknown command.
+- 2026-07-30: Duel started directly in `1on1`; Midair was turned on once
+  on `povdmm4`; Race loaded the `dm6` route without a toggling loop; Practice
+  confirmed the unlocked server. Every process ended without orphans.
+- 2026-07-30: two crashes reproduced on ezQuake 3.6.9 were identified
+  as `SIGSEGV` in `SV_SpawnSpectator`, on receiving a null `classname` from the
+  QVM runtime. The explicit local connection with `spectator 0` stayed up in the same
+  Duel scenario that used to end after about eight seconds.
+- 2026-07-31: CTF started on ezQuake 3.6.9 in a `1280x720` window, loaded
+  `e2m2`, ran `configs/usermodes/ctf/default.cfg` and entered `standby`
+  with one player and 16 slots. The test used `cfg_save_onquit 0` and kept the
+  hash of the personal configuration.
+- 2026-08-01: the 24 modes were opened on ezQuake 3.6.9 in a
+  `1280x720` window; the 22 Frogbot-compatible modes received the chosen bot
+  during the first entry. CTF and Race stayed without bots, as the
+  QVM contract requires. Practice no longer waits for a second entry that never comes.
 
-## Correção encaminhada ao cliente
+## Fix sent to the client
 
-- o ruído de registros duplicados após `vid_restart` não pertence ao KTX; a
-  correção genérica foi enviada ao ezQuake no
+- the duplicate registration noise after `vid_restart` does not belong to KTX; the
+  generic fix was sent to ezQuake in
   [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150).
 
-## Deliberadamente não alterado
+## Deliberately unchanged
 
-- nenhum modo, votação, arma, regra, bot ou mapa foi criado no gamecode; as
-  extensões apenas leem identidades declarativas, sorteiam a habilidade quando
-  solicitado e corrigem o balanceamento automático nos usermodes nativos de
-  duas ou três equipes; cores e skins continuam integralmente sob o KTX;
-- o launcher apenas expõe usermodes e comandos já existentes no KTX 1.47.
+- no mode, vote, weapon, rule, bot or map was created in the gamecode; the
+  extensions only read declarative identities, draw the skill when
+  asked and fix automatic balancing in the native usermodes with
+  two or three teams; colors and skins stay entirely under KTX;
+- the launcher only exposes usermodes and commands that already exist in KTX 1.47.

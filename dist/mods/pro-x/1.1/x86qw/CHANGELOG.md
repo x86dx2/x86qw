@@ -1,41 +1,41 @@
-# Pro-X 1.1 no x86QW
+# Pro-X 1.1 in x86QW
 
-## Original preservado
+## Original preserved
 
-- `upstream/prox_11.zip`: pacote público completo 1.1, 9095898 bytes, SHA-256 `8f68563cd5abec1a1fbf2b1ec2288a96693c7bad12b2ab6ce977451c1ee72010`;
-- contém gamecode, mídia, seis mapas `proxmap1` a `proxmap6` e o ENT opcional de `q1_q3dm13`.
+- `upstream/prox_11.zip`: complete public 1.1 package, 9095898 bytes, SHA-256 `8f68563cd5abec1a1fbf2b1ec2288a96693c7bad12b2ab6ce977451c1ee72010`;
+- it holds the gamecode, media, six maps `proxmap1` to `proxmap6` and the optional ENT for `q1_q3dm13`.
 
-O autor informou publicamente que não liberaria a fonte. O x86QW preserva o binário original e não tenta decompilá-lo ou reimplementá-lo.
+The author stated publicly that he would not release the source. x86QW preserves the original binary and does not try to decompile or reimplement it.
 
-## Alterações x86QW
+## x86QW changes
 
-- `runtime/maps/proxmap1.ent` reproduz exatamente o lump de entidades do BSP original, removendo somente quatro chaves obsoletas `"noname" "1"`;
-- a correção elimina quatro mensagens `noname is not a field` sem mudar entidades, arena, geometria ou gameplay;
-- força a leitura de entidades externas somente ao iniciar o Pro-X, inclusive se
-  uma configuração pessoal antiga deixou `sv_loadentfiles` desativado;
-- inicia o diretório do mod uma única vez com `-game` e publica `*gamedir`
-  separadamente, sem recarregar o filesystem durante o startup;
-- separa configurações de cliente, servidor e usuário;
-- deixa o console limpo ao iniciar e mantém a ajuda em `F10` somente sob demanda.
+- `runtime/maps/proxmap1.ent` reproduces exactly the entity lump of the original BSP, removing only four obsolete `"noname" "1"` keys;
+- the fix removes four `noname is not a field` messages without changing entities, arena, geometry or gameplay;
+- forces external entities to be read only when Pro-X starts, even if
+  an old personal configuration left `sv_loadentfiles` turned off;
+- starts the mod directory only once with `-game` and publishes `*gamedir`
+  separately, without reloading the filesystem during startup;
+- separates the client, server and user configurations;
+- leaves the console clean at startup and keeps the help on `F10`, on demand only.
 
-## Dependências opcionais
+## Optional dependencies
 
-- `q1edge.bsp` e `q1_q3dm13.bsp` são arenas externas condicionais e não são necessárias para os seis mapas do pacote;
-- esses mapas não foram incorporados automaticamente.
+- `q1edge.bsp` and `q1_q3dm13.bsp` are conditional external arenas and are not needed for the package's six maps;
+- these maps were not added automatically.
 
-## Validação de runtime
+## Runtime validation
 
-- 30/07/2026: ezQuake 3.6.9 e nightly `20260616-101233_a86996a` em `proxmap1`;
-- gamecode 1.1 carregado, jogador entrou e as quatro mensagens `noname is not a field` desapareceram;
-- nenhum arquivo obrigatório ausente, comando bloqueado ou erro do mod.
+- 2026-07-30: ezQuake 3.6.9 and nightly `20260616-101233_a86996a` on `proxmap1`;
+- 1.1 gamecode loaded, the player joined and the four `noname is not a field` messages were gone;
+- no missing required file, blocked command or mod error.
 
-## Correções encaminhadas ao cliente
+## Fixes sent to the client
 
-- o falso erro de QVM antes do fallback PR1 foi enviado ao ezQuake no
+- the false QVM error before the PR1 fallback was sent to ezQuake in
   [PR #1149](https://github.com/QW-Group/ezquake-source/pull/1149);
-- o ruído de registros duplicados após `vid_restart` foi enviado separadamente
-  no [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150).
+- the duplicate registration noise after `vid_restart` was sent separately
+  in [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150).
 
-## Deliberadamente não alterado
+## Deliberately unchanged
 
-- nenhum código, regra, mapa ou conteúdo visual foi criado.
+- no code, rule, map or visual content was created.

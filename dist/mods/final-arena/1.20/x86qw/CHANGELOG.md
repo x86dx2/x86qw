@@ -1,41 +1,41 @@
-# Final Arena 1.20 no x86QW
+# Final Arena 1.20 in x86QW
 
-## Original reconstruído
+## Original rebuilt
 
-- `upstream/fasrv12.zip`: servidor oficial 1.20, 278932 bytes, SHA-256 `a250816fc3ffa461e21fc0c85cb286751b2bb22de2fd7d7bc42add7d0fd6ca70`;
-- `upstream/farena12.zip`: cliente oficial 1.20, 7018988 bytes, SHA-256 `88dac7c3b7982deaddd3970a5c3293eeee8a30e18ddf9fd404c1504c6ab519dd`;
-- `source/qwrasrc12.zip`: fonte QuakeWorld oficial extraída do servidor, 70227 bytes, SHA-256 `b83684390e6c68e2cdb39e9d22312df798b4c4b27ff3d816f75cfb27a7f67de7`.
+- `upstream/fasrv12.zip`: official 1.20 server, 278932 bytes, SHA-256 `a250816fc3ffa461e21fc0c85cb286751b2bb22de2fd7d7bc42add7d0fd6ca70`;
+- `upstream/farena12.zip`: official 1.20 client, 7018988 bytes, SHA-256 `88dac7c3b7982deaddd3970a5c3293eeee8a30e18ddf9fd404c1504c6ab519dd`;
+- `source/qwrasrc12.zip`: official QuakeWorld source extracted from the server, 70227 bytes, SHA-256 `b83684390e6c68e2cdb39e9d22312df798b4c4b27ff3d816f75cfb27a7f67de7`.
 
-Os 93 membros do `pak0.pak` oficial foram comparados com o conteúdo nQuake e estão byte a byte preservados. O `qwprogs.dat` do nQuake é uma derivação posterior atribuída a Rakk; sua fonte pública não foi localizada.
+The 93 members of the official `pak0.pak` were compared with the nQuake content and are preserved byte for byte. nQuake's `qwprogs.dat` is a later derivative attributed to Rakk; its public source was not found.
 
-## Alterações x86QW
+## x86QW changes
 
-- mantém o gamecode Rakk já usado pelo nQuake para não perder votação, mochilas, airgib e estatísticas sem fonte equivalente;
-- separa perfil de cliente, configuração de servidor e arquivo pessoal;
-- inicia o diretório do mod uma única vez com `-game` e publica `*gamedir`
-  separadamente, sem recarregar o filesystem durante o startup;
-- expõe controles e ajuda sem alterar as regras do mod;
-- deixa o console limpo ao iniciar e mantém a ajuda em `F10` somente sob demanda.
+- keeps the Rakk gamecode nQuake already uses, so voting, backpacks, airgib and statistics without an equivalent source are not lost;
+- separates the client profile, the server configuration and the personal file;
+- starts the mod directory only once with `-game` and publishes `*gamedir`
+  separately, without reloading the filesystem during startup;
+- exposes controls and help without changing the mod's rules;
+- leaves the console clean at startup and keeps the help on `F10`, on demand only.
 
-## Lacunas conhecidas
+## Known gaps
 
-- a fonte oficial 1.20 permite reconstruir a base, mas não a derivação Rakk;
-- `sprites/s_aball.spr` aparece apenas em `amtest.qc`, uma entidade de teste, e não existe no cliente oficial.
+- the official 1.20 source can rebuild the base, but not the Rakk derivative;
+- `sprites/s_aball.spr` appears only in `amtest.qc`, a test entity, and does not exist in the official client.
 
-## Validação de runtime
+## Runtime validation
 
-- 30/07/2026: ezQuake 3.6.9 e nightly `20260616-101233_a86996a` em `23ar-a`;
-- gamecode Rakk carregado, mapa correto aberto e jogador entrou na fila;
-- nenhum arquivo obrigatório ausente, comando bloqueado ou erro do mod.
+- 2026-07-30: ezQuake 3.6.9 and nightly `20260616-101233_a86996a` on `23ar-a`;
+- Rakk gamecode loaded, the right map opened and the player joined the queue;
+- no missing required file, blocked command or mod error.
 
-## Correções encaminhadas ao cliente
+## Fixes sent to the client
 
-- o falso erro de QVM antes do fallback PR1 foi enviado ao ezQuake no
+- the false QVM error before the PR1 fallback was sent to ezQuake in
   [PR #1149](https://github.com/QW-Group/ezquake-source/pull/1149);
-- o ruído de registros duplicados após `vid_restart` foi enviado separadamente
-  no [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150).
+- the duplicate registration noise after `vid_restart` was sent separately
+  in [PR #1150](https://github.com/QW-Group/ezquake-source/pull/1150).
 
-## Deliberadamente não alterado
+## Deliberately unchanged
 
-- nenhuma alteração Rakk foi reimplementada por inferência;
-- nenhum sprite, mapa ou modo novo foi adicionado.
+- no Rakk change was reimplemented by inference;
+- no new sprite, map or mode was added.

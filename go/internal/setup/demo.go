@@ -36,7 +36,7 @@ type Demo struct {
 var demoComponents = []Component{
 	{"x86qw-client-bootstrap", "x86QW client base and startup", "Builds on the nQuake base with the x86QW client's startup, defaults and global layers.", "core", 28919, nil},
 	{"nquake-visual-core", "nQuake interface and visuals", "ezQuake's main packages and the nQuake look.", "core", 15351608, []string{"x86qw-client-bootstrap"}},
-	{"ktx", "KTX x86QW", "KTX 1.47 com 24 modos, Frogbots e Coach de Quad.", "gameplay", 2542965, []string{"x86qw-client-bootstrap"}},
+	{"ktx", "KTX x86QW", "KTX 1.47 run by ezQuake's built-in local server, with assisted fun by default and optional competitive rules.", "gameplay", 2542965, []string{"x86qw-client-bootstrap"}},
 	{"nquake-maps", "nQuake map selection", "Only the maps, ENT files and texts of the nQuake distribution.", "content", 20471003, []string{"x86qw-client-bootstrap"}},
 	{"nquake-base-textures", "Base textures", "The base texture pack nQuake selects.", "content", 21149469, []string{"nquake-visual-core"}},
 	{"nquake-player-skins", "Player skins", "GPL and community skins for players and teams.", "content", 14552089, []string{"nquake-visual-core"}},
@@ -46,36 +46,36 @@ var demoComponents = []Component{
 	{"nquake-scoreboard-flags", "Scoreboard flags", "Country flags for the scoreboard.", "content", 368135, []string{"nquake-visual-core"}},
 	{"nquake-crosshairs", "Crosshairs", "The crosshair collection nQuake ships.", "content", 14979, []string{"nquake-visual-core"}},
 	{"nquake-documentation", "Documentation and licenses", "Upstream licenses and the current x86QW documentation.", "documentation", 13000, nil},
-	{"nquake-matchinfo", "Match information", "Demos históricas e de treinamento mantidas pelo nQuake.", "content", 7411045, []string{"x86qw-client-bootstrap"}},
+	{"nquake-matchinfo", "Match information", "Historical and training demos kept by nQuake; optional, not needed to play.", "content", 7411045, []string{"x86qw-client-bootstrap"}},
 	{"qrp-hires", "QRP high resolution", "High resolution textures and brush models from the Quake Retexturing Project.", "addon", 404142164, []string{"nquake-visual-core"}},
 	{"final-arena", "Final Arena", "Final Arena 1.20: queued one-on-one duels, with its own x86QW profile.", "addon", 6984652, []string{"x86qw-client-bootstrap"}},
 	{"pro-x", "Pro-X", "Pro-X QW 1.1: rounds, teams and votes, with its own x86QW profile.", "addon", 9081189, []string{"x86qw-client-bootstrap"}},
 	{"team-fortress", "Team Fortress", "Team Fortress 2.9 with nQuake assets and maps fitted by x86QW.", "addon", 8566807, []string{"x86qw-client-bootstrap"}},
-	{"total-destruction-2", "Total Destruction 2", "TD2QW 2.22 com armas, magias, runas, modelos, sons e gamecode.", "addon", 502676, []string{"x86qw-client-bootstrap"}},
+	{"total-destruction-2", "Total Destruction 2", "TD2QW 2.22: weapons, spells, runes, models, sounds and game code.", "addon", 502676, []string{"x86qw-client-bootstrap"}},
 	{"mvdsv", "Dedicated MVDSV", "The MVDSV 1.11 QuakeWorld server for the declared game codes, MVD and QTV.", "server", 1121507, nil},
 	{"qtv", "QTV broadcast", "QTV pinned by commit, for local streams, a remote upstream and MVD demos.", "server", 12079507, nil},
 	{"qwfwd", "QWFWD proxy", "The QWFWD 1.30 QuakeWorld proxy, local by default, open on request.", "server", 287467, nil},
 }
 
 var demoModes = []Mode{
-	{ID: "duel", Label: "Duel", DefaultMap: "dm6", Maps: []string{"dm6", "dm2", "dm4", "aerowalk", "ztndm3"}, Bots: true, Players: "2", BotLimit: 1, Description: "Duelo competitivo entre dois jogadores."},
-	{ID: "2on2", Label: "2on2", DefaultMap: "dm6", Maps: []string{"dm6", "dm4", "aerowalk", "ztndm3"}, Bots: true, Players: "4", BotLimit: 3, Description: "Teamplay competitivo com duas duplas."},
-	{ID: "4on4", Label: "4on4", DefaultMap: "dm3", Maps: []string{"dm3", "dm2", "e1m2", "schloss"}, Bots: true, Players: "8", BotLimit: 7, Description: "Teamplay clássico com duas equipes de quatro."},
-	{ID: "ffa", Label: "Free For All", DefaultMap: "dm6", Maps: []string{"dm6", "dm3", "dm4", "e1m1"}, Bots: true, Players: "2+", Description: "Todos contra todos com respawn contínuo."},
-	{ID: "clan-arena", Label: "Clan Arena", DefaultMap: "dm6", Maps: []string{"dm6", "dm3", "aerowalk"}, Bots: true, Players: "4+", Description: "Rounds eliminatórios sem coleta de itens."},
-	{ID: "ctf", Label: "Capture The Flag", DefaultMap: "e2m2", Maps: []string{"e2m2", "e1m5", "e1m3", "e2m5"}, Players: "4+", Kind: "ctf", Description: "Duas equipes defendem sua bandeira e capturam a adversária."},
-	{ID: "midair", Label: "Midair", DefaultMap: "dm4", Maps: []string{"dm4", "dm6"}, Bots: true, Players: "2+", Description: "Combate aéreo com rockets e pontuação por altura."},
-	{ID: "instagib", Label: "Instagib", DefaultMap: "dm4", Maps: []string{"dm4", "dm3", "dm6"}, Bots: true, Players: "2+", Description: "Eliminação instantânea com shaft em DMM4."},
-	{ID: "race", Label: "Race", DefaultMap: "dm6", Maps: []string{"dm6", "dm4"}, Players: "1+", Kind: "race", Description: "Percursos cronometrados usando rotas oficiais do KTX."},
-	{ID: "tot", Label: "ThunderWalker ToT", DefaultMap: "dm6", Maps: []string{"dm6", "dm2"}, Bots: true, Players: "1+", Kind: "tot", Description: "Combate de sobrevivência com progressão e bots Frogbot."},
-	{ID: "practice", Label: "Practice", DefaultMap: "dm6", Maps: []string{"dm6", "dm2", "dm4", "dm3"}, Bots: true, Players: "1+", Description: "Servidor destravado para praticar itens, armas e movimento."},
+	{ID: "duel", Label: "Duel", DefaultMap: "dm6", Maps: []string{"dm6", "dm2", "dm4", "aerowalk", "ztndm3"}, Bots: true, Players: "2", BotLimit: 1, Description: "Competitive duel between two players."},
+	{ID: "2on2", Label: "2on2", DefaultMap: "dm6", Maps: []string{"dm6", "dm4", "aerowalk", "ztndm3"}, Bots: true, Players: "4", BotLimit: 3, Description: "Competitive teamplay with two pairs."},
+	{ID: "4on4", Label: "4on4", DefaultMap: "dm3", Maps: []string{"dm3", "dm2", "e1m2", "schloss"}, Bots: true, Players: "8", BotLimit: 7, Description: "Classic teamplay with two teams of four."},
+	{ID: "ffa", Label: "Free For All", DefaultMap: "dm6", Maps: []string{"dm6", "dm3", "dm4", "e1m1"}, Bots: true, Players: "2+", Description: "Everyone against everyone with continuous respawn."},
+	{ID: "clan-arena", Label: "Clan Arena", DefaultMap: "dm6", Maps: []string{"dm6", "dm3", "aerowalk"}, Bots: true, Players: "4+", Description: "Elimination rounds without item pickups."},
+	{ID: "ctf", Label: "Capture The Flag", DefaultMap: "e2m2", Maps: []string{"e2m2", "e1m5", "e1m3", "e2m5"}, Players: "4+", Kind: "ctf", Description: "Two teams defend their own flag and capture the opposing one."},
+	{ID: "midair", Label: "Midair", DefaultMap: "dm4", Maps: []string{"dm4", "dm6"}, Bots: true, Players: "2+", Description: "Aerial combat with rockets, scored by height."},
+	{ID: "instagib", Label: "Instagib", DefaultMap: "dm4", Maps: []string{"dm4", "dm3", "dm6"}, Bots: true, Players: "2+", Description: "Instant kills with the shaft in DMM4."},
+	{ID: "race", Label: "Race", DefaultMap: "dm6", Maps: []string{"dm6", "dm4"}, Players: "1+", Kind: "race", Description: "Timed runs over official KTX routes."},
+	{ID: "tot", Label: "ThunderWalker ToT", DefaultMap: "dm6", Maps: []string{"dm6", "dm2"}, Bots: true, Players: "1+", Kind: "tot", Description: "Survival combat with progression and Frogbot bots."},
+	{ID: "practice", Label: "Practice", DefaultMap: "dm6", Maps: []string{"dm6", "dm2", "dm4", "dm3"}, Bots: true, Players: "1+", Description: "Unlocked server to practice items, weapons and movement."},
 }
 
 var demoGroups = []ModeGroup{
-	{Key: "recommended", Label: "Recomendados", Modes: []string{"duel", "4on4", "ffa", "ctf"}},
-	{Key: "individual", Label: "Competitivo individual", Modes: []string{"duel", "ffa", "midair", "instagib"}},
-	{Key: "teams", Label: "Equipes", Modes: []string{"2on2", "4on4", "clan-arena", "ctf"}},
-	{Key: "training", Label: "Treino e movimento", Modes: []string{"race", "tot", "practice"}},
+	{Key: "recommended", Label: "Recommended", Modes: []string{"duel", "4on4", "ffa", "ctf"}},
+	{Key: "individual", Label: "Individual competition", Modes: []string{"duel", "ffa", "midair", "instagib"}},
+	{Key: "teams", Label: "Teams", Modes: []string{"2on2", "4on4", "clan-arena", "ctf"}},
+	{Key: "training", Label: "Training and movement", Modes: []string{"race", "tot", "practice"}},
 }
 
 // demoCore and demoClient are the sizes of the core data and of ezQuake per

@@ -184,3 +184,24 @@ func TestChunkingKeepsBodiesBounded(t *testing.T) {
 		t.Fatalf("invocation too large: %d", len(invocation))
 	}
 }
+
+// The map asset labels players read come straight from modes.json.
+func TestRequirementLabelsAreEnglish(t *testing.T) {
+	modes, err := LoadModes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"frogbot-route": "Frogbot route", "ctf-entities": "CTF flag entities", "race-route": "Race route"}
+	seen := map[string]bool{}
+	for _, mode := range modes {
+		for _, requirement := range mode.Requirements {
+			if requirement.Label != want[requirement.Key] {
+				t.Errorf("%s: %s is labelled %q", mode.Key, requirement.Key, requirement.Label)
+			}
+			seen[requirement.Key] = true
+		}
+	}
+	if len(seen) != len(want) {
+		t.Fatalf("requirements seen: %v", seen)
+	}
+}

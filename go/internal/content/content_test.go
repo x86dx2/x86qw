@@ -265,9 +265,8 @@ func TestMirrorMetadataIsEnglish(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, pkg := range objects(catalog.Value("packages")) {
-		pkg.Delete("mirror_notes")
-	}
+	// The catalog's ezQuake entries carry older notes, which normalising
+	// rewrites.
 	if err := project.NormalizeCatalogReleaseMetadata(catalog); err != nil {
 		t.Fatal(err)
 	}
