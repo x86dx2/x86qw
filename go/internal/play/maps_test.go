@@ -29,3 +29,21 @@ func TestABrokenPackageHidesOnlyItsOwnMaps(t *testing.T) {
 		t.Fatalf("%v %v", names, err)
 	}
 }
+
+// A .ent file's keys and values may be split by any whitespace: personal
+// CTF entities written with tabs still offer their map for CTF, and both
+// flags are still required.
+func TestCTFEntitiesTakeAnyWhitespace(t *testing.T) {
+	dir := t.TempDir()
+	for name, entities := range map[string]string{
+		"spaces.ent":   "{\n\"classname\"  \"item_flag_team1\"\n}\n{\n\"classname\" \"item_flag_team2\"\n}\n",
+		"tabs.ent":     "{\n\"classname\"\t\"item_flag_team1\"\n}\n{\n\"classname\"\t\"item_flag_team2\"\n}\n",
+		"one-flag.ent": "{\n\"classname\"\t\"item_flag_team1\"\n}\n",
+	} {
+		path := filepath.Join(dir, name)
+		os.WriteFile(path, []byte(entities), 0o644)
+		if valid := validPersonalAsset(path, ".ent"); valid != (name != "one-flag.ent") {
+			t.Errorf("%s: valid %v", name, valid)
+		}
+	}
+}

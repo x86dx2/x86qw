@@ -179,7 +179,8 @@ func validPersonalAsset(name, suffix string) bool {
 		}
 	}
 	if suffix == ".ent" {
-		text := strings.Join(lines, "\n")
+		// Any whitespace separates a key from its value.
+		text := strings.Join(strings.Fields(strings.Join(lines, "\n")), " ")
 		return strings.HasPrefix(text, "{") && strings.HasSuffix(text, "}") &&
 			strings.Count(text, `"classname" "item_flag_team1"`) == 1 &&
 			strings.Count(text, `"classname" "item_flag_team2"`) == 1 && !strings.Contains(text, ";")
