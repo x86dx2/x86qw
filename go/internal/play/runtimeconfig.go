@@ -70,7 +70,10 @@ func writeJournal(path string, document journalDocument, create bool) error {
 			return err
 		}
 		_, err = file.Write(payload)
-		return errors.Join(err, file.Sync(), file.Close())
+		if err = errors.Join(err, file.Sync(), file.Close()); err != nil {
+			os.Remove(path) // cut short, it would stop every later recovery
+		}
+		return err
 	}
 	temporary := path + ".tmp"
 	if err := os.WriteFile(temporary, payload, 0o600); err != nil {

@@ -4,7 +4,9 @@ package play
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -53,5 +55,42 @@ func TestRuntimeConfigLifecycleRecovery(t *testing.T) {
 	}
 	if _, err := os.Stat(config.journal); !os.IsNotExist(err) {
 		t.Fatal("the dead controller's journal was not removed")
+	}
+}
+
+// TestJournalWriterOverTheLimit is the process
+// TestAFailedJournalWriteLeavesNothing runs with a file size limit the
+// journal does not fit in.
+func TestJournalWriterOverTheLimit(t *testing.T) {
+	path := os.Getenv("X86QW_TEST_JOURNAL")
+	if path == "" {
+		t.Skip("run by TestAFailedJournalWriteLeavesNothing")
+	}
+	var limit syscall.Rlimit
+	syscall.Getrlimit(syscall.RLIMIT_FSIZE, &limit)
+	limit.Cur = 16
+	if err := syscall.Setrlimit(syscall.RLIMIT_FSIZE, &limit); err != nil {
+		t.Fatal(err)
+	}
+	if writeJournal(path, journalDocument{Format: 1, Project: "x86qw", Type: "ktx-runtime-config"}, true) == nil {
+		t.Fatal("the journal fit")
+	}
+}
+
+// A journal cut short, by a full disk for one, would stop every later KTX
+// launch at recovery: a first write that fails leaves no journal behind.
+func TestAFailedJournalWriteLeavesNothing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "x86qw-ktx-session-0123456789abcdef01234567.json")
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := exec.Command(self, "-test.run=^TestJournalWriterOverTheLimit$")
+	writer.Env = append(os.Environ(), "X86QW_TEST_JOURNAL="+path)
+	if output, err := writer.CombinedOutput(); err != nil {
+		t.Fatalf("%v\n%s", err, output)
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatal("the failed write left a journal behind")
 	}
 }
