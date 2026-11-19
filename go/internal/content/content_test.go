@@ -213,7 +213,9 @@ func TestArchiveMovesRefuseAChain(t *testing.T) {
 // enters with (on_enter_ffa for instagib's ffa); an entry config that does
 // not clear that event runs the mode command again on every map.
 func TestKTXEntryConfigClearsItsEvent(t *testing.T) {
-	project := NewProject(repoRoot(t))
+	root := repoRoot(t)
+	requireHydrated(t, root)
+	project := NewProject(root)
 	components, err := project.Components()
 	if err != nil {
 		t.Fatal(err)
