@@ -131,7 +131,7 @@ func TestProfileBacksUpAndRestores(t *testing.T) {
 	}
 	config := filepath.Join(root, "ezquake", "configs", "config.cfg")
 	writeFile(t, config, "name other\n")
-	if out := runOK(t, 0, "profile", "--restore", bundle, root); !strings.Contains(out, "ezquake/configs/config.cfg") {
+	if out := runOK(t, 0, "profile", "--restore", bundle, root, "--yes"); !strings.Contains(out, "ezquake/configs/config.cfg") {
 		t.Fatalf("restore: %s", out)
 	}
 	if data, _ := os.ReadFile(config); string(data) != "name player\n" {
@@ -170,6 +170,36 @@ func TestChangesEscapesControlCharacters(t *testing.T) {
 	}
 }
 
+// What deletes or overwrites the user's files asks first: without a
+// terminal and --yes, cleanup and profile --restore change nothing.
+func TestCleanupAndRestoreNeedYesWithoutATerminal(t *testing.T) {
+	root := fixtureInstall(t)
+	bundle := filepath.Join(t.TempDir(), "profile.zip")
+	runOK(t, 0, "profile", root, "--backup", bundle)
+	kept := map[string]string{
+		filepath.Join(root, "logs", "server.log"):               "log",
+		filepath.Join(root, "fortress", "progs", "mine.mdl"):    "mine",
+		filepath.Join(root, "ezquake", "configs", "config.cfg"): "name edited\n",
+	}
+	for path, body := range kept {
+		writeFile(t, path, body)
+	}
+	for _, args := range [][]string{
+		{"cleanup", "--personal-data", root},
+		{"cleanup", "--downloads", root},
+		{"profile", "--restore", bundle, root},
+	} {
+		if out := runOK(t, 2, args...); !strings.Contains(out, "Run again with --yes") {
+			t.Errorf("x86qw %v: %s", args, out)
+		}
+	}
+	for path, body := range kept {
+		if data, _ := os.ReadFile(path); string(data) != body {
+			t.Errorf("%s changed: %q", path, data)
+		}
+	}
+}
+
 // A folder of three demos goes as one removal: cleanup counts items, never
 // claiming one file for three.
 func TestCleanupCountsItemsNotFiles(t *testing.T) {
@@ -177,7 +207,7 @@ func TestCleanupCountsItemsNotFiles(t *testing.T) {
 	for _, name := range []string{"a.mvd", "b.mvd", "c.mvd"} {
 		writeFile(t, filepath.Join(root, "td2", "demos", name), "demo "+name)
 	}
-	if out := runOK(t, 0, "cleanup", "--personal-data", root); strings.Contains(out, "1 file") || !strings.Contains(out, "(1 item)") {
+	if out := runOK(t, 0, "cleanup", "--personal-data", root, "--yes"); strings.Contains(out, "1 file") || !strings.Contains(out, "(1 item)") {
 		t.Fatalf("cleanup: %s", out)
 	}
 }

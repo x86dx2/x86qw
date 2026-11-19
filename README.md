@@ -53,7 +53,7 @@ curl -fsS https://qw.x86.com.br/install.sh | bash
 In PowerShell or the Command Prompt:
 
 ```powershell
-powershell -c "irm https://qw.x86.com.br/install.ps1 | iex"
+powershell -c "[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://qw.x86.com.br/install.ps1 | iex"
 ```
 
 The bootstrap downloads the `x86qw` native CLI from the `x86qw-cli-2.5.5` release on
@@ -227,7 +227,8 @@ one's usage and options. Options can come before or after the folder.
 | `version` | Shows the version |
 
 Whatever changes or stops something — `update`, `upgrade`, `repair`, `uninstall`,
-`status --stop` and recipes — shows what it will do and asks on the terminal.
+`cleanup --downloads` or `--personal-data`, `profile --restore`, `status --stop`
+and recipes — shows what it will do and asks on the terminal.
 Without a terminal, it needs `--yes` and exits with code 2 when it is missing. `--dry-run` only
 shows the plan. `verify`, `doctor`, `hub`, `catalog`, `version`, `status` and the
 `update`, `upgrade` and `repair` plans with `--dry-run` accept `--json` and
@@ -270,8 +271,9 @@ The CLI inspects ZIP and PK3 files before any extraction, with limits, canonical
 modes and atomic promotion. On Windows, the installation's private state is created
 with a protected DACL, limited to the current user and `LOCAL SYSTEM`; external password
 files are only accepted with that same restriction and are never rewritten.
-See [ADR 0002](docs/adr/0002-single-archive-boundary.md) and
-[ADR 0003](docs/adr/0003-private-windows-dacl.md).
+The code is in `go/internal/archive` and `go/internal/privfs`; the decisions,
+written for the Python line, are [ADR 0002](docs/adr/0002-single-archive-boundary.md)
+and [ADR 0003](docs/adr/0003-private-windows-dacl.md).
 
 ## Architecture
 
