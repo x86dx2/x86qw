@@ -450,14 +450,14 @@
       ]
     },
     "qtv": {
-      "version": "0+025ca949aca0+x86qw.3",
+      "version": "0+025ca949aca0+x86qw.4",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "qtv",
-      "distribution_tag": "qtv-025ca949aca0-x86qw.3",
+      "distribution_tag": "qtv-025ca949aca0-x86qw.4",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/qtv/blob/025ca949aca06cad6777de0075148ac06a15f4f0/LICENSE",
-      "notes": "QTV fixado no commit oficial 025ca949aca0 e compilado de forma reproduzível para Linux amd64, Windows x64 e macOS arm64. O bootstrap instala somente a variante selecionada em qtv/, junto dos recursos e da configuração operacional.",
+      "notes": "QTV pinned to the official commit 025ca949aca0 and built reproducibly for Linux amd64, Windows x64 and macOS arm64. The bootstrap installs only the selected variant in qtv/, along with its resources and working configuration.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
