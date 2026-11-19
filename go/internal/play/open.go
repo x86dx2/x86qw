@@ -102,13 +102,14 @@ func openArguments(target, item string, write bool) ([]string, error) {
 }
 
 // ServerAddress is the game server a qw:// link joins, as host:port, on
-// 27500 when the link names no port; a QTV stream (N@host) joins none.
+// 27500 when the link names no port; a QTV stream (N@host or /qtvplay)
+// joins none.
 func ServerAddress(link string) (string, bool) {
 	if !strings.HasPrefix(strings.ToLower(link), "qw://") {
 		return "", false
 	}
-	server, _, _ := strings.Cut(link[len("qw://"):], "/")
-	if server == "" || strings.Contains(server, "@") {
+	server, path, _ := strings.Cut(link[len("qw://"):], "/")
+	if server == "" || strings.Contains(server, "@") || path == "qtvplay" {
 		return "", false
 	}
 	if !strings.Contains(server, ":") {

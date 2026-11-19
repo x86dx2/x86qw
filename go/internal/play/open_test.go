@@ -32,6 +32,7 @@ func TestServerAddressIsWhatALinkJoins(t *testing.T) {
 		"qw://qw.example.com:27501":            "qw.example.com:27501",
 		"QW://qw.example.com/observe":          "qw.example.com:27500",
 		"qw://2@qtv.example.org:28000/qtvplay": "",
+		"qw://qtv.example.org:28000/qtvplay":   "",
 		"final.mvd":                            "",
 	} {
 		if got, _ := ServerAddress(link); got != want {
