@@ -147,6 +147,7 @@ type modal struct {
 	field   map[string]*Field
 	json    bool
 	height  int // the tallest the dialog has been, so it never jumps
+	top     int // the row it opened on, kept while it fits
 	// before is what the choices were when the dialog opened; esc puts
 	// them back.
 	before     setup.Options
@@ -347,6 +348,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
 		clear(m.tops)
+		if m.modal != nil {
+			m.modal.top = 0
+		}
 	case tea.BackgroundColorMsg:
 		if !m.themed {
 			if msg.IsDark() {
@@ -1103,6 +1107,11 @@ func (m *Model) View() tea.View {
 		lines, hits, caret := m.modalView()
 		mw := lipgloss.Width(lines[0])
 		mx, my := (m.w-mw)/2, max(1, (m.h-1-len(lines))/2)
+		// A dialog that grows keeps the row it opened on while it fits.
+		if m.modal.top > 0 && m.modal.top+len(lines) <= m.h-1 {
+			my = m.modal.top
+		}
+		m.modal.top = my
 		place(strings.Join(lines, "\n"), mx, my)
 		for _, h := range hits {
 			m.hits = append(m.hits, hit{y: h.y + my, x0: h.x0 + mx, x1: h.x1 + mx, id: h.id})

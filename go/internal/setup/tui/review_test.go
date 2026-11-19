@@ -423,3 +423,30 @@ func TestTheCaretFollowsWideAndCombiningCharacters(t *testing.T) {
 		}
 	}
 }
+
+// A dialog that grows (an instance added, a port shown) keeps its top row
+// while it fits: nothing in it moves.
+func TestAGrowingDialogKeepsItsTop(t *testing.T) {
+	m := started(t, false)
+	drive(m, tea.WindowSizeMsg{Width: 100, Height: 40})
+	drive(m, typeText("x86dx2")...)
+	drive(m, key("down"), key("down"), key("enter"))
+	m.openModal("server")
+	top := func() int {
+		for row, line := range strings.Split(ansi.Strip(m.View().Content), "\n") {
+			if strings.Contains(line, "╭─") {
+				return row
+			}
+		}
+		return -1
+	}
+	want := top()
+	for _, row := range focusables(m.modalRows()) {
+		if row.id == "add" {
+			row.activate()
+		}
+	}
+	if got := top(); got != want {
+		t.Fatalf("the dialog moved from row %d to %d", want, got)
+	}
+}
