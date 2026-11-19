@@ -1,42 +1,12 @@
 package setup
 
-// The inventory speaks English; portuguese gives the Portuguese interface
-// its components, its games and the words of the update plan. The KTX
-// modes come from signed content in Portuguese; english gives the English
-// interface their words. Both are keyed by kind and ID ("component/ktx",
-// "mode/duel.d"), so the data files stay as they are. What is missing shows
-// as the data has it.
+// The inventory and the KTX mode catalog speak English; portuguese gives
+// the Portuguese interface its components, its games, its modes and the
+// words of the update plan, and english the few words the data does not
+// have. Both are keyed by kind and ID ("component/ktx", "mode/duel.d"), so
+// the data files stay as they are. What is missing shows as the data has it.
 var english = map[string]string{
-	"game/td2.d":          "Weapons, spells, runes and powers.",
-	"mode/duel.d":         "Competitive duel between two players.",
-	"mode/2on2.d":         "Competitive teamplay between two pairs.",
-	"mode/4on4.d":         "Classic teamplay between two teams of four.",
-	"mode/3on3.d":         "Competitive teamplay between two teams of three.",
-	"mode/10on10.d":       "Large scale teamplay for twenty players.",
-	"mode/ffa.d":          "Everyone against everyone, with continuous respawn.",
-	"mode/clan-arena.d":   "Elimination rounds without item pickups.",
-	"mode/wipeout.d":      "Team rounds with a growing team respawn.",
-	"mode/tot.d":          "Survival combat with progression and Frogbots.",
-	"mode/blitz-2v2.d":    "Quick 2on2 rounds with instant equipment.",
-	"mode/blitz-4v4.d":    "Quick 4on4 rounds with instant equipment.",
-	"mode/2on2on2.d":      "Three teams of two players.",
-	"mode/3on3on3.d":      "Three teams of three players.",
-	"mode/4on4on4.d":      "Three teams of four players.",
-	"mode/xonx.d":         "Flexible teamplay sized by the number of players.",
-	"mode/hoony.d":        "Duel in rounds with alternating spawns.",
-	"mode/ctf.d":          "Two teams defend their flag and capture the other.",
-	"mode/midair.d":       "Air combat with rockets, scored by height.",
-	"mode/dmm4.d":         "Every weapon and unlimited ammunition.",
-	"mode/instagib.d":     "Instant kills with the shaft on DMM4.",
-	"mode/lgc.d":          "Lightning gun duel under LGC rules on DMM4.",
-	"mode/rocket-arena.d": "Rocket duel without item pickups.",
-	"mode/race.d":         "Timed runs on the official KTX routes.",
-	"mode/practice.d":     "An unlocked server to practise items, weapons and movement.",
-	"group/recommended":   "Recommended",
-	"group/individual":    "Individual competition",
-	"group/teams":         "Teams",
-	"group/arena":         "Arena and alternatives",
-	"group/training":      "Training and movement",
+	"game/td2.d": "Weapons, spells, runes and powers.",
 }
 
 var portuguese = map[string]string{
@@ -87,10 +57,34 @@ var portuguese = map[string]string{
 	"component/mvdsv.d":                    "Servidor QuakeWorld MVDSV 1.11 para os gamecodes declarados, MVD e transmissão QTV.",
 	"component/qwfwd.d":                    "Proxy QuakeWorld QWFWD 1.30, local por padrão e exposição externa opcional.",
 	"component/qtv.d":                      "QTV HTTP fixado por commit para streams locais ou upstream remoto e demos MVD.",
+	"mode/duel.d":                          "Duelo competitivo entre dois jogadores.",
+	"mode/2on2.d":                          "Teamplay competitivo com duas duplas.",
+	"mode/4on4.d":                          "Teamplay clássico com duas equipes de quatro.",
+	"mode/3on3.d":                          "Teamplay competitivo com duas equipes de três.",
+	"mode/10on10.d":                        "Teamplay de grande escala para vinte jogadores.",
+	"mode/ffa.d":                           "Todos contra todos com respawn contínuo.",
+	"mode/clan-arena.d":                    "Rounds eliminatórios sem coleta de itens.",
+	"mode/wipeout.d":                       "Rounds em equipe com respawn coletivo progressivo.",
+	"mode/tot.d":                           "Combate de sobrevivência com progressão e bots Frogbot.",
+	"mode/blitz-2v2.d":                     "Rounds rápidos de 2on2 com equipamento imediato.",
+	"mode/blitz-4v4.d":                     "Rounds rápidos de 4on4 com equipamento imediato.",
+	"mode/2on2on2.d":                       "Confronto entre três equipes de dois jogadores.",
+	"mode/3on3on3.d":                       "Confronto entre três equipes de três jogadores.",
+	"mode/4on4on4.d":                       "Confronto entre três equipes de quatro jogadores.",
+	"mode/xonx.d":                          "Teamplay flexível dimensionado pelo número de jogadores.",
+	"mode/hoony.d":                         "Duelo em rounds com alternância de spawns.",
+	"mode/ctf.d":                           "Duas equipes defendem sua bandeira e capturam a adversária.",
+	"mode/midair.d":                        "Combate aéreo com rockets e pontuação por altura.",
+	"mode/dmm4.d":                          "Combate com todas as armas e munição ilimitada.",
+	"mode/instagib.d":                      "Eliminação instantânea com shaft em DMM4.",
+	"mode/lgc.d":                           "Duelo de shaft com regras LGC sobre a base DMM4.",
+	"mode/rocket-arena.d":                  "Duelo de rockets sem coleta de itens.",
+	"mode/race.d":                          "Percursos cronometrados usando rotas oficiais do KTX.",
+	"mode/practice.d":                      "Servidor destravado para praticar itens, armas e movimento.",
 }
 
 // Localize is a data text in lang, when its words are known, else the text
-// as the data has it. kind is component, game, mode, group or plan; id is
+// as the data has it. kind is component, game, mode or plan; id is
 // the ID, with ".d" for a description.
 func Localize(lang, kind, id, text string) string {
 	words := english
