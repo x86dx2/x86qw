@@ -12,7 +12,7 @@
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
       "distribution_component": "x86qw",
-      "notes": "Preserva a base nQuake e acrescenta uma camada inicial x86QW aplicada uma vez depois dos defaults upstream, além do x86QW Ruleset, uma experiência assistida sobre o ruleset default do ezQuake com iDrive, smart jump, movimento moderno, feedback visual e camada pessoal carregada por último. Mantém aliases temporários, desativa o cache incompatível com -nohome, limita texturas a 16384 e remove comandos incompatíveis com os clientes suportados.",
+      "notes": "Keeps the nQuake base and adds an initial x86QW layer applied once after the upstream defaults, plus the x86QW Ruleset, an assisted experience over ezQuake's default ruleset with iDrive, smart jump, modern movement, visual feedback and a personal layer loaded last. Keeps aliases temporary, turns off the cache that does not work with -nohome, limits textures to 16384 and removes commands the supported clients do not accept.",
       "text_replacements": [
         {
           "target": "non-gpl/qw/nquake_default.cfg",
@@ -176,7 +176,7 @@
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
-      "notes": "Mantém as licenças upstream e instala documentação x86QW atual e multiplataforma no lugar dos readmes e atalhos históricos."
+      "notes": "Keeps the upstream licenses and installs current, cross-platform x86QW documentation in place of the historical readmes and shortcuts."
     },
     "qrp-hires": {
       "version": "e4cb23d40aa2+x86qw.2",
@@ -184,7 +184,7 @@
       "strategy": "reference-snapshot",
       "freshness": "reference-payload-current",
       "embedded_version": "maps-1.00+items-0.73",
-      "notes": "Preserva os pacotes QRP e substitui o aviso UTF-16 legado por documentação x86QW em UTF-8; a prioridade é controlada por pak.lst."
+      "notes": "Keeps the QRP packages and replaces the legacy UTF-16 notice with UTF-8 x86QW documentation; pak.lst sets the priority."
     },
     "final-arena": {
       "version": "1.20+nquake.e4cb23d40aa2+x86qw.5",
