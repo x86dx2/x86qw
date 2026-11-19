@@ -31,7 +31,6 @@ Estas regras valem antes de qualquer outra instrução deste arquivo.
 
 ## Idioma
 - App, documentação e site: inglês (en-US) como idioma principal. Traduções pt-BR só nas tabelas de tradução.
-- Exceção: os CHANGELOGs dos mods (`dist/mods/*/*/x86qw/CHANGELOG.md`) e o README da camada x86QW do KTX (`dist/mods/ktx/1.47/x86qw/README.md`) ficam em pt-BR, porque traduzi-los força novas versões de pacote sem nada mudar no jogo.
 - Mensagens de commit e de terminal: inglês.
 
 ## Releases
