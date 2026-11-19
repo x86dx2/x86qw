@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/x86dx2/x86qw/go/internal/lock"
 )
 
 func TestOpenAcceptsOnlyCleanAddresses(t *testing.T) {
@@ -30,6 +32,7 @@ func TestServerAddressIsWhatALinkJoins(t *testing.T) {
 		"qw://qw.example.com:27501":            "qw.example.com:27501",
 		"QW://qw.example.com/observe":          "qw.example.com:27500",
 		"qw://2@qtv.example.org:28000/qtvplay": "",
+		"qw://qtv.example.org:28000/qtvplay":   "",
 		"final.mvd":                            "",
 	} {
 		if got, _ := ServerAddress(link); got != want {
@@ -67,5 +70,23 @@ func TestAFolderWithAPlusIsRefused(t *testing.T) {
 	err := Start("/Users/me/My Games +quit/x86qw", "/nonexistent/ezquake", "", &Launch{})
 	if err == nil || !strings.Contains(err.Error(), `" +"`) {
 		t.Fatalf("%v", err)
+	}
+}
+
+// A client started during an update, repair or uninstall would run from
+// files that operation replaces or removes, so it waits for it to finish. A
+// hosted server is no reason to wait.
+func TestTheClientWaitsForMaintenance(t *testing.T) {
+	for _, command := range []string{"update", "host"} {
+		target := t.TempDir()
+		held, err := lock.Acquire(target, command)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = Start(target, filepath.Join(target, "missing-ezquake"), "", &Launch{})
+		held.Release()
+		if waits := err != nil && strings.Contains(err.Error(), "wait for it to finish"); waits != (command == "update") {
+			t.Errorf("%s: %v", command, err)
+		}
 	}
 }
