@@ -208,3 +208,29 @@ func TestArchiveMovesRefuseAChain(t *testing.T) {
 		t.Errorf("moves in two archives refused: %v", err)
 	}
 }
+
+// The launcher runs a mode's entry config from the event its usermode
+// enters with (on_enter_ffa for instagib's ffa); an entry config that does
+// not clear that event runs the mode command again on every map.
+func TestKTXEntryConfigClearsItsEvent(t *testing.T) {
+	project := NewProject(repoRoot(t))
+	components, err := project.Components()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := project.ValidateKTXModeCatalog(components, nil); err != nil {
+		t.Fatalf("shipped mode catalog: %v", err)
+	}
+	modes, err := ReadJSON(project.Path(ktxModesPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range objects(modes.(*Object).Value("modes")) {
+		if mode.Value("id") == "instagib" {
+			mode.Set("usermode", "1on1")
+		}
+	}
+	if err := project.ValidateKTXModeCatalog(components, modes); err == nil {
+		t.Fatal("instagib entered by on_enter while its config clears on_enter_ffa")
+	}
+}
