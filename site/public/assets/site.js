@@ -52,7 +52,7 @@ if (catalogLive.length) {
     'Waiting for an answer',
     'Reading the public contract live.',
   );
-  fetch('/api/v1/product.json', { cache: 'no-store' })
+  fetch('/api/v1/product.json', { cache: 'no-store', signal: AbortSignal.timeout(10000) })
     .then((response) => {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return response.json();

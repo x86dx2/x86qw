@@ -81,3 +81,34 @@ test('live status reads product.json instead of the full catalog', async () => {
   assert.equal(status.nodes['.catalog-value'].textContent, '29 audited packages');
   assert.match(status.nodes['.catalog-detail'].textContent, /Current KTX: 1\.47/);
 });
+
+test('a catalog that never answers is reported as unavailable', async () => {
+  const header = makeNode(true);
+  const status = makeNode(false);
+  globalThis.document = {
+    querySelectorAll(selector) {
+      if (selector === '[data-catalog-live]') return [header, status];
+      return [];
+    },
+  };
+  const timeouts = [];
+  const timeout = AbortSignal.timeout;
+  // The real 10 s, shortened to 1 ms.
+  AbortSignal.timeout = (ms) => {
+    timeouts.push(ms);
+    return timeout.call(AbortSignal, 1);
+  };
+  globalThis.fetch = (url, options) => new Promise((resolve, reject) => {
+    options?.signal?.addEventListener('abort', () => reject(options.signal.reason));
+  });
+
+  try {
+    await loadSiteScript();
+  } finally {
+    AbortSignal.timeout = timeout;
+  }
+
+  assert.deepEqual(timeouts, [10000]);
+  assert.equal(header.dataset.state, 'error');
+  assert.equal(status.nodes['.catalog-label'].textContent, 'Catalog unavailable');
+});
