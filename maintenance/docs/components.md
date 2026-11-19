@@ -72,7 +72,7 @@ and auditable, not a second way of organizing.
 | --- | --- | --- | --- |
 | x86QW client base and startup | `dfb2ac9299f7+x86qw.4` | nQuake snapshot with the x86QW bootstrap | assisted x86QW Ruleset, temporary aliases on demand and a maximum texture size consistent with Apple Silicon's OpenGL 4.1, over a base common to stable and nightly |
 | nQuake interface and visuals | `e4cb23d40aa2` | nQuake snapshot | current in the reference repository |
-| KTX x86QW | `1.47+x86qw.20` | official release over nQuake resources and x86QW integration | 24 modes, maps filtered by the actual resources, opt-in casual Quad Coach, 77 Frogbot routes, 54 Race routes, complete CTF/Race options, a contextual key plan, a manageable roster and a reproducible QVM |
+| KTX x86QW | `1.47+x86qw.21` | official release over nQuake resources and x86QW integration | 24 modes, maps filtered by the actual resources, opt-in casual Quad Coach, 77 Frogbot routes, 54 Race routes, complete CTF/Race options, a contextual key plan, a manageable roster and a reproducible QVM |
 | Player skins | `e4cb23d40aa2` | curated nQuake collection | current in the reference repository |
 | Crosshairs | `e4cb23d40aa2` | curated nQuake collection | current in the reference repository |
 | Skyboxes | `e4cb23d40aa2` | curated nQuake collection | current in the reference repository |
@@ -86,7 +86,7 @@ and auditable, not a second way of organizing.
 | QRP high resolution | `e4cb23d40aa2+x86qw.2` | nQuake snapshot with a UTF-8 x86QW manual | holds maps 1.00 and items 0.73; explicit order in `pak.lst` |
 | Final Arena | `1.20+nquake.e4cb23d40aa2+x86qw.5` | nQuake snapshot and x86QW's own gameplay | queue, statistics and the mod's options accessible; optional x86QW Ruleset before the personal layer; original 1.20 files and base source kept |
 | Pro-X | `1.1+x86qw.6` | public 1.1 release and x86QW gameplay | complete official runtime; the ENT fixes only four obsolete fields; optional x86QW Ruleset and personal configuration loaded last |
-| Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.7` | 2.9 gamecode recompiled over nQuake assets | 2.8 gamecode removed from `misc.pak`; nQuake media kept; optional x86QW Ruleset before the personal layer |
+| Team Fortress | `2.9+nquake.e4cb23d40aa2+x86qw.8` | 2.9 gamecode recompiled over nQuake assets | 2.8 gamecode removed from `misc.pak`; nQuake media kept; optional x86QW Ruleset before the personal layer |
 | Total Destruction 2 | `2.22+x86qw.6` | independent package recompiled from upstream | complete runtime with optional x86QW Ruleset, spells, special, runes, voting, audio and personal configuration loaded last |
 | Dedicated MVDSV | `1.11+x86qw.5` | official release and a reproduced build per platform | KTX dedicated server for macOS arm64, Linux amd64 and Windows x64; a minimal patch fixes QVM argument passing in 64 bits on Apple Silicon, and Windows runs the console build, which opens no window |
 | QTV broadcast | `0+025ca949aca0+x86qw.3` | immutable upstream commit and reproduced builds | optional HTTP/MVD relay, loopback and upload off by default |
