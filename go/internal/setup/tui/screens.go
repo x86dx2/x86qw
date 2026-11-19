@@ -743,11 +743,11 @@ func (m *Model) installPage(p *page) {
 		}
 		for _, line := range log {
 			mark := p.st(t.Success).Render("+")
-			detail := p.st(t.Dim).Render(m.size(line.Size))
+			detail := p.st(t.Gray).Render(m.size(line.Size))
 			if line.Kind == '=' {
-				mark, detail = p.st(t.Gray).Render("="), p.st(t.Dim).Render(m.t("unchanged"))
+				mark, detail = p.st(t.Gray).Render("="), p.st(t.Gray).Render(m.t("unchanged"))
 			}
-			p.add(spread(p.st(t.Dim).Render(fmt.Sprintf("  %6.1fs  ", line.At.Seconds()))+mark+p.st(t.Text2).Render(" "+line.Path), detail+p.st(t.Base).Render("  "), p.width, t.Base))
+			p.add(spread(p.st(t.Gray).Render(fmt.Sprintf("  %6.1fs  ", line.At.Seconds()))+mark+p.st(t.Text2).Render(" "+line.Path), detail+p.st(t.Base).Render("  "), p.width, t.Base))
 		}
 		return
 	}
@@ -1091,9 +1091,9 @@ func (m *Model) panelPage(p *page) {
 				label = m.label("plan", u.Label, u.Label)
 			}
 			left := p.st(t.Text2).Render("  "+label) + note
-			right := p.st(t.Dim).Render(m.in(u.From)+"  → ") + p.st(t.Success).Render(to) + p.st(t.Base).Render("  ")
+			right := p.st(t.Gray).Render(m.in(u.From)+"  → ") + p.st(t.Success).Render(to) + p.st(t.Base).Render("  ")
 			if lipgloss.Width(left)+lipgloss.Width(right)+2 > p.width {
-				right = p.st(t.Dim).Render("→ ") + p.st(t.Success).Render(to) + p.st(t.Base).Render("  ")
+				right = p.st(t.Gray).Render("→ ") + p.st(t.Success).Render(to) + p.st(t.Base).Render("  ")
 			}
 			// The versions always show; the name gives way.
 			if room := p.width - lipgloss.Width(right) - 2; lipgloss.Width(left) > room {

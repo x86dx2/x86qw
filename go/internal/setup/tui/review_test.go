@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -519,5 +520,46 @@ func TestTheInstallSpeedShowsWhenNarrow(t *testing.T) {
 		m.cancel()
 		for range m.instCh {
 		}
+	}
+}
+
+// What the user reads is never in the faintest grey, under 3:1 on either
+// theme: the focused server's address, an update's installed version, the
+// install log.
+func TestInformationIsNotFaint(t *testing.T) {
+	m := New(Config{Backend: &setup.Demo{ExistingInstall: true, Speed: 50}, Target: shortTarget(t), Lang: EN, Start: "servers"})
+	drive(m, tea.WindowSizeMsg{Width: 100, Height: 34})
+	drive(m, run(m.Init())...)
+	gray := m.theme.Style(m.theme.Gray)
+	_, width, _ := m.bodyBox()
+	body := strings.Join(m.body(width).lines, "\n")
+	if server := m.focusedServer(); server == nil || !strings.Contains(body, gray.Render(server.Address)) {
+		t.Error("the focused server's address is faint")
+	}
+	toConsole(m)
+	m.panelView = "update"
+	body = strings.Join(m.body(width).lines, "\n")
+	shown := false
+	for _, update := range m.existing.Updates {
+		shown = shown || strings.Contains(body, gray.Render(m.in(update.From)+"  → "))
+	}
+	if !shown {
+		t.Error("the installed version is faint")
+	}
+	n := started(t, false)
+	drive(n, typeText("x86dx2")...)
+	drive(n, key("enter"))
+	n.startInstall()
+	for n.progress.Err == nil && len(n.progress.Log) == 0 {
+		n.progress = <-n.instCh
+	}
+	n.showLog = true
+	line := n.progress.Log[0]
+	body = strings.Join(n.body(width).lines, "\n")
+	if !strings.Contains(body, gray.Render(fmt.Sprintf("  %6.1fs  ", line.At.Seconds()))) || !strings.Contains(body, gray.Render(n.size(line.Size))) {
+		t.Error("the install log is faint")
+	}
+	n.cancel()
+	for range n.instCh {
 	}
 }
