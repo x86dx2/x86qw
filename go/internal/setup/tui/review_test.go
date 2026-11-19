@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/x86dx2/x86qw/go/internal/setup"
@@ -474,5 +475,23 @@ func TestTheKeysTabShowsEveryBinding(t *testing.T) {
 				t.Errorf("%d columns, %s: the jump binding is cut", width, lang)
 			}
 		}
+	}
+}
+
+// A footer too wide for the window drops whole hints before the last one:
+// esc, the way out, always shows, and no hint is cut in half.
+func TestTheFooterKeepsEscAndWholeHints(t *testing.T) {
+	m := New(Config{Backend: &setup.Demo{ExistingInstall: true, Speed: 50}, Target: shortTarget(t), Lang: PT, Start: "servers"})
+	drive(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+	drive(m, run(m.Init())...)
+	items := m.footerHints()
+	line, hits := hints(m.theme, items, m.w-4, "")
+	text := ansi.Strip(line)
+	last := items[len(items)-1]
+	if strings.Contains(text, "…") || !strings.HasSuffix(text, last[0]+" "+last[1]) {
+		t.Fatalf("footer %q", text)
+	}
+	if end := hits[len(hits)-1]; end.id != "hint:"+last[0] || end.x1 != lipgloss.Width(line) {
+		t.Fatalf("the last hit %+v does not end the line of %d", end, lipgloss.Width(line))
 	}
 }
