@@ -126,17 +126,15 @@ func (p *page) renderRows(rows []formRow, focus int, hover string) {
 			}
 			shown := []rune(text)
 			offset := 0
-			if focused && row.field.Caret >= fieldWidth-1 {
-				offset = row.field.Caret - fieldWidth + 2
+			// The text scrolls in columns, a wide character taking two and
+			// a combining mark none, until the caret fits.
+			for focused && offset < row.field.Caret && lipgloss.Width(string(shown[offset:row.field.Caret])) > fieldWidth-2 {
+				offset++
 			}
-			if offset < len(shown) {
-				shown = shown[offset:]
-			} else {
-				shown = nil
-			}
+			shown = shown[offset:]
 			right = style.Render(" "+fill(string(shown), fieldWidth-1, fieldBG)) + base.Render("  ")
 			if focused {
-				x := p.width - fieldWidth - 2 + 1 + (row.field.Caret - offset)
+				x := p.width - fieldWidth - 2 + 1 + lipgloss.Width(string(shown[:row.field.Caret-offset]))
 				p.caret = &[2]int{x, len(p.lines)}
 			}
 		default:

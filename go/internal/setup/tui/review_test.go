@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/x86dx2/x86qw/go/internal/setup"
 )
@@ -400,5 +401,25 @@ func TestPasteDropsTheLineBreakAndSaysWhatIsCut(t *testing.T) {
 	drive(m, tea.PasteMsg{Content: strings.Repeat("Ab3", 14)})
 	if len(m.opts.Server.Password) != 32 || m.toast == "" {
 		t.Fatalf("password %q, toast %q", m.opts.Server.Password, m.toast)
+	}
+}
+
+// The caret sits after the last character typed, in columns: a CJK name
+// takes two each, an accent written as its own mark none.
+func TestTheCaretFollowsWideAndCombiningCharacters(t *testing.T) {
+	for _, target := range []string{"/Users/田中太郎/Games/x86qw", "/Users/田中太郎/ゲーム/クエイク/x86qw", "/Users/x86/Música/x86qw"} {
+		m := New(Config{Backend: &setup.Demo{Speed: 50}, Target: target, Lang: EN})
+		drive(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+		drive(m, run(m.Init())...)
+		drive(m, typeText("x86dx2")...)
+		drive(m, key("enter"))
+		m.openModal("folder")
+		lines, _, caret := m.modalView()
+		if caret == nil {
+			t.Fatalf("%s: no caret", target)
+		}
+		if before := ansi.Strip(ansi.Cut(lines[caret[1]], 0, caret[0])); !strings.HasSuffix(before, "/x86qw") {
+			t.Errorf("%s: the caret follows %q", target, before)
+		}
 	}
 }
