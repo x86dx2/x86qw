@@ -18,13 +18,20 @@ import (
 
 const (
 	gitlabProjectID  = "84813414"
-	coreVersion      = "0.1.1"
+	coreVersion      = "0.1.2"
 	corePackage      = "x86qw-core-id1"
 	coreReleaseTag   = "x86qw-content-core-" + coreVersion
 	maxCorePakBytes  = 128 * 1024 * 1024
 	projectCopyright = "Copyright (c) 2026 x86dx2"
 	componentJSON    = "_x86qw/component.json"
+	// contentMirrorNotes is the body of a content package's mirror release.
+	contentMirrorNotes = "Versioned content packages of the x86QW distribution."
 )
+
+// ezquakeMirrorNotes is the body of an ezQuake build's mirror release.
+func ezquakeMirrorNotes(channel, version string) string {
+	return "ezQuake " + channel + " client " + version + ", preserved by the x86QW distribution."
+}
 
 // GitHubReleaseURL is the primary mirror URL of a release asset.
 func GitHubReleaseURL(tag, filename string) string {
@@ -255,7 +262,7 @@ func (p *Project) BuildPackages(distribution, output string, options BuildOption
 			"license_url", pyjson.Repr(getOr(release, "license_url", "https://github.com/nQuake/distfiles/tree/"+commit)),
 			"source_urls", orEmpty(sourceURLs), "redistribution_reviewed", true,
 			"urls", []any{mirror},
-			"mirror_title", title, "mirror_notes", "Pacotes de conteúdo versionados da distribuição x86QW.",
+			"mirror_title", title, "mirror_notes", contentMirrorNotes,
 			"mirror_latest", false,
 		)
 		if strategy == "upstream-package" || strategy == "upstream-composed" {
@@ -383,11 +390,14 @@ func (p *Project) BuildCorePackage(distribution, output, ownershipOutput string)
 		"component", "core", "package", corePackage, "version", coreVersion, "channel", "content",
 		"platform", "any", "architecture", "any", "filename", filename,
 		"size", intNumber(len(packageBytes)), "sha256", sha256Hex(packageBytes), "origin_url", mirror,
-		"license", "id-software-registered-game-data", "license_url", license,
+		// The MIT license covers only the generated metadata; the game data's
+		// terms are in the provenance record.
+		"license", "id-software-registered-game-data",
+		"license_url", "https://github.com/x86dx2/x86qw/blob/"+coreReleaseTag+"/maintenance/docs/provenance.md",
 		"source_urls", []any{"https://github.com/x86dx2/x86qw/tree/main/dist/game-data/id1"},
 		"redistribution_reviewed", true, "urls", []any{mirror},
-		"source_revision", revision, "mirror_title", "x86QW Content · Dados base "+coreVersion,
-		"mirror_notes", "Dados base obrigatórios usados pelo instalador x86QW.", "mirror_latest", false,
+		"source_revision", revision, "mirror_title", "x86QW Content · Base game data "+coreVersion,
+		"mirror_notes", "Base game data the x86QW installer requires.", "mirror_latest", false,
 	), nil
 }
 
@@ -536,7 +546,7 @@ func (p *Project) NormalizeCatalogReleaseMetadata(catalog *Object) error {
 		case "ezquake":
 			channel := pyjson.Repr(getOr(item, "channel", ""))
 			setDefault(item, "mirror_title", "x86QW Content · ezQuake "+channel+" "+version)
-			setDefault(item, "mirror_notes", "Cliente ezQuake "+channel+" "+version+" preservado pela distribuição x86QW.")
+			setDefault(item, "mirror_notes", ezquakeMirrorNotes(channel, version))
 			item.Set("mirror_latest", false)
 		default:
 			item.Set("mirror_latest", false)

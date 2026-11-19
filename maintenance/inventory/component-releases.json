@@ -41,12 +41,12 @@
       "freshness": "reference-payload-current"
     },
     "ktx": {
-      "version": "1.47+x86qw.20",
+      "version": "1.47+x86qw.21",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "upstream-composed",
       "freshness": "upstream-current",
       "distribution_component": "ktx",
-      "distribution_tag": "ktx-1.47-x86qw.20",
+      "distribution_tag": "ktx-1.47-x86qw.21",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/ktx/blob/1.47/LICENSE.md",
       "notes": "Parte da curadoria KTX do nQuake, preserva seu conteúdo exclusivo e usa os recursos oficiais do KTX 1.47. O QVM reprodutível x86QW acrescenta nomes Frogbot declarativos, habilidade aleatória, balanceamento automático, nomes únicos por função e um Coach de Quad opt-in para partidas casuais. O launcher expõe 24 modos, planos contextuais de teclas sem comandos crus e oferece somente mapas compatíveis com os recursos instalados. Arma, vida e interrupção por morte ficam restritas ao ToT; camisa, calça, skins e cores relacionais continuam sob controle do KTX e da configuração pessoal.",
@@ -273,7 +273,7 @@
       ]
     },
     "team-fortress": {
-      "version": "2.9+nquake.e4cb23d40aa2+x86qw.7",
+      "version": "2.9+nquake.e4cb23d40aa2+x86qw.8",
       "reference_revision": "e4cb23d40aa202335b5dafe4e8f1e8d424caac0d",
       "strategy": "reference-overlay",
       "freshness": "upstream-current",

@@ -192,3 +192,107 @@ func TestSchemaVersions(t *testing.T) {
 		t.Error("foreign schema field accepted")
 	}
 }
+
+// A move whose destination another move of the same archive takes as its
+// source would drop that member: a→b then b→c leaves only c.
+func TestArchiveMovesRefuseAChain(t *testing.T) {
+	move := func(target, source, destination string) any {
+		return object("target_archive", target, "source", source, "destination", destination)
+	}
+	chained := object("archive_moves", []any{move("x.zip", "a", "b"), move("x.zip", "b", "c")})
+	if err := validateArchiveEdits(chained, "upstream-package", "test"); err == nil {
+		t.Error("chained archive moves accepted")
+	}
+	apart := object("archive_moves", []any{move("x.zip", "a", "b"), move("y.zip", "b", "c")})
+	if err := validateArchiveEdits(apart, "upstream-package", "test"); err != nil {
+		t.Errorf("moves in two archives refused: %v", err)
+	}
+}
+
+// The launcher runs a mode's entry config from the event its usermode
+// enters with (on_enter_ffa for instagib's ffa); an entry config that does
+// not clear that event runs the mode command again on every map.
+func TestKTXEntryConfigClearsItsEvent(t *testing.T) {
+	root := repoRoot(t)
+	requireHydrated(t, root)
+	project := NewProject(root)
+	components, err := project.Components()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := project.ValidateKTXModeCatalog(components, nil); err != nil {
+		t.Fatalf("shipped mode catalog: %v", err)
+	}
+	modes, err := ReadJSON(project.Path(ktxModesPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range objects(modes.(*Object).Value("modes")) {
+		if mode.Value("id") == "instagib" {
+			mode.Set("usermode", "1on1")
+		}
+	}
+	if err := project.ValidateKTXModeCatalog(components, modes); err == nil {
+		t.Fatal("instagib entered by on_enter while its config clears on_enter_ffa")
+	}
+}
+
+// Mirror release titles and notes are public, so they are in English.
+func TestMirrorMetadataIsEnglish(t *testing.T) {
+	root := repoRoot(t)
+	requireHydrated(t, root)
+	project := NewProject(root)
+	if os.Getenv("X86QW_CONTENT_PARITY_BUILD") == "1" {
+		built, err := project.BuildPackages(project.Path(DistDir), t.TempDir(), BuildOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, pkg := range objects(built.Value("packages")) {
+			if notes := pkg.Value("mirror_notes"); notes != "Versioned content packages of the x86QW distribution." {
+				t.Errorf("%s notes: %v", pkg.Value("package"), notes)
+			}
+		}
+	}
+	core, err := project.BuildCorePackage(project.Path(DistDir), t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if title, notes := core.Value("mirror_title"), core.Value("mirror_notes"); title != "x86QW Content · Base game data "+coreVersion ||
+		notes != "Base game data the x86QW installer requires." {
+		t.Errorf("core: %v / %v", title, notes)
+	}
+	catalog, err := LoadJSONObject(project.Path(CatalogPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pkg := range objects(catalog.Value("packages")) {
+		pkg.Delete("mirror_notes")
+	}
+	if err := project.NormalizeCatalogReleaseMetadata(catalog); err != nil {
+		t.Fatal(err)
+	}
+	for _, pkg := range objects(catalog.Value("packages")) {
+		if pkg.Value("component") == "ezquake" {
+			want := "ezQuake " + pyjson.Repr(pkg.Value("channel")) + " client " + pyjson.Repr(pkg.Value("version")) + ", preserved by the x86QW distribution."
+			if pkg.Value("mirror_notes") != want {
+				t.Errorf("ezQuake notes: %v", pkg.Value("mirror_notes"))
+			}
+		}
+	}
+}
+
+// The core package holds id Software's registered game data: its license
+// link leads to the provenance record, not to x86QW's MIT license.
+func TestCorePackageLinksItsProvenance(t *testing.T) {
+	root := repoRoot(t)
+	requireHydrated(t, root)
+	project := NewProject(root)
+	core, err := project.BuildCorePackage(project.Path(DistDir), t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "https://github.com/x86dx2/x86qw/blob/" + coreReleaseTag + "/maintenance/docs/provenance.md"
+	if got := core.Value("license_url"); got != want {
+		t.Fatalf("core license_url %v, want %s", got, want)
+	}
+}

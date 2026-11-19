@@ -290,6 +290,14 @@ func validateArchiveEdits(release *Object, strategy, identifier string) error {
 		}
 		moveIdentities[[2]string{target, source}] = true
 	}
+	// Moves apply in declaration order, so a destination that is another
+	// move's source would be overwritten before it moves.
+	for _, raw := range moves {
+		move := raw.(*Object)
+		if moveIdentities[[2]string{move.Value("target_archive").(string), move.Value("destination").(string)}] {
+			return fmt.Errorf("chained archive move: %s", identifier)
+		}
+	}
 	removals, ok := getOr(release, "archive_removals", []any{}).([]any)
 	if !ok {
 		return fmt.Errorf("invalid archive removals: %s", identifier)

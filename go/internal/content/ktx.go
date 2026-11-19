@@ -384,7 +384,8 @@ func (p *Project) ValidateKTXModeCatalog(componentCatalog *Object, modeCatalog a
 	if ktx == nil {
 		return fmt.Errorf("KTX component missing during mode validation")
 	}
-	ctfEntities, entryConfigs := map[string]bool{}, map[string]bool{}
+	// entryConfigs maps each mode entry config to the aliases it unaliases.
+	ctfEntities, entryConfigs := map[string]bool{}, map[string]map[string]bool{}
 	sources, _ := getOr(ktx, "sources", []any{}).([]any)
 	for _, entry := range objects(sources) {
 		destination := pyjson.Repr(entry.Value("destination"))
@@ -396,7 +397,17 @@ func (p *Project) ValidateKTXModeCatalog(componentCatalog *Object, modeCatalog a
 	for _, entry := range objects(projectSources) {
 		destination := pyjson.Repr(entry.Value("destination"))
 		if ktxEntryConfig.MatchString(destination) {
-			entryConfigs[Casefold(posixName(destination))] = true
+			payload, err := os.ReadFile(p.Path(pyjson.Repr(entry.Value("path"))))
+			if err != nil {
+				return err
+			}
+			unaliased := map[string]bool{}
+			for _, line := range pySplitlines(latin1(payload)) {
+				if words := pySplit(line); len(words) == 2 && words[0] == "unalias" {
+					unaliased[words[1]] = true
+				}
+			}
+			entryConfigs[Casefold(posixName(destination))] = unaliased
 		}
 	}
 
@@ -413,7 +424,7 @@ func (p *Project) ValidateKTXModeCatalog(componentCatalog *Object, modeCatalog a
 }
 
 func validateKTXMode(raw any, modeIDs map[string]bool, policies *Object, assets *ktxAssets,
-	essential, managed, ctfEntities, entryConfigs map[string]bool) error {
+	essential, managed, ctfEntities map[string]bool, entryConfigs map[string]map[string]bool) error {
 	mode, _ := raw.(*Object)
 	var identifierValue, suggestionsValue any
 	if mode != nil {
@@ -434,8 +445,18 @@ func validateKTXMode(raw any, modeIDs map[string]bool, policies *Object, assets 
 	}
 	if entry := mode.Value("entry_config"); entry != nil {
 		text, ok := entry.(string)
-		if !ok || !entryConfigs[Casefold(text)] {
+		unaliased, found := entryConfigs[Casefold(text)]
+		if !ok || !found {
 			return fmt.Errorf("KTX mode references missing entry config: %s", identifier)
+		}
+		// The event x86qw play runs the entry config from; left set, it runs
+		// the mode command again on every map.
+		event := map[string]string{"ffa": "on_enter_ffa", "tot": "on_enter_ffa", "ctf": "on_enter_ctf"}[usermode]
+		if event == "" {
+			event = "on_enter"
+		}
+		if !unaliased[event] {
+			return fmt.Errorf("KTX mode entry config does not unalias %s: %s", event, identifier)
 		}
 	}
 	var commands []any
