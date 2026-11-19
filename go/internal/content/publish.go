@@ -153,7 +153,7 @@ func (p *Project) PublishGitHub(out io.Writer, catalog *Object, dryRun bool) err
 		for _, artifact := range artifacts {
 			pkg := artifact.pkg
 			titles[pyjson.Repr(getOr(pkg, "mirror_title", getOr(pkg, "release_title", "x86QW Content · "+group.tag)))] = true
-			notes[pyjson.Repr(getOr(pkg, "mirror_notes", "Pacotes versionados da distribuição x86QW."))] = true
+			notes[pyjson.Repr(getOr(pkg, "mirror_notes", contentMirrorNotes))] = true
 			latestValues[pyjson.Truthy(getOr(pkg, "mirror_latest", false))] = true
 		}
 		if len(titles) != 1 || len(notes) != 1 || len(latestValues) != 1 {

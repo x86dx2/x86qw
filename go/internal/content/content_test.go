@@ -234,3 +234,47 @@ func TestKTXEntryConfigClearsItsEvent(t *testing.T) {
 		t.Fatal("instagib entered by on_enter while its config clears on_enter_ffa")
 	}
 }
+
+// Mirror release titles and notes are public, so they are in English.
+func TestMirrorMetadataIsEnglish(t *testing.T) {
+	root := repoRoot(t)
+	requireHydrated(t, root)
+	project := NewProject(root)
+	if os.Getenv("X86QW_CONTENT_PARITY_BUILD") == "1" {
+		built, err := project.BuildPackages(project.Path(DistDir), t.TempDir(), BuildOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, pkg := range objects(built.Value("packages")) {
+			if notes := pkg.Value("mirror_notes"); notes != "Versioned content packages of the x86QW distribution." {
+				t.Errorf("%s notes: %v", pkg.Value("package"), notes)
+			}
+		}
+	}
+	core, err := project.BuildCorePackage(project.Path(DistDir), t.TempDir(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if title, notes := core.Value("mirror_title"), core.Value("mirror_notes"); title != "x86QW Content · Base game data "+coreVersion ||
+		notes != "Base game data the x86QW installer requires." {
+		t.Errorf("core: %v / %v", title, notes)
+	}
+	catalog, err := LoadJSONObject(project.Path(CatalogPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pkg := range objects(catalog.Value("packages")) {
+		pkg.Delete("mirror_notes")
+	}
+	if err := project.NormalizeCatalogReleaseMetadata(catalog); err != nil {
+		t.Fatal(err)
+	}
+	for _, pkg := range objects(catalog.Value("packages")) {
+		if pkg.Value("component") == "ezquake" {
+			want := "ezQuake " + pyjson.Repr(pkg.Value("channel")) + " client " + pyjson.Repr(pkg.Value("version")) + ", preserved by the x86QW distribution."
+			if pkg.Value("mirror_notes") != want {
+				t.Errorf("ezQuake notes: %v", pkg.Value("mirror_notes"))
+			}
+		}
+	}
+}

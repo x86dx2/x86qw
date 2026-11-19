@@ -1048,7 +1048,7 @@ func (p *Project) updateEZQuakeCatalog(catalog *Object, assets []Asset, manifest
 		}
 		record.Set("urls", urls)
 		record.Set("mirror_title", "x86QW Content · ezQuake "+channel+" "+version)
-		record.Set("mirror_notes", "Cliente ezQuake "+channel+" "+version+" preservado pela distribuição x86QW.")
+		record.Set("mirror_notes", ezquakeMirrorNotes(channel, version))
 		record.Set("mirror_latest", false)
 		replacements = append(replacements, record)
 		if channel == "stable" {
