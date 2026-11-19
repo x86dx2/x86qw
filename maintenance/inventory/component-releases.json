@@ -412,14 +412,14 @@
       ]
     },
     "qwfwd": {
-      "version": "1.30+x86qw.4",
+      "version": "1.30+x86qw.5",
       "strategy": "upstream-package",
       "freshness": "upstream-current",
       "distribution_component": "qwfwd",
-      "distribution_tag": "qwfwd-1.30-x86qw.4",
+      "distribution_tag": "qwfwd-1.30-x86qw.5",
       "license": "GPL-2.0",
       "license_url": "https://github.com/QW-Group/qwfwd/blob/1.30/LICENSE.md",
-      "notes": "QWFWD 1.30 oficial para Linux e Windows, mais build macOS arm64 reproduzível do mesmo tag. O bootstrap instala somente a variante selecionada em qwfwd/, junto de sua configuração operacional.",
+      "notes": "Official QWFWD 1.30 for Linux and Windows, plus a reproducible macOS arm64 build of the same tag. The bootstrap installs only the selected variant in qwfwd/, along with its working configuration.",
       "compatibility": {
         "client_scope": [
           "ezquake-stable:3.6.9",
